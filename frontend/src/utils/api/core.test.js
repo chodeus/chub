@@ -58,6 +58,109 @@ describe('apiCore.combineSignals', () => {
     });
 });
 
+describe('apiCore.combineSignals relay fallback (no AbortSignal.any)', () => {
+    let saved;
+    beforeEach(() => {
+        // Node has AbortSignal.any, so the relay branch is otherwise never run.
+        saved = AbortSignal.any;
+        AbortSignal.any = undefined;
+    });
+    afterEach(() => {
+        AbortSignal.any = saved;
+    });
+
+    it('still aborts from either source', () => {
+        const timeout = new AbortController();
+        const caller = new AbortController();
+        const combined = apiCore.combineSignals(timeout.signal, caller.signal);
+        expect(combined.aborted).toBe(false);
+        timeout.abort();
+        expect(combined.aborted).toBe(true);
+    });
+
+    it('detaches from the surviving source, so a reused caller signal is not pinned', () => {
+        const timeout = new AbortController();
+        const caller = new AbortController();
+        const remove = vi.spyOn(caller.signal, 'removeEventListener');
+
+        apiCore.combineSignals(timeout.signal, caller.signal);
+        timeout.abort(); // the OTHER source fires
+
+        // The regression: `once` only clears the listener that fired, leaving one
+        // attached to the long-lived caller signal for every request it made.
+        expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+    });
+
+    it('does not accumulate listeners on a caller signal reused across requests', () => {
+        const caller = new AbortController();
+        const add = vi.spyOn(caller.signal, 'addEventListener');
+        const remove = vi.spyOn(caller.signal, 'removeEventListener');
+
+        for (let i = 0; i < 5; i++) {
+            const timeout = new AbortController();
+            apiCore.combineSignals(timeout.signal, caller.signal);
+            timeout.abort();
+        }
+        expect(add).toHaveBeenCalledTimes(5);
+        expect(remove).toHaveBeenCalledTimes(5); // one detach per completed request
+    });
+});
+
+describe('apiCore.get request sharing', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        apiCore.clearCache();
+    });
+
+    it('does not let one caller abort a request shared with another', async () => {
+        // Both callers hit the same URL; an AbortSignal stringifies to {} so they
+        // collapse onto one tracker key. A's abort must not reject B.
+        let settle;
+        const fetchMock = vi.fn(
+            (_url, opts) =>
+                new Promise((resolve, reject) => {
+                    settle = () => resolve(jsonResponse({ v: 1 }));
+                    opts.signal.addEventListener(
+                        'abort',
+                        () => {
+                            const err = new Error('aborted');
+                            err.name = 'AbortError';
+                            reject(err);
+                        },
+                        { once: true }
+                    );
+                })
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        const a = new AbortController();
+        const pendingA = apiCore.get('/shared', { useCache: false, signal: a.signal });
+        const pendingB = apiCore.get('/shared', {
+            useCache: false,
+            signal: new AbortController().signal,
+        });
+
+        a.abort();
+        await expect(pendingA).rejects.toMatchObject({ name: 'AbortError' });
+
+        settle();
+        await expect(pendingB).resolves.toEqual({ v: 1 });
+        expect(fetchMock).toHaveBeenCalledTimes(2); // each got its own request
+    });
+
+    it('still de-duplicates concurrent GETs when no signal is passed', async () => {
+        const fetchMock = vi.fn(async () => jsonResponse({ v: 2 }));
+        vi.stubGlobal('fetch', fetchMock);
+        const [x, y] = await Promise.all([
+            apiCore.get('/dedupe', { useCache: false }),
+            apiCore.get('/dedupe', { useCache: false }),
+        ]);
+        expect(x).toEqual({ v: 2 });
+        expect(y).toEqual({ v: 2 });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe('apiCore.makeRequest signal forwarding', () => {
     afterEach(() => {
         vi.unstubAllGlobals();

@@ -186,14 +186,25 @@ const apiCore = {
         }
         // Relay for engines without AbortSignal.any.
         const relay = new AbortController();
-        const already = [callerSignal, timeoutSignal].find(s => s.aborted);
+        const sources = [callerSignal, timeoutSignal];
+        const already = sources.find(s => s.aborted);
         if (already) {
             relay.abort(already.reason);
             return relay.signal;
         }
-        [callerSignal, timeoutSignal].forEach(s =>
-            s.addEventListener('abort', () => relay.abort(s.reason), { once: true })
-        );
+        // Detach from BOTH sources on the first abort. `once` only clears the
+        // listener that fired; a caller signal often outlives the request, and a
+        // stale listener there would pin this relay for the signal's lifetime.
+        const handlers = new Map();
+        const detach = () => sources.forEach(s => s.removeEventListener('abort', handlers.get(s)));
+        sources.forEach(s => {
+            const onAbort = () => {
+                detach();
+                relay.abort(s.reason);
+            };
+            handlers.set(s, onAbort);
+            s.addEventListener('abort', onAbort);
+        });
         return relay.signal;
     },
 
@@ -336,8 +347,7 @@ const apiCore = {
             }
         }
 
-        // Use request tracker to prevent duplicate requests
-        return this.requestTracker.getOrCreate(cacheKey, async () => {
+        const run = async () => {
             const data = await this.makeRequest(url, {
                 method: 'GET',
                 ...requestOptions,
@@ -349,7 +359,18 @@ const apiCore = {
             }
 
             return data;
-        });
+        };
+
+        // A caller signal must NOT reach a promise shared with other callers: an
+        // AbortSignal stringifies to {} so every caller collapses onto the same
+        // tracker key, and one abort would reject everyone else's request. Give
+        // a cancelling caller its own request instead.
+        if (requestOptions.signal) {
+            return run();
+        }
+
+        // Use request tracker to prevent duplicate requests
+        return this.requestTracker.getOrCreate(cacheKey, run);
     },
 
     /**
