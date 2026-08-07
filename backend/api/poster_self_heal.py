@@ -14,6 +14,7 @@ dismiss it.
 Module settings are read/saved through the generic /api/config endpoints.
 """
 
+import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -24,6 +25,7 @@ from backend.util.config import load_config
 from backend.util.database import ChubDB
 from backend.util.database.poster_heal_review import poster_heal_review_for
 from backend.util.poster_self_heal.apply import apply_proposal
+from backend.util.poster_self_heal.cache_reconcile import drop_stale_row
 
 router = APIRouter(
     prefix="/api/poster-self-heal",
@@ -148,7 +150,9 @@ def apply_review(
     row = reviews.get(review_id)
     if not row:
         return error("Review not found", "NOT_FOUND", status_code=404)
-    if row.get("status") not in ("proposed",):
+    # "failed" is retryable on purpose — an auto-apply that raised is surfaced for
+    # exactly this, and the cause is often transient (Drive listing, token).
+    if row.get("status") not in ("proposed", "failed"):
         return error("Only an open proposal can be applied", "BAD_STATUS")
 
     current = row.get("current_filename") or ""
@@ -165,4 +169,8 @@ def apply_review(
         return error(f"Google Drive rename failed: {exc}", "DRIVE_RENAME")
 
     reviews.set_status(review_id, "applied")
+    # Drop the row the rename invalidated — same as the scheduled run.
+    stale = row.get("poster_file") or ""
+    if os.path.isabs(stale):
+        drop_stale_row(db, stale, logger)
     return ok(f"Applied{note}", {"new_filename": proposed})

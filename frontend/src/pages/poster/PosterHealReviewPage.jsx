@@ -170,16 +170,26 @@ const CoveragePanel = () => {
 
 const ReviewRow = ({ review, busy, onApply, onDismiss }) => {
     const pending = review.status === 'pending' || review.drift_type === 'ambiguous';
+    // An auto-apply that raised. Still actionable — retrying is the point.
+    const failed = review.status === 'failed';
     return (
-        <div className="flex flex-col gap-3 p-4 rounded-xl bg-surface border border-border md:flex-row md:items-center">
+        <div
+            className={`flex flex-col gap-3 p-4 rounded-xl bg-surface border md:flex-row md:items-center ${
+                failed ? 'border-error/40' : 'border-border'
+            }`}
+        >
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span
                         className={`font-mono text-[10px] px-1.5 py-0.5 rounded-[5px] ${
-                            pending ? 'bg-warning/15 text-warning' : 'bg-primary/15 text-primary'
+                            failed
+                                ? 'bg-error/15 text-error'
+                                : pending
+                                  ? 'bg-warning/15 text-warning'
+                                  : 'bg-primary/15 text-primary'
                         }`}
                     >
-                        {driftLabel(review.drift_type)}
+                        {failed ? 'Auto-apply failed' : driftLabel(review.drift_type)}
                     </span>
                     <span className="text-[11px] text-fg-subtle">{review.reason}</span>
                 </div>

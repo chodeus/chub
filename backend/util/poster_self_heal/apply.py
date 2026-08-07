@@ -30,7 +30,9 @@ def apply_proposal(row: Dict[str, Any], sync_cfg: Any, logger) -> str:
     if folder_id:
         # moveto/os.replace overwrite the destination permanently (Drive trash is
         # off) — refuse if a different file already holds the target name.
-        if proposed in list_files(folder_id, sync_cfg, logger):
+        # strict=True: a listing FAILURE must not read as "the name is free", or a
+        # transient Drive error would let the rename destroy the colliding poster.
+        if proposed in list_files(folder_id, sync_cfg, logger, strict=True):
             raise RuntimeError(
                 f"refusing to apply: '{proposed}' already exists in Drive folder "
                 f"{folder_id}; renaming '{current}' onto it would overwrite a "

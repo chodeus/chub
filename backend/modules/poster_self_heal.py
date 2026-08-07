@@ -22,6 +22,7 @@ from backend.util.database import ChubDB
 from backend.util.database.poster_heal_review import poster_heal_review_for
 from backend.util.notification import NotificationManager
 from backend.util.poster_self_heal.apply import apply_proposal
+from backend.util.poster_self_heal.cache_reconcile import drop_stale_row
 from backend.util.poster_self_heal.resolver import (
     index_media,
     poster_from_filename,
@@ -53,6 +54,14 @@ def local_dirs_for(cl2k) -> list:
         if path and path not in out:
             out.append(path)
     return out
+
+
+def should_auto_apply(prop, auto: bool, dismissed_files) -> bool:
+    """True when this run may rename ``prop`` unattended. A dismissed
+    poster_file never qualifies — dismissed is terminal."""
+    if not auto or prop.get("status") != "proposed":
+        return False
+    return prop.get("poster_file") not in dismissed_files
 
 
 def drive_twins(cl2k) -> tuple:
@@ -183,7 +192,9 @@ class PosterSelfHeal(ChubModule):
                 f"{len(drive_posters)} on Drive)"
                 f"{' [auto-apply ON]' if auto else ''}"
             )
-            proposed = pending = applied = failed = 0
+            proposed = pending = applied = failed = dismissed = 0
+            # Cheap first filter; re-checked live before each rename below.
+            dismissed_files = reviews.dismissed_files() if auto else set()
             for idx, (poster, heal_folder_id) in enumerate(posters, 1):
                 if self.is_cancelled():
                     self.logger.info("poster_self_heal cancelled.")
@@ -205,7 +216,18 @@ class PosterSelfHeal(ChubModule):
                     )
                     # Auto-apply confident proposals when enabled; ambiguous
                     # (pending) ones always wait for a manual pick.
-                    if auto and prop["status"] == "proposed":
+                    apply_error = None
+                    skipped = auto and prop["poster_file"] in dismissed_files
+                    if not skipped and should_auto_apply(prop, auto, dismissed_files):
+                        # Re-check live: the snapshot is from run start and a run
+                        # takes minutes, so the user may have dismissed this since.
+                        skipped = reviews.is_dismissed(prop["poster_file"])
+                    if skipped:
+                        dismissed += 1
+                        self.logger.debug(
+                            f"skipping dismissed {prop['current_filename']}"
+                        )
+                    elif should_auto_apply(prop, auto, dismissed_files):
                         try:
                             note = apply_proposal(prop, sync_cfg, self.logger)
                             prop["status"] = "applied"
@@ -214,26 +236,42 @@ class PosterSelfHeal(ChubModule):
                                 f"auto-applied {prop['proposed_filename']}{note}"
                             )
                         except Exception as exc:
+                            apply_error = str(exc)
                             failed += 1
                             self.logger.warning(
                                 f"auto-apply failed for {prop['current_filename']}: {exc}"
-                                " — left for manual review"
+                                " — reopened for manual review"
                             )
-                    if prop["status"] == "pending":
-                        pending += 1
-                    elif prop["status"] == "proposed":
-                        proposed += 1
+                    # Count a failed apply once, as failed; a dismissed skip isn't
+                    # open either.
+                    if apply_error is None and not skipped:
+                        if prop["status"] == "pending":
+                            pending += 1
+                        elif prop["status"] == "proposed":
+                            proposed += 1
                     reviews.upsert(prop)
+                    if apply_error is not None:
+                        # upsert's CASE keeps a terminal status — force it open.
+                        reviews.mark_failed(prop["poster_file"], apply_error)
+                    elif prop["status"] == "applied":
+                        # Drop the row the rename invalidated, or the next run
+                        # re-proposes it and collides with the file we created.
+                        stale = prop.get("poster_file") or ""
+                        if os.path.isabs(stale):
+                            drop_stale_row(db, stale, self.logger)
                 if total:
                     self._report_progress(int(idx / total * 100))
 
             self.logger.info(
                 f"poster_self_heal done: {applied} auto-applied, {proposed} proposed, "
-                f"{pending} need a manual pick, {failed} failed; "
+                f"{pending} need a manual pick, {failed} failed"
+                f"{f', {dismissed} skipped (dismissed)' if dismissed else ''}; "
                 f"{reviews.open_count()} open for review total"
             )
 
-            if applied or proposed or pending:
+            # Failures notify too — a run whose only outcome is failures is
+            # exactly the one worth telling the user about.
+            if applied or proposed or pending or failed:
                 output = {
                     "scanned": total,
                     "applied": applied,
