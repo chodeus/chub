@@ -80,15 +80,22 @@ def coverage() -> JSONResponse:
         if fid:
             heals.setdefault(fid, []).append(image_type)
 
-    folders = [
-        {
-            "name": (getattr(f, "name", "") or "").strip(),
-            "path": (getattr(f, "path", "") or "").strip(),
-            "types": list(getattr(f, "types", None) or []),
-        }
-        for f in (getattr(cl2k, "local_folders", None) or [])
-        if (getattr(f, "path", "") or "").strip() in scanned
-    ]
+    # One row per PATH, first claimer wins — two rows sharing a path are a single
+    # scanned location, and the panel keys on path.
+    folders = []
+    emitted: set = set()
+    for f in getattr(cl2k, "local_folders", None) or []:
+        path = (getattr(f, "path", "") or "").strip()
+        if path not in scanned or path in emitted:
+            continue
+        emitted.add(path)
+        folders.append(
+            {
+                "name": (getattr(f, "name", "") or "").strip(),
+                "path": path,
+                "types": list(getattr(f, "types", None) or []),
+            }
+        )
     seen: set = set()
     drives = []
     for d in getattr(cl2k, "gdrive_uploads", None) or []:

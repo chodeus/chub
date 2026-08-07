@@ -48,7 +48,9 @@ class _Cfg:
 
 
 def _client(monkeypatch, cfg):
-    monkeypatch.setattr(heal_router, "load_config", lambda: cfg)
+    """``cfg`` is a config object, or a zero-arg callable returning one (so a
+    test can REPLACE the config between requests, not just mutate it)."""
+    monkeypatch.setattr(heal_router, "load_config", cfg if callable(cfg) else lambda: cfg)
     app = FastAPI()
     app.include_router(heal_router.router)
     return TestClient(app)
@@ -128,11 +130,40 @@ def test_coverage_without_the_cl2k_extension_is_empty_not_an_error(monkeypatch):
 
 
 def test_coverage_rereads_config_each_request(monkeypatch):
-    """Config is a live read — a settings save must not need a restart."""
-    cfg = _routed_cfg()
-    client = _client(monkeypatch, cfg)
+    """Config is a live read — a settings save must not need a restart.
+
+    The second config is a REPLACEMENT object, not a mutation of the first: a
+    handler that captured the config once would still pass a mutation check,
+    since it would be holding the very list being mutated.
+    """
+    holder = {"cfg": _routed_cfg()}
+    client = _client(monkeypatch, lambda: holder["cfg"])
     assert client.get("/api/poster-self-heal/coverage").json()["data"]["drive_count"] == 2
-    cfg.cl2k_maker.gdrive_uploads.append(_Drive("Backgrounds", "BGS", ["background"]))
+
+    replaced = _routed_cfg()
+    replaced.cl2k_maker.gdrive_uploads.append(_Drive("Backgrounds", "BGS", ["background"]))
+    holder["cfg"] = replaced
+
     data = client.get("/api/poster-self-heal/coverage").json()["data"]
     assert data["drive_count"] == 3
     assert {d["folder_id"] for d in data["drives"]} == {"POSTERS", "LOGOS", "BGS"}
+
+
+def test_coverage_collapses_duplicate_folder_paths(monkeypatch):
+    """Two rows on one path are ONE scanned location — and the panel keys on path."""
+    cfg = _Cfg(
+        _Cl2k(
+            [
+                _Folder("First", "/art/shared", ["logo"]),
+                _Folder("Second", "/art/shared", ["background"]),
+                _Folder("Other", "/art/other", ["poster"]),
+            ],
+            [],
+        )
+    )
+    data = _client(monkeypatch, cfg).get("/api/poster-self-heal/coverage").json()["data"]
+    paths = [f["path"] for f in data["folders"]]
+    assert paths == ["/art/shared", "/art/other"]
+    assert len(paths) == len(set(paths))
+    assert data["folders"][0]["name"] == "First"  # first claimer wins
+    assert data["scanned_count"] == len(data["folders"])
