@@ -104,9 +104,13 @@ export const describeError = payload => {
 
     const named = details
         .map(d => {
-            const path = fieldPath(d?.loc);
-            const why = d?.msg || 'is invalid';
-            return path ? `${path}: ${why}` : why;
+            // Explicit check, not `||`: a malformed entry must fall back to the
+            // base message, not invent an "is invalid" with no field attached.
+            if (!d || typeof d !== 'object' || typeof d.msg !== 'string' || d.msg === '') {
+                return '';
+            }
+            const path = fieldPath(d.loc);
+            return path ? `${path}: ${d.msg}` : d.msg;
         })
         .filter(Boolean);
     if (named.length === 0) return base;

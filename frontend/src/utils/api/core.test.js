@@ -311,3 +311,33 @@ describe('describeError — validation failures name their fields', () => {
         expect(describeError({})).toBe('');
     });
 });
+
+describe('describeError — malformed validation details', () => {
+    const validation = details => ({
+        message: 'Validation error',
+        error_code: 'VALIDATION_ERROR',
+        data: details,
+    });
+
+    it('falls back to the base message for an empty detail record', () => {
+        expect(describeError(validation([{}]))).toBe('Validation error');
+    });
+
+    it('ignores entries with a non-string or empty msg', () => {
+        expect(describeError(validation([{ loc: ['body', 'x'], msg: '' }]))).toBe(
+            'Validation error'
+        );
+        expect(describeError(validation([{ loc: ['body', 'x'], msg: 42 }]))).toBe(
+            'Validation error'
+        );
+        expect(describeError(validation([null, undefined]))).toBe('Validation error');
+    });
+
+    it('still names the good entries when one is malformed', () => {
+        const msg = describeError(
+            validation([{}, { loc: ['body', 'tmdb_id'], msg: 'Field required' }])
+        );
+        expect(msg).toContain('tmdb_id: Field required');
+        expect(msg).not.toContain('is invalid');
+    });
+});
