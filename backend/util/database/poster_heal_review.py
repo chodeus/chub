@@ -133,15 +133,13 @@ class PosterHealReview(DatabaseBase):
     def mark_failed(self, poster_file: str, reason: str) -> None:
         """Force a row open as ``failed`` after an auto-apply raised.
 
-        Deliberately bypasses upsert's terminal-status CASE: a row already
-        ``applied`` whose re-apply now fails would otherwise keep that status and
-        never reach the review queue, so the run reports work "left for review"
-        that nothing can display. Scoped to a real failure, so a ``dismissed`` row
-        is only reopened when an apply was actually attempted and raised.
+        Bypasses upsert's terminal-status CASE for ``applied`` — such a row would
+        otherwise stay invisible while the run claims it was left for review.
+        ``dismissed`` stays terminal: the user said no.
         """
         self.execute_query(
             "UPDATE poster_heal_review SET status = 'failed', reason = ? "
-            "WHERE poster_file = ?",
+            "WHERE poster_file = ? AND status <> 'dismissed'",
             (reason, poster_file),
         )
 

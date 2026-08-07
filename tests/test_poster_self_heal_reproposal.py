@@ -251,3 +251,32 @@ def test_should_auto_apply_respects_auto_and_status():
     assert should_auto_apply(prop, False, set()) is False  # auto-apply off
     ambiguous = {"poster_file": "/p/x.jpg", "status": "pending"}
     assert should_auto_apply(ambiguous, True, set()) is False  # needs a manual pick
+
+
+def test_mark_failed_leaves_a_dismissed_row_terminal(db):
+    """'dismissed' is terminal — a failing apply must not reopen it."""
+    reviews = poster_heal_review_for(db)
+    reviews.upsert(_rec("/p/gone.jpg"))
+    reviews.set_status(reviews.list_open()[0]["id"], "dismissed")
+
+    reviews.mark_failed("/p/gone.jpg", "boom")
+
+    assert reviews.open_count() == 0
+    row = reviews.execute_query(
+        "SELECT status FROM poster_heal_review WHERE poster_file = ?",
+        ("/p/gone.jpg",),
+        fetch_one=True,
+    )
+    assert row["status"] == "dismissed"
+
+
+def test_mark_failed_still_reopens_an_applied_row(db):
+    """The case it exists for: an applied row whose re-apply fails."""
+    reviews = poster_heal_review_for(db)
+    reviews.upsert(_rec("/p/again.jpg"))
+    reviews.set_status(reviews.list_open()[0]["id"], "applied")
+
+    reviews.mark_failed("/p/again.jpg", "collision")
+
+    assert reviews.open_count() == 1
+    assert reviews.list_open()[0]["status"] == "failed"

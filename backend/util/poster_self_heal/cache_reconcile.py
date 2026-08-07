@@ -1,17 +1,8 @@
 # backend/util/poster_self_heal/cache_reconcile.py
-"""Keep poster_cache honest after the healer renames a file.
+"""Drop the poster_cache row for a file the healer just renamed.
 
-A successful apply moves the file out from under the row that produced the
-proposal. poster_cache's conflict key includes ``file`` (see its _UPSERT_SQL), so
-the row cannot be updated in place — a re-index inserts a NEW row and leaves the
-old one. The next run then re-reads the stale row, re-proposes the same rename,
-and collides with the file its own previous run created; that collision is
-permanent until the next full cache rebuild.
-
-The SQL lives here rather than as a PosterCache method because poster_cache.py is
-shared byte-identically with main and this is a develop-only extension concern. A
-named ``delete_by_file`` on main would be tidier — worth doing when something on
-main needs it too.
+Call after EVERY successful apply (scheduled and manual) — a surviving row
+re-proposes the rename and collides with the file we created.
 """
 
 from typing import Any
