@@ -166,6 +166,33 @@ jobs:
       run_stylelint: true
       run_prettier_check: true
 
+  # ---- Frontend tests (Vitest) ----
+  # Not folded into the reusable chodeus-ops node-ci.yml: that workflow has no
+  # test input and is shared fleet-wide, so adding one there would need a
+  # cross-repo change plus a SHA bump here.
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Vitest
+        working-directory: frontend
+        run: npm run test:run
+
   # ---- Branch isolation guard ----
   # Develop-only extensions (e.g. the CL2K poster maker) must never reach main.
   # On main (and PRs targeting main) fail if any extension code is present:
@@ -203,7 +230,7 @@ jobs:
   docker-validate:
     name: Docker Validate (PR)
     if: github.event_name == 'pull_request'
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard]
     runs-on: ubuntu-latest
 
     steps:
@@ -240,7 +267,7 @@ jobs:
   docker-push:
     name: Docker Build & Push
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard]
     runs-on: ubuntu-latest
     timeout-minutes: 45  # see release-please.yml docker-version
     # Serialize with the release-please docker-version job so concurrent pushes
@@ -304,7 +331,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   notify-failure:
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard, docker-push]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@aae195c19ec7069d2e91aca88107220ce807ef7e # main
     with:
