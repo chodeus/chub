@@ -621,9 +621,7 @@ def _require_any_id(req) -> Optional[JSONResponse]:
 class SquareArtRequest(BaseModel):
     kind: str
     title: str
-    # Optional: these makers use SUPPLIED art, so an id is only ever a filename
-    # tag. A TVDB/IMDB-only title is legitimate; _require_any_id enforces that at
-    # least one is present, or the file would have nothing to match on.
+    # Supplied art, so an id is only a filename tag. _require_any_id demands one.
     tmdb_id: Optional[int] = None
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
@@ -644,9 +642,7 @@ class SquareArtRequest(BaseModel):
 class LogoAssetRequest(BaseModel):
     kind: str
     title: str
-    # Optional: these makers use SUPPLIED art, so an id is only ever a filename
-    # tag. A TVDB/IMDB-only title is legitimate; _require_any_id enforces that at
-    # least one is present, or the file would have nothing to match on.
+    # Supplied art, so an id is only a filename tag. _require_any_id demands one.
     tmdb_id: Optional[int] = None
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
@@ -753,9 +749,7 @@ def square_generate(
 class BackgroundArtRequest(BaseModel):
     kind: str
     title: str
-    # Optional: these makers use SUPPLIED art, so an id is only ever a filename
-    # tag. A TVDB/IMDB-only title is legitimate; _require_any_id enforces that at
-    # least one is present, or the file would have nothing to match on.
+    # Supplied art, so an id is only a filename tag. _require_any_id demands one.
     tmdb_id: Optional[int] = None
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
