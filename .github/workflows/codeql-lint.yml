@@ -173,10 +173,16 @@ jobs:
   frontend-tests:
     name: Frontend Tests
     runs-on: ubuntu-latest
+    # Narrower than the workflow-wide grant: this job runs repo-controlled npm
+    # lifecycle scripts and test code, so it gets no token beyond reading.
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -230,7 +236,11 @@ jobs:
   docker-validate:
     name: Docker Validate (PR)
     if: github.event_name == 'pull_request'
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard]
+    # frontend-tests is deliberately NOT here: it is not a required check, and a
+    # needs-failure SKIPS this job — which GitHub reports as Success for a
+    # required check, turning a hard gate into a free pass. Promote
+    # "Frontend Tests" in branch protection to make it block instead.
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard]
     runs-on: ubuntu-latest
 
     steps:

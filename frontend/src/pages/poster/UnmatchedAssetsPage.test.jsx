@@ -114,10 +114,24 @@ describe('Unmatched tab — row actions', () => {
         expect(ignoreButtonsIn()).toHaveLength(2);
     });
 
-    it('renders no Ignore for a row the backend gave no targets', () => {
+    it('renders neither Ignore nor Match for a row the backend gave no targets', () => {
         unmatchedPayload = payload({ series: [{ ...A_SERIES, targets: [] }] });
         render(<UnmatchedAssetsPage />);
+
+        // Positive control first — without it a typo'd query or a row that
+        // failed to render would satisfy the absence assertions vacuously.
+        expect(screen.getByText('Foundation')).toBeInTheDocument();
         expect(ignoreButtonsIn()).toHaveLength(0);
+        // Match shares the gate. Rendering it without an id is the original
+        // bug's other half: it requested /posters/match/undefined/candidates
+        // and the swallowed 422 read as "nothing in your cache".
+        expect(screen.queryByRole('button', { name: 'Match' })).not.toBeInTheDocument();
+    });
+
+    it('renders Match on a row that does have targets', () => {
+        unmatchedPayload = payload({ series: [A_SERIES] });
+        render(<UnmatchedAssetsPage />);
+        expect(screen.getByRole('button', { name: 'Match' })).toBeInTheDocument();
     });
 
     it('ignores a single-target row straight from the button, with no picker', async () => {
