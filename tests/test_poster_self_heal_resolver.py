@@ -332,6 +332,77 @@ def test_is_under_empty_inputs_are_false():
     assert not _is_under(None, "/base")
 
 
+# --- a local row heals in the Drive that receives ITS image_type ---
+
+from backend.modules.poster_self_heal import drive_twins  # noqa: E402
+
+
+class _Drive:
+    def __init__(self, folder_id, types):
+        self.folder_id = folder_id
+        self.types = types
+
+
+class _Cl2k:
+    def __init__(self, gdrive_uploads):
+        self.gdrive_uploads = gdrive_uploads
+
+
+_ROUTED = _Cl2k(
+    [
+        _Drive("POSTERS", ["poster"]),
+        _Drive("BACKGROUNDS", ["background"]),
+        _Drive("LOGOS", ["logo"]),
+        _Drive("SQUAREART", ["squareart"]),
+    ]
+)
+
+
+def test_twin_follows_the_drive_claiming_that_image_type():
+    drive_ids, twin_of = drive_twins(_ROUTED)
+    assert drive_ids == ["POSTERS", "BACKGROUNDS", "LOGOS", "SQUAREART"]
+    # The regression: art types must NOT all resolve to the poster Drive, or the
+    # rename targets a folder the file isn't in, raises, and never heals.
+    assert twin_of("poster") == "POSTERS"
+    assert twin_of("background") == "BACKGROUNDS"
+    assert twin_of("logo") == "LOGOS"
+    assert twin_of("squareart") == "SQUAREART"
+
+
+def test_twin_falls_back_to_poster_drive_for_unclaimed_type():
+    _, twin_of = drive_twins(_ROUTED)
+    # No Drive claims "banner"; a missing image_type means poster.
+    assert twin_of("banner") == "POSTERS"
+    assert twin_of(None) == "POSTERS"
+
+
+def test_twin_falls_back_to_first_drive_when_nothing_claims_posters():
+    # Uploads-off / asset-only setup: keep healing the linked folder.
+    _, twin_of = drive_twins(_Cl2k([_Drive("ONLY", [])]))
+    assert twin_of("poster") == "ONLY"
+    assert twin_of("logo") == "ONLY"
+
+
+def test_twin_is_none_and_ids_empty_without_drives():
+    drive_ids, twin_of = drive_twins(_Cl2k([]))
+    assert drive_ids == []
+    assert twin_of("logo") is None
+
+
+def test_twin_skips_blank_folder_ids_and_keeps_first_claimer():
+    drive_ids, twin_of = drive_twins(
+        _Cl2k(
+            [
+                _Drive("  ", ["logo"]),  # blank id contributes nothing
+                _Drive("LOGOS_A", ["logo"]),
+                _Drive("LOGOS_B", ["logo"]),  # later claimer must not win
+            ]
+        )
+    )
+    assert drive_ids == ["LOGOS_A", "LOGOS_B"]
+    assert twin_of("logo") == "LOGOS_A"
+
+
 # --- season formatting is not drift (Season 1 == Season 01, Specials, year) ---
 
 
