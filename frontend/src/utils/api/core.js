@@ -173,6 +173,42 @@ const apiCore = {
     },
 
     /**
+     * Combine the timeout signal with a caller's, so passing `signal` cancels a
+     * request instead of being silently dropped — and the timeout still applies.
+     * @param {AbortSignal} timeoutSignal - This request's timeout signal
+     * @param {AbortSignal} [callerSignal] - Optional caller signal
+     * @returns {AbortSignal} Signal aborting when either does
+     */
+    combineSignals(timeoutSignal, callerSignal) {
+        if (!callerSignal) return timeoutSignal;
+        if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+            return AbortSignal.any([timeoutSignal, callerSignal]);
+        }
+        // Relay for engines without AbortSignal.any.
+        const relay = new AbortController();
+        const sources = [callerSignal, timeoutSignal];
+        const already = sources.find(s => s.aborted);
+        if (already) {
+            relay.abort(already.reason);
+            return relay.signal;
+        }
+        // Detach from BOTH sources on the first abort. `once` only clears the
+        // listener that fired; a caller signal often outlives the request, and a
+        // stale listener there would pin this relay for the signal's lifetime.
+        const handlers = new Map();
+        const detach = () => sources.forEach(s => s.removeEventListener('abort', handlers.get(s)));
+        sources.forEach(s => {
+            const onAbort = () => {
+                detach();
+                relay.abort(s.reason);
+            };
+            handlers.set(s, onAbort);
+            s.addEventListener('abort', onAbort);
+        });
+        return relay.signal;
+    },
+
+    /**
      * Make HTTP request with error handling
      * @param {string} url - Request URL
      * @param {Object} options - Fetch options
@@ -194,9 +230,15 @@ const apiCore = {
             // localStorage unavailable — skip
         }
 
-        // Destructure headers out of options so the spread doesn't overwrite them
-        // eslint-disable-next-line no-unused-vars
-        const { headers: optionHeaders, timeout: _timeout, ...restOptions } = options;
+        // Destructure headers/signal out of options so the spread can't overwrite
+        // the merged values set below.
+        const {
+            headers: optionHeaders,
+            // eslint-disable-next-line no-unused-vars
+            timeout: _timeout,
+            signal: callerSignal,
+            ...restOptions
+        } = options;
 
         const isFormData = typeof FormData !== 'undefined' && restOptions.body instanceof FormData;
         const headers = {
@@ -213,7 +255,7 @@ const apiCore = {
         const requestOptions = {
             ...restOptions,
             headers,
-            signal: controller.signal,
+            signal: this.combineSignals(controller.signal, callerSignal),
         };
 
         try {
@@ -270,6 +312,9 @@ const apiCore = {
             return responseData;
         } catch (error) {
             if (error.name === 'AbortError') {
+                // The caller cancelled deliberately — rethrow so it can recognise
+                // its own abort instead of handling a phantom timeout.
+                if (callerSignal?.aborted) throw error;
                 throw new APIError('Request timeout', 408, null, fullUrl);
             }
 
@@ -279,6 +324,12 @@ const apiCore = {
 
             // Network or other errors
             throw new APIError(`Network error: ${error.message}`, 0, null, fullUrl);
+        } finally {
+            // A completed request never aborts either signal, so the combined
+            // signal would keep listening to a (often reused) caller signal until
+            // the timeout eventually fired. Aborting here releases both listeners
+            // and clears the pending timer.
+            controller.abort();
         }
     },
 
@@ -302,8 +353,7 @@ const apiCore = {
             }
         }
 
-        // Use request tracker to prevent duplicate requests
-        return this.requestTracker.getOrCreate(cacheKey, async () => {
+        const run = async () => {
             const data = await this.makeRequest(url, {
                 method: 'GET',
                 ...requestOptions,
@@ -315,7 +365,18 @@ const apiCore = {
             }
 
             return data;
-        });
+        };
+
+        // A caller signal must NOT reach a promise shared with other callers: an
+        // AbortSignal stringifies to {} so every caller collapses onto the same
+        // tracker key, and one abort would reject everyone else's request. Give
+        // a cancelling caller its own request instead.
+        if (requestOptions.signal) {
+            return run();
+        }
+
+        // Use request tracker to prevent duplicate requests
+        return this.requestTracker.getOrCreate(cacheKey, run);
     },
 
     /**
