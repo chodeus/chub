@@ -7,6 +7,7 @@ dismiss it.
 
     GET  /api/poster-self-heal/reviews          open proposals + pending picks
     GET  /api/poster-self-heal/count            open count (for the badge)
+    GET  /api/poster-self-heal/coverage         save locations the heal scans
     POST /api/poster-self-heal/reviews/{id}/apply     rename on Drive + locally
     POST /api/poster-self-heal/reviews/{id}/dismiss   mark dismissed
 
@@ -50,6 +51,72 @@ def review_count(
 ) -> JSONResponse:
     reviews = poster_heal_review_for(db)
     return ok("ok", {"count": reviews.open_count()})
+
+
+@router.get("/coverage", summary="Save locations this heal keeps up to date")
+def coverage() -> JSONResponse:
+    """What the next run will actually scan, derived from the live CL2K config.
+
+    Built from the module's own ``local_dirs_for`` / ``drive_twins`` so the panel
+    can't drift from the scan. Note the scope is WIDER than the maker's routing:
+    a location with no claimed ``types`` saves nothing but is still healed, so
+    filtering on ``types`` here would under-report. Config-only — no rclone.
+    """
+    from backend.modules.poster_self_heal import drive_twins, local_dirs_for
+    from backend.util.cl2k.config import CL2K_IMAGE_TYPES
+
+    cfg = load_config()
+    cl2k = getattr(cfg, "cl2k_maker", None)
+    if cl2k is None:
+        return ok("ok", {"available": False, "folders": [], "drives": []})
+
+    scanned = local_dirs_for(cl2k)
+    drive_ids, twin_of = drive_twins(cl2k)
+    # Which types actually rename INTO each Drive — the twin resolution, not the
+    # claim, so a fallback target shows the types it really receives.
+    heals: dict = {}
+    for image_type in CL2K_IMAGE_TYPES:
+        fid = twin_of(image_type)
+        if fid:
+            heals.setdefault(fid, []).append(image_type)
+
+    folders = [
+        {
+            "name": (getattr(f, "name", "") or "").strip(),
+            "path": (getattr(f, "path", "") or "").strip(),
+            "types": list(getattr(f, "types", None) or []),
+        }
+        for f in (getattr(cl2k, "local_folders", None) or [])
+        if (getattr(f, "path", "") or "").strip() in scanned
+    ]
+    seen: set = set()
+    drives = []
+    for d in getattr(cl2k, "gdrive_uploads", None) or []:
+        fid = (getattr(d, "folder_id", "") or "").strip()
+        if not fid or fid in seen:
+            continue
+        seen.add(fid)
+        drives.append(
+            {
+                "name": (getattr(d, "name", "") or "").strip(),
+                "folder_id": fid,
+                "types": list(getattr(d, "types", None) or []),
+                "heals_types": heals.get(fid, []),
+            }
+        )
+
+    return ok(
+        "ok",
+        {
+            "available": True,
+            "style": (getattr(cl2k, "style", "") or "CL2K").strip(),
+            "folders": folders,
+            "drives": drives,
+            "unrouted_types": [t for t in CL2K_IMAGE_TYPES if not twin_of(t)],
+            "scanned_count": len(scanned),
+            "drive_count": len(drive_ids),
+        },
+    )
 
 
 @router.post("/reviews/{review_id}/dismiss", summary="Dismiss a proposal")

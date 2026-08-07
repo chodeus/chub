@@ -343,9 +343,16 @@ class _Drive:
         self.types = types
 
 
+class _Folder:
+    def __init__(self, path, types):
+        self.path = path
+        self.types = types
+
+
 class _Cl2k:
-    def __init__(self, gdrive_uploads):
+    def __init__(self, gdrive_uploads, local_folders=None):
         self.gdrive_uploads = gdrive_uploads
+        self.local_folders = local_folders or []
 
 
 _ROUTED = _Cl2k(
@@ -387,6 +394,30 @@ def test_twin_is_none_and_ids_empty_without_drives():
     drive_ids, twin_of = drive_twins(_Cl2k([]))
     assert drive_ids == []
     assert twin_of("logo") is None
+
+
+def test_local_dirs_keeps_config_order_and_dedupes():
+    from backend.modules.poster_self_heal import local_dirs_for
+
+    assert local_dirs_for(
+        _Cl2k(
+            [],
+            [
+                _Folder("/art/logos", ["logo"]),
+                _Folder("  ", ["background"]),  # blank path contributes nothing
+                _Folder("/art/backgrounds", ["background"]),
+                _Folder("/art/logos", ["squareart"]),  # dupe path collapses
+            ],
+        )
+    ) == ["/art/logos", "/art/backgrounds"]
+
+
+def test_local_dirs_ignores_types_so_an_inert_row_is_still_scanned():
+    from backend.modules.poster_self_heal import local_dirs_for
+
+    # types:[] saves nothing, but the healer still scans the folder — filtering
+    # on types here would silently drop it from the heal (and from the panel).
+    assert local_dirs_for(_Cl2k([], [_Folder("/art/orphans", [])])) == ["/art/orphans"]
 
 
 def test_twin_skips_blank_folder_ids_and_keeps_first_claimer():
