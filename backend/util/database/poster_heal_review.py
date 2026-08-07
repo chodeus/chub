@@ -115,12 +115,8 @@ class PosterHealReview(DatabaseBase):
         )
 
     def dismissed_files(self) -> set:
-        """``poster_file`` values the user has explicitly dismissed.
-
-        Fetched once per run: "dismissed" is documented as terminal and sticky,
-        so auto-apply must not act on one. The CASE above already keeps it out of
-        the review queue — this keeps it out of the *filesystem* too.
-        """
+        """``poster_file`` values the user dismissed. Auto-apply must skip
+        these — the CASE only keeps them out of the queue, not off the disk."""
         rows = (
             self.execute_query(
                 "SELECT poster_file FROM poster_heal_review WHERE status = 'dismissed'",
@@ -130,13 +126,20 @@ class PosterHealReview(DatabaseBase):
         )
         return {r["poster_file"] for r in rows if r.get("poster_file")}
 
-    def mark_failed(self, poster_file: str, reason: str) -> None:
-        """Force a row open as ``failed`` after an auto-apply raised.
+    def is_dismissed(self, poster_file: str) -> bool:
+        """Live check — call immediately before a rename; the run-start snapshot
+        goes stale as soon as the user dismisses something mid-run."""
+        row = self.execute_query(
+            "SELECT 1 AS hit FROM poster_heal_review "
+            "WHERE poster_file = ? AND status = 'dismissed'",
+            (poster_file,),
+            fetch_one=True,
+        )
+        return bool(row)
 
-        Bypasses upsert's terminal-status CASE for ``applied`` — such a row would
-        otherwise stay invisible while the run claims it was left for review.
-        ``dismissed`` stays terminal: the user said no.
-        """
+    def mark_failed(self, poster_file: str, reason: str) -> None:
+        """Force a row open as ``failed`` after an auto-apply raised. Overrides
+        a terminal ``applied``; ``dismissed`` stays terminal."""
         self.execute_query(
             "UPDATE poster_heal_review SET status = 'failed', reason = ? "
             "WHERE poster_file = ? AND status <> 'dismissed'",

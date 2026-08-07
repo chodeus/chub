@@ -57,12 +57,8 @@ def local_dirs_for(cl2k) -> list:
 
 
 def should_auto_apply(prop, auto: bool, dismissed_files) -> bool:
-    """Whether this run may rename ``prop`` without asking.
-
-    False for a dismissed poster_file: "dismissed" is documented as terminal and
-    sticky, and the upsert CASE only keeps it out of the review queue — without
-    this it would still be renamed on disk and on Drive.
-    """
+    """True when this run may rename ``prop`` unattended. A dismissed
+    poster_file never qualifies — dismissed is terminal."""
     if not auto or prop.get("status") != "proposed":
         return False
     return prop.get("poster_file") not in dismissed_files
@@ -197,11 +193,7 @@ class PosterSelfHeal(ChubModule):
                 f"{' [auto-apply ON]' if auto else ''}"
             )
             proposed = pending = applied = failed = dismissed = 0
-            # "dismissed" is documented as terminal and sticky, so auto-apply must
-            # not act on one. The upsert CASE only keeps it out of the review
-            # queue; without this it would still be renamed on disk and on Drive,
-            # which is the opposite of what the user asked for. Read once — the
-            # loop can run to tens of thousands of posters.
+            # Cheap first filter; re-checked live before each rename below.
             dismissed_files = reviews.dismissed_files() if auto else set()
             for idx, (poster, heal_folder_id) in enumerate(posters, 1):
                 if self.is_cancelled():
@@ -226,6 +218,10 @@ class PosterSelfHeal(ChubModule):
                     # (pending) ones always wait for a manual pick.
                     apply_error = None
                     skipped = auto and prop["poster_file"] in dismissed_files
+                    if not skipped and should_auto_apply(prop, auto, dismissed_files):
+                        # Re-check live: the snapshot is from run start and a run
+                        # takes minutes, so the user may have dismissed this since.
+                        skipped = reviews.is_dismissed(prop["poster_file"])
                     if skipped:
                         dismissed += 1
                         self.logger.debug(
@@ -246,9 +242,8 @@ class PosterSelfHeal(ChubModule):
                                 f"auto-apply failed for {prop['current_filename']}: {exc}"
                                 " — reopened for manual review"
                             )
-                    # A failed apply is counted ONCE, as failed: its status is
-                    # still "proposed" here, and counting it again below reported
-                    # two items as four. A dismissed skip isn't open either.
+                    # Count a failed apply once, as failed; a dismissed skip isn't
+                    # open either.
                     if apply_error is None and not skipped:
                         if prop["status"] == "pending":
                             pending += 1
@@ -256,14 +251,11 @@ class PosterSelfHeal(ChubModule):
                             proposed += 1
                     reviews.upsert(prop)
                     if apply_error is not None:
-                        # upsert's CASE keeps a terminal status, so a row that was
-                        # already "applied" would stay invisible — force it open.
+                        # upsert's CASE keeps a terminal status — force it open.
                         reviews.mark_failed(prop["poster_file"], apply_error)
                     elif prop["status"] == "applied":
-                        # The rename moved the file out from under the index that
-                        # produced this proposal. Drop the stale row or the next
-                        # run re-proposes a rename whose target now exists — which
-                        # fails forever, since the collision is our own doing.
+                        # Drop the row the rename invalidated, or the next run
+                        # re-proposes it and collides with the file we created.
                         stale = prop.get("poster_file") or ""
                         if os.path.isabs(stale):
                             drop_stale_row(db, stale, self.logger)

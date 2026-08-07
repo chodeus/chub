@@ -280,3 +280,24 @@ def test_mark_failed_still_reopens_an_applied_row(db):
 
     assert reviews.open_count() == 1
     assert reviews.list_open()[0]["status"] == "failed"
+
+
+def test_is_dismissed_sees_a_mid_run_dismissal(db):
+    """dismissed_files is a run-start snapshot; a run takes minutes, so a user can
+    dismiss between the snapshot and the rename. The live check must catch it."""
+    reviews = poster_heal_review_for(db)
+    reviews.upsert(_rec("/p/late.jpg"))
+    snapshot = reviews.dismissed_files()  # taken BEFORE the dismissal
+    assert "/p/late.jpg" not in snapshot
+
+    reviews.set_status(reviews.list_open()[0]["id"], "dismissed")
+
+    assert "/p/late.jpg" not in snapshot, "snapshot is stale, as expected"
+    assert reviews.is_dismissed("/p/late.jpg") is True
+
+
+def test_is_dismissed_false_for_open_and_unknown(db):
+    reviews = poster_heal_review_for(db)
+    reviews.upsert(_rec("/p/open.jpg"))
+    assert reviews.is_dismissed("/p/open.jpg") is False
+    assert reviews.is_dismissed("/p/never-seen.jpg") is False

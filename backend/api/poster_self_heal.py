@@ -169,9 +169,7 @@ def apply_review(
         return error(f"Google Drive rename failed: {exc}", "DRIVE_RENAME")
 
     reviews.set_status(review_id, "applied")
-    # Same reconciliation the scheduled run does: the rename moved the file out
-    # from under its poster_cache row, and that row would otherwise re-propose
-    # this rename on the next scan and collide with the file we just created.
+    # Drop the row the rename invalidated — same as the scheduled run.
     stale = row.get("poster_file") or ""
     if os.path.isabs(stale):
         drop_stale_row(db, stale, logger)
