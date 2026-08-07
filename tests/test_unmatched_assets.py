@@ -243,6 +243,68 @@ def test_group_assets_keeps_row_ids_on_every_type():
     assert sorted(series["missing_seasons"]) == [1, 2]
 
 
+def test_group_match_rows_collapses_a_series_into_one_entry():
+    """The Ignored tab groups like Unmatched: one row per show, carrying a target
+    per media_cache row so Restore can undo all of them."""
+    m = make_module()
+    rows = [
+        {"id": 1, "type": "movie", "title": "M", "year": 2020, "instance_name": "radarr"},
+        {
+            "id": 2,
+            "type": "series",
+            "title": "Show",
+            "year": 2021,
+            "season_number": None,
+            "instance_name": "sonarr",
+        },
+        {
+            "id": 3,
+            "type": "show",
+            "title": "Show",
+            "year": 2021,
+            "season_number": 1,
+            "instance_name": "sonarr",
+        },
+        {"id": 4, "type": "collection", "title": "Coll", "year": None},
+    ]
+    out = m._group_match_rows(rows)
+
+    assert [r["title"] for r in out] == ["M", "Show", "Coll"]
+    series = next(r for r in out if r["title"] == "Show")
+    assert sorted(t["id"] for t in series["targets"]) == [2, 3]
+    assert series["missing_main_poster"] is True
+    assert series["missing_seasons"] == [1]
+    # Movies and collections are already one row per item — left untouched.
+    assert "targets" not in out[0]
+
+
+def test_group_match_rows_keeps_instances_apart():
+    """Same show ignored on two instances stays two rows — otherwise Restore
+    would silently un-ignore the other instance's rows."""
+    m = make_module()
+    rows = [
+        {
+            "id": 10,
+            "type": "series",
+            "title": "Show",
+            "year": 2021,
+            "season_number": 1,
+            "instance_name": "sonarr",
+        },
+        {
+            "id": 20,
+            "type": "series",
+            "title": "Show",
+            "year": 2021,
+            "season_number": 1,
+            "instance_name": "sonarr_4k",
+        },
+    ]
+    out = m._group_match_rows(rows)
+    assert len(out) == 2
+    assert {r["instance_name"] for r in out} == {"sonarr", "sonarr_4k"}
+
+
 def test_group_assets_series_split_by_instance():
     """The same show unmatched on two *arr instances is two rows. Merging them
     would fan Ignore across both while labelling the row with one instance."""

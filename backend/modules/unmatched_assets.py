@@ -649,6 +649,39 @@ class UnmatchedAssets(ChubModule):
             "conflicts": conflicts,
         }
 
+    @staticmethod
+    def _group_match_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Collapse a series' per-season rows into one entry, mirroring
+        group_assets so the Ignored tab reads like Unmatched. Movies and
+        collections pass through — they are already one row per item."""
+        out: List[Dict[str, Any]] = []
+        index: Dict[tuple, Dict[str, Any]] = {}
+        for row in rows:
+            if row.get("type") not in ("show", "series"):
+                out.append(row)
+                continue
+            # instance_name is part of the key for the same reason group_assets
+            # needs it — a 1080p/4K split is two independent items.
+            key = (row.get("title"), row.get("year"), row.get("instance_name"))
+            season = row.get("season_number")
+            entry = index.get(key)
+            if entry is None:
+                entry = {
+                    **row,
+                    "season_number": None,
+                    "missing_seasons": [],
+                    "missing_main_poster": False,
+                    "targets": [],
+                }
+                out.append(entry)
+                index[key] = entry
+            if season is not None:
+                entry["missing_seasons"].append(season)
+            else:
+                entry["missing_main_poster"] = True
+            entry["targets"].append({"id": row.get("id"), "season_number": season})
+        return out
+
     def get_review_and_ignored(self, db: ChubDB) -> tuple:
         """Return (needs_review, ignored, locked) flat lists for the tabs.
 
@@ -666,15 +699,18 @@ class UnmatchedAssets(ChubModule):
             for r in db.collection.get_needs_review()
             if self.allowed_collection(r) and self.should_include(r)
         ]
-        ignored_rows = [
-            self._serialize_match_row(r, False)
-            for r in db.media.get_ignored()
-            if self.allowed_media(r)
-        ] + [
-            self._serialize_match_row(r, True)
-            for r in db.collection.get_ignored()
-            if self.allowed_collection(r)
-        ]
+        ignored_rows = self._group_match_rows(
+            [
+                self._serialize_match_row(r, False)
+                for r in db.media.get_ignored()
+                if self.allowed_media(r)
+            ]
+            + [
+                self._serialize_match_row(r, True)
+                for r in db.collection.get_ignored()
+                if self.allowed_collection(r)
+            ]
+        )
         locked_rows = [
             self._serialize_match_row(r, False)
             for r in db.media.get_user_confirmed()

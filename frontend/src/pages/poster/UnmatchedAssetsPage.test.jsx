@@ -96,6 +96,11 @@ const A_SERIES = {
 const IGNORE_BTN = /^Ignore (this item|— choose what to hide)$/;
 const ignoreButtonsIn = () => screen.queryAllByRole('button', { name: IGNORE_BTN });
 
+/** Every setMatchIgnored call as [id, payload], id-ordered — asserting on whole
+ *  calls catches a wrong `ignored` value that an id-only check would miss. */
+const sortedIgnoreCalls = () =>
+    [...mockPostersAPI.setMatchIgnored.mock.calls].sort((a, b) => a[0] - b[0]);
+
 beforeEach(() => {
     unmatchedPayload = null;
     mockPostersAPI.setMatchIgnored.mockResolvedValue({});
@@ -209,10 +214,11 @@ describe('Unmatched tab — per-target ignore', () => {
             within(screen.getByRole('dialog')).getByRole('button', { name: /Everything/ })
         );
 
-        expect(mockPostersAPI.setMatchIgnored).toHaveBeenCalledTimes(3);
-        expect(
-            mockPostersAPI.setMatchIgnored.mock.calls.map(c => c[0]).sort((a, b) => a - b)
-        ).toEqual([20, 21, 22]);
+        expect(sortedIgnoreCalls()).toEqual([
+            [20, { kind: 'media', ignored: true }],
+            [21, { kind: 'media', ignored: true }],
+            [22, { kind: 'media', ignored: true }],
+        ]);
     });
 
     it('still refreshes when one call in the fan-out fails', async () => {
@@ -233,6 +239,99 @@ describe('Unmatched tab — per-target ignore', () => {
 
         expect(refresh).toHaveBeenCalled();
         expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('2 of 3'));
+    });
+});
+
+describe('Ignored tab — grouped rows', () => {
+    /** What the backend now sends: one entry per show, carrying a target per
+     *  media_cache row it covers. */
+    const IGNORED_SERIES = {
+        id: 20,
+        title: 'Foundation',
+        year: 2021,
+        type: 'series',
+        asset_type: 'series',
+        instance_name: 'sonarr',
+        missing_main_poster: true,
+        missing_seasons: [1, 2],
+        targets: [
+            { id: 20, season_number: null },
+            { id: 21, season_number: 1 },
+            { id: 22, season_number: 2 },
+        ],
+    };
+
+    const openIgnoredTab = async user => {
+        await user.click(screen.getByRole('button', { name: /^Ignored/ }));
+    };
+
+    it('shows one row with a chip per ignored season', async () => {
+        const user = userEvent.setup();
+        unmatchedPayload = { ...payload({}), ignored: [IGNORED_SERIES] };
+        render(<UnmatchedAssetsPage />);
+        await openIgnoredTab(user);
+
+        expect(screen.getAllByText('Foundation')).toHaveLength(1);
+        // Without these the grouped row is indistinguishable from any other.
+        expect(screen.getByText('Poster')).toBeInTheDocument();
+        expect(screen.getByText('S01')).toBeInTheDocument();
+        expect(screen.getByText('S02')).toBeInTheDocument();
+    });
+
+    it('chips a single-season group too, so it cannot read as the whole show', async () => {
+        const user = userEvent.setup();
+        // Ignoring only S01 leaves one target. Without a chip this row is
+        // indistinguishable from having ignored the entire show.
+        unmatchedPayload = {
+            ...payload({}),
+            ignored: [
+                {
+                    ...IGNORED_SERIES,
+                    id: 21,
+                    missing_main_poster: false,
+                    missing_seasons: [1],
+                    targets: [{ id: 21, season_number: 1 }],
+                },
+            ],
+        };
+        render(<UnmatchedAssetsPage />);
+        await openIgnoredTab(user);
+
+        expect(screen.getByText('Foundation')).toBeInTheDocument();
+        expect(screen.getByText('S01')).toBeInTheDocument();
+        expect(screen.queryByText('Poster')).not.toBeInTheDocument();
+    });
+
+    it('does not chip a movie row, which is not a group', async () => {
+        const user = userEvent.setup();
+        unmatchedPayload = {
+            ...payload({}),
+            ignored: [{ id: 5, title: 'Blade Runner 2049', year: 2017, type: 'movie' }],
+        };
+        render(<UnmatchedAssetsPage />);
+        await openIgnoredTab(user);
+
+        expect(screen.getByText('Blade Runner 2049')).toBeInTheDocument();
+        // MissingPosterChips falls back to a bare "Poster" chip for non-series;
+        // movies carry no targets so they must not reach it at all.
+        expect(screen.queryByText('Poster')).not.toBeInTheDocument();
+    });
+
+    it('restores every row the group covers, not just the first', async () => {
+        const user = userEvent.setup();
+        unmatchedPayload = { ...payload({}), ignored: [IGNORED_SERIES] };
+        render(<UnmatchedAssetsPage />);
+        await openIgnoredTab(user);
+
+        await user.click(screen.getByRole('button', { name: 'Restore' }));
+
+        // Whole calls, not just the ids: asserting the payload for one target
+        // would let a wrong `ignored` value on the other two slip through.
+        expect(sortedIgnoreCalls()).toEqual([
+            [20, { kind: 'media', ignored: false }],
+            [21, { kind: 'media', ignored: false }],
+            [22, { kind: 'media', ignored: false }],
+        ]);
     });
 });
 
