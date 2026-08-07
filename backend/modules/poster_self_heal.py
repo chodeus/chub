@@ -43,6 +43,35 @@ def _is_under(path: str, base_dir: str) -> bool:
     return p == base or p.startswith(base + os.sep)
 
 
+def drive_twins(cl2k) -> tuple:
+    """``(drive_ids, twin_of)`` for the configured ``gdrive_uploads``.
+
+    ``twin_of(image_type)`` gives the Drive folder a locally-saved row of that
+    type should be renamed in. Art types route to their own folders, so a logo
+    must heal against the logo Drive — renaming it in the poster Drive raises
+    (the file isn't there) and the row then never heals at all. First claimer
+    wins, matching ``_drive_targets``' config-order preference; a type no Drive
+    claims falls back to the poster Drive, else the first Drive at all (the
+    pre-redesign behaviour of healing the linked folder even with uploads off).
+    """
+    drive_ids: list = []
+    by_type: dict = {}
+    for drive in getattr(cl2k, "gdrive_uploads", None) or []:
+        fid = (getattr(drive, "folder_id", "") or "").strip()
+        if not fid:
+            continue
+        if fid not in drive_ids:
+            drive_ids.append(fid)
+        for image_type in getattr(drive, "types", None) or []:
+            by_type.setdefault(image_type, fid)
+    fallback = by_type.get("poster") or (drive_ids[0] if drive_ids else None)
+
+    def twin_of(image_type):
+        return by_type.get(image_type or "poster", fallback)
+
+    return drive_ids, twin_of
+
+
 class PosterSelfHeal(ChubModule):
     """Detect stale ids / changed titles / missing ids on CL2K posters."""
 
@@ -61,24 +90,7 @@ class PosterSelfHeal(ChubModule):
             p = (getattr(folder, "path", "") or "").strip()
             if p and p not in local_dirs:
                 local_dirs.append(p)
-        drive_ids: list = []
-        poster_twin_id = None
-        for drive in getattr(cl2k, "gdrive_uploads", None) or []:
-            fid = (getattr(drive, "folder_id", "") or "").strip()
-            if not fid:
-                continue
-            if fid not in drive_ids:
-                drive_ids.append(fid)
-            # Where a locally-saved poster's Drive twin lives: the first Drive
-            # that receives posters (fall back to the first Drive at all, which
-            # matches the pre-redesign behaviour of healing the linked folder
-            # even with uploads off).
-            if poster_twin_id is None and "poster" in (
-                getattr(drive, "types", None) or []
-            ):
-                poster_twin_id = fid
-        if poster_twin_id is None and drive_ids:
-            poster_twin_id = drive_ids[0]
+        drive_ids, twin_of = drive_twins(cl2k)
         if not local_dirs and not drive_ids:
             self.logger.error(
                 "CL2K maker has no local folders or Drive uploads configured — "
@@ -137,8 +149,10 @@ class PosterSelfHeal(ChubModule):
                         seen_names.add(base)
                         drive_posters.append((parsed, fid))
 
-            # Local posters heal their Drive twin (if any) in poster_twin_id.
-            posters = [(p, poster_twin_id) for p in local_posters] + drive_posters
+            # Local rows heal the Drive twin that receives their own image_type.
+            posters = [
+                (p, twin_of(p.get("image_type"))) for p in local_posters
+            ] + drive_posters
             media_index = index_media(db.media.get_all())
             reviews = poster_heal_review_for(db)
 
