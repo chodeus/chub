@@ -29,4 +29,11 @@ export default defineConfig([
       react: { version: 'detect' },
     },
   },
+  {
+    // Vitest injects describe/it/expect/vi as globals (globals: true).
+    files: ['src/**/*.test.{js,jsx}', 'src/test/**/*.{js,jsx}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node, ...globals.vitest },
+    },
+  },
 ]);
