@@ -398,12 +398,63 @@ const TestUploadButton = ({ folderId, disabled }) => {
     );
 };
 
+// Splits ONE parent Drive into the community artwork layout. Opt-in per row —
+// a Drive that should stay flat simply never uses it, and nothing on Drive is
+// moved or deleted either way.
+const SplitSubfoldersButton = ({ folderId, disabled, onSplit }) => {
+    const toast = useToast();
+    const [busy, setBusy] = useState(false);
+    const canRun = !disabled && !busy && !!(folderId || '').trim();
+
+    const run = useCallback(async () => {
+        setBusy(true);
+        try {
+            const res = await apiCore.post('/cl2k-maker/gdrive/type-subfolders', {
+                gdrive_folder_id: folderId,
+            });
+            const subfolders = res?.data?.subfolders || [];
+            // Refuse to rewrite the row on a partial answer: a missing type or a
+            // blank folder_id would save a destination that silently uploads
+            // nothing (_drive_targets skips a blank id).
+            const usable =
+                CL2K_ART_TYPES.filter(t => t.value !== 'poster').every(t =>
+                    subfolders.some(s => s.image_type === t.value && (s.folder_id || '').trim())
+                ) && subfolders.every(s => (s.folder_id || '').trim());
+            if (!usable) throw new Error('Drive returned an incomplete set of subfolders');
+            onSplit(subfolders);
+            toast.success(res?.message || 'Split into type subfolders');
+        } catch (e) {
+            toast.error(e?.message || 'Could not create the type subfolders');
+        } finally {
+            setBusy(false);
+        }
+    }, [folderId, toast, onSplit]);
+
+    return (
+        <button
+            type="button"
+            onClick={run}
+            disabled={!canRun}
+            title={
+                (folderId || '').trim()
+                    ? 'Create logos/backgrounds/squareart in this Drive folder and route each type to its own'
+                    : 'Enter a Folder ID first'
+            }
+            className="inline-flex items-center gap-1.5 h-[38px] px-3 shrink-0 bg-surface border border-border rounded-lg text-fg-muted text-[12.5px] font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
+        >
+            <Icon name="create_new_folder" className="text-[16px] text-accent" />
+            {busy ? 'Splitting…' : 'Split by type'}
+        </button>
+    );
+};
+
 const DriveEntry = ({
     entry,
     disabled,
     onPatch,
     onDelete,
     onToggleType,
+    onSplit,
     autoFocus,
     clearFocus,
 }) => {
@@ -431,6 +482,11 @@ const DriveEntry = ({
                     aria-label="Drive folder ID"
                 />
                 <TestUploadButton folderId={entry.folder_id} disabled={disabled} />
+                <SplitSubfoldersButton
+                    folderId={entry.folder_id}
+                    disabled={disabled}
+                    onSplit={onSplit}
+                />
             </div>
             <TypeChips
                 microLabel="Uploads"
@@ -454,6 +510,28 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
     }, [value]);
 
     const clearFocus = useCallback(() => setFocusIndex(null), [setFocusIndex]);
+
+    // Replace the split row with one routed row per type. The parent row's own
+    // claimed types are dropped — they now live on the children — and any type
+    // it didn't claim is left unclaimed rather than silently switched on.
+    const splitRow = useCallback(
+        (index, subfolders) => {
+            const parent = entries[index] || {};
+            const claimed = parent.types || [];
+            const children = subfolders
+                // Only types the parent actually claimed. An unclaimed row splits
+                // into nothing and is left untouched by the empty-children return.
+                .filter(s => claimed.includes(s.image_type))
+                .map(s => ({
+                    name: `${parent.name || 'Drive'} ${s.name}`.trim(),
+                    folder_id: s.folder_id,
+                    types: [s.image_type],
+                }));
+            if (children.length === 0) return;
+            onChange(entries.flatMap((e, i) => (i === index ? children : [e])));
+        },
+        [entries, onChange]
+    );
 
     return (
         <div>
@@ -484,6 +562,7 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
                             onPatch={changes => patch(i, changes)}
                             onDelete={() => remove(i)}
                             onToggleType={type => toggleType(i, type)}
+                            onSplit={subfolders => splitRow(i, subfolders)}
                             autoFocus={focusIndex === i}
                             clearFocus={clearFocus}
                         />

@@ -256,6 +256,98 @@ def list_files(folder_id: str, sync_cfg: Any, logger) -> List[str]:
     return [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
 
 
+# image_type -> the Drive subfolder the community artwork drives use for it. A
+# FIXED map, never user input, so these never widen the rclone argument surface.
+TYPE_SUBFOLDERS = {
+    "logo": "logos",
+    "background": "backgrounds",
+    "squareart": "squareart",
+}
+
+
+def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
+    """Create (or find) ``logos``/``backgrounds``/``squareart`` under ``folder_id``.
+
+    Returns one ``{image_type, name, folder_id, created}`` per subfolder so the
+    caller can store real child ids — the upload path still addresses exactly one
+    Drive folder per destination. Raises on a missing token or rclone failure.
+    """
+    _reject_unsafe_id(folder_id, "gdrive_folder_id")
+    auth = _upload_auth_args(sync_cfg)
+    if not auth:
+        raise RuntimeError(
+            "no usable Google Drive OAuth token configured — set a token under "
+            "Sync GDrive (a service account cannot own files in a personal Drive)"
+        )
+    rclone = _rclone_path()
+    _ensure_remote(rclone)
+
+    def _dir_ids() -> dict:
+        result = subprocess.run(
+            [
+                rclone,
+                "lsjson",
+                "posters:",
+                "--drive-root-folder-id",
+                folder_id,
+                "--dirs-only",
+                *auth,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"rclone lsjson failed: {_rclone_error_detail(result.stderr)}"
+            )
+        # Keep only usable ids: a blank/absent/non-string ID must NOT register the
+        # name, or the completeness check below passes and we hand back a routed
+        # row whose folder_id is empty — which _drive_targets skips silently, so
+        # that art type would just stop uploading with no error anywhere.
+        return {
+            d["Name"]: d["ID"]
+            for d in json.loads(result.stdout or "[]")
+            if isinstance(d.get("ID"), str) and d["ID"].strip()
+        }
+
+    existing = _dir_ids()
+    made = []
+    for name in TYPE_SUBFOLDERS.values():
+        if name in existing:
+            continue
+        result = subprocess.run(
+            [rclone, "mkdir", f"posters:{name}", "--drive-root-folder-id", folder_id, *auth],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"rclone mkdir '{name}' failed: {_rclone_error_detail(result.stderr)}"
+            )
+        made.append(name)
+
+    # Re-list once so newly created folders come back with their real ids.
+    ids = _dir_ids() if made else existing
+    missing = [n for n in TYPE_SUBFOLDERS.values() if n not in ids]
+    if missing:
+        raise RuntimeError(f"Drive did not return an id for: {', '.join(missing)}")
+    logger.info(
+        f"cl2k: type subfolders under {folder_id} — created {made or 'none'}, "
+        f"reused {[n for n in TYPE_SUBFOLDERS.values() if n not in made]}"
+    )
+    return [
+        {
+            "image_type": image_type,
+            "name": name,
+            "folder_id": ids[name],
+            "created": name in made,
+        }
+        for image_type, name in TYPE_SUBFOLDERS.items()
+    ]
+
+
 def delete_file(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
     """Delete the single file ``name`` from Drive folder ``folder_id`` via
     ``rclone deletefile``. ``name`` is relative to ``folder_id`` (the rclone

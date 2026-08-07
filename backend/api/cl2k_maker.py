@@ -334,6 +334,51 @@ def test_drive(
     return ok(detail, {"folder_id": folder_id})
 
 
+@router.post(
+    "/gdrive/type-subfolders",
+    summary="Create logos/backgrounds/squareart under a parent Drive folder",
+)
+def gdrive_type_subfolders(
+    req: TestDriveRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    """Split one parent Drive folder into the community artwork layout.
+
+    Creates (or reuses) the three type subfolders and returns their real ids, so
+    the caller can store one routed destination per type. Purely additive on
+    Drive — nothing is moved, renamed or deleted, and a drive that should stay
+    flat simply never calls this.
+    """
+    from backend.util.cl2k.gdrive_upload import ensure_type_subfolders, has_upload_token
+
+    folder_id = (req.gdrive_folder_id or "").strip()
+    if not folder_id:
+        return error("A Google Drive folder ID is required", "GDRIVE_FOLDER_REQUIRED")
+    cfg = load_config()
+    if not has_upload_token(cfg.sync_gdrive):
+        return error(
+            "No Google Drive OAuth token configured — set one under Sync GDrive "
+            "(a service account cannot own files in a personal Drive).",
+            "GDRIVE_NO_TOKEN",
+        )
+    try:
+        subfolders = ensure_type_subfolders(folder_id, cfg.sync_gdrive, logger)
+    except ValueError as exc:
+        return error(f"Invalid folder ID: {exc}", "GDRIVE_FOLDER_INVALID")
+    except Exception as exc:
+        return error(
+            f"Could not create the type subfolders: {exc}",
+            "GDRIVE_SUBFOLDERS_FAILED",
+            status_code=502,
+        )
+    created = [s["name"] for s in subfolders if s["created"]]
+    detail = (
+        f"Created {', '.join(created)}" if created else "All three subfolders already existed"
+    )
+    return ok(detail, {"folder_id": folder_id, "subfolders": subfolders})
+
+
 @router.get(
     "/external-ids", summary="TMDB external ids (tvdb_id + imdb_id) for a title"
 )
