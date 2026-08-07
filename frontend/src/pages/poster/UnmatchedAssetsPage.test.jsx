@@ -272,6 +272,45 @@ describe('Ignored tab — grouped rows', () => {
         expect(screen.getByText('S02')).toBeInTheDocument();
     });
 
+    it('chips a single-season group too, so it cannot read as the whole show', async () => {
+        const user = userEvent.setup();
+        // Ignoring only S01 leaves one target. Without a chip this row is
+        // indistinguishable from having ignored the entire show.
+        unmatchedPayload = {
+            ...payload({}),
+            ignored: [
+                {
+                    ...IGNORED_SERIES,
+                    id: 21,
+                    missing_main_poster: false,
+                    missing_seasons: [1],
+                    targets: [{ id: 21, season_number: 1 }],
+                },
+            ],
+        };
+        render(<UnmatchedAssetsPage />);
+        await openIgnoredTab(user);
+
+        expect(screen.getByText('Foundation')).toBeInTheDocument();
+        expect(screen.getByText('S01')).toBeInTheDocument();
+        expect(screen.queryByText('Poster')).not.toBeInTheDocument();
+    });
+
+    it('does not chip a movie row, which is not a group', async () => {
+        const user = userEvent.setup();
+        unmatchedPayload = {
+            ...payload({}),
+            ignored: [{ id: 5, title: 'Blade Runner 2049', year: 2017, type: 'movie' }],
+        };
+        render(<UnmatchedAssetsPage />);
+        await openIgnoredTab(user);
+
+        expect(screen.getByText('Blade Runner 2049')).toBeInTheDocument();
+        // MissingPosterChips falls back to a bare "Poster" chip for non-series;
+        // movies carry no targets so they must not reach it at all.
+        expect(screen.queryByText('Poster')).not.toBeInTheDocument();
+    });
+
     it('restores every row the group covers, not just the first', async () => {
         const user = userEvent.setup();
         unmatchedPayload = { ...payload({}), ignored: [IGNORED_SERIES] };

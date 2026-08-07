@@ -943,9 +943,11 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                                         >
                                             {item.title}
                                         </Link>
-                                        {item.targets?.length > 1 && (
-                                            // Which seasons this grouped row covers — without it
-                                            // several identical titles are indistinguishable.
+                                        {item.targets?.length > 0 && (
+                                            // Any grouped series row, including a one-target one —
+                                            // a show with only S01 ignored must not read as the
+                                            // whole show. Only series get `targets`, so movies and
+                                            // collections skip the chips entirely.
                                             <div className="mt-1">
                                                 <MissingPosterChips item={item} />
                                             </div>
