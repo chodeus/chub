@@ -25,7 +25,7 @@ import io
 from typing import Optional
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image
 
 
 def _despeckle(alpha: np.ndarray, min_area: int = 12) -> np.ndarray:
@@ -204,6 +204,33 @@ def _kmeans(pts: np.ndarray, k: int, iters: int = 12):
     return cent, np.bincount(lab, minlength=k)
 
 
+# A near-ring cluster with no colour within this ΔE in the FAR ring is title
+# bleed (grunge spray / glow hugging the glyphs), not backdrop — see _drop_bleed.
+_BLEED_FAR_SUPPORT = 14.0
+
+
+def _drop_bleed(arr: np.ndarray, mask: np.ndarray, cent: np.ndarray) -> np.ndarray:
+    """Drop near-ring clusters unsupported by the far ring (40-80px out).
+
+    A distressed/sprayed title bleeds its own colour into the ring just outside
+    the brush, poisoning the backdrop palette so the letters key as backdrop.
+    The bleed hugs the text; real backdrop continues outward — so any near
+    cluster with no far-ring colour within ``_BLEED_FAR_SUPPORT`` ΔE is bleed.
+    Fail-safe: too small a far ring, or nothing validating, keeps all clusters.
+    """
+    far = _dilate(mask, 80) & ~_dilate(mask, 40)
+    fpts = arr[far]
+    if len(fpts) < 200:
+        return cent
+    fsub = fpts.astype(np.float32)[:: max(1, len(fpts) // 4000)]
+    fcent, fcounts = _kmeans(fsub, 5)
+    fcent = fcent[fcounts > 0]
+    diff = _srgb_to_lab(cent[None])[0][:, None] - _srgb_to_lab(fcent[None])[0][None]
+    de = np.sqrt((diff * diff).sum(axis=2)).min(axis=1)
+    keep = de <= _BLEED_FAR_SUPPORT
+    return cent[keep] if keep.any() else cent
+
+
 def _background_colors(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarray:
     """Backdrop palette (n, 3): the colours the title sits ON.
 
@@ -213,20 +240,19 @@ def _background_colors(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarra
     as several colours rather than one muddy average. Sampling outside, not
     inside, sidesteps having to guess which inside-brush colour is the title — so
     a title that spans several tones (highlight + shadow) is never mistaken for
-    backdrop and erased. Falls back to a single border colour with no brush.
+    backdrop and erased. Clusters that are title bleed rather than backdrop are
+    dropped (see :func:`_drop_bleed`). Falls back to a single border colour with
+    no brush.
     """
     if mask is not None and mask.any():
-        m = Image.fromarray((mask.astype(np.uint8)) * 255)
-        ring = (
-            np.asarray(m.filter(ImageFilter.MaxFilter(45))) > 127
-        ) & ~mask  # ~22px out
+        ring = _dilate(mask, 22) & ~mask
         pts = arr[ring]
         if len(pts) >= 50:
             sub = pts.astype(np.float32)[
                 :: max(1, len(pts) // 4000)
             ]  # subsample, cheap
             cent, counts = _kmeans(sub, 5)
-            return cent[counts > 0]
+            return _drop_bleed(arr, mask, cent[counts > 0])
     return _local_background(arr, mask)[None, :]
 
 
@@ -243,6 +269,56 @@ def _background_distance(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndar
 # Cap the input so the (H×W×N×3) float buffers below can't OOM the worker on an
 # oversized/decompression-bomb image. Posters are well under this.
 _MAX_SIDE = 3000
+
+# White-union guards: reject when the union would cover more of the brush than a
+# title plausibly does (a pale FIELD keyed white), and cap the spill flood.
+_UNION_MAX_COVER = 0.60
+_SPILL_MAX_ITERS = 64
+
+
+def _white_union_alpha(
+    arr: np.ndarray, mask: np.ndarray, color_alpha: np.ndarray
+) -> np.ndarray:
+    """Brightness-key alpha for the WHITE part of a mixed title, or zeros.
+
+    A mixed title (white "BEAUTIFUL", yellow "GAME") defeats both single keys:
+    white mode drops the coloured words, and the colour key drops the white ones
+    whenever anything white-ish sits in the backdrop palette. So subject mode
+    unions in the same min-channel key :func:`extract_title_logo` uses — with two
+    guards so a pale BACKDROP can never ride along:
+
+    - spill: bright content flowing across the brush border is backdrop (sky, a
+      plate) — a properly brushed title is an island. Flood the addition from
+      the bright outside rim and drop everything reached.
+    - coverage: if the union would cover over ``_UNION_MAX_COVER`` of the brush,
+      the bright pixels are a field, not letters — reject wholesale.
+    """
+    mn = np.minimum(np.minimum(arr[..., 0], arr[..., 1]), arr[..., 2])
+    split = _otsu(mn[mask])
+    lo = float(np.clip(split, 120.0, 200.0)) if split is not None else 165.0
+    hi = lo + 50.0
+    t = np.clip((mn - lo) / (hi - lo), 0.0, 1.0)
+    walpha = ((t * t * (3.0 - 2.0 * t)) * 255.0).astype(np.uint8)
+    walpha = (walpha * mask).astype(np.uint8)
+
+    add = (walpha > 128) & (color_alpha <= 128)
+    if not add.any():
+        return np.zeros_like(walpha)
+
+    bright_out = (_dilate(mask, 2) & ~mask) & (mn >= lo)
+    spill = add & _dilate(bright_out, 3)
+    for _ in range(_SPILL_MAX_ITERS):
+        grown = add & _dilate(spill, 4)
+        if int(grown.sum()) == int(spill.sum()):
+            break
+        spill = grown
+    if spill.any():
+        walpha[_dilate(spill, 2)] = 0
+
+    union = (color_alpha > 128) | (walpha > 128)
+    if int(union.sum()) / max(int(mask.sum()), 1) > _UNION_MAX_COVER:
+        return np.zeros_like(walpha)
+    return walpha
 
 
 def _open_rgb_bounded(image_bytes: bytes) -> Image.Image:
@@ -266,9 +342,11 @@ def extract_subject_logo(
     *distance from the local background* (see :func:`_background_distance`, which
     models a multi-toned backdrop as a colour palette), so a red or green title
     separates from a cityscape or a wood-grain plate while keeping its own
-    colours. The CL2K whiten pass downstream then turns that colour into the
-    two-tone look, exactly as it does for a fetched TMDB/fanart logo — so this
-    must NOT pre-whiten the way the white key does.
+    colours. A MIXED title (white words + coloured words) additionally unions in
+    the brightness key (see :func:`_white_union_alpha`). The CL2K whiten pass
+    downstream then turns that colour into the two-tone look, exactly as it does
+    for a fetched TMDB/fanart logo — so this must NOT pre-whiten the way the
+    white key does.
 
     mask_bytes: brush PNG, white = the title region; brush close around the title
     so the backdrop palette is sampled from real backdrop, not other artwork.
@@ -292,6 +370,9 @@ def extract_subject_logo(
 
     if mask is not None:
         alpha = (alpha * mask).astype(np.uint8)
+        # Mixed titles: union in the white part (see _white_union_alpha) — the
+        # colour key alone drops it when the backdrop palette has a white-ish tone.
+        alpha = np.maximum(alpha, _white_union_alpha(arr, mask, alpha))
 
     alpha = _despeckle(alpha)
 
