@@ -119,9 +119,13 @@ const ART_SOURCES = [
 // square pickers, so those stay on ART_SOURCES.
 const BACKDROP_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
 
-// Providers text_removal.unavailable_reason() accepts — anything else (a config
-// still on the dropped 'huggingface') is rejected server-side.
-const AI_ERASE_PROVIDERS = ['lama_sidecar', 'openai'];
+// Mirrors text_removal.unavailable_reason(): a provider is only usable with the
+// field it actually needs, so the erase button can't offer a call the server rejects.
+const aiEraseReady = config => {
+    if (config?.ai_provider === 'lama_sidecar') return !!config.ai_endpoint;
+    if (config?.ai_provider === 'openai') return !!config.api_key;
+    return false;
+};
 
 // The logo picker gets 'gdrive' too, browsing the sync cache for `- logo` assets
 // (image_type=logo) rather than finished posters. A gdrive_list folder that sits
@@ -2070,7 +2074,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     artBySource={artBySource}
                     loadingArt={loadingArt}
                     saveTargets={saveTargets}
-                    aiProvider={config?.ai_provider || 'none'}
+                    canErase={aiEraseReady(config)}
                     toast={toast}
                 />
             )}
@@ -6144,7 +6148,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
 
 // ─── Logo asset tab ─────────────────────────────────────────────────────────
 
-const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider, toast }) => {
+const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, canErase, toast }) => {
     const [logo, setLogo] = useState(null); // file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, url, name }
     const [logoSource, setLogoSource] = useState('tmdb');
@@ -6212,9 +6216,9 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider
     const [extractMask, setExtractMask] = useState(null);
     const [extractMode, setExtractMode] = useState('white'); // white|subject|erase
     const [extracting, setExtracting] = useState(false);
-    // Named providers, not "anything but none": a config left on a dropped
-    // provider (huggingface) would otherwise offer a button the backend rejects.
-    const canErase = AI_ERASE_PROVIDERS.includes(aiProvider);
+    // Config can change under a mounted panel, so never submit a mode the button
+    // has stopped offering.
+    const activeExtractMode = extractMode === 'erase' && !canErase ? 'white' : extractMode;
     const posters = artBySource[posterSource]?.posters || [];
     const posterUrl = customPoster?.url || (posterPath ? urlForPath(posterPath) : null);
     // 'upload' AND 'gdrive' both seed customPoster, so only clear it when
@@ -6363,7 +6367,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider
                 image_path: customPoster ? null : posterPath,
                 image_b64: customPoster?.b64 || null,
                 mask_b64: extractMask,
-                mode: extractMode,
+                mode: activeExtractMode,
             });
             const url = await new Promise(resolve => {
                 const fr = new FileReader();
@@ -6824,14 +6828,14 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider
                                 <div className="flex items-center gap-2 mb-1">
                                     <button
                                         type="button"
-                                        className={seg(extractMode === 'white')}
+                                        className={seg(activeExtractMode === 'white')}
                                         onClick={() => setExtractMode('white')}
                                     >
                                         White title
                                     </button>
                                     <button
                                         type="button"
-                                        className={seg(extractMode === 'subject')}
+                                        className={seg(activeExtractMode === 'subject')}
                                         onClick={() => setExtractMode('subject')}
                                     >
                                         Coloured / mixed title
@@ -6839,7 +6843,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider
                                     {canErase && (
                                         <button
                                             type="button"
-                                            className={seg(extractMode === 'erase')}
+                                            className={seg(activeExtractMode === 'erase')}
                                             onClick={() => setExtractMode('erase')}
                                         >
                                             Busy art (AI erase)
@@ -6847,9 +6851,9 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider
                                     )}
                                 </div>
                                 <p className="text-xs text-fg-subtle mb-1">
-                                    {extractMode === 'erase'
+                                    {activeExtractMode === 'erase'
                                         ? 'Brush over the title, then Tighten — the AI erases it and keeps whatever changed. Slower, but it holds up where the colour keys chew the letters:'
-                                        : extractMode === 'subject'
+                                        : activeExtractMode === 'subject'
                                           ? 'Brush over the whole title — mixed white + coloured titles are keyed together:'
                                           : 'Brush over the white title:'}
                                 </p>
