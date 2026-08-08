@@ -2066,6 +2066,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     artBySource={artBySource}
                     loadingArt={loadingArt}
                     saveTargets={saveTargets}
+                    aiProvider={config?.ai_provider || 'none'}
                     toast={toast}
                 />
             )}
@@ -6139,7 +6140,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
 
 // ─── Logo asset tab ─────────────────────────────────────────────────────────
 
-const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) => {
+const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider, toast }) => {
     const [logo, setLogo] = useState(null); // file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, url, name }
     const [logoSource, setLogoSource] = useState('tmdb');
@@ -6196,14 +6197,18 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Brush over a title on a poster; the key lifts it into a transparent logo,
     // which becomes the custom logo and flows through the same whiten/save. White
     // mode keys a white title by brightness; coloured mode keys by colour and
-    // also carries the white words of a mixed title.
+    // also carries the white words of a mixed title. Erase mode keys nothing by
+    // appearance — it inpaints the title away and takes whatever changed — so it
+    // needs an AI provider, and it is the only one that survives a title sitting
+    // on busy art the other two can't separate it from.
     const [extractOpen, setExtractOpen] = useState(false);
     const [posterSource, setPosterSource] = useState('tmdb');
     const [posterPath, setPosterPath] = useState(null);
     const [customPoster, setCustomPoster] = useState(null); // { b64, url, name }
     const [extractMask, setExtractMask] = useState(null);
-    const [extractMode, setExtractMode] = useState('white'); // 'white' | 'subject'
+    const [extractMode, setExtractMode] = useState('white'); // white|subject|erase
     const [extracting, setExtracting] = useState(false);
+    const canErase = aiProvider !== 'none';
     const posters = artBySource[posterSource]?.posters || [];
     const posterUrl = customPoster?.url || (posterPath ? urlForPath(posterPath) : null);
     // 'upload' AND 'gdrive' both seed customPoster, so only clear it when
@@ -6823,11 +6828,22 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                     >
                                         Coloured / mixed title
                                     </button>
+                                    {canErase && (
+                                        <button
+                                            type="button"
+                                            className={seg(extractMode === 'erase')}
+                                            onClick={() => setExtractMode('erase')}
+                                        >
+                                            Busy art (AI erase)
+                                        </button>
+                                    )}
                                 </div>
                                 <p className="text-xs text-fg-subtle mb-1">
-                                    {extractMode === 'subject'
-                                        ? 'Brush over the whole title — mixed white + coloured titles are keyed together:'
-                                        : 'Brush over the white title:'}
+                                    {extractMode === 'erase'
+                                        ? 'Brush over the title, then Tighten — the AI erases it and keeps whatever changed. Slower, but it holds up where the colour keys chew the letters:'
+                                        : extractMode === 'subject'
+                                          ? 'Brush over the whole title — mixed white + coloured titles are keyed together:'
+                                          : 'Brush over the white title:'}
                                 </p>
                                 <div className="bg-black rounded p-1 inline-block max-w-full">
                                     <BrushMask
