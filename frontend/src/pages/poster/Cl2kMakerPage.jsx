@@ -6195,7 +6195,8 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // ─── Extract a logo from a poster (no AI) ──────────────────────────────────
     // Brush over a title on a poster; the key lifts it into a transparent logo,
     // which becomes the custom logo and flows through the same whiten/save. White
-    // mode keys a white title by brightness; coloured mode keys it by colour.
+    // mode keys a white title by brightness; coloured mode keys by colour and
+    // also carries the white words of a mixed title.
     const [extractOpen, setExtractOpen] = useState(false);
     const [posterSource, setPosterSource] = useState('tmdb');
     const [posterPath, setPosterPath] = useState(null);
@@ -6820,12 +6821,12 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                         className={seg(extractMode === 'subject')}
                                         onClick={() => setExtractMode('subject')}
                                     >
-                                        Coloured title
+                                        Coloured / mixed title
                                     </button>
                                 </div>
                                 <p className="text-xs text-fg-subtle mb-1">
                                     {extractMode === 'subject'
-                                        ? 'Brush over the coloured title (keep close to it):'
+                                        ? 'Brush over the whole title — mixed white + coloured titles are keyed together:'
                                         : 'Brush over the white title:'}
                                 </p>
                                 <div className="bg-black rounded p-1 inline-block max-w-full">

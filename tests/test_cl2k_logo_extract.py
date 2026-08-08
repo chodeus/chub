@@ -105,6 +105,207 @@ def test_white_key_misses_the_coloured_title():
     assert res.split()[-1].getextrema()[1] == 0  # nothing keyed -> fully transparent
 
 
+def _brush(size, rect) -> bytes:
+    m = Image.new("L", size, 0)
+    ImageDraw.Draw(m).rectangle(rect, fill=255)
+    return _png(m)
+
+
+def test_subject_keeps_both_halves_of_a_mixed_title():
+    # white word + red word on a dark field; the colour key alone drops the white
+    # word when a white-ish tone sits in the backdrop palette, so subject mode
+    # unions in the brightness key
+    img = Image.new("RGB", (400, 300), (40, 35, 30))
+    d = ImageDraw.Draw(img)
+    d.rectangle((60, 100, 340, 130), fill=(250, 248, 245))  # white word
+    d.rectangle((60, 160, 340, 190), fill=(210, 170, 30))  # yellow word
+    d.rectangle((0, 270, 400, 300), fill=(245, 243, 240))  # white-ish art far away
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 80, 360, 210)))
+    res = Image.open(io.BytesIO(out))
+    # both words in the crop: white bar at the top, yellow at the bottom (a
+    # yellow-only extraction would crop to ~30px tall)
+    assert res.height >= 85
+    a = res.split()[-1].load()
+    px = res.load()
+    wx, wy = res.width // 2, res.height // 6  # mid white bar
+    yx, yy = res.width // 2, res.height * 5 // 6  # mid yellow bar
+    assert a[wx, wy] > 200, "white word must survive subject mode"
+    assert a[yx, yy] > 200, "coloured word must survive subject mode"
+    r, g, b, _ = px[yx, yy]
+    assert r > 150 and b < 100, "coloured word keeps its original colour"
+
+
+def test_subject_keys_every_colour_of_a_multicolour_title():
+    # the colour key is distance-from-backdrop, not anchored to one hue: white,
+    # red, yellow and green words must ALL extract with their original colours
+    img = Image.new("RGB", (400, 420), (38, 34, 30))
+    d = ImageDraw.Draw(img)
+    bars = [
+        ((60, 80, 340, 110), (250, 248, 245)),
+        ((60, 150, 340, 180), (200, 35, 35)),
+        ((60, 220, 340, 250), (215, 180, 45)),
+        ((60, 290, 340, 320), (50, 160, 60)),
+    ]
+    for r, c in bars:
+        d.rectangle(r, fill=c)
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 60, 360, 340)))
+    res = Image.open(io.BytesIO(out))
+    px = res.load()
+    ox, oy = 58, 78  # crop origin = content bbox (bars start at (60, 80))
+    for (x0, y0, x1, y1), (er, eg, eb) in bars:
+        r, g, b, a = px[(x0 + x1) // 2 - ox, (y0 + y1) // 2 - oy]
+        assert a > 200, f"word at y={y0} must extract"
+        assert abs(r - er) < 30 and abs(g - eg) < 30 and abs(b - eb) < 30
+
+
+def test_subject_ring_bleed_does_not_eat_the_title():
+    # grunge 'spray' of title colour just OUTSIDE the brush poisons the backdrop
+    # palette unless bleed clusters are dropped (no far-ring support)
+    img = Image.new("RGB", (500, 360), (30, 28, 25))
+    d = ImageDraw.Draw(img)
+    d.rectangle((120, 140, 380, 220), fill=(215, 180, 45))  # fat yellow title
+    # dense speckle hugging the title: inside the near ring, outside the brush
+    for x in range(100, 400, 9):
+        d.ellipse((x, 118, x + 5, 123), fill=(215, 180, 45))
+        d.ellipse((x, 238, x + 5, 243), fill=(215, 180, 45))
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (110, 132, 390, 228)))
+    res = Image.open(io.BytesIO(out))
+    arr = res.split()[-1]
+    # the glyph body must stay SOLID: sample a grid inside the bar
+    solid = sum(
+        arr.load()[x, y] > 200
+        for x in range(30, res.width - 30, 20)
+        for y in range(20, res.height - 20, 12)
+    )
+    total = len(range(30, res.width - 30, 20)) * len(range(20, res.height - 20, 12))
+    assert solid / total > 0.9, "title body must not be eaten by its own bleed"
+
+
+def test_subject_union_rejected_on_a_pale_field():
+    # coloured title on a cream field: the white key would grab the WHOLE field —
+    # the coverage guard must reject the union and keep pure colour-key output
+    img = Image.new("RGB", (400, 240), (235, 228, 210))
+    ImageDraw.Draw(img).rectangle((60, 100, 340, 140), fill=(200, 30, 30))
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 80, 360, 160)))
+    res = Image.open(io.BytesIO(out))
+    assert 250 <= res.width <= 320 and res.height <= 80  # red bar only, no field
+    r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
+    assert r > 150 and g < 100 and a > 200
+
+
+def test_subject_union_drops_backdrop_spilling_across_the_brush():
+    # a pale sky band crossing the brush border is backdrop, not title — the
+    # spill guard must drop it even though it brightness-keys
+    img = Image.new("RGB", (400, 300), (40, 45, 60))
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, 400, 90), fill=(200, 215, 235))  # sky, continues past brush
+    d.rectangle((60, 140, 340, 190), fill=(200, 30, 30))  # red title
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (30, 60, 370, 220)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height <= 80, "sky band must not widen the crop"
+    r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
+    assert r > 150 and g < 100 and a > 200  # the title itself survives
+
+
+def test_subject_rescues_a_pale_word_next_to_a_vivid_one():
+    # a big vivid word pulls the Otsu band-fit high enough that a pale muted
+    # word lands under `lo` and vanishes; per-anchor rescue must keep it (its
+    # min channel is under the white-key floor, so the union can't)
+    import numpy as np
+
+    img = Image.new("RGB", (400, 340), (128, 128, 128))
+    d = ImageDraw.Draw(img)
+    d.rectangle((100, 90, 300, 120), fill=(110, 120, 160))  # pale muted-blue word
+    d.rectangle((50, 160, 350, 280), fill=(205, 35, 35))  # fat vivid red word
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 70, 360, 300)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height >= 180, "crop must span BOTH words, not just the vivid one"
+    arr = np.asarray(res)
+    top = arr[: res.height // 3]
+    op = top[..., 3] > 128
+    assert int(op.sum()) > 2000, "pale word must survive"
+    mean = top[..., :3][op].mean(axis=0)
+    assert mean[2] > mean[0] + 20, "pale word keeps its blue tint"
+
+
+def _junk_poster():
+    """Red title bar plus an off-title junk blob, both far from the backdrop."""
+    img = Image.new("RGB", (400, 300), (40, 42, 46))
+    d = ImageDraw.Draw(img)
+    d.rectangle((60, 90, 340, 130), fill=(200, 30, 30))  # the title
+    d.ellipse((150, 190, 250, 250), fill=(60, 130, 200))  # scene junk in-brush
+    return img
+
+
+def test_subject_zone_filter_drops_junk_off_the_text_line(monkeypatch):
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    prob = np.zeros((300, 400), dtype=np.float32)
+    prob[92:128, 65:335] = 1.0  # detector box over the title only
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
+
+    img = _junk_poster()
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 70, 360, 270)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height <= 80, "junk blob must be dropped, crop is the title alone"
+    r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
+    assert r > 150 and a > 200
+
+
+def test_subject_zone_filter_fails_safe_without_detector(monkeypatch):
+    from backend.util.cl2k import text_detect
+
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: None)
+    img = _junk_poster()
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 70, 360, 270)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height > 140, "no detector -> keep everything the key found"
+
+
+def test_subject_zone_filter_distrusts_a_partial_detection(monkeypatch):
+    # the box covers only a minority DISCONNECTED piece; the flood then keeps
+    # under half the keyed area -> the detector likely missed the wordmark, so
+    # the filter must leave alpha alone rather than shave the bulk
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    prob = np.zeros((300, 400), dtype=np.float32)
+    prob[92:112, 65:110] = 1.0  # box over the small bar only
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
+
+    img = Image.new("RGB", (400, 300), (40, 42, 46))
+    d = ImageDraw.Draw(img)
+    d.rectangle((60, 90, 110, 112), fill=(200, 30, 30))  # small detected bar
+    d.rectangle((60, 150, 340, 250), fill=(200, 30, 30))  # bulk, disconnected
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 70, 360, 270)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height > 140, "partial detection must not shave the wordmark"
+
+
+def test_subject_spill_guard_reaches_deep_into_a_large_brush():
+    # a bright column entering a TALL brush and running deep inside it must be
+    # fully flood-killed — a fixed iteration cap left everything past ~256px
+    img = Image.new("RGB", (300, 1400), (35, 38, 44))
+    d = ImageDraw.Draw(img)
+    d.rectangle((120, 0, 180, 1200), fill=(205, 212, 228))  # crosses the brush top
+    d.rectangle((60, 1250, 240, 1300), fill=(200, 30, 30))  # red title near the foot
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (20, 40, 280, 1350)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height <= 80, "deep backdrop column must not survive the flood"
+    r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
+    assert r > 150 and g < 100 and a > 200
+
+
 def _coloured_title_strokes():
     """Thin red vertical strokes (stroke-shaped 'letters') on a grey plate."""
     img = Image.new("RGB", (400, 240), (120, 122, 124))
@@ -112,6 +313,34 @@ def _coloured_title_strokes():
     for x in range(70, 340, 45):
         d.rectangle((x, 90, x + 12, 150), fill=(210, 40, 40))
     return img
+
+
+def test_tighten_survives_title_bleed_in_the_outside_ring(monkeypatch):
+    # spray of the TITLE's colour just outside the block used to poison
+    # _outside_background: the fallback anchor then "matched the background" and
+    # tighten gave up. Bleed clusters have no far-ring support and are dropped.
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: None)
+    img = Image.new("RGB", (500, 300), (120, 122, 124))
+    d = ImageDraw.Draw(img)
+    for x in range(90, 420, 45):  # stroke-shaped red title
+        d.rectangle((x, 120, x + 12, 180), fill=(210, 40, 40))
+    for x in range(60, 450, 8):  # dense red spray hugging the block
+        d.rectangle((x, 100, x + 3, 103), fill=(210, 40, 40))
+        d.rectangle((x, 197, x + 3, 200), fill=(210, 40, 40))
+
+    block = Image.new("L", img.size, 0)
+    ImageDraw.Draw(block).rectangle((70, 108, 440, 192), fill=255)
+
+    out = tighten_text_mask(_jpeg(img), _png(block))
+    assert out is not None, "bleed in the ring must not abort tightening"
+    m = Image.open(io.BytesIO(out)).convert("L")
+    assert m.getpixel((96, 150)) > 200  # on a red stroke -> remove
+    assert m.getpixel((118, 150)) < 60  # centre of the gap between strokes -> keep
+    assert (np.asarray(m) > 127).sum() < (np.asarray(block) > 127).sum()
 
 
 def test_tighten_shrinks_block_to_coloured_glyphs(monkeypatch):
