@@ -234,6 +234,58 @@ def test_subject_rescues_a_pale_word_next_to_a_vivid_one():
     assert mean[2] > mean[0] + 20, "pale word keeps its blue tint"
 
 
+def _junk_poster():
+    """Red title bar plus an off-title junk blob, both far from the backdrop."""
+    img = Image.new("RGB", (400, 300), (40, 42, 46))
+    d = ImageDraw.Draw(img)
+    d.rectangle((60, 90, 340, 130), fill=(200, 30, 30))  # the title
+    d.ellipse((150, 190, 250, 250), fill=(60, 130, 200))  # scene junk in-brush
+    return img
+
+
+def test_subject_zone_filter_drops_junk_off_the_text_line(monkeypatch):
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    prob = np.zeros((300, 400), dtype=np.float32)
+    prob[92:128, 65:335] = 1.0  # detector box over the title only
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
+
+    out = extract_subject_logo(_jpeg(_junk_poster()), _brush((400, 300), (40, 70, 360, 270)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height <= 80, "junk blob must be dropped, crop is the title alone"
+    r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
+    assert r > 150 and a > 200
+
+
+def test_subject_zone_filter_fails_safe_without_detector(monkeypatch):
+    from backend.util.cl2k import text_detect
+
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: None)
+    out = extract_subject_logo(_jpeg(_junk_poster()), _brush((400, 300), (40, 70, 360, 270)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height > 140, "no detector -> keep everything the key found"
+
+
+def test_subject_zone_filter_distrusts_a_partial_detection(monkeypatch):
+    # the box covers only a corner of the title; keeping under half the keyed
+    # area means the detector likely missed the wordmark -> leave alpha alone
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    prob = np.zeros((300, 400), dtype=np.float32)
+    prob[92:100, 65:110] = 1.0
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
+
+    img = Image.new("RGB", (400, 300), (40, 42, 46))
+    ImageDraw.Draw(img).rectangle((60, 90, 340, 250), fill=(200, 30, 30))  # tall title
+    out = extract_subject_logo(_jpeg(img), _brush((400, 300), (40, 70, 360, 270)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height > 140, "partial detection must not shave the wordmark"
+
+
 def test_subject_spill_guard_reaches_deep_into_a_large_brush():
     # a bright column entering a TALL brush and running deep inside it must be
     # fully flood-killed — a fixed iteration cap left everything past ~256px

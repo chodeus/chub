@@ -230,14 +230,8 @@ def _far_ring_palette(
 def _drop_bleed(
     arr: np.ndarray, mask: np.ndarray, cent: np.ndarray, near_px: int
 ) -> np.ndarray:
-    """Drop near-ring clusters unsupported by the far ring (40-80px out).
-
-    A distressed/sprayed title bleeds its own colour into the ring just outside
-    the brush, poisoning the backdrop palette so the letters key as backdrop.
-    The bleed hugs the text; real backdrop continues outward — so any near
-    cluster with no far-ring colour within ``_BLEED_FAR_SUPPORT`` ΔE is bleed.
-    Fail-safe: too small a far ring, or nothing validating, keeps all clusters.
-    """
+    """Drop near-ring clusters with no far-ring colour support — title bleed
+    (spray/glow), not backdrop. Keeps all clusters when validation can't run."""
     fcent = _far_ring_palette(arr, mask, near_px)
     if fcent is None:
         return cent
@@ -294,19 +288,8 @@ def _white_union_alpha(
     arr: np.ndarray, mask: np.ndarray, color_alpha: np.ndarray
 ) -> np.ndarray:
     """Brightness-key alpha for the WHITE part of a mixed title, or zeros.
-
-    A mixed title (white "BEAUTIFUL", yellow "GAME") defeats both single keys:
-    white mode drops the coloured words, and the colour key drops the white ones
-    whenever anything white-ish sits in the backdrop palette. So subject mode
-    unions in the same min-channel key :func:`extract_title_logo` uses — with two
-    guards so a pale BACKDROP can never ride along:
-
-    - spill: bright content flowing across the brush border is backdrop (sky, a
-      plate) — a properly brushed title is an island. Flood the addition from
-      the bright outside rim and drop everything reached.
-    - coverage: if the union would cover over ``_UNION_MAX_COVER`` of the brush,
-      the bright pixels are a field, not letters — reject wholesale.
-    """
+    Guards: border-spill flood (bright content crossing the brush edge is
+    backdrop) and the ``_UNION_MAX_COVER`` cap (a pale field, not letters)."""
     mn = np.minimum(np.minimum(arr[..., 0], arr[..., 1]), arr[..., 2])
     split = _otsu(mn[mask])
     lo = float(np.clip(split, 120.0, 200.0)) if split is not None else 165.0
@@ -346,19 +329,9 @@ def _border_spill(add: np.ndarray, seed: np.ndarray) -> np.ndarray:
 def _anchor_rescue_alpha(
     arr: np.ndarray, mask: np.ndarray, base_alpha: np.ndarray, bg: np.ndarray
 ) -> np.ndarray:
-    """Per-anchor bands for pale NON-white title words the global band drops.
-
-    A title mixing a vivid word with a pale one can make the Otsu band-fit split
-    between the two TITLE colours instead of title-vs-backdrop — the pale word's
-    distance lands under the fitted ``lo`` and it vanishes (and, not being
-    near-white, the brightness union can't catch it either). Rescue: k-means the
-    brushed pixels and give every substantial cluster that is clearly separated
-    from the backdrop palette (ΔE >= ``_BG_NEAR``) its own key band, clamped to
-    ``0.6 x`` its backdrop distance exactly as :func:`_detect_anchors` does.
-    Guarded like the white union: anchor-coloured content flowing across the
-    brush border is flood-killed, and a union past ``_UNION_MAX_COVER`` of the
-    brush is rejected wholesale.
-    """
+    """Per-anchor key bands for pale non-white words the fitted band drops
+    (band clamped to ``0.6 x`` backdrop distance, as in :func:`_detect_anchors`).
+    Same border-spill and coverage guards as the white union; zeros if unsafe."""
     zeros = np.zeros(arr.shape[:2], dtype=np.uint8)
     pts = arr[mask]
     if len(pts) < 200:
@@ -397,6 +370,31 @@ def _anchor_rescue_alpha(
     if int(union.sum()) / max(int(mask.sum()), 1) > _UNION_MAX_COVER:
         return zeros
     return rescue
+
+
+# The detector must account for at least this share of the keyed area before the
+# zone filter may remove anything — below it, it likely missed the wordmark.
+_ZONE_MIN_KEEP = 0.5
+
+
+def _text_zone_filter(
+    image_bytes: bytes, mask: np.ndarray, alpha: np.ndarray
+) -> np.ndarray:
+    """Drop keyed content with no connection to a detected text line — scene
+    junk the colour key can't tell from title. Fail-safe: no detector, no boxes,
+    or a keep under ``_ZONE_MIN_KEEP`` of the keyed area leaves alpha unchanged."""
+    prob = _sized_probmap(image_bytes, alpha.shape)
+    if prob is None:
+        return alpha
+    width = alpha.shape[1]
+    zone = _dilate((prob > 0.3) & _dilate(mask, 8), max(12, round(0.025 * width)))
+    keyed = alpha > 40
+    if not (zone.any() and keyed.any()):
+        return alpha
+    keep = _border_spill(keyed, keyed & zone)
+    if int(keep.sum()) < _ZONE_MIN_KEEP * int(keyed.sum()):
+        return alpha
+    return (alpha * _dilate(keep, 2)).astype(np.uint8)
 
 
 def _open_rgb_bounded(image_bytes: bytes) -> Image.Image:
@@ -456,6 +454,8 @@ def extract_subject_logo(
         alpha = np.maximum(alpha, _anchor_rescue_alpha(arr, mask, alpha, bg))
 
     alpha = _despeckle(alpha)
+    if mask is not None:
+        alpha = _text_zone_filter(image_bytes, mask, alpha)
 
     out = np.zeros((img.height, img.width, 4), dtype=np.uint8)
     out[..., 0:3] = arr.astype(np.uint8)  # keep ORIGINAL colours; whiten happens later
