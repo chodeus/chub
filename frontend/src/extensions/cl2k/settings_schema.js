@@ -141,10 +141,24 @@ export const CL2K_MAKER_SCHEMA = {
             conditional: {
                 field: 'ai_provider',
                 condition: 'in',
-                value: ['openai', 'lama_sidecar'],
+                value: ['openai'],
+            },
+            description: 'OpenAI token.',
+        },
+        {
+            // Its own field, not api_key: switching providers used to overwrite
+            // whichever token was already there.
+            key: 'client_key',
+            label: 'Sidecar API Key',
+            type: 'password',
+            section: 'AI Text Removal',
+            conditional: {
+                field: 'ai_provider',
+                condition: 'in',
+                value: ['lama_sidecar'],
             },
             description:
-                'OpenAI token. For the LaMa sidecar this is optional: set it only if the sidecar runs with LAMA_API_KEY (sent as X-API-Key).',
+                'Optional: set this only if the sidecar runs with LAMA_API_KEY. CHUB sends it as X-API-Key.',
         },
         {
             key: 'ai_model',

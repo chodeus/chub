@@ -6,9 +6,9 @@ the chosen backend:
 
 - ``lama_sidecar`` — POST image+mask to a self-hosted lama-sidecar/IOPaint
   server. FREE, private, the recommended default. ``ai_endpoint`` = the inpaint
-  URL; ``api_key`` is sent as X-API-Key when set (for a sidecar running with
-  LAMA_API_KEY). (LaMa is what we benchmarked; excellent over texture, weaker
-  over faces.)
+  URL; ``client_key`` is sent as X-API-Key when set (for a sidecar running with
+  LAMA_API_KEY) — its own field, so it never collides with the openai token.
+  (LaMa is what we benchmarked; excellent over texture, weaker over faces.)
 - ``openai`` — OpenAI ``images.edit`` (gpt-image-1). PAID; better over faces, can
   hallucinate. ``api_key`` (+ optional ``ai_model``).
 
@@ -193,7 +193,9 @@ def _lama_route(endpoint: str, path: str) -> str:
 def _lama_headers(config) -> dict:
     """X-API-Key for a sidecar running with LAMA_API_KEY; empty when keyless
     (the sidecar ignores the header unless it has a key configured)."""
-    key = getattr(config, "api_key", "")
+    # Pre-split configs kept this in api_key; Cl2kMakerConfig migrates it across
+    # on load, so there is nothing to guess at here.
+    key = getattr(config, "client_key", "") or ""
     return {"X-API-Key": key} if key else {}
 
 

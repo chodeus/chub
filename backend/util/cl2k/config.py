@@ -65,11 +65,13 @@ class Cl2kMakerConfig(BaseModel):
     # handoff for those.
     ai_provider: str = "none"  # none | lama_sidecar | openai
     ai_endpoint: str = ""  # lama sidecar URL
-    # openai token, or the optional LAMA_API_KEY of a locked-down sidecar (sent
-    # as X-API-Key). Named ``api_key`` (not ``ai_api_key``) so the core
+    # openai token. Named ``api_key`` (not ``ai_api_key``) so the core
     # secret-redaction list — which matches on exact leaf key names — masks it
     # on GET /api/config like every other secret. Don't re-prefix it.
     api_key: str = ""
+    # Sidecar secret (its LAMA_API_KEY), sent as X-API-Key. Its own field so an
+    # openai token and a sidecar secret coexist; name is redaction-driven, as above.
+    client_key: str = ""
     ai_model: str = ""  # openai model id (default gpt-image-1)
     # The sidecar's quality passes (snap + native boundary refine, v1.6+) add
     # roughly one extra inference per erase, which can push a busy CPU box
@@ -90,6 +92,29 @@ class Cl2kMakerConfig(BaseModel):
         "Seamlessly reconstruct the underlying artwork and background where the "
         "text was. Do not change anything else."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_sidecar_key(cls, data):
+        """Claim a pre-split sidecar secret out of the shared ``api_key``.
+
+        ``api_key`` used to hold either the openai token or the sidecar's, so
+        choosing a provider overwrote whichever was already there. Move it once,
+        here, rather than guessing per request in ``_lama_headers`` — but never
+        move an openai token (``sk-``) left behind by an earlier provider choice.
+
+        Idempotent like the migration below: it no-ops once ``client_key`` is
+        set, which the first save then persists.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("client_key") or data.get("ai_provider") != "lama_sidecar":
+            return data
+        legacy = (data.get("api_key") or "").strip()
+        if legacy and not legacy.startswith("sk-"):
+            data = dict(data)
+            data["client_key"], data["api_key"] = legacy, ""
+        return data
 
     @model_validator(mode="before")
     @classmethod
