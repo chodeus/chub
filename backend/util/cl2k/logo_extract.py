@@ -564,9 +564,8 @@ def extract_logo_by_diff(
 
     alpha = _despeckle(alpha)
     if mask is not None:
-        # The eraser repaints everything the brush covered, so scene detail caught
-        # by a loose brush diffs just as strongly as the title — same cure as
-        # subject mode's.
+        # A loose brush makes the eraser repaint scene detail, which diffs as
+        # strongly as the title.
         alpha = _text_zone_filter(original_bytes, mask, alpha)
 
     out = np.zeros((orig_img.height, orig_img.width, 4), dtype=np.uint8)
