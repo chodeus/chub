@@ -960,9 +960,10 @@ def extract_logo(
         except Exception as exc:
             logger.error(f"cl2k: extract-logo erase failed: {exc}", exc_info=True)
             return error(f"AI erase failed: {exc}", "CL2K_AI")
-        if cleaned is raw:
-            # remove_text passes the poster straight through when the provider
-            # bails; diffing that keys nothing, so fail here instead of
+        if cleaned == raw:
+            # By value, not identity: remove_text hands the original object back
+            # when the provider bails, but a provider can also echo an equal
+            # copy. Either way diffing keys nothing, so fail here instead of
             # returning a blank logo that looks like a bad brush.
             return error("The AI erase returned the poster unchanged", "CL2K_AI")
         png = extract_logo_by_diff(raw, cleaned, mask, **band)

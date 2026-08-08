@@ -119,6 +119,10 @@ const ART_SOURCES = [
 // square pickers, so those stay on ART_SOURCES.
 const BACKDROP_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
 
+// Providers text_removal.unavailable_reason() accepts — anything else (a config
+// still on the dropped 'huggingface') is rejected server-side.
+const AI_ERASE_PROVIDERS = ['lama_sidecar', 'openai'];
+
 // The logo picker gets 'gdrive' too, browsing the sync cache for `- logo` assets
 // (image_type=logo) rather than finished posters. A gdrive_list folder that sits
 // outside every renamer source_dir — an "Extras"/assets drive — is indexed
@@ -6208,7 +6212,9 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider
     const [extractMask, setExtractMask] = useState(null);
     const [extractMode, setExtractMode] = useState('white'); // white|subject|erase
     const [extracting, setExtracting] = useState(false);
-    const canErase = aiProvider !== 'none';
+    // Named providers, not "anything but none": a config left on a dropped
+    // provider (huggingface) would otherwise offer a button the backend rejects.
+    const canErase = AI_ERASE_PROVIDERS.includes(aiProvider);
     const posters = artBySource[posterSource]?.posters || [];
     const posterUrl = customPoster?.url || (posterPath ? urlForPath(posterPath) : null);
     // 'upload' AND 'gdrive' both seed customPoster, so only clear it when
@@ -6678,11 +6684,13 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, aiProvider
                 >
                     <div className="flex flex-col gap-3">
                         <p className="text-xs text-fg-subtle">
-                            Pull a title straight off a poster — no OpenAI. Pick a poster, brush
-                            over the title (a loose scribble is fine; keep off bright areas), then
-                            Extract. Detect text prefills every text region on the poster — brush
-                            off the bits you don&apos;t want; Tighten to letters shrinks your brush
-                            to the glyphs for a cleaner key. The result becomes your logo below.
+                            Pull a title straight off a poster. White and Coloured key it locally,
+                            with no AI; Busy art runs your configured eraser (LaMa sidecar or
+                            OpenAI) first. Pick a poster, brush over the title (a loose scribble is
+                            fine; keep off bright areas), then Extract. Detect text prefills every
+                            text region on the poster — brush off the bits you don&apos;t want;
+                            Tighten to letters shrinks your brush to the glyphs for a cleaner key.
+                            The result becomes your logo below.
                         </p>
                         {posterSource === 'upload' ? (
                             <UploadArtCard

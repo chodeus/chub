@@ -19,7 +19,6 @@ pytest.importorskip("wand.image")  # backend.api.cl2k_maker pulls in the rendere
 from PIL import Image, ImageDraw  # noqa: E402
 
 import backend.api.cl2k_maker as cl2k_api  # noqa: E402
-from backend.api.cl2k_maker import ExtractLogoRequest, extract_logo  # noqa: E402
 
 _FIELD = (40, 45, 55)
 _TITLE_BOX = (60, 100, 340, 140)
@@ -41,6 +40,9 @@ def _mask_b64() -> str:
     mask = Image.new("L", (400, 240), 0)
     ImageDraw.Draw(mask).rectangle((40, 80, 360, 160), fill=255)
     return _b64(mask, "L")
+
+
+_POSTER_B64 = _b64(_poster())  # the exact bytes the endpoint will diff against
 
 
 def _logger():
@@ -74,8 +76,8 @@ def provider(monkeypatch):
 
 
 def _call(**kw):
-    req = ExtractLogoRequest(image_b64=_b64(_poster()), mode="erase", **kw)
-    return extract_logo(req, db=object(), logger=_logger())
+    req = cl2k_api.ExtractLogoRequest(image_b64=_POSTER_B64, mode="erase", **kw)
+    return cl2k_api.extract_logo(req, db=object(), logger=_logger())
 
 
 def _body(resp):
@@ -100,6 +102,16 @@ def test_erase_reports_a_provider_that_returns_the_poster_unchanged(provider):
     """remove_text passes the original through when the provider bails. Diffing
     that keys nothing, so this must error rather than return a blank logo."""
     provider(erased=None)
+    resp = _call(mask_b64=_mask_b64())
+    assert resp.status_code == 400
+    assert _body(resp)["error_code"] == "CL2K_AI"
+
+
+def test_erase_reports_a_provider_that_echoes_an_equal_copy(provider):
+    """The guard has to compare by value: a provider returning a distinct bytes
+    object with identical content would slip past an identity check and diff to
+    a fully transparent logo, served as a 200."""
+    provider(erased=bytes(bytearray(base64.b64decode(_POSTER_B64))))
     resp = _call(mask_b64=_mask_b64())
     assert resp.status_code == 400
     assert _body(resp)["error_code"] == "CL2K_AI"
