@@ -252,7 +252,8 @@ def test_subject_zone_filter_drops_junk_off_the_text_line(monkeypatch):
     prob[92:128, 65:335] = 1.0  # detector box over the title only
     monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
 
-    out = extract_subject_logo(_jpeg(_junk_poster()), _brush((400, 300), (40, 70, 360, 270)))
+    img = _junk_poster()
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 70, 360, 270)))
     res = Image.open(io.BytesIO(out))
     assert res.height <= 80, "junk blob must be dropped, crop is the title alone"
     r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
@@ -263,25 +264,29 @@ def test_subject_zone_filter_fails_safe_without_detector(monkeypatch):
     from backend.util.cl2k import text_detect
 
     monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: None)
-    out = extract_subject_logo(_jpeg(_junk_poster()), _brush((400, 300), (40, 70, 360, 270)))
+    img = _junk_poster()
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 70, 360, 270)))
     res = Image.open(io.BytesIO(out))
     assert res.height > 140, "no detector -> keep everything the key found"
 
 
 def test_subject_zone_filter_distrusts_a_partial_detection(monkeypatch):
-    # the box covers only a corner of the title; keeping under half the keyed
-    # area means the detector likely missed the wordmark -> leave alpha alone
+    # the box covers only a minority DISCONNECTED piece; the flood then keeps
+    # under half the keyed area -> the detector likely missed the wordmark, so
+    # the filter must leave alpha alone rather than shave the bulk
     import numpy as np
 
     from backend.util.cl2k import text_detect
 
     prob = np.zeros((300, 400), dtype=np.float32)
-    prob[92:100, 65:110] = 1.0
+    prob[92:112, 65:110] = 1.0  # box over the small bar only
     monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
 
     img = Image.new("RGB", (400, 300), (40, 42, 46))
-    ImageDraw.Draw(img).rectangle((60, 90, 340, 250), fill=(200, 30, 30))  # tall title
-    out = extract_subject_logo(_jpeg(img), _brush((400, 300), (40, 70, 360, 270)))
+    d = ImageDraw.Draw(img)
+    d.rectangle((60, 90, 110, 112), fill=(200, 30, 30))  # small detected bar
+    d.rectangle((60, 150, 340, 250), fill=(200, 30, 30))  # bulk, disconnected
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 70, 360, 270)))
     res = Image.open(io.BytesIO(out))
     assert res.height > 140, "partial detection must not shave the wordmark"
 
@@ -334,7 +339,7 @@ def test_tighten_survives_title_bleed_in_the_outside_ring(monkeypatch):
     assert out is not None, "bleed in the ring must not abort tightening"
     m = Image.open(io.BytesIO(out)).convert("L")
     assert m.getpixel((96, 150)) > 200  # on a red stroke -> remove
-    assert m.getpixel((130, 150)) < 60  # gap between strokes -> keep
+    assert m.getpixel((118, 150)) < 60  # centre of the gap between strokes -> keep
     assert (np.asarray(m) > 127).sum() < (np.asarray(block) > 127).sum()
 
 

@@ -218,7 +218,8 @@ def _far_ring_palette(
     near ring (a brush close to the frame edge leaves a one-SIDED far ring that
     would wrongly condemn colours legitimately present near the other sides).
     """
-    far = _dilate(mask, 80) & ~_dilate(mask, 40)
+    d40 = _dilate(mask, 40)
+    far = _dilate(d40, 40) & ~d40  # square dilations compose: 40+40 = 80
     fpts = space[far]
     if len(fpts) < max(200, near_px // 2):
         return None
@@ -303,7 +304,7 @@ def _white_union_alpha(
         return np.zeros_like(walpha)
 
     bright_out = (_dilate(mask, 2) & ~mask) & (mn >= lo)
-    spill = _border_spill(add, bright_out)
+    spill = _geodesic_flood(add, bright_out)
     if spill.any():
         walpha[_dilate(spill, 2)] = 0
 
@@ -313,10 +314,9 @@ def _white_union_alpha(
     return walpha
 
 
-def _border_spill(add: np.ndarray, seed: np.ndarray) -> np.ndarray:
-    """Geodesic flood of ``seed`` through ``add``: the part connected to content
-    just outside the brush border, i.e. backdrop flowing in. The bound is the
-    flood's max travel at 4px/pass; the loop exits early on stability."""
+def _geodesic_flood(add: np.ndarray, seed: np.ndarray) -> np.ndarray:
+    """Geodesic flood of ``seed`` through ``add`` (connected reachability at
+    4px/pass). Bound = max possible travel; the loop exits early on stability."""
     spill = add & _dilate(seed, 3)
     for _ in range((add.shape[0] + add.shape[1]) // 4 + 2):
         grown = add & _dilate(spill, 4)
@@ -352,7 +352,7 @@ def _anchor_rescue_alpha(
         d = float(np.sqrt(((c - bg_lab) ** 2).sum(axis=1)).min())
         if d < _BG_NEAR:
             continue  # backdrop-like, or too close to separate safely
-        tol = min(33.0, max(_BG_SAME, 0.6 * d))
+        tol = min(_COLOR_TOL_MAX, max(_BG_SAME, 0.6 * d))
         de = np.sqrt(((lab - c) ** 2).sum(axis=-1))
         t = np.clip((tol - de) / max(0.3 * tol, 1.0), 0.0, 1.0)
         rescue = np.maximum(rescue, (t * t * (3.0 - 2.0 * t) * 255.0).astype(np.uint8))
@@ -362,7 +362,7 @@ def _anchor_rescue_alpha(
     add = (rescue > 128) & (base_alpha <= 128)
     if not add.any():
         return zeros
-    spill = _border_spill(add, seed)
+    spill = _geodesic_flood(add, seed)
     if spill.any():
         rescue[_dilate(spill, 2)] = 0
 
@@ -391,7 +391,7 @@ def _text_zone_filter(
     keyed = alpha > 40
     if not (zone.any() and keyed.any()):
         return alpha
-    keep = _border_spill(keyed, keyed & zone)
+    keep = _geodesic_flood(keyed, keyed & zone)
     if int(keep.sum()) < _ZONE_MIN_KEEP * int(keyed.sum()):
         return alpha
     return (alpha * _dilate(keep, 2)).astype(np.uint8)
@@ -600,6 +600,7 @@ def _sized_probmap(image_bytes, shape):
 # Anchor/background separation tiers (ΔE76 in Lab, against the DOMINANT outside
 # clusters only — ``_BG_DOMINANT_FRAC`` mirrors _matches_background's min_frac).
 _BG_SAME = 8.0  # closer than this = the background itself, not ink
+_COLOR_TOL_MAX = 33.0  # cap on any per-anchor key band (tighten + rescue paths)
 _BG_NEAR = 20.0  # closer than this = "suspect" ink (white title on a pale field)
 _BG_DOMINANT_FRAC = 0.15
 _ANCHOR_MIN_FRAC = 0.08  # smaller clusters are anti-aliasing blends, not ink
@@ -711,7 +712,7 @@ def tighten_text_mask(
     mask_bytes: Optional[bytes],
     *,
     grow: Optional[int] = None,
-    color_tol: float = 33.0,
+    color_tol: float = _COLOR_TOL_MAX,
 ) -> Optional[bytes]:
     """Shrink a brushed *block* erase-mask down to the title's glyph strokes.
 
