@@ -209,7 +209,27 @@ def _kmeans(pts: np.ndarray, k: int, iters: int = 12):
 _BLEED_FAR_SUPPORT = 14.0
 
 
-def _drop_bleed(arr: np.ndarray, mask: np.ndarray, cent: np.ndarray) -> np.ndarray:
+def _far_ring_palette(
+    space: np.ndarray, mask: np.ndarray, near_px: int
+) -> Optional[np.ndarray]:
+    """k-means palette of the 40-80px far ring, in ``space``'s own colour space.
+
+    None when the ring is too small to trust — absolutely, or relative to the
+    near ring (a brush close to the frame edge leaves a one-SIDED far ring that
+    would wrongly condemn colours legitimately present near the other sides).
+    """
+    far = _dilate(mask, 80) & ~_dilate(mask, 40)
+    fpts = space[far]
+    if len(fpts) < max(200, near_px // 2):
+        return None
+    fsub = fpts.astype(np.float32)[:: max(1, len(fpts) // 4000)]
+    fcent, fcounts = _kmeans(fsub, 5)
+    return fcent[fcounts > 0]
+
+
+def _drop_bleed(
+    arr: np.ndarray, mask: np.ndarray, cent: np.ndarray, near_px: int
+) -> np.ndarray:
     """Drop near-ring clusters unsupported by the far ring (40-80px out).
 
     A distressed/sprayed title bleeds its own colour into the ring just outside
@@ -218,13 +238,9 @@ def _drop_bleed(arr: np.ndarray, mask: np.ndarray, cent: np.ndarray) -> np.ndarr
     cluster with no far-ring colour within ``_BLEED_FAR_SUPPORT`` ΔE is bleed.
     Fail-safe: too small a far ring, or nothing validating, keeps all clusters.
     """
-    far = _dilate(mask, 80) & ~_dilate(mask, 40)
-    fpts = arr[far]
-    if len(fpts) < 200:
+    fcent = _far_ring_palette(arr, mask, near_px)
+    if fcent is None:
         return cent
-    fsub = fpts.astype(np.float32)[:: max(1, len(fpts) // 4000)]
-    fcent, fcounts = _kmeans(fsub, 5)
-    fcent = fcent[fcounts > 0]
     diff = _srgb_to_lab(cent[None])[0][:, None] - _srgb_to_lab(fcent[None])[0][None]
     de = np.sqrt((diff * diff).sum(axis=2)).min(axis=1)
     keep = de <= _BLEED_FAR_SUPPORT
@@ -252,16 +268,15 @@ def _background_colors(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarra
                 :: max(1, len(pts) // 4000)
             ]  # subsample, cheap
             cent, counts = _kmeans(sub, 5)
-            return _drop_bleed(arr, mask, cent[counts > 0])
+            return _drop_bleed(arr, mask, cent[counts > 0], int(ring.sum()))
     return _local_background(arr, mask)[None, :]
 
 
-def _background_distance(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarray:
+def _background_distance(arr: np.ndarray, bg: np.ndarray) -> np.ndarray:
     """Per-pixel ΔE76 (Lab) to the *nearest* backdrop colour (see
     :func:`_background_colors`) — small where a pixel matches the backdrop, large
     on the title. Lab, not raw RGB: a dark-red title on a dark backdrop is a hue
     flip RGB distance barely scores, while ΔE tracks what the eye separates."""
-    bg = _background_colors(arr, mask)
     diff = _srgb_to_lab(arr)[..., None, :] - _srgb_to_lab(bg)[None, None]
     return np.sqrt((diff * diff).sum(axis=-1)).min(axis=-1)
 
@@ -270,10 +285,9 @@ def _background_distance(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndar
 # oversized/decompression-bomb image. Posters are well under this.
 _MAX_SIDE = 3000
 
-# White-union guards: reject when the union would cover more of the brush than a
-# title plausibly does (a pale FIELD keyed white), and cap the spill flood.
+# White-union guard: reject when the union would cover more of the brush than a
+# title plausibly does (a pale FIELD keyed white).
 _UNION_MAX_COVER = 0.60
-_SPILL_MAX_ITERS = 64
 
 
 def _white_union_alpha(
@@ -306,12 +320,7 @@ def _white_union_alpha(
         return np.zeros_like(walpha)
 
     bright_out = (_dilate(mask, 2) & ~mask) & (mn >= lo)
-    spill = add & _dilate(bright_out, 3)
-    for _ in range(_SPILL_MAX_ITERS):
-        grown = add & _dilate(spill, 4)
-        if int(grown.sum()) == int(spill.sum()):
-            break
-        spill = grown
+    spill = _border_spill(add, bright_out)
     if spill.any():
         walpha[_dilate(spill, 2)] = 0
 
@@ -319,6 +328,75 @@ def _white_union_alpha(
     if int(union.sum()) / max(int(mask.sum()), 1) > _UNION_MAX_COVER:
         return np.zeros_like(walpha)
     return walpha
+
+
+def _border_spill(add: np.ndarray, seed: np.ndarray) -> np.ndarray:
+    """Geodesic flood of ``seed`` through ``add``: the part connected to content
+    just outside the brush border, i.e. backdrop flowing in. The bound is the
+    flood's max travel at 4px/pass; the loop exits early on stability."""
+    spill = add & _dilate(seed, 3)
+    for _ in range((add.shape[0] + add.shape[1]) // 4 + 2):
+        grown = add & _dilate(spill, 4)
+        if int(grown.sum()) == int(spill.sum()):
+            break
+        spill = grown
+    return spill
+
+
+def _anchor_rescue_alpha(
+    arr: np.ndarray, mask: np.ndarray, base_alpha: np.ndarray, bg: np.ndarray
+) -> np.ndarray:
+    """Per-anchor bands for pale NON-white title words the global band drops.
+
+    A title mixing a vivid word with a pale one can make the Otsu band-fit split
+    between the two TITLE colours instead of title-vs-backdrop — the pale word's
+    distance lands under the fitted ``lo`` and it vanishes (and, not being
+    near-white, the brightness union can't catch it either). Rescue: k-means the
+    brushed pixels and give every substantial cluster that is clearly separated
+    from the backdrop palette (ΔE >= ``_BG_NEAR``) its own key band, clamped to
+    ``0.6 x`` its backdrop distance exactly as :func:`_detect_anchors` does.
+    Guarded like the white union: anchor-coloured content flowing across the
+    brush border is flood-killed, and a union past ``_UNION_MAX_COVER`` of the
+    brush is rejected wholesale.
+    """
+    zeros = np.zeros(arr.shape[:2], dtype=np.uint8)
+    pts = arr[mask]
+    if len(pts) < 200:
+        return zeros
+    sub = pts.astype(np.float32)[:: max(1, len(pts) // 4000)]
+    cent, counts = _kmeans(sub, 5)
+    frac = counts / max(1, int(counts.sum()))
+    lab = _srgb_to_lab(arr)
+    cent_lab = _srgb_to_lab(cent[None])[0]
+    bg_lab = _srgb_to_lab(bg[None])[0]
+
+    rim_out = _dilate(mask, 2) & ~mask
+    rescue = zeros.copy()
+    seed = np.zeros(arr.shape[:2], dtype=bool)
+    for c, f in zip(cent_lab, frac):
+        if f < _ANCHOR_MIN_FRAC:
+            continue
+        d = float(np.sqrt(((c - bg_lab) ** 2).sum(axis=1)).min())
+        if d < _BG_NEAR:
+            continue  # backdrop-like, or too close to separate safely
+        tol = min(33.0, max(_BG_SAME, 0.6 * d))
+        de = np.sqrt(((lab - c) ** 2).sum(axis=-1))
+        t = np.clip((tol - de) / max(0.3 * tol, 1.0), 0.0, 1.0)
+        rescue = np.maximum(rescue, (t * t * (3.0 - 2.0 * t) * 255.0).astype(np.uint8))
+        seed |= rim_out & (de < tol)
+    rescue = (rescue * mask).astype(np.uint8)
+
+    add = (rescue > 128) & (base_alpha <= 128)
+    if not add.any():
+        return zeros
+    spill = _border_spill(add, seed)
+    if spill.any():
+        rescue[_dilate(spill, 2)] = 0
+
+    union = (base_alpha > 128) | (rescue > 128)
+    if int(union.sum()) / max(int(mask.sum()), 1) > _UNION_MAX_COVER:
+        return zeros
+    return rescue
 
 
 def _open_rgb_bounded(image_bytes: bytes) -> Image.Image:
@@ -360,7 +438,8 @@ def extract_subject_logo(
     arr = np.asarray(img).astype(np.float32)
     mask = _load_mask(mask_bytes, img.size)
 
-    dist = _background_distance(arr, mask)
+    bg = _background_colors(arr, mask)
+    dist = _background_distance(arr, bg)
     if (lo, hi) == (40.0, 90.0):  # untouched defaults -> fit the band per poster
         split = _otsu(dist[mask] if mask is not None else dist)
         if split is not None and 8.0 <= split <= 80.0:
@@ -371,8 +450,10 @@ def extract_subject_logo(
     if mask is not None:
         alpha = (alpha * mask).astype(np.uint8)
         # Mixed titles: union in the white part (see _white_union_alpha) — the
-        # colour key alone drops it when the backdrop palette has a white-ish tone.
+        # colour key alone drops it when the backdrop palette has a white-ish
+        # tone — then rescue pale non-white words the band-fit dropped.
         alpha = np.maximum(alpha, _white_union_alpha(arr, mask, alpha))
+        alpha = np.maximum(alpha, _anchor_rescue_alpha(arr, mask, alpha, bg))
 
     alpha = _despeckle(alpha)
 
@@ -587,6 +668,9 @@ def _outside_background(lab, block, width):
     brush tightness. Returns ``None`` when there's no usable outside (a block that
     fills the frame). Used to key the title INK against — and to reject an anchor
     (detector or colour-key) that merely IS the background, i.e. an inversion.
+    Title bleed clusters (spray hugging the glyphs, no far-ring support) are
+    dropped, as in :func:`_drop_bleed`; kept fractions stay un-renormalised so
+    the dominance gates still measure share of the full outside area.
     """
     outside = _dilate(block, max(8, round(0.02 * width))) & ~block
     if int(outside.sum()) < 50:
@@ -597,7 +681,15 @@ def _outside_background(lab, block, width):
     obg = obg.astype(np.float32)[:: max(1, len(obg) // 4000)]
     bg_cent, bg_counts = _kmeans(obg, 5)
     keep = bg_counts > 0
-    return bg_cent[keep], bg_counts[keep] / int(bg_counts.sum())
+    cent, frac = bg_cent[keep], bg_counts[keep] / int(bg_counts.sum())
+    fcent = _far_ring_palette(lab, block, int(outside.sum()))
+    if fcent is not None:
+        diff = cent[:, None] - fcent[None]
+        de = np.sqrt((diff * diff).sum(axis=2)).min(axis=1)
+        keeps = de <= _BLEED_FAR_SUPPORT
+        if keeps.any():
+            cent, frac = cent[keeps], frac[keeps]
+    return cent, frac
 
 
 def _matches_background(title_lab, bg, tol=20.0, min_frac=0.15):

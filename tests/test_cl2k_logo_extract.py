@@ -212,6 +212,43 @@ def test_subject_union_drops_backdrop_spilling_across_the_brush():
     assert r > 150 and g < 100 and a > 200  # the title itself survives
 
 
+def test_subject_rescues_a_pale_word_next_to_a_vivid_one():
+    # a big vivid word pulls the Otsu band-fit high enough that a pale muted
+    # word lands under `lo` and vanishes; per-anchor rescue must keep it (its
+    # min channel is under the white-key floor, so the union can't)
+    import numpy as np
+
+    img = Image.new("RGB", (400, 340), (128, 128, 128))
+    d = ImageDraw.Draw(img)
+    d.rectangle((100, 90, 300, 120), fill=(110, 120, 160))  # pale muted-blue word
+    d.rectangle((50, 160, 350, 280), fill=(205, 35, 35))  # fat vivid red word
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (40, 70, 360, 300)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height >= 180, "crop must span BOTH words, not just the vivid one"
+    arr = np.asarray(res)
+    top = arr[: res.height // 3]
+    op = top[..., 3] > 128
+    assert int(op.sum()) > 2000, "pale word must survive"
+    mean = top[..., :3][op].mean(axis=0)
+    assert mean[2] > mean[0] + 20, "pale word keeps its blue tint"
+
+
+def test_subject_spill_guard_reaches_deep_into_a_large_brush():
+    # a bright column entering a TALL brush and running deep inside it must be
+    # fully flood-killed — a fixed iteration cap left everything past ~256px
+    img = Image.new("RGB", (300, 1400), (35, 38, 44))
+    d = ImageDraw.Draw(img)
+    d.rectangle((120, 0, 180, 1200), fill=(205, 212, 228))  # crosses the brush top
+    d.rectangle((60, 1250, 240, 1300), fill=(200, 30, 30))  # red title near the foot
+
+    out = extract_subject_logo(_jpeg(img), _brush(img.size, (20, 40, 280, 1350)))
+    res = Image.open(io.BytesIO(out))
+    assert res.height <= 80, "deep backdrop column must not survive the flood"
+    r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
+    assert r > 150 and g < 100 and a > 200
+
+
 def _coloured_title_strokes():
     """Thin red vertical strokes (stroke-shaped 'letters') on a grey plate."""
     img = Image.new("RGB", (400, 240), (120, 122, 124))
@@ -219,6 +256,34 @@ def _coloured_title_strokes():
     for x in range(70, 340, 45):
         d.rectangle((x, 90, x + 12, 150), fill=(210, 40, 40))
     return img
+
+
+def test_tighten_survives_title_bleed_in_the_outside_ring(monkeypatch):
+    # spray of the TITLE's colour just outside the block used to poison
+    # _outside_background: the fallback anchor then "matched the background" and
+    # tighten gave up. Bleed clusters have no far-ring support and are dropped.
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: None)
+    img = Image.new("RGB", (500, 300), (120, 122, 124))
+    d = ImageDraw.Draw(img)
+    for x in range(90, 420, 45):  # stroke-shaped red title
+        d.rectangle((x, 120, x + 12, 180), fill=(210, 40, 40))
+    for x in range(60, 450, 8):  # dense red spray hugging the block
+        d.rectangle((x, 100, x + 3, 103), fill=(210, 40, 40))
+        d.rectangle((x, 197, x + 3, 200), fill=(210, 40, 40))
+
+    block = Image.new("L", img.size, 0)
+    ImageDraw.Draw(block).rectangle((70, 108, 440, 192), fill=255)
+
+    out = tighten_text_mask(_jpeg(img), _png(block))
+    assert out is not None, "bleed in the ring must not abort tightening"
+    m = Image.open(io.BytesIO(out)).convert("L")
+    assert m.getpixel((96, 150)) > 200  # on a red stroke -> remove
+    assert m.getpixel((130, 150)) < 60  # gap between strokes -> keep
+    assert (np.asarray(m) > 127).sum() < (np.asarray(block) > 127).sum()
 
 
 def test_tighten_shrinks_block_to_coloured_glyphs(monkeypatch):
