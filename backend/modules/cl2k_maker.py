@@ -555,6 +555,7 @@ def generate_square_art(
     season_number: Optional[int] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ) -> Dict[str, Any]:
     """Render + file 1:1 square art (``- squareart.jpg``) for a media item.
 
@@ -612,6 +613,7 @@ def generate_square_art(
         image_type="squareart",
         asset_suffix=" - squareart",
         ext=".jpg",
+        defer_upload=defer_upload,
     )
 
 
@@ -636,6 +638,7 @@ def generate_background_art(
     season_number: Optional[int] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ) -> Dict[str, Any]:
     """Render + file 16:9 background art (``- background.jpg``) for a media item.
 
@@ -698,6 +701,7 @@ def generate_background_art(
         image_type="background",
         asset_suffix=" - background",
         ext=".jpg",
+        defer_upload=defer_upload,
     )
 
 
@@ -722,6 +726,7 @@ def generate_logo_asset(
     erase_mask_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ) -> Dict[str, Any]:
     """File a clear logo as its own ``- logo.png`` asset (applied via uploadLogo).
 
@@ -777,6 +782,7 @@ def generate_logo_asset(
         image_type="logo",
         asset_suffix=" - logo",
         ext=".png",
+        defer_upload=defer_upload,
     )
 
 
@@ -1006,6 +1012,28 @@ def _persist_poster(
             if tmpdir:
                 shutil.rmtree(tmpdir, ignore_errors=True)
 
+        # A deferred failure has no response left to ride home on — the caller was
+        # told "queued" and would otherwise read silence as success. Inline runs
+        # need none of this: their errors are returned to the caller below.
+        if reload_config and upload_errors:
+            detail = "; ".join(upload_errors)
+            logger.error(f"CL2K deferred Drive upload FAILED for {filename}: {detail}")
+            try:
+                from backend.util.notification import NotificationManager
+
+                NotificationManager(
+                    fresh, logger, module_name="cl2k_maker"
+                ).send_notification(
+                    {
+                        "file": filename,
+                        "image_type": image_type,
+                        "uploaded": len(uploaded_folders),
+                        "failed": upload_errors,
+                    },
+                    event="failure",
+                )
+            except Exception as exc:
+                logger.error(f"CL2K could not send the upload-failure notice: {exc}")
         if not uploaded_folders:
             return
         # Provenance is bookkeeping; the poster is already on Drive. Never let it
