@@ -1,6 +1,6 @@
 services:
   chub:
-    image: ghcr.io/chodeus/chub:latest@sha256:6ae1886868846e7b9f47d2e58bbca8da81f0d5a14028c4080bccf811bc7a9165
+    image: ghcr.io/chodeus/chub:latest@sha256:9f7fb02f3e41342be5f43c6b99ccf4f5644a9fc894cfb465559be585b02801e5
     container_name: chub
     restart: unless-stopped
 
