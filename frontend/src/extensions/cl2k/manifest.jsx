@@ -3,6 +3,7 @@
 import React from 'react';
 import { FieldRegistry } from '../../components/fields/FieldRegistry.jsx';
 import { CL2K_MAKER_SCHEMA, CL2K_MAKER_MODULE_ENTRY } from './settings_schema.js';
+import { Cl2kAiTestField } from './AiConnectionTest.jsx';
 import {
     Cl2kCoverageField,
     Cl2kGdriveUploadsField,
@@ -17,6 +18,7 @@ const Cl2kMakerPage = React.lazy(() => import('../../pages/poster/Cl2kMakerPage.
 FieldRegistry.register('cl2k_local_folders', Cl2kLocalFoldersField);
 FieldRegistry.register('cl2k_gdrive_uploads', Cl2kGdriveUploadsField);
 FieldRegistry.register('cl2k_coverage', Cl2kCoverageField);
+FieldRegistry.register('cl2k_ai_test', Cl2kAiTestField);
 
 export default {
     routes: [

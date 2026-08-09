@@ -17,6 +17,7 @@ Module settings are read/saved through the generic /api/config endpoints.
 """
 
 import base64
+import io
 import posixpath
 import re
 import threading
@@ -1718,3 +1719,103 @@ def tighten_mask(
             },
         )
     return ok("ok", {"tightened": True, "mask": base64.b64encode(tightened).decode()})
+
+
+def _probe_png() -> str:
+    """A 32x32 base64 PNG — the cheapest body the sidecar's detect will accept."""
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), (0, 0, 0)).save(buf, "PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def _test_lama_sidecar(cfg, logger) -> JSONResponse:
+    import requests
+
+    url = text_removal._lama_route(cfg.ai_endpoint, "/api/v1/detect")
+    body = {"image": _probe_png(), "min_score": 0.5}
+    timeout = min(text_removal._timeout(cfg), 30)
+    try:
+        resp = requests.post(
+            url, json=body, headers=text_removal._lama_headers(cfg), timeout=timeout
+        )
+    except Exception as exc:
+        logger.warning(f"CL2K test-ai: sidecar unreachable — {exc}")
+        return error(
+            f"Couldn't reach the sidecar at {cfg.ai_endpoint} — {exc}", "CL2K_AI_TEST"
+        )
+    if resp.status_code in (401, 403):
+        if not cfg.client_key:
+            # The asymmetric case: container keyed, CHUB not. Every erase 401s
+            # and nothing else reports it, so name it precisely.
+            return error(
+                "The sidecar requires a key but CHUB's Sidecar API Key is empty "
+                "— copy the container's LAMA_API_KEY into it.",
+                "CL2K_AI_TEST",
+            )
+        return error(
+            "The sidecar rejected the key. CHUB's Sidecar API Key and the "
+            "container's LAMA_API_KEY must match exactly.",
+            "CL2K_AI_TEST",
+        )
+    if not resp.ok:
+        return error(
+            f"The sidecar answered HTTP {resp.status_code}.", "CL2K_AI_TEST"
+        )
+    if not cfg.client_key:
+        return ok("Sidecar reachable. No key set — it is accepting anyone on this network.")
+    # A 200 alone can't tell "key accepted" from "key ignored": a keyless sidecar
+    # ignores the header entirely. Re-probe unauthenticated to tell them apart.
+    try:
+        bare = requests.post(url, json=body, timeout=timeout)
+        enforced = bare.status_code in (401, 403)
+    except Exception:
+        enforced = True  # unreachable without creds reads as enforced, not as a pass
+    if not enforced:
+        return ok(
+            "Sidecar reachable and your key works — but it also answers WITHOUT "
+            "a key, so LAMA_API_KEY is not set on the container."
+        )
+    return ok("Sidecar reachable, key accepted, and unauthenticated calls are refused.")
+
+
+def _test_openai(cfg, logger) -> JSONResponse:
+    import requests
+
+    try:
+        resp = requests.get(
+            "https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {cfg.api_key}"},
+            timeout=20,
+        )
+    except Exception as exc:
+        logger.warning(f"CL2K test-ai: OpenAI unreachable — {exc}")
+        return error(f"Couldn't reach OpenAI — {exc}", "CL2K_AI_TEST")
+    if resp.status_code in (401, 403):
+        return error("OpenAI rejected the API key.", "CL2K_AI_TEST")
+    if not resp.ok:
+        return error(f"OpenAI answered HTTP {resp.status_code}.", "CL2K_AI_TEST")
+    return ok("OpenAI reachable and the key is accepted.")
+
+
+@router.post(
+    "/test-ai", summary="Check the configured AI provider is reachable and authenticated"
+)
+def test_ai(
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    """Round-trip the provider's AUTHENTICATED route.
+
+    Deliberately not /health: the sidecar leaves that open, so it answers 200
+    with a wrong key or none at all. Credentials are read server-side — the
+    frontend only ever sees them redacted, so it cannot send them back.
+    """
+    cfg, unavailable = _ai_config_or_error(logger, "test-ai")
+    if unavailable:
+        return unavailable
+    maker = cfg.cl2k_maker
+    if maker.ai_provider == "lama_sidecar":
+        return _test_lama_sidecar(maker, logger)
+    return _test_openai(maker, logger)
