@@ -87,9 +87,11 @@ def test_no_provider_is_reported_not_probed(provider):
 
 
 def test_unreachable_sidecar_names_the_endpoint(provider):
+    """503, not 400: the request was fine, the upstream is down (.coderabbit.yaml
+    fail-closed rule — a transport failure must not read as a client error)."""
     provider(raises=OSError("connection refused"))
     resp = _call()
-    assert resp.status_code == 400
+    assert resp.status_code == 503
     body = _body(resp)
     assert body["error_code"] == "CL2K_AI_TEST"
     assert "lama-sidecar:8418" in body["message"]
@@ -151,3 +153,30 @@ def test_openai_ok(provider):
     resp = _call()
     assert resp.status_code == 200
     assert calls == [("get", True)], "must send the key, and must not touch the sidecar"
+
+
+def test_a_failed_reprobe_never_claims_enforcement(provider, monkeypatch):
+    """The authenticated probe succeeding proves the key works; it proves nothing
+    about whether unauthenticated calls are refused. An exception on the second
+    probe must not be reported as "refused" — that asserts a security property
+    that was never observed."""
+    calls = {"n": 0}
+
+    def flaky_post(url, json=None, headers=None, timeout=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _resp(200)  # authenticated probe: key accepted
+        raise OSError("timed out")  # unauthenticated re-probe: inconclusive
+
+    provider()
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "requests",
+        types.SimpleNamespace(post=flaky_post, get=lambda *a, **k: _resp(200)),
+    )
+    resp = _call()
+    body = _body(resp)
+    assert resp.status_code == 200, "the key demonstrably works; don't fail the whole test"
+    assert "could not run" in body["message"]
+    # The clean-pass wording, verbatim — it must never appear unverified.
+    assert "unauthenticated calls are refused" not in body["message"]

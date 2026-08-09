@@ -1743,7 +1743,9 @@ def _test_lama_sidecar(cfg, logger) -> JSONResponse:
     except Exception as exc:
         logger.warning(f"CL2K test-ai: sidecar unreachable — {exc}")
         return error(
-            f"Couldn't reach the sidecar at {cfg.ai_endpoint} — {exc}", "CL2K_AI_TEST"
+            f"Couldn't reach the sidecar at {cfg.ai_endpoint} — {exc}",
+            "CL2K_AI_TEST",
+            status_code=503,
         )
     if resp.status_code in (401, 403):
         if not cfg.client_key:
@@ -1769,10 +1771,15 @@ def _test_lama_sidecar(cfg, logger) -> JSONResponse:
     # ignores the header entirely. Re-probe unauthenticated to tell them apart.
     try:
         bare = requests.post(url, json=body, timeout=timeout)
-        enforced = bare.status_code in (401, 403)
-    except Exception:
-        enforced = True  # unreachable without creds reads as enforced, not as a pass
-    if not enforced:
+    except Exception as exc:
+        # An exception proves nothing about enforcement. Say what was actually
+        # verified — the key works — and never claim the part that wasn't.
+        logger.warning(f"CL2K test-ai: unauthenticated re-probe failed — {exc}")
+        return ok(
+            "Sidecar reachable and your key works. The follow-up check — whether "
+            f"a keyless call gets blocked — could not run ({exc})."
+        )
+    if bare.status_code not in (401, 403):
         return ok(
             "Sidecar reachable and your key works — but it also answers WITHOUT "
             "a key, so LAMA_API_KEY is not set on the container."
@@ -1791,7 +1798,7 @@ def _test_openai(cfg, logger) -> JSONResponse:
         )
     except Exception as exc:
         logger.warning(f"CL2K test-ai: OpenAI unreachable — {exc}")
-        return error(f"Couldn't reach OpenAI — {exc}", "CL2K_AI_TEST")
+        return error(f"Couldn't reach OpenAI — {exc}", "CL2K_AI_TEST", status_code=503)
     if resp.status_code in (401, 403):
         return error("OpenAI rejected the API key.", "CL2K_AI_TEST")
     if not resp.ok:
