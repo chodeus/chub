@@ -173,6 +173,18 @@ export const CL2K_MAKER_SCHEMA = {
             description: 'OpenAI model id (default gpt-image-1).',
         },
         {
+            // Read-only probe (AiConnectionTest.jsx) — no config key of its own.
+            key: 'ai_connection_test',
+            label: 'Connection',
+            type: 'cl2k_ai_test',
+            section: 'AI Text Removal',
+            conditional: {
+                field: 'ai_provider',
+                condition: 'in',
+                value: ['lama_sidecar', 'openai'],
+            },
+        },
+        {
             key: 'ai_prompt',
             label: 'AI Prompt',
             type: 'textarea',
