@@ -563,6 +563,10 @@ def extract_logo_by_diff(
         alpha = (alpha * _dilate(mask, 6)).astype(np.uint8)
 
     alpha = _despeckle(alpha)
+    if mask is not None:
+        # A loose brush makes the eraser repaint scene detail, which diffs as
+        # strongly as the title.
+        alpha = _text_zone_filter(original_bytes, mask, alpha)
 
     out = np.zeros((orig_img.height, orig_img.width, 4), dtype=np.uint8)
     out[..., 0:3] = orig.astype(np.uint8)  # keep ORIGINAL colours; whiten happens later

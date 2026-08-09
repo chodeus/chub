@@ -158,6 +158,24 @@ def _b64_to_bytes(b64: Optional[str], validate: bool = False) -> Optional[bytes]
     return base64.b64decode(b64.split(",")[-1], validate=validate) if b64 else None
 
 
+def _ai_config_or_error(logger: Any, what: str):
+    """``(full config, None)`` when an AI erase can run, else ``(None, 400)``.
+
+    Every user-triggered AI route fails loudly rather than returning the image
+    unchanged, which the frontend would report as a successful erase. Read live:
+    a handler holding config from import time goes stale on a settings save.
+    Routes needing more than "a provider is usable" (detect-text wants the
+    sidecar specifically) add that check themselves — this owns only the part
+    all three share.
+    """
+    cfg = load_config()
+    reason = text_removal.unavailable_reason(cfg.cl2k_maker)
+    if reason:
+        logger.warning(f"CL2K {what}: AI unavailable — {reason}")
+        return None, error(reason, "CL2K_AI_UNAVAILABLE")
+    return cfg, None
+
+
 def _crop_tuple(req: Any):
     """Assemble the (x, y, w, h) fit crop from a request, or None if unset.
 
@@ -668,15 +686,12 @@ class ExtractLogoRequest(BaseModel):
     # the title can't leak in; without it the whole image is keyed.
     mask_b64: Optional[str] = None
     # "white" keys a white/near-white title by brightness; "subject" keys a
-    # coloured title by its colour distance from the local background; "diff"
-    # keys wherever the original differs from an AI-erased result (needs
-    # cleaned_b64 — the most faithful key, it catches glows no colour key can).
+    # coloured title by its colour distance from the local background; "erase"
+    # inpaints the title away and keys whatever changed — the most faithful key,
+    # it catches glows no colour key can, and the only one needing a provider.
     mode: str = "white"
-    # AI-erased result (base64/data-url) for mode="diff": the frontend already
-    # holds it after a retext preview, alongside the original and the brush.
-    cleaned_b64: Optional[str] = None
     # Smoothstep band, interpreted per mode (white: min-channel 0-255; subject:
-    # ΔE76 0-~150; diff: RGB distance 0-441). None lets each mode use its own
+    # ΔE76 0-~150; erase: RGB distance 0-441). None lets each mode use its own
     # default — white/subject then fit the band to the poster (Otsu).
     lo: Optional[float] = Field(None, ge=0.0, le=441.0)
     hi: Optional[float] = Field(None, ge=0.0, le=441.0)
@@ -902,7 +917,7 @@ def logo_asset_generate(
 
 @router.post(
     "/extract-logo",
-    summary="Extract a white title from a poster into a transparent logo PNG",
+    summary="Key a title out of poster art into a transparent logo PNG",
 )
 def extract_logo(
     req: ExtractLogoRequest,
@@ -929,16 +944,28 @@ def extract_logo(
     except Exception:
         return error("invalid mask data", "BAD_MASK")
     band = {k: v for k, v in (("lo", req.lo), ("hi", req.hi)) if v is not None}
-    if req.mode == "diff":
-        try:
-            cleaned = _b64_to_bytes(req.cleaned_b64)
-        except Exception:
-            return error("invalid cleaned-image data", "BAD_IMAGE")
-        if not cleaned:
+    if req.mode == "erase":
+        if not mask:
             return error(
-                "Diff extraction needs the AI-erased result (cleaned_b64)",
-                "NO_CLEANED",
+                "Brush over the title first — the eraser only fills what is masked",
+                "NO_MASK",
             )
+        cfg, unavailable = _ai_config_or_error(logger, "extract-logo erase")
+        if unavailable:
+            return unavailable
+        try:
+            cleaned = text_removal.remove_text(
+                raw, config=cfg.cl2k_maker, mask_bytes=mask, logger=logger
+            )
+        except Exception as exc:
+            logger.error(f"cl2k: extract-logo erase failed: {exc}", exc_info=True)
+            return error(f"AI erase failed: {exc}", "CL2K_AI")
+        if cleaned == raw:
+            # By value, not identity: remove_text hands the original object back
+            # when the provider bails, but a provider can also echo an equal
+            # copy. Either way diffing keys nothing, so fail here instead of
+            # returning a blank logo that looks like a bad brush.
+            return error("The AI erase returned the poster unchanged", "CL2K_AI")
         png = extract_logo_by_diff(raw, cleaned, mask, **band)
     else:
         extract = extract_subject_logo if req.mode == "subject" else extract_title_logo
@@ -1515,15 +1542,14 @@ def retext(
         f"(apply_ai={req.apply_ai}, mask={'yes' if req.mask_b64 else 'no'}, "
         f"label={req.label_text!r})"
     )
-    cfg = load_config()
-    # Fail an explicit AI erase loudly rather than returning the image unchanged
-    # (which the frontend would report as a successful erase). Only guards the
-    # user-triggered apply_ai path; the lenient skip stays in remove_text.
+    # Only the user-triggered apply_ai path is gated; the lenient skip for an
+    # unconfigured provider stays in remove_text.
     if req.apply_ai:
-        reason = text_removal.unavailable_reason(cfg.cl2k_maker)
-        if reason:
-            logger.warning(f"CL2K retext: AI unavailable — {reason}")
-            return error(reason, "CL2K_AI_UNAVAILABLE")
+        cfg, unavailable = _ai_config_or_error(logger, "retext")
+        if unavailable:
+            return unavailable
+    else:
+        cfg = load_config()
     try:
         out = retext_poster(
             db=db,
@@ -1597,14 +1623,15 @@ def detect_text(
             return error(f"could not fetch the source image: {exc}", "CL2K_DETECT")
     else:
         return error("no image provided", "CL2K_DETECT")
-    cfg = load_config().cl2k_maker
-    reason = text_removal.unavailable_reason(cfg)
-    if reason is None and cfg.ai_provider != "lama_sidecar":
+    full_config, unavailable = _ai_config_or_error(logger, "detect-text")
+    if unavailable:
+        return unavailable
+    cfg = full_config.cl2k_maker
+    if cfg.ai_provider != "lama_sidecar":  # openai has no detection endpoint
         reason = (
             "Text detection needs the LaMa sidecar provider — "
             "select it in Module Settings → CL2K Maker."
         )
-    if reason:
         logger.warning(f"CL2K detect-text: unavailable — {reason}")
         return error(reason, "CL2K_AI_UNAVAILABLE")
     import requests

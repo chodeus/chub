@@ -119,6 +119,14 @@ const ART_SOURCES = [
 // square pickers, so those stay on ART_SOURCES.
 const BACKDROP_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
 
+// Mirrors text_removal.unavailable_reason(): a provider is only usable with the
+// field it actually needs, so the erase button can't offer a call the server rejects.
+const aiEraseReady = config => {
+    if (config?.ai_provider === 'lama_sidecar') return !!config.ai_endpoint;
+    if (config?.ai_provider === 'openai') return !!config.api_key;
+    return false;
+};
+
 // The logo picker gets 'gdrive' too, browsing the sync cache for `- logo` assets
 // (image_type=logo) rather than finished posters. A gdrive_list folder that sits
 // outside every renamer source_dir — an "Extras"/assets drive — is indexed
@@ -2066,6 +2074,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     artBySource={artBySource}
                     loadingArt={loadingArt}
                     saveTargets={saveTargets}
+                    canErase={aiEraseReady(config)}
                     toast={toast}
                 />
             )}
@@ -6139,7 +6148,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
 
 // ─── Logo asset tab ─────────────────────────────────────────────────────────
 
-const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) => {
+const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, canErase, toast }) => {
     const [logo, setLogo] = useState(null); // file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, url, name }
     const [logoSource, setLogoSource] = useState('tmdb');
@@ -6196,14 +6205,20 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Brush over a title on a poster; the key lifts it into a transparent logo,
     // which becomes the custom logo and flows through the same whiten/save. White
     // mode keys a white title by brightness; coloured mode keys by colour and
-    // also carries the white words of a mixed title.
+    // also carries the white words of a mixed title. Erase mode keys nothing by
+    // appearance — it inpaints the title away and takes whatever changed — so it
+    // needs an AI provider, and it is the only one that survives a title sitting
+    // on busy art the other two can't separate it from.
     const [extractOpen, setExtractOpen] = useState(false);
     const [posterSource, setPosterSource] = useState('tmdb');
     const [posterPath, setPosterPath] = useState(null);
     const [customPoster, setCustomPoster] = useState(null); // { b64, url, name }
     const [extractMask, setExtractMask] = useState(null);
-    const [extractMode, setExtractMode] = useState('white'); // 'white' | 'subject'
+    const [extractMode, setExtractMode] = useState('white'); // white|subject|erase
     const [extracting, setExtracting] = useState(false);
+    // Config can change under a mounted panel, so never submit a mode the button
+    // has stopped offering.
+    const activeExtractMode = extractMode === 'erase' && !canErase ? 'white' : extractMode;
     const posters = artBySource[posterSource]?.posters || [];
     const posterUrl = customPoster?.url || (posterPath ? urlForPath(posterPath) : null);
     // 'upload' AND 'gdrive' both seed customPoster, so only clear it when
@@ -6352,7 +6367,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                 image_path: customPoster ? null : posterPath,
                 image_b64: customPoster?.b64 || null,
                 mask_b64: extractMask,
-                mode: extractMode,
+                mode: activeExtractMode,
             });
             const url = await new Promise(resolve => {
                 const fr = new FileReader();
@@ -6673,11 +6688,13 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                 >
                     <div className="flex flex-col gap-3">
                         <p className="text-xs text-fg-subtle">
-                            Pull a title straight off a poster — no OpenAI. Pick a poster, brush
-                            over the title (a loose scribble is fine; keep off bright areas), then
-                            Extract. Detect text prefills every text region on the poster — brush
-                            off the bits you don&apos;t want; Tighten to letters shrinks your brush
-                            to the glyphs for a cleaner key. The result becomes your logo below.
+                            Pull a title straight off a poster. White and Coloured key it locally,
+                            with no AI; Busy art runs your configured eraser (LaMa sidecar or
+                            OpenAI) first. Pick a poster, brush over the title (a loose scribble is
+                            fine; keep off bright areas), then Extract. Detect text prefills every
+                            text region on the poster — brush off the bits you don&apos;t want;
+                            Tighten to letters shrinks your brush to the glyphs for a cleaner key.
+                            The result becomes your logo below.
                         </p>
                         {posterSource === 'upload' ? (
                             <UploadArtCard
@@ -6811,23 +6828,34 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                 <div className="flex items-center gap-2 mb-1">
                                     <button
                                         type="button"
-                                        className={seg(extractMode === 'white')}
+                                        className={seg(activeExtractMode === 'white')}
                                         onClick={() => setExtractMode('white')}
                                     >
                                         White title
                                     </button>
                                     <button
                                         type="button"
-                                        className={seg(extractMode === 'subject')}
+                                        className={seg(activeExtractMode === 'subject')}
                                         onClick={() => setExtractMode('subject')}
                                     >
                                         Coloured / mixed title
                                     </button>
+                                    {canErase && (
+                                        <button
+                                            type="button"
+                                            className={seg(activeExtractMode === 'erase')}
+                                            onClick={() => setExtractMode('erase')}
+                                        >
+                                            Busy art (AI erase)
+                                        </button>
+                                    )}
                                 </div>
                                 <p className="text-xs text-fg-subtle mb-1">
-                                    {extractMode === 'subject'
-                                        ? 'Brush over the whole title — mixed white + coloured titles are keyed together:'
-                                        : 'Brush over the white title:'}
+                                    {activeExtractMode === 'erase'
+                                        ? 'Brush over the title, then Tighten — the AI erases it and keeps whatever changed. Slower, but it holds up where the colour keys chew the letters:'
+                                        : activeExtractMode === 'subject'
+                                          ? 'Brush over the whole title — mixed white + coloured titles are keyed together:'
+                                          : 'Brush over the white title:'}
                                 </p>
                                 <div className="bg-black rounded p-1 inline-block max-w-full">
                                     <BrushMask

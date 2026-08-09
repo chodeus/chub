@@ -65,11 +65,12 @@ class Cl2kMakerConfig(BaseModel):
     # handoff for those.
     ai_provider: str = "none"  # none | lama_sidecar | openai
     ai_endpoint: str = ""  # lama sidecar URL
-    # openai token, or the optional LAMA_API_KEY of a locked-down sidecar (sent
-    # as X-API-Key). Named ``api_key`` (not ``ai_api_key``) so the core
-    # secret-redaction list — which matches on exact leaf key names — masks it
-    # on GET /api/config like every other secret. Don't re-prefix it.
+    # openai token. Name is redaction-driven (the core secret list matches exact
+    # leaf keys) — don't re-prefix it to ai_api_key.
     api_key: str = ""
+    # Sidecar's LAMA_API_KEY, sent as X-API-Key. Own field so both providers'
+    # credentials coexist; same redaction-driven naming.
+    client_key: str = ""
     ai_model: str = ""  # openai model id (default gpt-image-1)
     # The sidecar's quality passes (snap + native boundary refine, v1.6+) add
     # roughly one extra inference per erase, which can push a busy CPU box
@@ -90,6 +91,22 @@ class Cl2kMakerConfig(BaseModel):
         "Seamlessly reconstruct the underlying artwork and background where the "
         "text was. Do not change anything else."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_sidecar_key(cls, data):
+        """Move a pre-split sidecar secret out of the shared ``api_key``."""
+        if not isinstance(data, dict):
+            return data
+        # No-ops once client_key is set, which the first save persists.
+        if data.get("client_key") or data.get("ai_provider") != "lama_sidecar":
+            return data
+        legacy = (data.get("api_key") or "").strip()
+        # Never an openai token left behind by an earlier provider choice.
+        if legacy and not legacy.startswith("sk-"):
+            data = dict(data)
+            data["client_key"], data["api_key"] = legacy, ""
+        return data
 
     @model_validator(mode="before")
     @classmethod

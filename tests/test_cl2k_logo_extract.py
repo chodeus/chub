@@ -10,6 +10,7 @@ import io
 from PIL import Image, ImageDraw
 
 from backend.util.cl2k.logo_extract import (
+    extract_logo_by_diff,
     extract_subject_logo,
     extract_title_logo,
     fill_dark_bodies,
@@ -698,3 +699,110 @@ def test_text_detect_probmap_shape_when_available():
     assert prob is not None
     assert prob.shape == (96, 320)
     assert 0.0 <= float(prob.min()) and float(prob.max()) <= 1.0
+
+
+# --------------------------------------------------------------------------
+# diff key (after an AI erase)
+# --------------------------------------------------------------------------
+
+_FIELD = (40, 45, 55)
+_TITLE_BOX = (60, 100, 340, 140)
+_JUNK_BOX = (100, 30, 150, 70)  # scene detail the brush also covers
+
+
+def _erase_poster(*, junk: bool) -> Image.Image:
+    img = Image.new("RGB", (400, 240), _FIELD)
+    draw = ImageDraw.Draw(img)
+    draw.rectangle(_TITLE_BOX, fill=(255, 255, 255))
+    if junk:
+        draw.rectangle(_JUNK_BOX, fill=(240, 238, 235))
+    return img
+
+
+def _erased(img: Image.Image, *boxes) -> Image.Image:
+    """``img`` with ``boxes`` painted back to the field — stands in for LaMa."""
+    out = img.copy()
+    draw = ImageDraw.Draw(out)
+    for box in boxes:
+        draw.rectangle(box, fill=_FIELD)
+    return out
+
+
+def _erase_mask() -> Image.Image:
+    mask = Image.new("L", (400, 240), 0)
+    ImageDraw.Draw(mask).rectangle((40, 20, 360, 160), fill=255)
+    return mask
+
+
+def _pin_detector(monkeypatch, hot_box):
+    """Pin the DBNet probmap: hot over ``hot_box``, or absent when it is None.
+
+    The vendored model is an optional dep, so a real detector run would make
+    these assertions depend on whether onnxruntime is installed.
+    """
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    def fake(_image_bytes):
+        if hot_box is None:
+            return None
+        prob = np.zeros((240, 400), dtype=np.float32)
+        x0, y0, x1, y1 = hot_box
+        prob[y0:y1, x0:x1] = 1.0
+        return prob
+
+    monkeypatch.setattr(text_detect, "detect_text_probmap", fake)
+
+
+def test_diff_keys_whatever_the_eraser_repainted(monkeypatch):
+    _pin_detector(monkeypatch, None)
+    img = _erase_poster(junk=False)
+    out = extract_logo_by_diff(
+        _png(img), _png(_erased(img, _TITLE_BOX)), _png(_erase_mask())
+    )
+    res = Image.open(io.BytesIO(out))
+    assert res.mode == "RGBA"
+    # trimmed to the repainted bar (~280x40), not the 400x240 frame
+    assert 250 <= res.width <= 320
+    assert res.height <= 80
+    # ORIGINAL colours survive — the CL2K whiten pass recolours downstream
+    r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
+    assert (r, g, b) == (255, 255, 255) and a > 200
+
+
+def test_diff_ignores_inpaint_drift_outside_the_brush(monkeypatch):
+    _pin_detector(monkeypatch, None)
+    img = _erase_poster(junk=False)
+    # The eraser also nudged a corner well outside the brush (inpaint drift).
+    cleaned = _erased(img, _TITLE_BOX)
+    ImageDraw.Draw(cleaned).rectangle((5, 190, 60, 230), fill=(200, 60, 60))
+
+    out = extract_logo_by_diff(_png(img), _png(cleaned), _png(_erase_mask()))
+    res = Image.open(io.BytesIO(out))
+    assert res.height <= 80  # drift at y=190 would stretch this past 100
+
+
+def test_diff_zone_filter_drops_repaint_off_the_text_line(monkeypatch):
+    """The eraser repaints ALL of a loose brush, so scene detail diffs as hard as
+    the title — the text-zone filter is what tells them apart (regression: the
+    girl's dress keying in above the Cassadaga title)."""
+    _pin_detector(monkeypatch, _TITLE_BOX)
+    img = _erase_poster(junk=True)
+    out = extract_logo_by_diff(
+        _png(img), _png(_erased(img, _TITLE_BOX, _JUNK_BOX)), _png(_erase_mask())
+    )
+    res = Image.open(io.BytesIO(out))
+    assert res.height <= 80  # junk at y=30 is gone; only the bar remains
+
+
+def test_diff_keeps_repaint_when_the_detector_is_absent(monkeypatch):
+    """Fail-safe: with no detector there is no text line to judge against, so the
+    filter must leave the key alone rather than guess it away."""
+    _pin_detector(monkeypatch, None)
+    img = _erase_poster(junk=True)
+    out = extract_logo_by_diff(
+        _png(img), _png(_erased(img, _TITLE_BOX, _JUNK_BOX)), _png(_erase_mask())
+    )
+    res = Image.open(io.BytesIO(out))
+    assert res.height >= 100  # spans the junk at y=30 down to the bar at y=140
