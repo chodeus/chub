@@ -532,6 +532,7 @@ def generate_for_item(
         save_local=save_local,
         upload_gdrive=upload_gdrive,
         defer_upload=defer_upload,
+        full_config=full_config,
     )
 
 
@@ -555,6 +556,7 @@ def generate_square_art(
     season_number: Optional[int] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ) -> Dict[str, Any]:
     """Render + file 1:1 square art (``- squareart.jpg``) for a media item.
 
@@ -612,6 +614,8 @@ def generate_square_art(
         image_type="squareart",
         asset_suffix=" - squareart",
         ext=".jpg",
+        defer_upload=defer_upload,
+        full_config=full_config,
     )
 
 
@@ -636,6 +640,7 @@ def generate_background_art(
     season_number: Optional[int] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ) -> Dict[str, Any]:
     """Render + file 16:9 background art (``- background.jpg``) for a media item.
 
@@ -698,6 +703,8 @@ def generate_background_art(
         image_type="background",
         asset_suffix=" - background",
         ext=".jpg",
+        defer_upload=defer_upload,
+        full_config=full_config,
     )
 
 
@@ -722,6 +729,7 @@ def generate_logo_asset(
     erase_mask_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ) -> Dict[str, Any]:
     """File a clear logo as its own ``- logo.png`` asset (applied via uploadLogo).
 
@@ -777,6 +785,8 @@ def generate_logo_asset(
         image_type="logo",
         asset_suffix=" - logo",
         ext=".png",
+        defer_upload=defer_upload,
+        full_config=full_config,
     )
 
 
@@ -831,6 +841,7 @@ def _persist_poster(
     asset_suffix: str = "",
     ext: Optional[str] = None,
     defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
+    full_config=None,
 ) -> Dict[str, Any]:
     """Write a finished poster to every claiming save location + provenance.
 
@@ -954,13 +965,41 @@ def _persist_poster(
     uploaded_folders: List[str] = []
     upload_errors: List[str] = []
 
+    def _report_deferred_failure(errors: List[str], notify_cfg) -> None:
+        """Tell the user about a failure the response can no longer carry.
+
+        The caller was told "queued", so silence here reads as success.
+        """
+        detail = "; ".join(errors)
+        logger.error(f"CL2K deferred Drive upload FAILED for {filename}: {detail}")
+        if notify_cfg is None:
+            logger.error("CL2K could not notify: no usable config")
+            return
+        try:
+            from backend.util.notification import NotificationManager
+
+            NotificationManager(
+                notify_cfg, logger, module_name="cl2k_maker"
+            ).send_notification(
+                {
+                    "file": filename,
+                    "image_type": image_type,
+                    "uploaded": len(uploaded_folders),
+                    "failed": errors,
+                },
+                event="failure",
+            )
+        except Exception as exc:
+            logger.error(f"CL2K could not send the upload-failure notice: {exc}")
+
     def _run_uploads(reload_config: bool = False) -> None:
         """Upload to every routed Drive folder; deferred runs reload live config."""
         from backend.util.cl2k.gdrive_upload import upload_file
 
         targets, upload_cfg = folder_ids, sync_cfg
+        fresh = None
         if reload_config:
-            # Deferred runs use current routing/credentials; skip if unreadable.
+            # Deferred runs use current routing/credentials.
             try:
                 from backend.util.config import load_config
 
@@ -968,15 +1007,18 @@ def _persist_poster(
                 targets = _drive_targets(fresh.cl2k_maker, image_type)
                 upload_cfg = fresh.sync_gdrive
             except Exception as exc:
-                logger.warning(
-                    f"CL2K skipped deferred Drive upload for {filename} — "
-                    f"could not re-read config: {exc}"
+                # Nothing gets uploaded, and the response is long gone — report
+                # it rather than returning on a warning.
+                _report_deferred_failure(
+                    [f"could not re-read config: {exc}"], full_config
                 )
                 return
             if not targets:
-                logger.info(
-                    f"CL2K skipped deferred Drive upload for {filename} — "
-                    f"no Drive folder is routed for {image_type} any more"
+                # Also a false success: the response promised an upload and none
+                # happens. Different cause, same silence.
+                _report_deferred_failure(
+                    [f"no Drive folder is routed for {image_type} any more"],
+                    fresh or full_config,
                 )
                 return
 
@@ -1006,6 +1048,11 @@ def _persist_poster(
             if tmpdir:
                 shutil.rmtree(tmpdir, ignore_errors=True)
 
+        # A deferred failure has no response left to ride home on — the caller was
+        # told "queued" and would otherwise read silence as success. Inline runs
+        # need none of this: their errors are returned to the caller below.
+        if reload_config and upload_errors:
+            _report_deferred_failure(upload_errors, fresh or full_config)
         if not uploaded_folders:
             return
         # Provenance is bookkeeping; the poster is already on Drive. Never let it
@@ -1220,6 +1267,7 @@ def save_finished_poster(
         logo_source=logo_source,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
+        full_config=full_config,
     )
 
 

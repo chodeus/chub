@@ -606,7 +606,8 @@ def generate(
         force=req.force,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
-        # Interactive path only — the batch run() and asset makers stay inline.
+        # Every interactive save defers alike (posters and the asset makers); the
+        # batch run() stays inline. A deferred failure notifies — see _run_uploads.
         defer_upload=background_tasks.add_task,
     )
     if result.get("status") == "generated":
@@ -730,6 +731,7 @@ def square_preview(
 @router.post("/square-generate", summary="Generate + save square art")
 def square_generate(
     req: SquareArtRequest,
+    background_tasks: BackgroundTasks,
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
@@ -754,8 +756,11 @@ def square_generate(
         season_number=req.season_number,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
+        defer_upload=background_tasks.add_task,
     )
     if result.get("status") == "generated":
+        if result.get("upload_pending"):
+            return ok("Square art generated — uploading to Drive", result)
         return ok("Square art generated", result)
     return error(
         result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
@@ -818,6 +823,7 @@ def background_preview(
 @router.post("/background-generate", summary="Generate + save background art")
 def background_generate(
     req: BackgroundArtRequest,
+    background_tasks: BackgroundTasks,
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
@@ -843,8 +849,11 @@ def background_generate(
         season_number=req.season_number,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
+        defer_upload=background_tasks.add_task,
     )
     if result.get("status") == "generated":
+        if result.get("upload_pending"):
+            return ok("Background art generated — uploading to Drive", result)
         return ok("Background art generated", result)
     return error(
         result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
@@ -883,6 +892,7 @@ def logo_asset_preview(
 @router.post("/logo-asset-generate", summary="File a clear logo as a - logo asset")
 def logo_asset_generate(
     req: LogoAssetRequest,
+    background_tasks: BackgroundTasks,
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
@@ -908,8 +918,11 @@ def logo_asset_generate(
         erase_mask_bytes=_b64_to_bytes(req.erase_b64),
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
+        defer_upload=background_tasks.add_task,
     )
     if result.get("status") == "generated":
+        if result.get("upload_pending"):
+            return ok("Logo asset filed — uploading to Drive", result)
         return ok("Logo asset filed", result)
     return error(
         result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
