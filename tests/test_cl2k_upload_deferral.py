@@ -96,7 +96,7 @@ def _persist(monkeypatch, tmp_path, *, upload_raises=None):
     return notes, full, db
 
 
-def _run(maker_mod, db, full, logger, captured):
+def _run(maker_mod, db, full, logger, captured, **kw):
     return maker_mod._persist_poster(
         db=db,
         cfg=full.cl2k_maker,
@@ -116,6 +116,8 @@ def _run(maker_mod, db, full, logger, captured):
         upload_gdrive=True,
         image_type="logo",
         defer_upload=captured.append,
+        full_config=full,
+        **kw,
     )
 
 
@@ -144,3 +146,48 @@ def test_a_deferred_success_does_not_notify(monkeypatch, tmp_path):
     _run(maker, db, full, _logger(), captured)
     captured[0]()
     assert not notes, "a clean upload must stay quiet"
+
+
+def test_a_failed_config_reload_is_reported_not_swallowed(monkeypatch, tmp_path):
+    """The deferred task re-reads config for live routing. If that read fails it
+    used to log a warning and return — above the failure report — so the caller
+    kept its "queued" success and heard nothing. .coderabbit.yaml names
+    config-load explicitly: such a guard must never pass through silently."""
+    notes, full, db = _persist(monkeypatch, tmp_path)
+    errors = []
+    logger = _logger()
+    logger.error = errors.append
+
+    captured = []
+    _run(maker, db, full, logger, captured)
+    assert captured, "the upload should have been deferred"
+
+    # Config becomes unreadable between the response and the background task.
+    def boom():
+        raise RuntimeError("config.yml is empty")
+
+    monkeypatch.setattr("backend.util.config.load_config", boom, raising=False)
+    captured[0]()
+
+    assert any(e == "failure" for e, _ in notes), "a failed reload must notify"
+    assert any("FAILED" in m for m in errors), "and must log at error level"
+    assert any("could not re-read config" in str(o) for _, o in notes), \
+        "the notice must say what actually failed"
+
+
+def test_losing_the_route_before_the_task_runs_is_reported(monkeypatch, tmp_path):
+    """Third instance of the same class, found by sweeping rather than by review:
+    if routing changes between the response and the background task, nothing
+    uploads. It was an INFO log while the toast said "uploading to Drive"."""
+    notes, full, db = _persist(monkeypatch, tmp_path)
+    errors = []
+    logger = _logger()
+    logger.error = errors.append
+
+    captured = []
+    _run(maker, db, full, logger, captured)
+    monkeypatch.setattr(maker, "_drive_targets", lambda cfg, image_type: [])
+    captured[0]()
+
+    assert any(e == "failure" for e, _ in notes), "losing the route must be reported"
+    assert any("no Drive folder is routed" in str(o) for _, o in notes)
