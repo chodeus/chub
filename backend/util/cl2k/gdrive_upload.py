@@ -20,12 +20,8 @@ from collections import defaultdict
 from shutil import which
 from typing import Any, List, Optional
 
-# One lock per Drive folder. rclone decides "create or replace" by listing the
-# destination first, and Drive lets two files share a name — so two uploads
-# overlapping in the same folder both see "absent" and both create. Saving twice
-# in quick succession is enough (the upload is deferred past the response).
-# Single-process assumption: CHUB runs one uvicorn process, so a thread lock
-# covers it. Running multiple workers would need a cross-process lock.
+# Serialises writes per Drive folder: concurrent uploads both list "absent" and
+# both create, and Drive allows duplicate names. Thread lock — single process only.
 _FOLDER_LOCKS_GUARD = threading.Lock()
 _FOLDER_LOCKS: "defaultdict[str, threading.Lock]" = defaultdict(threading.Lock)
 
@@ -106,10 +102,8 @@ def _oauth_args(sync_cfg: Any) -> List[str]:
         return []
     client_id = getattr(sync_cfg, "client_id", "") or ""
     client_secret = getattr(sync_cfg, "client_secret", "") or ""
-    # Config-sourced, so they reach the argv the same way gdrive_sa_location does
-    # — and a value starting with "-" would be read by rclone as an option, not
-    # data. Real Google credentials never do (ids are numeric-led, secrets are
-    # GOCSPX-…, the token is JSON), so this rejects only malformed input.
+    # A leading "-" would reach rclone as an option, not data. Real Google
+    # credentials never start with one.
     _reject_unsafe(client_id, "gdrive_client_id")
     _reject_unsafe(client_secret, "gdrive_client_secret")
     _reject_unsafe(token, "gdrive_token")
@@ -201,13 +195,22 @@ def upload_file(
     logger.debug(f"uploaded {os.path.basename(local_path)} to drive {folder_id}")
 
 
+# rclone filter metacharacters. CL2K names carry `{tmdb-…}`, and `{}` is
+# alternation — unescaped it matches the wrong thing.
+_FILTER_META = re.compile(r"([\\*?\[\]{}])")
+
+
+def _filter_literal(name: str) -> str:
+    """``name`` as an rclone filter that matches it and nothing else."""
+    return "/" + _FILTER_META.sub(r"\\\1", name)
+
+
 def _reap_duplicates(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
     """Collapse same-named copies of ``name``, keeping the newest — ours.
 
-    Repairs duplicates the lock can't prevent: ones already in the folder, or
-    written by another CHUB instance. Costs one listing per upload and only
-    deletes when a duplicate of the file we just wrote actually exists, so the
-    normal path never runs a destructive command. Never raises: the upload
+    Scoped to ``name``: an upload of one file must never delete another file's
+    duplicates. Only runs when a duplicate of what we just wrote exists, so the
+    normal path issues no destructive command. Never raises — the upload
     succeeded, and failing to tidy up must not report it as failed.
     """
     try:
@@ -229,6 +232,9 @@ def _reap_duplicates(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
                 "--drive-root-folder-id",
                 folder_id,
                 "--drive-use-trash=false",
+                # dedupe honours filters from rclone 1.61.
+                "--include",
+                _filter_literal(name),
                 *auth,
             ],
             check=False,
@@ -281,9 +287,8 @@ def move_file(
         "-v",
         *auth,
     ]
-    # Same lock as upload_file: this is the folder's other writer (the healer
-    # renames while the maker uploads), and a rename onto a name an upload is
-    # creating duplicates it just as readily.
+    # Upload's lock: this is the folder's other writer, and a rename onto a name
+    # an upload is creating duplicates the same way.
     with _folder_lock(folder_id):
         result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if result.returncode != 0:

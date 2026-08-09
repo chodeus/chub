@@ -212,3 +212,37 @@ def test_real_google_credentials_still_pass(monkeypatch):
     )
     args = gd._oauth_args(cfg)
     assert "--drive-token" in args and "GOCSPX-abcdef123456" in args
+
+
+def test_the_reap_is_scoped_to_the_uploaded_filename(monkeypatch):
+    """Uploading one file must never collapse another file's duplicates. Proven
+    against the real Drive too: staging duplicates of two names and reaping one
+    left the other at 2."""
+    drive = FakeDrive()
+    drive.files = ["poster.png", "poster.png", "other.png", "other.png"]
+    _install(monkeypatch, drive)
+    seen = []
+
+    def fake_run(cmd, **kw):
+        seen.append(cmd)
+        if "dedupe" in cmd:
+            drive.files.remove("poster.png")  # only the filtered name collapses
+        elif "copy" in cmd:
+            drive.rclone_copy("poster.png")
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(gd.subprocess, "run", fake_run)
+    gd.upload_file("/tmp/poster.png", "folder-A", object(), _logger())
+
+    dedupe = [c for c in seen if "dedupe" in c]
+    assert dedupe, "a duplicate of the uploaded name should trigger a dedupe"
+    assert "--include" in dedupe[0], "dedupe must be filtered, not folder-wide"
+    assert drive.count("other.png") == 2, "another file's duplicates must survive"
+
+
+def test_filter_escapes_the_metacharacters_in_real_filenames(monkeypatch):
+    """CL2K names carry `{tmdb-…}`, and `{}` is alternation in an rclone filter —
+    unescaped, the pattern matches the wrong thing or nothing at all."""
+    got = gd._filter_literal("Cassadaga (2011) {tmdb-92398} - logo.png")
+    assert got == r"/Cassadaga (2011) \{tmdb-92398\} - logo.png"
+    assert gd._filter_literal("a[b]*c?d") == r"/a\[b\]\*c\?d"
