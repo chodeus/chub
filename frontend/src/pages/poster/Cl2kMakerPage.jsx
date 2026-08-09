@@ -119,13 +119,28 @@ const ART_SOURCES = [
 // square pickers, so those stay on ART_SOURCES.
 const BACKDROP_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
 
-// Mirrors text_removal.unavailable_reason(): a provider is only usable with the
-// field it actually needs, so the erase button can't offer a call the server rejects.
-const aiEraseReady = config => {
-    if (config?.ai_provider === 'lama_sidecar') return !!config.ai_endpoint;
-    if (config?.ai_provider === 'openai') return !!config.api_key;
-    return false;
+// Why an AI erase can't run, or null when it can. Mirrors the backend's
+// unavailable_reason() case for case — keep them in step. api_key reads back as
+// '********' when set (redacted) and '' when unset.
+export const aiUnavailableReason = config => {
+    const provider = config?.ai_provider || 'none';
+    if (provider === 'none')
+        return 'AI provider is “none” — enable one in Module Settings or this has no effect.';
+    if (provider === 'openai')
+        return config?.api_key
+            ? null
+            : 'No API key set for this provider — add one in Module Settings.';
+    if (provider === 'lama_sidecar')
+        return config?.ai_endpoint
+            ? null
+            : 'No AI Endpoint set — add your LaMa container URL in Module Settings.';
+    return `Unknown AI provider “${provider}” — choose one in Module Settings.`;
 };
+
+// Detection is sidecar-only: /detect-text rejects every other provider, so the
+// button has to be withheld rather than offered and failed.
+export const lamaDetectReady = config =>
+    config?.ai_provider === 'lama_sidecar' && !aiUnavailableReason(config);
 
 // The logo picker gets 'gdrive' too, browsing the sync cache for `- logo` assets
 // (image_type=logo) rather than finished posters. A gdrive_list folder that sits
@@ -2074,7 +2089,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     artBySource={artBySource}
                     loadingArt={loadingArt}
                     saveTargets={saveTargets}
-                    canErase={aiEraseReady(config)}
+                    canErase={!aiUnavailableReason(config)}
+                    canDetect={lamaDetectReady(config)}
                     toast={toast}
                 />
             )}
@@ -3653,17 +3669,10 @@ const AiPanel = ({
     // the pop-out closes — strokes carry both ways.
     const [modalOpen, setModalOpen] = useState(false);
     const provider = config?.ai_provider || 'none';
-    // Why AI can't run (mirrors the backend's unavailable_reason) — gates the
-    // Send to AI button so it doesn't silently no-op. api_key reads back as
-    // '********' when set (redacted) and '' when unset.
-    const aiBlock =
-        provider === 'none'
-            ? 'AI provider is “none” — enable one in Module Settings or this has no effect.'
-            : provider === 'openai' && !config?.api_key
-              ? 'No API key set for this provider — add one in Module Settings.'
-              : provider === 'lama_sidecar' && !config?.ai_endpoint
-                ? 'No AI Endpoint set — add your LaMa container URL in Module Settings.'
-                : null;
+    // Gates the Send to AI button so it doesn't silently no-op.
+    const aiBlock = aiUnavailableReason(config);
+    // Withheld unless the sidecar can serve it; Tighten stays on — it is local.
+    const detectText = lamaDetectReady(config) ? onDetectText : null;
     return (
         <>
             <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
@@ -3709,7 +3718,7 @@ const AiPanel = ({
                                 brushSize={brushSize}
                                 onMaskChange={onMaskChange}
                                 initialMask={mask}
-                                onDetectText={onDetectText}
+                                onDetectText={detectText}
                                 onTightenText={onTightenText}
                             />
                         ) : (
@@ -3797,7 +3806,7 @@ const AiPanel = ({
                                         onMaskChange={onMaskChange}
                                         initialMask={mask}
                                         imgClassName="max-h-[calc(90vh_-_11rem)]"
-                                        onDetectText={onDetectText}
+                                        onDetectText={detectText}
                                         onTightenText={onTightenText}
                                     />
                                 </div>
@@ -6148,7 +6157,15 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
 
 // ─── Logo asset tab ─────────────────────────────────────────────────────────
 
-const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, canErase, toast }) => {
+const LogoAssetPanel = ({
+    item,
+    artBySource,
+    loadingArt,
+    saveTargets,
+    canErase,
+    canDetect,
+    toast,
+}) => {
     const [logo, setLogo] = useState(null); // file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, url, name }
     const [logoSource, setLogoSource] = useState('tmdb');
@@ -6862,7 +6879,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, canErase, 
                                         imageUrl={posterUrl}
                                         brushSize={18}
                                         onMaskChange={setExtractMask}
-                                        onDetectText={runPosterDetect}
+                                        onDetectText={canDetect ? runPosterDetect : null}
                                         onTightenText={runPosterTighten}
                                     />
                                 </div>
