@@ -226,7 +226,13 @@ def test_the_reap_is_scoped_to_the_uploaded_filename(monkeypatch):
     def fake_run(cmd, **kw):
         seen.append(cmd)
         if "dedupe" in cmd:
-            drive.files.remove("poster.png")  # only the filtered name collapses
+            # Actually APPLY the filter rather than assuming it. A fake that
+            # collapses a hard-coded name passes even when the filter is wrong,
+            # which proves nothing about the thing under test.
+            pattern = cmd[cmd.index("--include") + 1]
+            target = pattern.lstrip("/").replace("\\", "")
+            while drive.files.count(target) > 1:
+                drive.files.remove(target)
         elif "copy" in cmd:
             drive.rclone_copy("poster.png")
         return types.SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -236,7 +242,8 @@ def test_the_reap_is_scoped_to_the_uploaded_filename(monkeypatch):
 
     dedupe = [c for c in seen if "dedupe" in c]
     assert dedupe, "a duplicate of the uploaded name should trigger a dedupe"
-    assert "--include" in dedupe[0], "dedupe must be filtered, not folder-wide"
+    assert dedupe[0][dedupe[0].index("--include") + 1] == "/poster.png"
+    assert drive.count("poster.png") == 1, "our own duplicate must be collapsed"
     assert drive.count("other.png") == 2, "another file's duplicates must survive"
 
 
