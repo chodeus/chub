@@ -104,11 +104,20 @@ def _oauth_args(sync_cfg: Any) -> List[str]:
     token = (token or "").strip()
     if "access_token" not in token and "refresh_token" not in token:
         return []
+    client_id = getattr(sync_cfg, "client_id", "") or ""
+    client_secret = getattr(sync_cfg, "client_secret", "") or ""
+    # Config-sourced, so they reach the argv the same way gdrive_sa_location does
+    # — and a value starting with "-" would be read by rclone as an option, not
+    # data. Real Google credentials never do (ids are numeric-led, secrets are
+    # GOCSPX-…, the token is JSON), so this rejects only malformed input.
+    _reject_unsafe(client_id, "gdrive_client_id")
+    _reject_unsafe(client_secret, "gdrive_client_secret")
+    _reject_unsafe(token, "gdrive_token")
     return [
         "--drive-client-id",
-        getattr(sync_cfg, "client_id", "") or "",
+        client_id,
         "--drive-client-secret",
-        getattr(sync_cfg, "client_secret", "") or "",
+        client_secret,
         "--drive-token",
         token,
     ]
@@ -159,6 +168,7 @@ def upload_file(
     non-zero rclone exit so the caller can record the failure.
     """
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
+    _reject_unsafe(local_path, "local_path")
     auth = _upload_auth_args(sync_cfg)
     if not auth:
         raise RuntimeError(

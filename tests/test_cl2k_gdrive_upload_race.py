@@ -13,6 +13,8 @@ import threading
 import time
 import types
 
+import pytest
+
 from backend.util.cl2k import gdrive_upload as gd
 
 
@@ -179,3 +181,34 @@ def test_a_failed_duplicate_check_does_not_fail_the_upload(monkeypatch):
     )
     gd.upload_file("/tmp/poster.png", "folder-A", object(), _logger())
     assert drive.count("poster.png") == 1
+
+
+def test_every_value_reaching_the_rclone_argv_is_validated(monkeypatch):
+    """CodeQL flags this call site as an uncontrolled command line. subprocess is
+    list-form (no shell), so the residual risk is argument injection: a value
+    starting with "-" is read by rclone as an option. folder_id and the SA path
+    were already validated; local_path and the OAuth trio were not."""
+    drive = FakeDrive()
+    _install(monkeypatch, drive)
+    with pytest.raises(ValueError, match="local_path"):
+        gd.upload_file("-X=evil", "folder-A", object(), _logger())
+
+
+def test_an_option_shaped_oauth_value_is_refused(monkeypatch):
+    cfg = types.SimpleNamespace(
+        token='{"access_token": "a"}', client_id="-oops", client_secret=""
+    )
+    with pytest.raises(ValueError, match="gdrive_client_id"):
+        gd._oauth_args(cfg)
+
+
+def test_real_google_credentials_still_pass(monkeypatch):
+    """The validator must not reject legitimate config: ids are numeric-led,
+    secrets are GOCSPX-…, and the token is JSON."""
+    cfg = types.SimpleNamespace(
+        token='{"access_token": "ya29.x", "refresh_token": "1//y"}',
+        client_id="123456789-abc.apps.googleusercontent.com",
+        client_secret="GOCSPX-abcdef123456",
+    )
+    args = gd._oauth_args(cfg)
+    assert "--drive-token" in args and "GOCSPX-abcdef123456" in args
