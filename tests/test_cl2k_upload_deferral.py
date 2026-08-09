@@ -142,10 +142,14 @@ def test_a_deferred_upload_failure_notifies(monkeypatch, tmp_path):
 
 def test_a_deferred_success_does_not_notify(monkeypatch, tmp_path):
     notes, full, db = _persist(monkeypatch, tmp_path)
+    errors = []
+    logger = _logger()
+    logger.error = errors.append
     captured = []
-    _run(maker, db, full, _logger(), captured)
+    _run(maker, db, full, logger, captured)
     captured[0]()
     assert not notes, "a clean upload must stay quiet"
+    assert not errors, "and must not log a failure either"
 
 
 def test_a_failed_config_reload_is_reported_not_swallowed(monkeypatch, tmp_path):
@@ -190,4 +194,5 @@ def test_losing_the_route_before_the_task_runs_is_reported(monkeypatch, tmp_path
     captured[0]()
 
     assert any(e == "failure" for e, _ in notes), "losing the route must be reported"
+    assert any("FAILED" in m for m in errors), "and must log at error level"
     assert any("no Drive folder is routed" in str(o) for _, o in notes)
