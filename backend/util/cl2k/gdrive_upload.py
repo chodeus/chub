@@ -14,9 +14,25 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import uuid
+from collections import defaultdict
 from shutil import which
 from typing import Any, List, Optional
+
+# One lock per Drive folder. rclone decides "create or replace" by listing the
+# destination first, and Drive lets two files share a name — so two uploads
+# overlapping in the same folder both see "absent" and both create. Saving twice
+# in quick succession is enough (the upload is deferred past the response).
+# Single-process assumption: CHUB runs one uvicorn process, so a thread lock
+# covers it. Running multiple workers would need a cross-process lock.
+_FOLDER_LOCKS_GUARD = threading.Lock()
+_FOLDER_LOCKS: "defaultdict[str, threading.Lock]" = defaultdict(threading.Lock)
+
+
+def _folder_lock(folder_id: str) -> threading.Lock:
+    with _FOLDER_LOCKS_GUARD:
+        return _FOLDER_LOCKS[folder_id]
 
 
 def _rclone_path() -> str:
@@ -163,10 +179,58 @@ def upload_file(
         "-v",
         *auth,
     ]
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"rclone copy failed: {_rclone_error_detail(result.stderr)}")
+    # Serialised per folder: see _FOLDER_LOCKS. rclone replaces a same-named file
+    # correctly on its own — it only duplicates when two runs overlap.
+    with _folder_lock(folder_id):
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"rclone copy failed: {_rclone_error_detail(result.stderr)}"
+            )
+        _reap_duplicates(os.path.basename(local_path), folder_id, sync_cfg, logger)
     logger.debug(f"uploaded {os.path.basename(local_path)} to drive {folder_id}")
+
+
+def _reap_duplicates(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
+    """Collapse same-named copies of ``name``, keeping the newest — ours.
+
+    Repairs duplicates the lock can't prevent: ones already in the folder, or
+    written by another CHUB instance. Costs one listing per upload and only
+    deletes when a duplicate of the file we just wrote actually exists, so the
+    normal path never runs a destructive command. Never raises: the upload
+    succeeded, and failing to tidy up must not report it as failed.
+    """
+    try:
+        names = list_files(folder_id, sync_cfg, logger, strict=True)
+        if sum(1 for n in names if n == name) < 2:
+            return
+        logger.warning(
+            f"CL2K drive {folder_id}: {name} exists more than once — keeping the newest"
+        )
+        auth = _upload_auth_args(sync_cfg)
+        rclone = _rclone_path()
+        result = subprocess.run(
+            [
+                rclone,
+                "dedupe",
+                "--dedupe-mode",
+                "newest",
+                "posters:",
+                "--drive-root-folder-id",
+                folder_id,
+                "--drive-use-trash=false",
+                *auth,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                f"CL2K drive dedupe failed: {_rclone_error_detail(result.stderr)}"
+            )
+    except Exception as exc:
+        logger.warning(f"CL2K drive duplicate check failed for {name}: {exc}")
 
 
 def move_file(
@@ -207,7 +271,11 @@ def move_file(
         "-v",
         *auth,
     ]
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    # Same lock as upload_file: this is the folder's other writer (the healer
+    # renames while the maker uploads), and a rename onto a name an upload is
+    # creating duplicates it just as readily.
+    with _folder_lock(folder_id):
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(
             f"rclone moveto failed: {_rclone_error_detail(result.stderr)}"
