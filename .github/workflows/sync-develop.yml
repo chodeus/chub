@@ -3,10 +3,8 @@ name: Sync develop from main
 # Open a back-merge PR from main into develop on every push to main, so develop
 # (the public app + develop-only extensions) keeps receiving everything that lands
 # on main — releases, fixes, dependency bumps. The branch model's sync direction
-# is main -> develop and shared files are byte-identical on both EXCEPT
-# deploy/docker/Dockerfile, which develop extends with CL2K layers — so that file
-# is the one EXPECTED merge conflict; resolve it by taking main's FROM/base lines
-# and keeping develop's appended CL2K layers. An already-open base:develop /
+# is main -> develop and shared files are byte-identical on both, so the merge
+# should never conflict while the invariant holds. An already-open base:develop /
 # head:main PR auto-tracks main's tip, so we only create one when none is open.
 #
 # The PR is a NOTIFICATION that develop has drifted, not a mergeable PR: develop
@@ -57,9 +55,7 @@ jobs:
             --base develop \
             --head main \
             --title "chore: sync develop with main" \
-            --body "@coderabbitai ignore
-
-          \`develop\` has drifted behind \`main\` (releases, fixes, dependency bumps). **Do not merge this PR** — it reports the drift, it does not fix it.
+            --body "\`develop\` has drifted behind \`main\` (releases, fixes, dependency bumps). **Do not merge this PR** — it reports the drift, it does not fix it.
 
           \`develop\` requires branches be up to date, and \`head:main\` can never satisfy that without pulling develop's extension files into main, which the branch invariant forbids. Squash or rebase would also leave \`main\` unreachable from \`develop\`, so this workflow would just open another PR next push.
 
