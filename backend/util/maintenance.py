@@ -9,6 +9,7 @@ Both tasks are no-ops unless enabled in config, so the thread is cheap to leave
 running. All work is wrapped so a transient failure never kills the thread.
 """
 
+import fnmatch
 import os
 import stat
 import threading
@@ -64,38 +65,59 @@ def prune_old_backups(backup_dir: Path, keep: int, config, logger=None) -> int:
 
     try:
         root = backup_dir.resolve(strict=True)
+    except OSError:
+        return 0
+
+    # Authorise BEFORE opening anything: a component of backup_dir can be
+    # re-pointed after get_backup_dir() cleared it, so resolve() may land out.
+    if not is_path_allowed(str(root), config):
+        if logger:
+            logger.error(f"Refusing to prune '{root}': outside the allowed roots")
+        return 0
+
+    try:
         dir_fd = os.open(str(root), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     except OSError:
         return 0
 
     removed = 0
     try:
-        # Before any listing: a component of backup_dir can be re-pointed
-        # after get_backup_dir() authorised it, so resolve() may land outside.
-        if not is_path_allowed(str(root), config):
+        # The path can be swapped between the check and the open, so pin the
+        # descriptor to the directory that was actually authorised.
+        opened, authorised = os.fstat(dir_fd), os.stat(root)
+        if (opened.st_dev, opened.st_ino) != (authorised.st_dev, authorised.st_ino):
             if logger:
-                logger.error(f"Refusing to prune '{root}': outside the allowed roots")
+                logger.error(f"Refusing to prune '{root}': it changed under us")
             return 0
 
-        backups = sorted(
-            root.glob("chub-backup-*.zip"),
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
-        for old in backups[keep:]:
+        entries = []
+        for name in os.listdir(dir_fd):
+            if not fnmatch.fnmatch(name, "chub-backup-*.zip"):
+                continue
             try:
-                # NEVER resolve-then-unlink: that deletes a symlink's TARGET.
-                # lstat+S_ISREG rejects links/dirs; dir_fd anchors both calls.
-                st = os.lstat(old.name, dir_fd=dir_fd)
-                if not stat.S_ISREG(st.st_mode):
-                    if logger:
-                        logger.warning(f"Skipping non-regular backup entry: {old}")
-                    continue
-                os.unlink(old.name, dir_fd=dir_fd)
+                # ONE nofollow stat through dir_fd: following a link to read
+                # its mtime would stat a target the link owner chose.
+                st = os.lstat(name, dir_fd=dir_fd)
+            except OSError as e:
+                if logger:
+                    logger.debug(f"Could not read backup {root / name}: {e}")
+                continue
+            entries.append((st.st_mtime, name, stat.S_ISREG(st.st_mode)))
+        entries.sort(key=lambda entry: entry[0], reverse=True)
+
+        for _mtime, name, is_regular in entries[keep:]:
+            # NEVER resolve-then-unlink: that deletes a symlink's TARGET.
+            # S_ISREG rejects links/dirs; dir_fd anchors the unlink.
+            if not is_regular:
+                if logger:
+                    logger.warning(f"Skipping non-regular backup entry: {root / name}")
+                continue
+            try:
+                os.unlink(name, dir_fd=dir_fd)
                 removed += 1
             except OSError as e:
                 if logger:
-                    logger.debug(f"Could not prune backup {old}: {e}")
+                    logger.debug(f"Could not prune backup {root / name}: {e}")
     except OSError:
         return removed
     finally:

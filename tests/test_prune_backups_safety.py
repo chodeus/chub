@@ -84,14 +84,14 @@ def test_a_symlinked_backup_never_unlinks_its_target(tmp_path):
     backups.mkdir()
     precious = tmp_path / "precious.zip"
     precious.write_text("must survive")
-    # The sort key is f.stat().st_mtime, which FOLLOWS the link — so ageing the
-    # target is what puts the link last and into the delete window.
-    _age(precious, 2)
 
     _archive(backups, "chub-backup-20260803-000000.zip", age=0)
     _archive(backups, "chub-backup-20260802-000000.zip", age=1)
     link = backups / "chub-backup-20260801-000000.zip"
     link.symlink_to(precious)
+    # The sort key is the LINK's OWN mtime — prune never follows it — so age the
+    # link, not the target, to put it last and into the delete window.
+    _age(link, 2)
 
     logger = _Log()
     maintenance.prune_old_backups(
@@ -136,11 +136,19 @@ def test_missing_directory_returns_zero(tmp_path):
     assert maintenance.prune_old_backups(tmp_path / "nope", keep=1, config=config) == 0
 
 
-def test_unconfined_root_deletes_nothing(tmp_path):
-    """A root that resolves outside the allowed roots must be refused, loudly."""
+def test_unconfined_root_deletes_nothing(tmp_path, monkeypatch):
+    """A root outside the allowed roots is refused before anything is opened."""
     for i in range(4):
         _archive(tmp_path, f"chub-backup-2026080{i}-000000.zip", age=i)
     logger = _Log()
+
+    opened = []
+    real_open = os.open
+    monkeypatch.setattr(
+        maintenance.os,
+        "open",
+        lambda path, *a, **k: (opened.append(path), real_open(path, *a, **k))[1],
+    )
 
     # A default ChubConfig's allowed roots are CONFIG_DIR + mounts, never tmp_path.
     removed = maintenance.prune_old_backups(
@@ -148,8 +156,37 @@ def test_unconfined_root_deletes_nothing(tmp_path):
     )
 
     assert removed == 0
+    assert opened == [], "opened a descriptor on a root that was never authorised"
     assert len(list(tmp_path.glob("chub-backup-*.zip"))) == 4
     assert any("outside the allowed roots" in e for e in logger.errors)
+
+
+def test_root_swapped_after_the_check_deletes_nothing(tmp_path, monkeypatch):
+    """The opened descriptor must BE the directory is_path_allowed cleared."""
+    for i in range(4):
+        _archive(tmp_path, f"chub-backup-2026080{i}-000000.zip", age=i)
+    logger = _Log()
+
+    real_stat = os.stat
+    root = str(tmp_path.resolve())
+
+    def _swapped_stat(path, *a, **kw):
+        """Report a different inode for the root, as a mid-flight swap would."""
+        st = real_stat(path, *a, **kw)
+        if str(path) != root:
+            return st
+        fields = list(st)
+        fields[1] += 1  # st_ino
+        return os.stat_result(fields)
+
+    monkeypatch.setattr(maintenance.os, "stat", _swapped_stat)
+    removed = maintenance.prune_old_backups(
+        tmp_path, keep=1, config=_allowing(tmp_path), logger=logger
+    )
+
+    assert removed == 0
+    assert len(list(tmp_path.glob("chub-backup-*.zip"))) == 4
+    assert any("changed under us" in e for e in logger.errors)
 
 
 def test_confined_root_still_prunes(tmp_path):
