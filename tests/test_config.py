@@ -12,7 +12,6 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-import backend.util.config as config_mod
 import backend.util.scheduler as scheduler
 from backend.modules.upgradinatorr import Upgradinatorr
 from backend.util.arr import LidarrClient
@@ -174,9 +173,10 @@ def test_load_config_caches_until_the_file_changes(tmp_path, monkeypatch):
     save_config(config, config_path)
 
     parses = []
-    real_safe_load = config_mod.yaml.safe_load
+    # Same module object backend.util.config calls yaml.safe_load on.
+    real_safe_load = yaml.safe_load
     monkeypatch.setattr(
-        config_mod.yaml,
+        yaml,
         "safe_load",
         lambda stream: (parses.append(1), real_safe_load(stream))[1],
     )
