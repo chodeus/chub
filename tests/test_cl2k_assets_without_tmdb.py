@@ -81,15 +81,49 @@ def test_filenames_are_correct_without_a_tmdb_id():
     )
 
 
-def test_the_poster_generate_path_still_requires_tmdb():
-    """GenerateRequest auto-sources art from TMDB (list_images), so its id stays
-    mandatory — relaxing it would break art lookup, not just naming."""
+def test_generate_requires_tmdb_id_or_a_supplied_backdrop():
+    """GenerateRequest auto-sources art from TMDB (list_images) only when NO
+    backdrop is supplied, so tmdb_id is required UNLESS a backdrop is handed over.
+    (The endpoint's _require_any_id separately demands some id for the filename.)"""
     from pydantic import ValidationError
 
     from backend.api.cl2k_maker import GenerateRequest
 
     with pytest.raises(ValidationError):
-        GenerateRequest(kind="movie", title="X")
+        GenerateRequest(kind="movie", title="X")  # no id, no backdrop
+    with pytest.raises(ValidationError):
+        GenerateRequest(kind="show", title="X", tvdb_id=479037)  # id but no art source
+
+
+def test_generate_accepts_a_tvdb_only_title_when_a_backdrop_is_supplied():
+    """A TVDB/IMDB-only title is legitimate once the user supplies the backdrop —
+    tmdb_id is only needed to auto-source one."""
+    from backend.api.cl2k_maker import GenerateRequest
+
+    req = GenerateRequest(
+        kind="show", title="Obscure Show", tvdb_id=479037, backdrop_path="/p.jpg"
+    )
+    assert req.tmdb_id is None and req.tvdb_id == 479037
+    # backdrop_b64 counts as a supplied backdrop too.
+    assert (
+        GenerateRequest(
+            kind="movie", title="X", imdb_id="tt1", backdrop_b64="Zm9v"
+        ).tmdb_id
+        is None
+    )
+
+
+def test_seasons_request_requires_tmdb_id_or_a_backdrop():
+    """SeasonsRequest carries the show backdrop over for each season; auto-source +
+    season-reuse key on tmdb_id, so it's required unless a backdrop is supplied."""
+    from pydantic import ValidationError
+
+    from backend.api.cl2k_maker import SeasonsRequest
+
+    with pytest.raises(ValidationError):
+        SeasonsRequest(title="X", seasons=[1], tvdb_id=5)
+    req = SeasonsRequest(title="X", seasons=[1], tvdb_id=5, backdrop_path="/p.jpg")
+    assert req.tmdb_id is None
 
 
 def test_app_mounts_with_the_relaxed_models():
@@ -102,3 +136,98 @@ def test_app_mounts_with_the_relaxed_models():
     # would blow up on a model it can't serialise.
     paths = app.openapi()["paths"]
     assert "/api/cl2k-maker/square-generate" in paths
+
+
+def _cl2k_logger():
+    """A no-op logger accepted by the CL2K endpoint + module."""
+    import types
+
+    return types.SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+
+
+def _render_config():
+    """Minimal config for generate_for_item (skip_existing off; save is stubbed)."""
+    import types
+
+    return types.SimpleNamespace(
+        cl2k_maker=types.SimpleNamespace(skip_existing=False),
+        tmdb=types.SimpleNamespace(),
+        sync_gdrive=types.SimpleNamespace(),
+    )
+
+
+def test_generate_endpoint_no_tmdb_path_completes_without_a_lookup(monkeypatch):
+    """Endpoint: tmdb_id=None + a supplied backdrop + a TVDB id renders with NO TMDB
+    lookup — the title is given and the art supplied, so nothing is auto-sourced."""
+    from fastapi import BackgroundTasks
+
+    import backend.modules.cl2k_maker as maker
+    from backend.api import cl2k_maker as api
+
+    monkeypatch.setattr(
+        maker, "TMDBClient", lambda *a, **k: pytest.fail("TMDB used on the no-TMDB path")
+    )
+    seen = {}
+    monkeypatch.setattr(
+        maker,
+        "_resolve_and_render",
+        lambda *a, **kw: seen.update(kw)
+        or (b"poster", {"backdrop_path": "/p.jpg", "logo_source": "tmdb"}),
+    )
+    monkeypatch.setattr(
+        maker, "_persist_poster", lambda *a, **kw: {"status": "generated", "file": "x.png"}
+    )
+    monkeypatch.setattr(api, "load_config", _render_config)
+
+    req = api.GenerateRequest(
+        kind="show", title="Obscure Show", tvdb_id=479037, backdrop_b64="Zm9v"
+    )
+    resp = api.generate(req, BackgroundTasks(), db=object(), logger=_cl2k_logger())
+
+    assert resp.status_code == 200
+    assert seen["tmdb_id"] is None
+    assert seen["tvdb_id"] == 479037
+    assert seen["backdrop_bytes"] == b"foo"  # supplied backdrop forwarded, not auto-sourced
+
+
+def test_generate_endpoint_blank_title_resolved_via_tmdb_id(monkeypatch):
+    """Endpoint: a blank title with a tmdb_id resolves the canonical title from TMDB
+    (by id) before naming/render, not saved as a bare id-tag filename."""
+    from fastapi import BackgroundTasks
+
+    import backend.modules.cl2k_maker as maker
+    from backend.api import cl2k_maker as api
+
+    class _FakeTMDB:
+        def __init__(self, *a, **k):
+            pass
+
+        def find_tmdb_id(self, *a, **k):
+            return None
+
+        def get_details(self, tmdb_id, mt):
+            return {"title": "Resolved Name", "year": 2020}
+
+    monkeypatch.setattr(maker, "TMDBClient", _FakeTMDB)
+    seen = {}
+    monkeypatch.setattr(
+        maker,
+        "_resolve_and_render",
+        lambda *a, **kw: seen.update(kw)
+        or (b"poster", {"backdrop_path": None, "logo_source": "tmdb"}),
+    )
+    monkeypatch.setattr(
+        maker, "_persist_poster", lambda *a, **kw: {"status": "generated", "file": "x.png"}
+    )
+    monkeypatch.setattr(api, "load_config", _render_config)
+
+    req = api.GenerateRequest(kind="movie", title="", tmdb_id=603)
+    resp = api.generate(req, BackgroundTasks(), db=object(), logger=_cl2k_logger())
+
+    assert resp.status_code == 200
+    assert seen["title"] == "Resolved Name"  # backfilled from TMDB by id

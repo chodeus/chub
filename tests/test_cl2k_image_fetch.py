@@ -110,3 +110,89 @@ def test_strip_and_reinject_plex_token(monkeypatch):
         imf._with_plex_token("http://image.tmdb.org/x.jpg")
         == "http://image.tmdb.org/x.jpg"
     )
+
+
+def test_token_never_minted_onto_mismatched_scheme(monkeypatch):
+    # Config is https; an http:// URL for the same host:port must NOT get the
+    # admin token (that would transmit it in cleartext).
+    from types import SimpleNamespace
+
+    from backend.util.cl2k import image_fetch as imf
+
+    cfg = SimpleNamespace(
+        instances=SimpleNamespace(
+            plex={"p": SimpleNamespace(url="https://plex.local:32400", api="SECRET")}
+        )
+    )
+    monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
+    assert (
+        imf._with_plex_token("http://plex.local:32400/library/metadata/1")
+        == "http://plex.local:32400/library/metadata/1"
+    )
+    # …and the matching https scheme still re-mints.
+    assert "X-Plex-Token=SECRET" in imf._with_plex_token(
+        "https://plex.local:32400/library/metadata/1"
+    )
+
+
+class _Resp:
+    def __init__(self, *, status=200, is_redirect=False, location=None, content=b"IMG"):
+        self.status_code = status
+        self.is_redirect = is_redirect
+        self.headers = {"Location": location} if location else {}
+        self.content = content
+
+    @property
+    def ok(self):
+        return 200 <= self.status_code < 300
+
+
+class _Session:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = []
+
+    def get(self, url, **kwargs):
+        self.calls.append(url)
+        return self._responses.pop(0)
+
+
+def test_http_failure_error_excludes_plex_token(monkeypatch):
+    # A Plex 401 must not leak the minted token into the raised message — callers
+    # surface {exc} to the browser.
+    from types import SimpleNamespace
+
+    from backend.util.cl2k import image_fetch as imf
+
+    cfg = SimpleNamespace(
+        instances=SimpleNamespace(
+            plex={"p": SimpleNamespace(url="http://plex.local:32400", api="SECRET")}
+        )
+    )
+    monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
+    sess = _Session([_Resp(status=401)])
+    try:
+        # A valid artwork path (reaches the fetch + token mint; the path allow-list
+        # rejects a bare /library/metadata/<id> before the token is ever minted).
+        imf.download("http://plex.local:32400/library/metadata/1/thumb/2", session=sess)
+        raise AssertionError("expected download to raise on 401")
+    except ValueError as exc:
+        assert "SECRET" not in str(exc) and "X-Plex-Token" not in str(exc)
+        assert "401" in str(exc)
+
+
+def test_exhausted_redirects_raise_not_cache():
+    # A redirect chain longer than the hop budget must raise, never return the
+    # 3xx body as image bytes.
+    from backend.util.cl2k import image_fetch as imf
+
+    redirects = [
+        _Resp(is_redirect=True, location="https://image.tmdb.org/t/p/original/a.jpg")
+        for _ in range(6)
+    ]
+    sess = _Session(redirects)
+    try:
+        imf.download("https://image.tmdb.org/t/p/original/x.jpg", session=sess)
+        raise AssertionError("expected download to raise on redirect exhaustion")
+    except ValueError as exc:
+        assert "redirect" in str(exc).lower()

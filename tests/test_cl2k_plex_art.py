@@ -372,10 +372,15 @@ def test_unwrap_proxy_extracts_src():
 
 
 class _Resp:
-    def __init__(self, *, redirect_to=None, content=b"img"):
+    def __init__(self, *, redirect_to=None, content=b"img", status_code=200):
         self.is_redirect = redirect_to is not None
         self.headers = {"Location": redirect_to} if redirect_to else {}
         self.content = content
+        self.status_code = status_code
+
+    @property
+    def ok(self):
+        return 200 <= self.status_code < 300
 
     def raise_for_status(self):
         pass
@@ -412,3 +417,50 @@ def test_download_follows_redirect_to_allowed_host(monkeypatch):
         "http://192.168.2.206:32400/library/metadata/9/art/1", session=sess
     )
     assert out == b"redirected-img"
+
+
+# --------------------------------------------------------------------------
+# download() Plex path allow-list (token-minting SSRF)
+# --------------------------------------------------------------------------
+
+
+def test_download_rejects_nonart_plex_path_before_minting_token(monkeypatch):
+    # A crafted non-artwork Plex path passes the host allow-list (host-only) but
+    # must be refused BEFORE the admin token is minted — else CHUB fires a
+    # side-effecting Plex admin GET (/:/prefs leaks the account-level token).
+    monkeypatch.setattr(image_fetch, "_plex_netlocs", lambda: {"plex:32400"})
+    minted = {"n": 0}
+    monkeypatch.setattr(
+        image_fetch,
+        "_with_plex_token",
+        lambda u: minted.__setitem__("n", minted["n"] + 1) or u,
+    )
+    sess = _Session([_Resp(content=b"should-not-fetch")])
+    with pytest.raises(ValueError, match="non-artwork"):
+        image_fetch.download("http://plex:32400/:/prefs", session=sess)
+    assert minted["n"] == 0  # token never minted
+
+
+def test_download_allows_a_genuine_plex_art_path(monkeypatch):
+    monkeypatch.setattr(image_fetch, "_plex_netlocs", lambda: {"plex:32400"})
+    monkeypatch.setattr(image_fetch, "_with_plex_token", lambda u: u)
+    sess = _Session([_Resp(content=b"art-bytes")])
+    out = image_fetch.download(
+        "http://plex:32400/library/metadata/9/thumb/1699", session=sess
+    )
+    assert out == b"art-bytes"
+
+
+def test_unwrap_proxy_refuses_a_nonart_src_on_a_configured_plex(monkeypatch):
+    # With Plex configured, a proxy ?src= aimed at a non-artwork path is not
+    # unwrapped (defense-in-depth; download re-checks the same rule).
+    monkeypatch.setattr(image_fetch, "_plex_netlocs", lambda: {"plex:32400"})
+    bad = "/api/cl2k-maker/plex-art?src=http%3A%2F%2Fplex%3A32400%2F%3A%2Fprefs"
+    assert image_fetch._unwrap_proxy(bad) == bad  # unchanged, not unwrapped
+    good = (
+        "/api/cl2k-maker/plex-art"
+        "?src=http%3A%2F%2Fplex%3A32400%2Flibrary%2Fmetadata%2F9%2Fthumb%2F1"
+    )
+    assert (
+        image_fetch._unwrap_proxy(good) == "http://plex:32400/library/metadata/9/thumb/1"
+    )

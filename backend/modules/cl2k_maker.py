@@ -478,6 +478,13 @@ def generate_for_item(
     ):
         return {"status": "skipped", "reason": "already generated"}
 
+    # AI removal requested but the provider is unusable: remove_text would pass the
+    # art through un-erased and we'd save it as "generated" — refuse (as /retext does).
+    if apply_ai or mask_bytes:
+        reason = text_removal.unavailable_reason(cfg)
+        if reason:
+            return {"status": "error", "reason": reason}
+
     blob, info = _resolve_and_render(
         db,
         full_config,
@@ -884,6 +891,16 @@ def _persist_poster(
     # build_poster_filename already strips path-illegal chars, but basename makes it
     # provably impossible for a crafted title to escape the save dirs (path-injection).
     filename = os.path.basename(filename)
+
+    # A title-less, id-less item collapses to a bare ".jpg" dotfile that overwrites
+    # every save — fail closed on an empty stem (splitext reads ".jpg" as the name).
+    ext_used = ext or geo.OUTPUT_EXT
+    stem = filename[: -len(ext_used)] if filename.endswith(ext_used) else filename
+    if not stem.strip():
+        return {
+            "status": "error",
+            "reason": "cannot build a filename — the item has no title or id",
+        }
 
     # Nothing claims this type: a valid outcome by design — no auto-save, the
     # caller offers the art as a download instead.

@@ -17,12 +17,15 @@ degrades to the colour-key rather than breaking. The model
 from __future__ import annotations
 
 import io
+import logging
 import os
-from functools import lru_cache
+import threading
 from typing import Optional
 
 import numpy as np
 from PIL import Image
+
+_log = logging.getLogger(__name__)
 
 _MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "ppocr_v4_det.onnx")
 # DBNet preprocessing (PP-OCR): ImageNet mean/std, /255, NCHW.
@@ -35,23 +38,39 @@ _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 _SCALES = (960, 640, 448, 320)
 
 
-@lru_cache(maxsize=1)
+_SESSION = None
+_SESSION_LOCK = threading.Lock()
+
+
 def _session():
-    """Cached ORT session, or None when onnxruntime/model is unavailable."""
+    """Cached ORT session, or None when onnxruntime/model is unavailable.
+    A failed init is transient — never cached, so it retries next call."""
+    global _SESSION
+    if _SESSION is not None:
+        return _SESSION
     if not os.path.exists(_MODEL_PATH):
         return None
     try:
         import onnxruntime as ort  # optional dep — absent => colour-key fallback
     except Exception:
         return None
-    try:
-        opts = ort.SessionOptions()
-        opts.intra_op_num_threads = 2  # gentle on the shared worker
-        return ort.InferenceSession(
-            _MODEL_PATH, sess_options=opts, providers=["CPUExecutionProvider"]
-        )
-    except Exception:
-        return None
+    # Build inside the lock (double-checked) so a request burst spawns ONE session,
+    # not several racing InferenceSessions (OOM / provider-init failure).
+    with _SESSION_LOCK:
+        if _SESSION is not None:  # another caller built it while we waited
+            return _SESSION
+        try:
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = 2  # gentle on the shared worker
+            _SESSION = ort.InferenceSession(
+                _MODEL_PATH, sess_options=opts, providers=["CPUExecutionProvider"]
+            )
+        except Exception as exc:
+            _log.warning(
+                "cl2k text detector unavailable this call (will retry): %s", exc
+            )
+            return None
+        return _SESSION
 
 
 def available() -> bool:

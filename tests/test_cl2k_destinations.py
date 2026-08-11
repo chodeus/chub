@@ -241,6 +241,31 @@ def test_not_routed_is_generated_with_no_writes(db, tmp_path):
     assert cl2k_generated_for(db).list_recent() == []
 
 
+def test_persist_rejects_a_title_and_id_less_item(db, tmp_path):
+    """An empty title with no ids makes build_poster_filename collapse to a bare
+    ".jpg" dotfile that overwrites every save — _persist_poster must fail closed."""
+    from backend.modules.cl2k_maker import _persist_poster
+
+    cfg = _cfg(local_folders=[_folder(str(tmp_path), ["poster"], name="A")])
+    res = _persist_poster(
+        db,
+        cfg,
+        StubLogger(),
+        blob=b"x",
+        title="   ",  # whitespace-only stem, no ids
+        year=None,
+        tmdb_id=None,
+        save_local=True,
+        upload_gdrive=False,
+        image_type="poster",
+        asset_suffix="",
+        ext=".jpg",
+        **PERSIST_ARGS,
+    )
+    assert res["status"] == "error"
+    assert list(tmp_path.iterdir()) == []  # nothing written to disk
+
+
 # --- _persist_poster: Drive fan-out ---
 
 
