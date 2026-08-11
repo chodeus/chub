@@ -40,8 +40,11 @@ def list_images(
         if key in tmdb._memo:
             return tmdb._memo[key]
     result = tmdb._fetch_images(tmdb_id, mt, languages)
-    with tmdb._memo_lock:
-        tmdb._memo[key] = result
+    # Don't memoize a transient None (a 404 returns an empty dict) — one blip would
+    # strip this title's art for the whole process. Cache authoritative answers only.
+    if result is not None:
+        with tmdb._memo_lock:
+            tmdb._memo[key] = result
     return result
 
 
@@ -133,15 +136,18 @@ def external_ids(tmdb, tmdb_id: int, media_type: str) -> Dict[str, Any]:
     params = {"api_key": tmdb.cfg.apikey}
     resp = tmdb._request_with_retry(url, params, what=f"{mt}/{tmdb_id}/external_ids")
     out: Dict[str, Any] = {"tvdb_id": None, "imdb_id": None}
-    if resp is not None and resp.ok:
-        try:
-            data = resp.json()
-        except ValueError:
-            data = {}
-        tvdb = data.get("tvdb_id")
-        imdb = data.get("imdb_id")
-        out["tvdb_id"] = tvdb if isinstance(tvdb, int) else None
-        out["imdb_id"] = imdb or None
+    if resp is None or not resp.ok:
+        # Transient failure — don't memoize the empty result, or a single blip
+        # permanently blanks this title's ids (which feed generated filenames).
+        return out
+    try:
+        data = resp.json()
+    except ValueError:
+        return out
+    tvdb = data.get("tvdb_id")
+    imdb = data.get("imdb_id")
+    out["tvdb_id"] = tvdb if isinstance(tvdb, int) else None
+    out["imdb_id"] = imdb or None
     with tmdb._memo_lock:
         tmdb._memo[key] = out
     return out

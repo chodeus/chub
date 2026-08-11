@@ -191,3 +191,55 @@ def test_malformed_logo_edit_masks_fail_the_job_rather_than_the_thread(field, lo
     api._run_seasons_job(jid, object(), logger, req)
 
     assert _job_state(jid)["status"] == "error"
+
+
+# --- season list cleaning + job-start guard ---
+
+
+def test_clean_seasons_dedupes_orders_and_drops_negatives():
+    assert api._clean_seasons([3, 1, 2, 2, 1]) == [1, 2, 3]
+    assert api._clean_seasons([0, 5, -1, "x", None, 3]) == [0, 3, 5]
+    assert api._clean_seasons(None) == []
+
+
+def test_spawn_season_job_marks_error_when_the_thread_cannot_start(logger, monkeypatch):
+    """A thread that can't spawn must land as job status "error" + a 503, not leave
+    the job polling "running" forever."""
+
+    class _Boom:
+        def __init__(self, *a, **k):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start a thread")
+
+    monkeypatch.setattr(api.threading, "Thread", _Boom)
+    jid = api._new_season_job(1, "Some Show")
+    resp = api._spawn_season_job(jid, lambda: None, (), name="cl2k-x", logger=logger)
+    assert resp is not None and resp.status_code == 503
+    assert _job_state(jid)["status"] == "error"
+
+
+def test_generate_seasons_endpoint_rejects_too_many(logger):
+    """A list longer than _MAX_SEASONS is a visible error, never silent truncation."""
+    req = api.SeasonsRequest(
+        tmdb_id=1, title="X", seasons=list(range(api._MAX_SEASONS + 5))
+    )
+    resp = api.generate_seasons_endpoint(req, db=object(), logger=logger)
+    assert resp.status_code == 400
+    assert b"CL2K_TOO_MANY_SEASONS" in resp.body
+
+
+def test_generate_seasons_endpoint_cleans_the_list_before_spawning(logger, monkeypatch):
+    """The worker iterates req.seasons, so the endpoint must reassign the cleaned
+    (deduped, ordered) list onto the request before spawning."""
+    captured = {}
+
+    def _fake_spawn(jid, target, args, *, name, logger):
+        captured["seasons"] = args[3].seasons
+        return None
+
+    monkeypatch.setattr(api, "_spawn_season_job", _fake_spawn)
+    req = api.SeasonsRequest(tmdb_id=1, title="X", seasons=[2, 1, 2, 1, 3])
+    api.generate_seasons_endpoint(req, db=object(), logger=logger)
+    assert captured["seasons"] == [1, 2, 3]

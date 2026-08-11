@@ -81,15 +81,49 @@ def test_filenames_are_correct_without_a_tmdb_id():
     )
 
 
-def test_the_poster_generate_path_still_requires_tmdb():
-    """GenerateRequest auto-sources art from TMDB (list_images), so its id stays
-    mandatory — relaxing it would break art lookup, not just naming."""
+def test_generate_requires_tmdb_id_or_a_supplied_backdrop():
+    """GenerateRequest auto-sources art from TMDB (list_images) only when NO
+    backdrop is supplied, so tmdb_id is required UNLESS a backdrop is handed over.
+    (The endpoint's _require_any_id separately demands some id for the filename.)"""
     from pydantic import ValidationError
 
     from backend.api.cl2k_maker import GenerateRequest
 
     with pytest.raises(ValidationError):
-        GenerateRequest(kind="movie", title="X")
+        GenerateRequest(kind="movie", title="X")  # no id, no backdrop
+    with pytest.raises(ValidationError):
+        GenerateRequest(kind="show", title="X", tvdb_id=479037)  # id but no art source
+
+
+def test_generate_accepts_a_tvdb_only_title_when_a_backdrop_is_supplied():
+    """A TVDB/IMDB-only title is legitimate once the user supplies the backdrop —
+    tmdb_id is only needed to auto-source one."""
+    from backend.api.cl2k_maker import GenerateRequest
+
+    req = GenerateRequest(
+        kind="show", title="Obscure Show", tvdb_id=479037, backdrop_path="/p.jpg"
+    )
+    assert req.tmdb_id is None and req.tvdb_id == 479037
+    # backdrop_b64 counts as a supplied backdrop too.
+    assert (
+        GenerateRequest(
+            kind="movie", title="X", imdb_id="tt1", backdrop_b64="Zm9v"
+        ).tmdb_id
+        is None
+    )
+
+
+def test_seasons_request_requires_tmdb_id_or_a_backdrop():
+    """SeasonsRequest carries the show backdrop over for each season; auto-source +
+    season-reuse key on tmdb_id, so it's required unless a backdrop is supplied."""
+    from pydantic import ValidationError
+
+    from backend.api.cl2k_maker import SeasonsRequest
+
+    with pytest.raises(ValidationError):
+        SeasonsRequest(title="X", seasons=[1], tvdb_id=5)
+    req = SeasonsRequest(title="X", seasons=[1], tvdb_id=5, backdrop_path="/p.jpg")
+    assert req.tmdb_id is None
 
 
 def test_app_mounts_with_the_relaxed_models():

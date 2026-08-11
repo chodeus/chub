@@ -17,6 +17,8 @@ thin fetch of the original-resolution CDN asset (no key needed for images).
 
 from __future__ import annotations
 
+import posixpath
+import re
 import threading
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
@@ -128,6 +130,14 @@ def _plex_netlocs() -> set:
         return set()
 
 
+def _plex_origin(url: str) -> tuple:
+    """(scheme, host:port) of a URL — the identity the token is keyed on."""
+    from urllib.parse import urlparse
+
+    p = urlparse(url)
+    return (p.scheme.lower(), (p.netloc or "").lower())
+
+
 def _is_allowed_image_host(url: str) -> bool:
     """Allow only the known image CDNs (TMDB + fanart.tv + Plex's own CDN) and
     the user's own configured Plex server(s).
@@ -168,6 +178,47 @@ def _is_allowed_image_host(url: str) -> bool:
     return (parsed.netloc or "").lower() in _plex_netlocs()
 
 
+# Plex-instance URLs get the admin token minted, so only artwork-key paths may be
+# fetched. Mirrors _valid_plex_art_src in api/cl2k_maker.py — keep the two in sync.
+_PLEX_ART_PATH = re.compile(
+    r"^/library/metadata/\d+/"
+    r"(art|thumb|posters?|clearlogos?|banner|theme|composite|image|file)(?:/|$)",
+    re.IGNORECASE,
+)
+_PLEX_PROVIDER_URI = re.compile(r"^(?:upload|metadata|media)://", re.IGNORECASE)
+
+
+def _is_plex_art_path(url: str) -> bool:
+    """True only for a normalized Plex artwork-key URL (rejects ``..`` dot-segments
+    before matching). The ``file`` key needs a Plex provider ``?url=``."""
+    from urllib.parse import parse_qs, unquote, urlparse
+
+    parsed = urlparse(url)
+    path = unquote(parsed.path or "")
+    if ".." in path.split("/") or path != posixpath.normpath(path):
+        return False
+    match = _PLEX_ART_PATH.match(path)
+    if not match:
+        return False
+    if match.group(1).lower() == "file":
+        url_ref = parse_qs(parsed.query).get("url", [""])[0]
+        return bool(_PLEX_PROVIDER_URI.match(url_ref.strip()))
+    return True
+
+
+def _reject_nonart_plex(url: str) -> None:
+    """Raise (hostname-only message; callers surface it) if ``url`` targets a
+    configured Plex instance on a non-artwork path _with_plex_token would mint."""
+    from urllib.parse import urlparse
+
+    if (urlparse(url).netloc or "").lower() in _plex_netlocs() and not _is_plex_art_path(
+        url
+    ):
+        raise ValueError(
+            f"refusing to fetch non-artwork path from Plex host {urlparse(url).hostname!r}"
+        )
+
+
 def strip_plex_token(value: Optional[str]) -> Optional[str]:
     """Drop the X-Plex-Token query param so the admin token is never persisted at
     rest (e.g. in cl2k_generated.backdrop_path). download() re-mints it on fetch."""
@@ -184,17 +235,15 @@ def strip_plex_token(value: Optional[str]) -> Optional[str]:
     return urlunsplit(parts._replace(query=urlencode(kept)))
 
 
-def _plex_token_for(netloc: str) -> Optional[str]:
+def _plex_token_for(origin: tuple) -> Optional[str]:
     """The X-Plex-Token (Plex instance api key) for the configured Plex server
-    matching ``netloc``."""
-    from urllib.parse import urlparse
-
+    whose ``(scheme, host:port)`` matches ``origin``."""
     try:
         from backend.util.config import load_config
 
         plex = getattr(load_config().instances, "plex", {}) or {}
         for cfg in plex.values():
-            if (urlparse(getattr(cfg, "url", "") or "").netloc or "").lower() == netloc:
+            if _plex_origin(getattr(cfg, "url", "") or "") == origin:
                 return getattr(cfg, "api", None) or None
     except Exception:
         return None
@@ -203,15 +252,14 @@ def _plex_token_for(netloc: str) -> Optional[str]:
 
 def _with_plex_token(url: str) -> str:
     """Re-mint the X-Plex-Token for a tokenless Plex-server URL (a persisted
-    backdrop_path has it stripped). No-op for non-Plex hosts or already-tokened URLs."""
-    from urllib.parse import urlparse
+    backdrop_path has it stripped). No-op for non-Plex hosts or already-tokened URLs.
 
+    Scheme is part of the match: never append the token to an ``http://`` URL for
+    an ``https://``-configured instance — that would transmit the admin token in
+    cleartext even though host:port line up."""
     if "x-plex-token" in url.lower():
         return url
-    netloc = (urlparse(url).netloc or "").lower()
-    if netloc not in _plex_netlocs():
-        return url
-    token = _plex_token_for(netloc)
+    token = _plex_token_for(_plex_origin(url))
     if not token:
         return url
     return f"{url}{'&' if '?' in url else '?'}X-Plex-Token={token}"
@@ -227,6 +275,14 @@ def _unwrap_proxy(file_path: str) -> str:
     from urllib.parse import parse_qs, urlparse
 
     src = parse_qs(urlparse(file_path).query).get("src", [""])[0]
+    # Re-validate: a ?src= aimed at a configured Plex instance must be an artwork
+    # path (download re-checks) — never unwrap a crafted /:/prefs as pre-approved.
+    if (
+        src
+        and (urlparse(src).netloc or "").lower() in _plex_netlocs()
+        and not _is_plex_art_path(src)
+    ):
+        return file_path
     return src or file_path
 
 
@@ -273,38 +329,52 @@ def download(file_path: str, session=None) -> bytes:
     """
     import requests
 
+    from urllib.parse import urlparse
+
     file_path = _unwrap_proxy(file_path)
     url = file_path if file_path.startswith("http") else TMDB_IMAGE_CDN + file_path
     if not _is_allowed_image_host(url):
-        from urllib.parse import urlparse
-
         raise ValueError(
             f"refusing to fetch image from disallowed host: {urlparse(url).hostname!r}"
         )
-    # Re-mint the Plex token for a persisted (token-stripped) backdrop_path.
-    url = _with_plex_token(url)
+    # Artwork paths only on a configured Plex instance (the token is minted below).
+    _reject_nonart_plex(url)
+    # Cache under the tokenless request URL, snapshotted BEFORE the mint so the
+    # live X-Plex-Token never lands in the module-level cache key.
+    cache_key = url
     if session is None:
-        cached = _dl_cache_get(url)
+        cached = _dl_cache_get(cache_key)
         if cached is not None:
             return cached
+    # Re-mint the Plex token for a persisted (token-stripped) backdrop_path.
+    url = _with_plex_token(url)
     getter = session or requests
-    cache_key = url
     # Don't auto-follow redirects: an allowed host that 3xx-redirects to an internal
     # address would defeat _is_allowed_image_host. Re-validate the host every hop.
     resp = getter.get(url, timeout=15, allow_redirects=False)
     hops = 0
     while getattr(resp, "is_redirect", False) and hops < 4:
-        from urllib.parse import urljoin, urlparse
+        from urllib.parse import urljoin
 
         nxt = urljoin(url, resp.headers.get("Location", ""))
         if not _is_allowed_image_host(nxt):
             raise ValueError(
                 f"refusing to follow redirect to disallowed host: {urlparse(nxt).hostname!r}"
             )
+        _reject_nonart_plex(nxt)
         url = _with_plex_token(nxt)
         resp = getter.get(url, timeout=15, allow_redirects=False)
         hops += 1
-    resp.raise_for_status()
+    # A residual redirect here means the hop budget ran out — never cache a 3xx
+    # body as the image (raise_for_status does not treat 3xx as an error).
+    if getattr(resp, "is_redirect", False):
+        raise ValueError("too many redirects while fetching image")
+    # Hostname-only on failure: requests' HTTPError text embeds the full URL,
+    # which carries the minted X-Plex-Token, and callers surface {exc} to clients.
+    if not resp.ok:
+        raise ValueError(
+            f"image fetch failed ({resp.status_code}) for {urlparse(url).hostname!r}"
+        )
     if session is None:
         _dl_cache_put(cache_key, resp.content)
     return resp.content

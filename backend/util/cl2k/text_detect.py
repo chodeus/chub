@@ -17,12 +17,15 @@ degrades to the colour-key rather than breaking. The model
 from __future__ import annotations
 
 import io
+import logging
 import os
-from functools import lru_cache
+import threading
 from typing import Optional
 
 import numpy as np
 from PIL import Image
+
+_log = logging.getLogger(__name__)
 
 _MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "ppocr_v4_det.onnx")
 # DBNet preprocessing (PP-OCR): ImageNet mean/std, /255, NCHW.
@@ -35,9 +38,21 @@ _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 _SCALES = (960, 640, 448, 320)
 
 
-@lru_cache(maxsize=1)
+_SESSION = None
+_SESSION_LOCK = threading.Lock()
+
+
 def _session():
-    """Cached ORT session, or None when onnxruntime/model is unavailable."""
+    """Cached ORT session, or None when onnxruntime/model is unavailable.
+
+    Only a *successful* session is cached. A transient InferenceSession failure
+    (OOM mid-batch, provider init race, a volume mount not yet surfacing the
+    model) must NOT be memoized, or one blip disables the detector for the whole
+    process — every later extract then silently takes the worse colour-key path.
+    Missing model / missing onnxruntime are stable states, cheap to re-check."""
+    global _SESSION
+    if _SESSION is not None:
+        return _SESSION
     if not os.path.exists(_MODEL_PATH):
         return None
     try:
@@ -47,11 +62,16 @@ def _session():
     try:
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = 2  # gentle on the shared worker
-        return ort.InferenceSession(
+        sess = ort.InferenceSession(
             _MODEL_PATH, sess_options=opts, providers=["CPUExecutionProvider"]
         )
-    except Exception:
+    except Exception as exc:
+        _log.warning("cl2k text detector unavailable this call (will retry): %s", exc)
         return None
+    with _SESSION_LOCK:
+        if _SESSION is None:
+            _SESSION = sess
+        return _SESSION
 
 
 def available() -> bool:

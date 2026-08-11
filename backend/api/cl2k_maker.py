@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.cl2k_maker import (
@@ -75,7 +75,9 @@ def get_cl2k_logger(request: Request) -> Any:
 class GenerateRequest(BaseModel):
     kind: str
     title: str
-    tmdb_id: int
+    # Optional so a TVDB/IMDB-only title can render from a supplied backdrop; the
+    # validator below still requires tmdb_id whenever no backdrop is handed over.
+    tmdb_id: Optional[int] = None
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
@@ -145,6 +147,14 @@ class GenerateRequest(BaseModel):
     # Drive (False skips). Nothing selected/routed = downloadable only.
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _tmdb_id_or_backdrop(self):
+        # Art auto-sources from TMDB (list_images) only when no backdrop is given,
+        # so tmdb_id is needed unless the caller supplies one (path or b64).
+        if self.tmdb_id is None and not (self.backdrop_path or self.backdrop_b64):
+            raise ValueError("tmdb_id is required unless a backdrop is supplied")
+        return self
 
 
 def _mask_bytes(b64: Optional[str]) -> Optional[bytes]:
@@ -568,6 +578,8 @@ def generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    if (bad := _require_any_id(req)) is not None:
+        return bad
     try:
         mask_bytes = _mask_bytes(req.mask_b64)
     except Exception:
@@ -1037,7 +1049,9 @@ def psd_export(
 
 
 class SeasonsRequest(BaseModel):
-    tmdb_id: int
+    # Optional, gated by the validator below (tmdb_id or a supplied backdrop) —
+    # a season batch carrying the show's backdrop over needs no tmdb_id.
+    tmdb_id: Optional[int] = None
     title: str
     seasons: List[int]
     year: Optional[int] = None
@@ -1075,6 +1089,14 @@ class SeasonsRequest(BaseModel):
     # single-poster Generate used. upload_gdrive=None falls back to module config.
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _tmdb_id_or_backdrop(self):
+        # Auto-source (list_images + season backdrop reuse) both key on tmdb_id, so
+        # it's needed unless the request carries its own backdrop (path or b64).
+        if self.tmdb_id is None and not (self.backdrop_path or self.backdrop_b64):
+            raise ValueError("tmdb_id is required unless a backdrop is supplied")
+        return self
 
 
 # ─── Background season-batch jobs ────────────────────────────────────────────
@@ -1125,6 +1147,44 @@ def _season_job_snapshot(jid: int) -> Optional[Dict[str, Any]]:
     with _season_jobs_lock:
         job = _season_jobs.get(jid)
         return dict(job) if job else None
+
+
+# A show has nowhere near this many seasons; a huge list is a malformed/abusive
+# request, not a real batch. Rejected visibly, never silently truncated.
+_MAX_SEASONS = 60
+
+
+def _clean_seasons(raw) -> List[int]:
+    """Deduped, ordered, non-negative season numbers from a raw request list."""
+    out = set()
+    for n in raw or []:
+        try:
+            v = int(n)
+        except (TypeError, ValueError):
+            continue
+        if v >= 0:
+            out.add(v)
+    return sorted(out)
+
+
+def _spawn_season_job(
+    jid: int, target, args, *, name: str, logger: Any
+) -> Optional[JSONResponse]:
+    """Start the daemon worker; on RuntimeError mark the job errored (so it can't
+    poll 'running' forever) and return a 503, else None."""
+    try:
+        threading.Thread(target=target, args=args, daemon=True, name=name).start()
+    except RuntimeError as exc:
+        logger.error(f"cl2k: could not start {name}: {exc}")
+        with _season_jobs_lock:
+            job = _season_jobs.get(jid)
+            if job is not None:
+                job["status"] = "error"
+                job["error"] = str(exc)
+        return error(
+            "could not start the season job", "CL2K_JOB_START", status_code=503
+        )
+    return None
 
 
 def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> None:
@@ -1200,17 +1260,28 @@ def generate_seasons_endpoint(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
-    seasons = [int(n) for n in (req.seasons or [])]
+    if (bad := _require_any_id(req)) is not None:
+        return bad
+    seasons = _clean_seasons(req.seasons)
     if not seasons:
         return error("No seasons requested", "CL2K_NO_SEASONS")
+    if len(seasons) > _MAX_SEASONS:
+        return error(
+            f"Too many seasons ({len(seasons)}); the maximum is {_MAX_SEASONS}",
+            "CL2K_TOO_MANY_SEASONS",
+        )
+    req.seasons = seasons  # the worker iterates req.seasons
     jid = _new_season_job(len(seasons), req.title)
-    thread = threading.Thread(
-        target=_run_seasons_job,
-        args=(jid, db, logger, req),
-        daemon=True,
-        name=f"cl2k-seasons-{jid}",
-    )
-    thread.start()
+    if (
+        failed := _spawn_season_job(
+            jid,
+            _run_seasons_job,
+            (jid, db, logger, req),
+            name=f"cl2k-seasons-{jid}",
+            logger=logger,
+        )
+    ) is not None:
+        return failed
     logger.info(f"cl2k: season batch {jid} started ({len(seasons)} seasons)")
     return ok("Season generation started", {"job_id": jid, "total": len(seasons)})
 
@@ -1322,9 +1393,17 @@ def retext_seasons_endpoint(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
-    seasons = [int(n) for n in (req.seasons or [])]
+    if (bad := _require_any_id(req)) is not None:
+        return bad
+    seasons = _clean_seasons(req.seasons)
     if not seasons:
         return error("No seasons requested", "CL2K_NO_SEASONS")
+    if len(seasons) > _MAX_SEASONS:
+        return error(
+            f"Too many seasons ({len(seasons)}); the maximum is {_MAX_SEASONS}",
+            "CL2K_TOO_MANY_SEASONS",
+        )
+    req.seasons = seasons  # the worker iterates req.seasons
     if req.image_b64:
         try:
             image_bytes = base64.b64decode(req.image_b64.split(",")[-1])
@@ -1339,13 +1418,16 @@ def retext_seasons_endpoint(
     else:
         return error("no image provided", "CL2K_RETEXT")
     jid = _new_season_job(len(seasons), req.title)
-    thread = threading.Thread(
-        target=_run_retext_seasons_job,
-        args=(jid, db, logger, image_bytes, req),
-        daemon=True,
-        name=f"cl2k-retext-seasons-{jid}",
-    )
-    thread.start()
+    if (
+        failed := _spawn_season_job(
+            jid,
+            _run_retext_seasons_job,
+            (jid, db, logger, image_bytes, req),
+            name=f"cl2k-retext-seasons-{jid}",
+            logger=logger,
+        )
+    ) is not None:
+        return failed
     logger.info(f"cl2k: as-is season batch {jid} started ({len(seasons)} seasons)")
     return ok("Season generation started", {"job_id": jid, "total": len(seasons)})
 
@@ -1534,6 +1616,9 @@ def retext(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    # Only a save needs a matchable filename; a preview returns bytes to the caller.
+    if not req.preview and (bad := _require_any_id(req)) is not None:
+        return bad
     if req.image_b64:
         try:
             image_bytes = base64.b64decode(req.image_b64.split(",")[-1])

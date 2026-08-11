@@ -49,6 +49,43 @@ def env(monkeypatch):
     return full_config, logger
 
 
+def test_generate_refuses_when_ai_requested_but_provider_unavailable(monkeypatch):
+    """apply_ai/mask on generate must fail closed when the provider is unusable —
+    else remove_text passes the art through and it saves as "generated"."""
+    monkeypatch.setattr(maker, "_backfill_title_year", lambda *a, **k: (k["title"], None))
+    monkeypatch.setattr(
+        maker.text_removal,
+        "unavailable_reason",
+        lambda *a, **k: "AI provider not configured",
+    )
+    reached = {"render": False}
+    monkeypatch.setattr(
+        maker,
+        "_resolve_and_render",
+        lambda *a, **k: reached.__setitem__("render", True) or (b"x", {}),
+    )
+    cfg = types.SimpleNamespace(skip_existing=False)
+    full_config = types.SimpleNamespace(cl2k_maker=cfg)
+    logger = types.SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    res = maker.generate_for_item(
+        db=object(),
+        full_config=full_config,
+        logger=logger,
+        kind="movie",
+        title="X",
+        tmdb_id=1,
+        apply_ai=True,
+    )
+    assert res["status"] == "error"
+    assert "not configured" in res["reason"]
+    assert reached["render"] is False  # refused before render/save
+
+
 def test_explicit_small_logo_is_kept(env):
     """A logo the user picked (``logo_path`` supplied) survives even when it's
     narrower than LOGO_MIN_WIDTH — matching the preview that showed it."""
