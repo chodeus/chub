@@ -179,7 +179,7 @@ def _is_allowed_image_host(url: str) -> bool:
 
 
 # Plex-instance URLs get the admin token minted, so only artwork-key paths may be
-# fetched. Mirrors _valid_plex_art_src in api/cl2k_maker.py — keep the two in sync.
+# fetched. Canonical Plex-art-path check — api/cl2k_maker.py's proxy imports this.
 _PLEX_ART_PATH = re.compile(
     r"^/library/metadata/\d+/"
     r"(art|thumb|posters?|clearlogos?|banner|theme|composite|image|file)(?:/|$)",
@@ -251,12 +251,8 @@ def _plex_token_for(origin: tuple) -> Optional[str]:
 
 
 def _with_plex_token(url: str) -> str:
-    """Re-mint the X-Plex-Token for a tokenless Plex-server URL (a persisted
-    backdrop_path has it stripped). No-op for non-Plex hosts or already-tokened URLs.
-
-    Scheme is part of the match: never append the token to an ``http://`` URL for
-    an ``https://``-configured instance — that would transmit the admin token in
-    cleartext even though host:port line up."""
+    """Re-mint the X-Plex-Token for a tokenless Plex-server URL; no-op otherwise.
+    Scheme-matched, so the admin token never rides an ``http://`` URL in cleartext."""
     if "x-plex-token" in url.lower():
         return url
     token = _plex_token_for(_plex_origin(url))

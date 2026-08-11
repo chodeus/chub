@@ -18,11 +18,8 @@ Module settings are read/saved through the generic /api/config endpoints.
 
 import base64
 import io
-import posixpath
-import re
 import threading
 from typing import Any, Dict, List, Optional
-from urllib.parse import parse_qs, unquote, urlparse
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
@@ -41,7 +38,11 @@ from backend.modules.cl2k_maker import (
     retext_poster,
 )
 from backend.util.cl2k import geometry as geo, text_removal, tmdb_art
-from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
+from backend.util.cl2k.image_fetch import (
+    TMDB_IMAGE_CDN,
+    _is_plex_art_path,
+    download as download_image,
+)
 from backend.util.cl2k.logo_extract import (
     extract_logo_by_diff,
     extract_subject_logo,
@@ -70,6 +71,14 @@ def get_cl2k_logger(request: Request) -> Any:
     log), so generation/upload activity and errors show up under the Logs page's
     CL2K Maker section instead of vanishing into the general log."""
     return get_module_logger(request, "cl2k_maker")
+
+
+def _require_tmdb_or_backdrop(req: Any):
+    """Require a tmdb_id unless the request supplies its own backdrop (path/b64)."""
+    # Art auto-sources from TMDB (list_images) only when no backdrop is given.
+    if req.tmdb_id is None and not (req.backdrop_path or req.backdrop_b64):
+        raise ValueError("tmdb_id is required unless a backdrop is supplied")
+    return req
 
 
 class GenerateRequest(BaseModel):
@@ -150,11 +159,8 @@ class GenerateRequest(BaseModel):
 
     @model_validator(mode="after")
     def _tmdb_id_or_backdrop(self):
-        # Art auto-sources from TMDB (list_images) only when no backdrop is given,
-        # so tmdb_id is needed unless the caller supplies one (path or b64).
-        if self.tmdb_id is None and not (self.backdrop_path or self.backdrop_b64):
-            raise ValueError("tmdb_id is required unless a backdrop is supplied")
-        return self
+        """Require a tmdb_id unless a backdrop is supplied (shared rule)."""
+        return _require_tmdb_or_backdrop(self)
 
 
 def _mask_bytes(b64: Optional[str]) -> Optional[bytes]:
@@ -1092,11 +1098,8 @@ class SeasonsRequest(BaseModel):
 
     @model_validator(mode="after")
     def _tmdb_id_or_backdrop(self):
-        # Auto-source (list_images + season backdrop reuse) both key on tmdb_id, so
-        # it's needed unless the request carries its own backdrop (path or b64).
-        if self.tmdb_id is None and not (self.backdrop_path or self.backdrop_b64):
-            raise ValueError("tmdb_id is required unless a backdrop is supplied")
-        return self
+        """Require a tmdb_id unless a backdrop is supplied (shared rule)."""
+        return _require_tmdb_or_backdrop(self)
 
 
 # ─── Background season-batch jobs ────────────────────────────────────────────
@@ -1495,49 +1498,11 @@ def plex_images_endpoint(
     return ok("ok", res)
 
 
-# Plex artwork keys look like /library/metadata/<id>/<arttype>/<name>. The proxy
-# only fetches these — never arbitrary Plex endpoints. Without it, a leaked <img>
-# URL (which carries a live stream token + the Plex host in ?src=) could be
-# repointed at /:/prefs and leak the PlexOnlineToken (the account token), read
-# /myplex/account or listings, or pivot via /photo/:/transcode (internal SSRF).
-_PLEX_ART_PATH = re.compile(
-    r"^/library/metadata/\d+/"
-    r"(art|thumb|posters?|clearlogos?|banner|theme|composite|image|file)(?:/|$)",
-    re.IGNORECASE,
-)
-
-# The ``/library/metadata/<id>/file`` key (plexapi's form for locally-stored art
-# — uploaded or agent-combined posters/backgrounds/logos) carries the real
-# artwork ref in its ``?url=`` param, and that ref is ALWAYS a Plex provider URI
-# (an internal storage handle), never an http(s) URL. Constraining ``?url=`` to
-# these schemes keeps the ``file`` proxy from being coerced into making Plex
-# fetch an arbitrary host — the same SSRF the path allow-list guards against.
-_PLEX_PROVIDER_URI = re.compile(r"^(?:upload|metadata|media)://", re.IGNORECASE)
-
-
+# The /plex-art proxy only fetches Plex artwork-key paths — never arbitrary Plex
+# endpoints (a leaked <img> src repointed at /:/prefs leaks the PlexOnlineToken).
 def _valid_plex_art_src(src: str) -> bool:
-    """True only for a clean Plex artwork-key URL. Decodes percent-encoding and
-    rejects any ``..`` / ``%2e%2e`` dot-segment (or ``//``) BEFORE matching: a
-    string-only regex on the raw path is defeated because requests/Plex collapse
-    ``../`` downstream — ``/library/metadata/1/art/../../:/prefs`` becomes
-    ``/:/prefs``, which leaks the account-level PlexOnlineToken. Validating the
-    normalized path guarantees what we check is what actually gets fetched.
-
-    Local posters/art resolve to a ``/library/metadata/<id>/file?url=<provider>``
-    key; that ``file`` type is allowed only when ``?url=`` is a Plex provider URI
-    (upload://, metadata://, media://) — never an http URL — so the proxy can't
-    be turned into a Plex-mediated SSRF (see :data:`_PLEX_PROVIDER_URI`)."""
-    parsed = urlparse(src)
-    path = unquote(parsed.path or "")
-    if ".." in path.split("/") or path != posixpath.normpath(path):
-        return False
-    match = _PLEX_ART_PATH.match(path)
-    if not match:
-        return False
-    if match.group(1).lower() == "file":
-        url_ref = parse_qs(parsed.query).get("url", [""])[0]
-        return bool(_PLEX_PROVIDER_URI.match(url_ref.strip()))
-    return True
+    """True only for a clean Plex artwork-key URL — the /plex-art proxy guard."""
+    return _is_plex_art_path(src)
 
 
 def _img_media_type(blob: bytes) -> str:
@@ -1560,7 +1525,7 @@ def plex_art_proxy(
 ) -> Response:
     """Fetch a Plex ARTWORK image server-side and stream the bytes back, so the
     browser's <img> never carries the user's long-lived X-Plex-Token. ``src`` is
-    constrained to Plex artwork-key paths (_PLEX_ART_PATH) and ``download_image``
+    constrained to Plex artwork-key paths (_is_plex_art_path) and ``download_image``
     re-mints the token + SSRF-gates the host, so a stream token minted to load one
     poster can't be repointed at other Plex endpoints or hosts. Loaded by <img>
     with a short-lived stream token in the URL (see the manifest's

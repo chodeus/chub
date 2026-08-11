@@ -44,12 +44,7 @@ _SESSION_LOCK = threading.Lock()
 
 def _session():
     """Cached ORT session, or None when onnxruntime/model is unavailable.
-
-    Only a *successful* session is cached. A transient InferenceSession failure
-    (OOM mid-batch, provider init race, a volume mount not yet surfacing the
-    model) must NOT be memoized, or one blip disables the detector for the whole
-    process — every later extract then silently takes the worse colour-key path.
-    Missing model / missing onnxruntime are stable states, cheap to re-check."""
+    A failed init is transient — never cached, so it retries next call."""
     global _SESSION
     if _SESSION is not None:
         return _SESSION
@@ -59,18 +54,22 @@ def _session():
         import onnxruntime as ort  # optional dep — absent => colour-key fallback
     except Exception:
         return None
-    try:
-        opts = ort.SessionOptions()
-        opts.intra_op_num_threads = 2  # gentle on the shared worker
-        sess = ort.InferenceSession(
-            _MODEL_PATH, sess_options=opts, providers=["CPUExecutionProvider"]
-        )
-    except Exception as exc:
-        _log.warning("cl2k text detector unavailable this call (will retry): %s", exc)
-        return None
+    # Build inside the lock (double-checked) so a request burst spawns ONE session,
+    # not several racing InferenceSessions (OOM / provider-init failure).
     with _SESSION_LOCK:
-        if _SESSION is None:
-            _SESSION = sess
+        if _SESSION is not None:  # another caller built it while we waited
+            return _SESSION
+        try:
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = 2  # gentle on the shared worker
+            _SESSION = ort.InferenceSession(
+                _MODEL_PATH, sess_options=opts, providers=["CPUExecutionProvider"]
+            )
+        except Exception as exc:
+            _log.warning(
+                "cl2k text detector unavailable this call (will retry): %s", exc
+            )
+            return None
         return _SESSION
 
 
