@@ -4,7 +4,7 @@ from typing import Any, List, Optional
 from backend.util.helper import parse_search_id
 from backend.util.normalization import normalize_titles
 
-from .db_base import DatabaseBase
+from .db_base import DatabaseBase, escape_like
 
 # Library-health SQL fragments, shared across the stats queries so by_type,
 # totals and by_instance can't drift. Everything is counted in CONTENT UNITS —
@@ -877,17 +877,9 @@ class MediaCache(DatabaseBase):
             # whose normalized form has the punctuation stripped. Raw
             # title LIKE is the case-insensitive fallback for exact
             # stored substrings. Same fix as poster_cache.search.
-            # Escape LIKE metacharacters so a query with %/_ matches literally
-            # (mirrors poster_cache.delete_by_path_prefix).
-            norm_esc = (
-                normalize_titles(query)
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_")
-            )
-            raw_esc = (
-                query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
+            # Escape LIKE metacharacters so a query with %/_ matches literally.
+            norm_esc = escape_like(normalize_titles(query))
+            raw_esc = escape_like(query)
             sub = [
                 "normalized_title LIKE ? ESCAPE '\\'",
                 "title LIKE ? ESCAPE '\\'",
@@ -915,12 +907,7 @@ class MediaCache(DatabaseBase):
         if genres:
             genre_conditions = ["genre LIKE ? ESCAPE '\\'" for _ in genres]
             conditions.append(f"({' OR '.join(genre_conditions)})")
-            params.extend(
-                "%"
-                + g.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-                + "%"
-                for g in genres
-            )
+            params.extend(f"%{escape_like(g)}%" for g in genres)
 
         if year_min is not None:
             conditions.append("CAST(year AS INTEGER) >= ?")

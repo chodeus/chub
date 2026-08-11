@@ -18,8 +18,8 @@ from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.arr import create_arr_client
-from backend.util.config import load_config
-from backend.util.database import ChubDB
+from backend.util.config import ConfigError, load_config
+from backend.util.database import ChubDB, escape_like
 from backend.util.ssrf_guard import is_safe_url, safe_external_get
 
 router = APIRouter(
@@ -464,35 +464,29 @@ async def get_duplicates(
         # quality group (configured in general.duplicate_exclude_groups).
         # e.g. [["radarr", "radarr4k"]] means radarr+radarr4k pairs
         # are intentional quality copies, not real duplicates.
-        try:
-            from backend.util.config import load_config
+        raw_groups = load_config().general.duplicate_exclude_groups
+        if raw_groups:
+            # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}].
+            # The field is List[Any] — skip malformed entries, don't raise.
+            exclude_sets = []
+            for g in raw_groups:
+                members = g.get("instances") if isinstance(g, dict) else g
+                if isinstance(members, (list, tuple, set)) and all(
+                    isinstance(m, str) and m.strip() for m in members
+                ):
+                    exclude_sets.append({m.strip() for m in members})
+            exclude_sets = [s for s in exclude_sets if len(s) >= 2]
 
-            raw_groups = load_config().general.duplicate_exclude_groups
-            if raw_groups:
-                # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}]
-                exclude_sets = []
-                for g in raw_groups:
-                    if isinstance(g, dict):
-                        exclude_sets.append(set(g.get("instances", [])))
-                    else:
-                        exclude_sets.append(set(g))
-                exclude_sets = [s for s in exclude_sets if len(s) >= 2]
+            if exclude_sets:
 
-                if exclude_sets:
+                def _not_excluded(dup):
+                    """True when this group isn't wholly inside one exclude set."""
+                    raw = dup.get("instances", "")
+                    instances = {s.strip() for s in raw.split(",") if s.strip()}
+                    return not any(instances.issubset(group) for group in exclude_sets)
 
-                    def _not_excluded(dup):
-                        raw = dup.get("instances", "")
-                        instances = {s.strip() for s in raw.split(",") if s.strip()}
-                        return not any(
-                            instances.issubset(group) for group in exclude_sets
-                        )
-
-                    duplicates = [d for d in duplicates if _not_excluded(d)]
-                    folder_collisions = [
-                        d for d in folder_collisions if _not_excluded(d)
-                    ]
-        except Exception:
-            pass  # Config not loaded — skip filtering
+                duplicates = [d for d in duplicates if _not_excluded(d)]
+                folder_collisions = [d for d in folder_collisions if _not_excluded(d)]
 
         return ok(
             f"Found {len(duplicates)} duplicate groups, "
@@ -505,6 +499,10 @@ async def get_duplicates(
             },
         )
 
+    except ConfigError:
+        # Deny: unfiltered results report intentional quality pairs as
+        # duplicates next to a bulk-delete button. main.py's handler answers.
+        raise
     except Exception as e:
         logger.error(f"Error finding duplicates: {e}")
         return error(
@@ -2037,6 +2035,7 @@ async def generate_collection_from_tag(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Build a poster_collection from every media row carrying `tag`."""
     try:
         payload = await request.json()
         tag = (payload.get("tag") or "").strip()
@@ -2050,8 +2049,8 @@ async def generate_collection_from_tag(
         media_rows = (
             db.worker.execute_query(
                 "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
-                "FROM media_cache WHERE tags LIKE ?",
-                (f"%{tag}%",),
+                "FROM media_cache WHERE tags LIKE ? ESCAPE '\\'",
+                (f"%{escape_like(tag)}%",),
                 fetch_all=True,
             )
             or []

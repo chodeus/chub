@@ -18,7 +18,8 @@ from starlette.concurrency import run_in_threadpool
 from backend.api.utils import error, get_database, get_logger, get_module_logger, ok
 from backend.modules.sync_gdrive import SyncGDrive
 from backend.modules.unmatched_assets import UnmatchedAssets
-from backend.util.database import ChubDB
+from backend.util.database import ChubDB, escape_like
+from backend.util.helper import get_static_dir
 
 router = APIRouter(
     prefix="/api/posters",
@@ -1175,7 +1176,7 @@ def _optimize_posters_sync(
 @router.get(
     "/list",
     summary="List available poster files",
-    description="List available poster files from the templates/posters directory.",
+    description="List available poster files from the static posters directory.",
     responses={
         200: {
             "description": "Poster files listed successfully",
@@ -1193,7 +1194,7 @@ def _optimize_posters_sync(
 )
 async def list_poster_files(logger: Any = Depends(get_logger)) -> JSONResponse:
     """
-    List available poster files from templates/posters directory.
+    List available poster files from the static posters directory.
 
     Returns just the filenames for dynamic discovery by the frontend.
     Used for default poster selection and asset management.
@@ -1204,7 +1205,9 @@ async def list_poster_files(logger: Any = Depends(get_logger)) -> JSONResponse:
     try:
         logger.debug("Serving GET /api/posters/list")
 
-        posters_dir = Path(__file__).parents[2] / "templates" / "posters"
+        # Same directory main.py mounts at /posters — resolved via STATIC_DIR,
+        # which Docker points at /app/public (templates/ isn't in the image).
+        posters_dir = get_static_dir() / "posters"
         allowed_extensions = {".jpg", ".jpeg", ".png", ".webp"}
 
         if not posters_dir.exists():
@@ -2810,13 +2813,16 @@ def upload_collection_posters(
     summary="Backfill poster width/height",
     description="Walk poster_cache rows missing width/height and populate "
     "them by opening the file with PIL. Processes up to `limit` rows per call "
-    "so it can be run incrementally without blocking the event loop.",
+    "so it can be run incrementally.",
 )
-async def backfill_poster_dimensions(
+def backfill_poster_dimensions(
     limit: int = 200,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Populate missing poster width/height for up to `limit` rows."""
+    # Sync on purpose: the PIL/db loop blocks, so Starlette runs the whole
+    # endpoint in a threadpool instead of stalling the event loop.
     try:
         limit = max(1, min(limit, 2000))
         rows = (
@@ -3624,7 +3630,7 @@ async def get_poster(
         404: {"description": "Poster or file not found"},
     },
 )
-async def get_poster_thumbnail(
+def get_poster_thumbnail(
     poster_id: int,
     width: int = Query(200, ge=50, le=500, description="Thumbnail width in pixels"),
     logger: Any = Depends(get_logger),
@@ -3635,6 +3641,9 @@ async def get_poster_thumbnail(
 
     Generates a downsized JPEG thumbnail on first request and caches it
     in a .thumbnails subdirectory. Subsequent requests serve from cache.
+
+    Sync on purpose: the LANCZOS resize + JPEG encode are blocking, so
+    Starlette runs this in a threadpool instead of stalling the event loop.
 
     Args:
         poster_id: The unique identifier of the poster
@@ -3710,7 +3719,7 @@ async def get_poster_thumbnail(
         404: {"description": "Poster or file not found"},
     },
 )
-async def download_poster(
+def download_poster(
     poster_id: int,
     size: Optional[int] = Query(
         None, ge=100, le=4000, description="Max dimension in pixels"
@@ -3728,6 +3737,9 @@ async def download_poster(
     When no processing params are provided, serves the raw file.
     When size, format, or quality are specified, processes the image
     before serving.
+
+    Sync on purpose: the optional resize/encode is blocking, so Starlette
+    runs this in a threadpool instead of stalling the event loop.
 
     Args:
         poster_id: The unique identifier of the poster to download
@@ -3889,13 +3901,8 @@ async def delete_poster(
                 # Find media items that were matched to this poster by original_file
                 if full_path:
                     # Escape LIKE metacharacters so a basename with %/_ can't
-                    # unmatch the wrong media rows (mirror poster_cache).
-                    basename_like = (
-                        os.path.basename(full_path)
-                        .replace("\\", "\\\\")
-                        .replace("%", "\\%")
-                        .replace("_", "\\_")
-                    )
+                    # unmatch the wrong media rows.
+                    basename_like = escape_like(os.path.basename(full_path))
                     media_items = (
                         db.media.execute_query(
                             "SELECT id, title, instance_name, asset_type, year, season_number FROM media_cache WHERE original_file LIKE ? ESCAPE '\\'",
