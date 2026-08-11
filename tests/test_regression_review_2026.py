@@ -10,7 +10,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.api.main import handle_config_error
 from backend.util.config import ChubConfig, ConfigError, ConfigParseError
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
@@ -478,10 +477,12 @@ class _StubLog:
 
 def _app(router, db=None):
     """Mount `router` on a bare app carrying main.py's real ConfigError handler."""
+    import backend.api.main as apimain
+
     app = FastAPI()
     app.state.logger = _StubLog()
     app.state.db = db
-    app.add_exception_handler(ConfigError, handle_config_error)
+    app.add_exception_handler(ConfigError, apimain.handle_config_error)
     app.include_router(router)
     # raise_server_exceptions=False so the handler answers instead of re-raising.
     return TestClient(app, raise_server_exceptions=False)

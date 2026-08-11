@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 import backend.util.maintenance as maintenance
 from backend.util.config import ChubConfig, ConfigParseError
-from backend.util.maintenance import prune_old_backups
 
 # Fixed mtimes so "oldest" is explicit rather than an artefact of creation order.
 _BASE_MTIME = 1_700_000_000
@@ -58,7 +57,7 @@ def test_prunes_oldest_and_keeps_newest(tmp_path):
     for i in range(5):
         _archive(tmp_path, f"chub-backup-2026080{i}-000000.zip", age=i)
 
-    removed = prune_old_backups(tmp_path, keep=2)
+    removed = maintenance.prune_old_backups(tmp_path, keep=2)
 
     assert removed == 3
     survivors = {p.name for p in tmp_path.glob("chub-backup-*.zip")}
@@ -84,7 +83,7 @@ def test_a_symlinked_backup_never_unlinks_its_target(tmp_path):
     link.symlink_to(precious)
 
     logger = _Log()
-    prune_old_backups(backups, keep=2, logger=logger)
+    maintenance.prune_old_backups(backups, keep=2, logger=logger)
 
     assert precious.exists(), "prune followed the symlink and deleted its target"
     assert link.is_symlink(), "the link itself should be left alone, not resolved"
@@ -100,7 +99,7 @@ def test_a_directory_named_like_a_backup_is_skipped(tmp_path):
     _age(stray, 2)
 
     logger = _Log()
-    removed = prune_old_backups(tmp_path, keep=2, logger=logger)
+    removed = maintenance.prune_old_backups(tmp_path, keep=2, logger=logger)
 
     assert removed == 0
     assert (tmp_path / "chub-backup-20260801-000000.zip").is_dir()
@@ -110,14 +109,14 @@ def test_keep_zero_or_negative_is_a_noop(tmp_path):
     """keep <= 0 disables pruning entirely."""
     _archive(tmp_path, "chub-backup-20260803-000000.zip")
 
-    assert prune_old_backups(tmp_path, keep=0) == 0
-    assert prune_old_backups(tmp_path, keep=-1) == 0
+    assert maintenance.prune_old_backups(tmp_path, keep=0) == 0
+    assert maintenance.prune_old_backups(tmp_path, keep=-1) == 0
     assert len(list(tmp_path.glob("chub-backup-*.zip"))) == 1
 
 
 def test_missing_directory_returns_zero(tmp_path):
     """A backup_dir that doesn't exist prunes nothing rather than raising."""
-    assert prune_old_backups(tmp_path / "nope", keep=1) == 0
+    assert maintenance.prune_old_backups(tmp_path / "nope", keep=1) == 0
 
 
 def test_unconfined_root_deletes_nothing(tmp_path):
@@ -127,7 +126,7 @@ def test_unconfined_root_deletes_nothing(tmp_path):
     logger = _Log()
 
     # A default ChubConfig's allowed roots are CONFIG_DIR + mounts, never tmp_path.
-    removed = prune_old_backups(tmp_path, keep=1, logger=logger, config=ChubConfig())
+    removed = maintenance.prune_old_backups(tmp_path, keep=1, logger=logger, config=ChubConfig())
 
     assert removed == 0
     assert len(list(tmp_path.glob("chub-backup-*.zip"))) == 4
@@ -144,7 +143,7 @@ def test_confined_root_still_prunes(tmp_path):
     config = ChubConfig()
     config.poster_renamerr.source_dirs = [str(tmp_path)]
 
-    assert prune_old_backups(backups, keep=1, config=config) == 3
+    assert maintenance.prune_old_backups(backups, keep=1, config=config) == 3
     assert len(list(backups.glob("chub-backup-*.zip"))) == 1
 
 
