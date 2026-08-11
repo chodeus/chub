@@ -9,6 +9,27 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 from backend.util.logger import Logger
 
 
+# Files this process has already schema-synced (by _schema_file_identity) — every
+# interface construction calls init_schema, else one request re-syncs 24 tables N×.
+_SCHEMA_SYNCED: set = set()
+_SCHEMA_SYNCED_LOCK = threading.Lock()
+
+
+def _schema_file_identity(db_path: str):
+    """Identity of the db FILE (device+inode); None when it doesn't exist yet."""
+    try:
+        st = os.stat(db_path)
+    except OSError:
+        return None
+    return (os.path.abspath(db_path), st.st_dev, st.st_ino)
+
+
+def escape_like(value: str) -> str:
+    """Escape LIKE metacharacters so `value` matches literally."""
+    # The SQL MUST carry ESCAPE '\\' too, or this silently does nothing.
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class DatabaseBase:
     """Base class for all database operations with proper resource management."""
 
@@ -163,12 +184,26 @@ class DatabaseBase:
             conn.commit()
 
     @staticmethod
-    def init_schema(db_path: str) -> None:
-        """Initialize database schema - called by ChubDB."""
+    def init_schema(db_path: str, force: bool = False) -> None:
+        """Initialize database schema — skips files already synced this process."""
         from .schema import SchemaManager
+
+        # Gated per db FILE: a replaced/deleted db gets a new identity and
+        # re-syncs itself, so only an in-place definition change needs force.
+        identity = _schema_file_identity(db_path)
+        if not force and identity is not None:
+            with _SCHEMA_SYNCED_LOCK:
+                if identity in _SCHEMA_SYNCED:
+                    return
 
         conn = sqlite3.connect(db_path)
         try:
             SchemaManager.init_database(conn)
         finally:
             conn.close()
+
+        # Re-stat: the file may not have existed before connect() created it.
+        identity = _schema_file_identity(db_path)
+        if identity is not None:
+            with _SCHEMA_SYNCED_LOCK:
+                _SCHEMA_SYNCED.add(identity)

@@ -383,7 +383,7 @@ async def get_all_run_states(
             from backend.modules import MODULES
 
             for mod_name in MODULES:
-                job_status = orchestrator.get_module_status(mod_name)
+                job_status = orchestrator.get_module_status(mod_name, db=db)
                 if job_status.get("running"):
                     if mod_name in states_by_name:
                         states_by_name[mod_name]["status"] = "running"
@@ -454,7 +454,9 @@ async def module_events(request: Request):
                         orchestrator = request.app.state.module_orchestrator
                         if orchestrator:
                             for mod_name in MODULES:
-                                job_status = orchestrator.get_module_status(mod_name)
+                                job_status = orchestrator.get_module_status(
+                                    mod_name, db=db
+                                )
                                 if job_status.get("running"):
                                     job_id = job_status.get("job_id")
                                     job = (

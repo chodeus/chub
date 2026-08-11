@@ -104,6 +104,28 @@ class TestSchemaManager:
             os.unlink(db_path)
 
 
+def test_init_schema_syncs_each_db_file_once(monkeypatch, tmp_path):
+    """Every interface construction calls init_schema; only the first may sync."""
+    from backend.util.database import db_base
+
+    syncs = []
+    monkeypatch.setattr(
+        SchemaManager,
+        "init_database",
+        classmethod(lambda cls, conn, **kw: syncs.append(1)),
+    )
+
+    db_path = str(tmp_path / "chub.db")
+    db_base.DatabaseBase.init_schema(db_path)
+    db_base.DatabaseBase.init_schema(db_path)
+    assert len(syncs) == 1
+
+    # A different file still syncs, and force re-runs an already-synced one.
+    db_base.DatabaseBase.init_schema(str(tmp_path / "other.db"))
+    db_base.DatabaseBase.init_schema(db_path, force=True)
+    assert len(syncs) == 3
+
+
 def test_collection_update_persists_file_hash_and_mtime():
     """collection_cache.update must accept file_hash/file_mtime (previously it
     didn't, so collection poster hashes were never stored → re-upload every run)."""

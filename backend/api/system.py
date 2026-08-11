@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from backend.api.utils import error, get_database, get_logger, ok
+from backend.util.backup import get_backup_dir, save_backup
 from backend.util.config import (
     ConfigError,
     ChubConfig,
@@ -552,107 +553,6 @@ async def test(
 # ==== Backup / Restore ====
 
 
-def _get_db_path() -> str:
-    """Get the SQLite database path."""
-    config_dir = os.environ.get("CONFIG_DIR") or str(
-        Path(__file__).parents[2] / "config"
-    )
-    return os.path.join(config_dir, "chub.db")
-
-
-def _default_backup_dir() -> Path:
-    config_dir = os.environ.get("CONFIG_DIR") or str(
-        Path(__file__).parents[2] / "config"
-    )
-    return Path(config_dir) / "backups"
-
-
-def _get_backup_dir(logger: Any = None) -> Path:
-    """Resolve general.backup_dir, falling back to CONFIG_DIR/backups."""
-    default = _default_backup_dir()
-
-    configured = ""
-    config = None
-    try:
-        config = load_config()
-        configured = (getattr(config.general, "backup_dir", "") or "").strip()
-    except Exception as exc:
-        if logger:
-            logger.error(f"Could not read backup_dir from config: {exc}")
-
-    if configured and config is not None:
-        if not is_path_allowed(configured, config):
-            if logger:
-                logger.error(
-                    f"backup_dir '{configured}' is outside the allowed roots; "
-                    f"backing up to {default} instead"
-                )
-        else:
-            try:
-                target = Path(configured).expanduser().resolve()
-                target.mkdir(parents=True, exist_ok=True)
-                # Re-confine the RESOLVED target: is_path_allowed() authorised a
-                # path that a swapped symlink could since have re-pointed.
-                if is_path_allowed(str(target), config):
-                    return target
-                if logger:
-                    logger.error(
-                        f"backup_dir '{configured}' resolved outside the allowed "
-                        f"roots ({target}); backing up to {default} instead"
-                    )
-            except OSError as exc:
-                if logger:
-                    logger.error(
-                        f"backup_dir '{configured}' is not usable ({exc}); "
-                        f"backing up to {default} instead"
-                    )
-
-    default.mkdir(parents=True, exist_ok=True)
-    return default
-
-
-def build_backup_bytes() -> bytes:
-    """Build a backup zip (config.yml + chub.db.sql dump) and return its bytes.
-
-    Uses SQLite's backup API to safely snapshot the database while it may be in
-    use. Shared by the download endpoint and the auto-backup maintenance thread.
-    """
-    config_path = get_config_path()
-    db_path = _get_db_path()
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        if os.path.exists(config_path):
-            zf.write(config_path, "config.yml")
-
-        if os.path.exists(db_path):
-            db_buf = io.BytesIO()
-            src = sqlite3.connect(db_path)
-            try:
-                mem = sqlite3.connect(":memory:")
-                src.backup(mem)
-                for line in mem.iterdump():
-                    db_buf.write(f"{line}\n".encode("utf-8"))
-                mem.close()
-            finally:
-                src.close()
-            db_buf.seek(0)
-            zf.writestr("chub.db.sql", db_buf.read())
-
-    return buf.getvalue()
-
-
-def save_backup(logger: Any = None) -> Path:
-    """Write a timestamped backup into the backups directory; return its path."""
-    data = build_backup_bytes()
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_path = _get_backup_dir(logger) / f"chub-backup-{timestamp}.zip"
-    backup_path.write_bytes(data)
-    if logger:
-        logger.info(f"Backup created: {backup_path.name}")
-    return backup_path
-
-
 @router.post(
     "/backup",
     summary="Create backup",
@@ -697,7 +597,7 @@ def create_backup(
 async def list_backups(logger: Any = Depends(get_logger)) -> JSONResponse:
     """List backup files in the backups directory."""
     try:
-        backup_dir = _get_backup_dir()
+        backup_dir = get_backup_dir()
         backups = []
         for f in sorted(backup_dir.glob("chub-backup-*.zip"), reverse=True):
             stat = f.stat()
@@ -822,7 +722,7 @@ async def restore_backup(
 
                 # If DB dump is included, save it for reference
                 if "chub.db.sql" in names:
-                    backup_dir = _get_backup_dir()
+                    backup_dir = get_backup_dir()
                     sql_path = backup_dir / "restored-db.sql"
                     sql_path.write_bytes(zf.read("chub.db.sql"))
                     restored_items.append(

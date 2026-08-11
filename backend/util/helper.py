@@ -345,6 +345,14 @@ def get_config_dir() -> str:
     return str(config_dir)
 
 
+def get_static_dir() -> Path:
+    """Get the frontend static directory (STATIC_DIR env, else templates/)."""
+    static_dir = os.environ.get("STATIC_DIR")
+    if static_dir:
+        return Path(static_dir)
+    return Path(__file__).resolve().parents[2] / "templates"
+
+
 def extract_year(text: str) -> Optional[int]:
     """Extract first 4-digit year from text, returns None if not found."""
     try:

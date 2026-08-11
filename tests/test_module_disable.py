@@ -41,6 +41,16 @@ def test_module_is_disabled_empty_default():
     assert module_is_disabled("poster_renamerr", cfg) is False
 
 
+def test_module_is_disabled_fails_closed_on_config_error(monkeypatch):
+    """An unreadable config must skip the run — these modules mutate the disk."""
+
+    def boom(*_a, **_kw):
+        raise RuntimeError("config.yml is unparseable")
+
+    monkeypatch.setattr("backend.util.config.load_config", boom)
+    assert module_is_disabled("poster_renamerr") is True
+
+
 def test_orchestrator_async_skips_disabled():
     orch = ModuleOrchestrator(logger=StubLogger())
     with patch("backend.util.config.module_is_disabled", return_value=True):

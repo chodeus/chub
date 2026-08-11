@@ -1,11 +1,11 @@
-"""Tests for backend.api.system._get_backup_dir — the configurable backup
+"""Tests for backend.util.backup.get_backup_dir — the configurable backup
 location. A backup landing in the wrong place beats one silently never written,
 so every failure path must fall back to CONFIG_DIR/backups, loudly."""
 
-import backend.api.system as system_mod
+import backend.util.backup as backup_mod
 
-_default_backup_dir = system_mod._default_backup_dir
-_get_backup_dir = system_mod._get_backup_dir
+_default_backup_dir = backup_mod._default_backup_dir
+_get_backup_dir = backup_mod.get_backup_dir
 
 
 class _Log:
@@ -25,8 +25,8 @@ class _Cfg:
 
 
 def _stub_config(monkeypatch, backup_dir="", allowed=True):
-    monkeypatch.setattr(system_mod, "load_config", lambda: _Cfg(backup_dir))
-    monkeypatch.setattr(system_mod, "is_path_allowed", lambda p, c: allowed)
+    monkeypatch.setattr(backup_mod, "load_config", lambda: _Cfg(backup_dir))
+    monkeypatch.setattr(backup_mod, "is_path_allowed", lambda p, c: allowed)
 
 
 def test_defaults_to_config_dir_when_unset(monkeypatch, tmp_path):
@@ -75,7 +75,7 @@ def test_unreadable_config_falls_back_and_logs(monkeypatch, tmp_path):
     def boom():
         raise RuntimeError("config.yml is unparseable")
 
-    monkeypatch.setattr(system_mod, "load_config", boom)
+    monkeypatch.setattr(backup_mod, "load_config", boom)
     logger = _Log()
 
     assert _get_backup_dir(logger) == _default_backup_dir()

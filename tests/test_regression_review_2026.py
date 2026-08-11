@@ -457,3 +457,108 @@ def test_redact_oauth_tokens_in_yaml_form():
     assert "1//0gLongRefreshTokenValue1234567890abcd" not in out
     assert "access_token: [redacted]" in out
     assert "refresh_token: [redacted]" in out
+
+
+# --- Round 3: backend correctness + perf audit ---
+
+
+class _StubLog:
+    def __getattr__(self, _):
+        return lambda *a, **k: None
+
+    def get_adapter(self, *_a, **_kw):
+        return self
+
+
+def _app(router, db=None):
+    app = FastAPI()
+    app.state.logger = _StubLog()
+    app.state.db = db
+    app.include_router(router)
+    return TestClient(app)
+
+
+# 18. /api/posters/list must resolve through STATIC_DIR, not a hardcoded
+#     templates/ path that doesn't exist in the Docker image (empty list).
+def test_poster_list_uses_static_dir(monkeypatch, tmp_path):
+    import backend.api.posters as posters
+
+    posters_dir = tmp_path / "posters"
+    posters_dir.mkdir()
+    (posters_dir / "default-movie.jpg").write_bytes(b"x")
+    (posters_dir / "notes.txt").write_text("ignored")
+    monkeypatch.setenv("STATIC_DIR", str(tmp_path))
+
+    resp = _app(posters.router).get("/api/posters/list")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["files"] == ["default-movie.jpg"]
+
+
+# 19a. has_rows_under_prefix must escape LIKE metacharacters, or a sibling
+#      folder makes the skip-on-zero-change guard wrongly believe rows exist.
+def test_has_rows_under_prefix_escapes_like_wildcards(db):
+    db.poster.upsert(_poster("/data/MyXMovies/p.jpg", "/data/MyXMovies"))
+
+    assert db.poster.has_rows_under_prefix("/data/MyXMovies") is True
+    assert db.poster.has_rows_under_prefix("/data/My_Movies") is False
+
+
+# 19b. poster_cache.search must escape too — the raw `title LIKE` branch keeps
+#      the metacharacters that normalize_titles strips.
+def test_poster_search_escapes_like_wildcards(db):
+    for title, tmdb_id in (("My_Movies", 1), ("MyXMovies", 2)):
+        item = _poster(f"/data/{title}/p.jpg", f"/data/{title}")
+        item.update(
+            title=title, normalized_title=normalize_titles(title), tmdb_id=tmdb_id
+        )
+        db.poster.upsert(item)
+
+    titles = {row["title"] for row in db.poster.search("My_Movies")["items"]}
+    assert titles == {"My_Movies"}
+
+
+# 19c. The tag→collection query must escape as well, or one tag silently
+#      sweeps in every similarly-named tag's media.
+def test_collection_from_tag_escapes_like_wildcards(db):
+    import backend.api.media_api as media_api
+
+    for title, tag in (("Dune", "4K_UHD"), ("Sicario", "4KxUHD")):
+        db.media.upsert(
+            {
+                "title": title,
+                "normalized_title": normalize_titles(title),
+                "year": 2021,
+                "tags": [tag],
+            },
+            "movie",
+            "radarr",
+            "radarr",
+        )
+
+    resp = _app(media_api.router, db).post(
+        "/api/media/collections/from-tag", json={"tag": "4K_UHD"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["matched_media"] == 1
+
+
+# 20. The duplicate-exclusion filter must not silently fail open: a config it
+#     can't read has to be flagged, since a bulk-delete button sits next to it.
+def test_duplicates_reports_when_exclusion_filter_not_applied(db, monkeypatch):
+    import backend.api.media_api as media_api
+    from backend.util.config import ChubConfig, ConfigError
+
+    client = _app(media_api.router, db)
+
+    cfg = ChubConfig()
+    cfg.general.duplicate_exclude_groups = [["radarr", "radarr4k"]]
+    monkeypatch.setattr(media_api, "load_config", lambda: cfg)
+    assert client.get("/api/media/duplicates").json()["data"]["filter_applied"] is True
+
+    def boom():
+        raise ConfigError("corrupt config")
+
+    monkeypatch.setattr(media_api, "load_config", boom)
+    body = client.get("/api/media/duplicates")
+    assert body.status_code == 200
+    assert body.json()["data"]["filter_applied"] is False

@@ -18,8 +18,8 @@ from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.arr import create_arr_client
-from backend.util.config import load_config
-from backend.util.database import ChubDB
+from backend.util.config import ConfigError, load_config
+from backend.util.database import ChubDB, escape_like
 from backend.util.ssrf_guard import is_safe_url, safe_external_get
 
 router = APIRouter(
@@ -425,6 +425,7 @@ async def get_collections(
                             ],
                             "total": 0,
                             "total_collisions": 2,
+                            "filter_applied": True,
                         },
                     }
                 }
@@ -464,18 +465,17 @@ async def get_duplicates(
         # quality group (configured in general.duplicate_exclude_groups).
         # e.g. [["radarr", "radarr4k"]] means radarr+radarr4k pairs
         # are intentional quality copies, not real duplicates.
+        filter_applied = True
         try:
-            from backend.util.config import load_config
-
             raw_groups = load_config().general.duplicate_exclude_groups
             if raw_groups:
-                # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}]
+                # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}].
+                # The field is List[Any] — skip malformed entries, don't raise.
                 exclude_sets = []
                 for g in raw_groups:
-                    if isinstance(g, dict):
-                        exclude_sets.append(set(g.get("instances", [])))
-                    else:
-                        exclude_sets.append(set(g))
+                    members = g.get("instances") if isinstance(g, dict) else g
+                    if isinstance(members, (list, tuple, set)):
+                        exclude_sets.append(set(members))
                 exclude_sets = [s for s in exclude_sets if len(s) >= 2]
 
                 if exclude_sets:
@@ -491,8 +491,13 @@ async def get_duplicates(
                     folder_collisions = [
                         d for d in folder_collisions if _not_excluded(d)
                     ]
-        except Exception:
-            pass  # Config not loaded — skip filtering
+        except ConfigError as cfg_err:
+            # Unfiltered results would report intentional quality pairs as
+            # duplicates next to a bulk-delete button — say so in the payload.
+            filter_applied = False
+            logger.warning(
+                f"duplicate_exclude_groups not applied (config unreadable): {cfg_err}"
+            )
 
         return ok(
             f"Found {len(duplicates)} duplicate groups, "
@@ -502,6 +507,7 @@ async def get_duplicates(
                 "folder_collisions": folder_collisions,
                 "total": len(duplicates),
                 "total_collisions": len(folder_collisions),
+                "filter_applied": filter_applied,
             },
         )
 
@@ -2050,8 +2056,8 @@ async def generate_collection_from_tag(
         media_rows = (
             db.worker.execute_query(
                 "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
-                "FROM media_cache WHERE tags LIKE ?",
-                (f"%{tag}%",),
+                "FROM media_cache WHERE tags LIKE ? ESCAPE '\\'",
+                (f"%{escape_like(tag)}%",),
                 fetch_all=True,
             )
             or []

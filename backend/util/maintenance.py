@@ -15,6 +15,8 @@ import threading
 import time
 from pathlib import Path
 
+from backend.util.backup import get_backup_dir, save_backup
+
 
 def _log_base() -> Path:
     """Resolve the logs base directory the same way the logger does."""
@@ -97,12 +99,8 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
 
 def run_auto_backup(keep: int, logger=None) -> None:
     """Write one backup and trim the directory to `keep` archives."""
-    # Imported lazily — backend.api.system pulls in FastAPI/router state that we
-    # don't want to import at module load (this util is imported early).
-    from backend.api.system import _get_backup_dir, save_backup
-
     save_backup(logger)
-    prune_old_backups(_get_backup_dir(logger), keep, logger)
+    prune_old_backups(get_backup_dir(logger), keep, logger)
 
 
 def _run_once(config, logger) -> None:

@@ -9,7 +9,7 @@ from backend.util.logger import Logger
 
 from .border_state import BorderState
 from .collection_cache import CollectionCache
-from .db_base import DatabaseBase
+from .db_base import DatabaseBase, escape_like
 from .holiday import HolidayStatus
 from .media_asset_matches import MediaAssetMatches
 from .media_cache import MediaCache
@@ -414,5 +414,6 @@ __all__ = [
     "MediaCache",
     "MediaAssetMatches",
     "WebhookCache",
+    "escape_like",
     "with_database",
 ]

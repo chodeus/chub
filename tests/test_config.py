@@ -12,6 +12,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+import backend.util.config as config_mod
 import backend.util.scheduler as scheduler
 from backend.modules.upgradinatorr import Upgradinatorr
 from backend.util.arr import LidarrClient
@@ -163,6 +164,44 @@ def test_save_config_creates_config_directory(tmp_path):
     save_config(ChubConfig(), str(config_path))
 
     assert config_path.exists()
+
+
+def test_load_config_caches_until_the_file_changes(tmp_path, monkeypatch):
+    """Repeat loads come from cache; a rewrite is picked up on the next load."""
+    config_path = str(tmp_path / "config.yml")
+    config = ChubConfig()
+    config.auth.username = "first"
+    save_config(config, config_path)
+
+    parses = []
+    real_safe_load = config_mod.yaml.safe_load
+    monkeypatch.setattr(
+        config_mod.yaml,
+        "safe_load",
+        lambda stream: (parses.append(1), real_safe_load(stream))[1],
+    )
+
+    assert load_config(config_path).auth.username == "first"
+    assert load_config(config_path).auth.username == "first"
+    assert len(parses) == 1
+
+    config.auth.username = "second"
+    save_config(config, config_path)
+    assert load_config(config_path).auth.username == "second"
+
+
+def test_load_config_does_not_share_mutable_state(tmp_path):
+    """Callers mutate what load_config returns before saving — never the cache."""
+    config_path = str(tmp_path / "config.yml")
+    save_config(ChubConfig(), config_path)
+
+    first = load_config(config_path)
+    first.auth.username = "never-saved"
+    first.general.disabled_modules.append("nohl")
+
+    second = load_config(config_path)
+    assert second.auth.username == ""
+    assert second.general.disabled_modules == []
 
 
 def test_legacy_notifications_auto_heal_on_load(tmp_path):
