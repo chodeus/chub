@@ -9,6 +9,7 @@ permissions:
 jobs:
   ghcr-delete-tag:
     runs-on: ubuntu-latest
+    timeout-minutes: 5  # a stalled GHCR request can't keep cleanup running
     if: github.event.ref_type == 'branch'
     # Serialize with the create/push publisher for this branch (raw ref matches
     # their ghcr-push group) so a delete never races a mid-publish.
@@ -40,7 +41,7 @@ jobs:
           # Branch on the HTTP status, not an empty digest: 404 = nothing to delete;
           # 401/429/5xx must fail loudly instead of being masked as "not found".
           headers="$(mktemp)"
-          status=$(curl -s -o /dev/null -D "$headers" -w '%{http_code}' \
+          status=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -D "$headers" -w '%{http_code}' \
             -H "Authorization: Bearer $GH_TOKEN" \
             -I "https://ghcr.io/v2/${REPO}/manifests/${TAG}")
           if [[ "$status" == "404" ]]; then
@@ -56,7 +57,7 @@ jobs:
             echo "::error::GHCR returned $status for $TAG but no docker-content-digest header"
             exit 1
           fi
-          del_status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+          del_status=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' -X DELETE \
             -H "Authorization: Bearer $GH_TOKEN" \
             "https://ghcr.io/v2/${REPO}/manifests/${DIGEST}")
           # A concurrent delete may have already removed it, so treat 404 as success too.
