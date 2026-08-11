@@ -29,8 +29,10 @@ def test_all_tracked_json_assets_parse():
     assert not failures, "Invalid JSON asset(s):\n" + "\n".join(failures)
 
 
-def test_release_manifest_version_is_semver():
-    """.release-please-manifest.json '.' is read at runtime by backend/util/version.py."""
+def test_release_manifest_is_stable_base_semver():
+    """Manifest '.' is the X.Y.Z base backend/util/version.py appends branch/build to."""
     manifest = json.loads((REPO_ROOT / ".release-please-manifest.json").read_text())
     assert "." in manifest, "manifest missing '.' key"
-    assert re.fullmatch(r"\d+\.\d+\.\d+", manifest["."].strip()), manifest["."]
+    # ASCII, no leading zeros; version.py splits this as the 3-component base.
+    semver = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    assert re.fullmatch(semver, manifest["."].strip()), manifest["."]

@@ -283,9 +283,14 @@ jobs:
             echo "$bad"
             exit 1
           fi
-          # The one allowed modification must be append-only: no main lines removed.
-          if git diff origin/main...HEAD -- deploy/docker/Dockerfile | grep -q '^-[^-]'; then
-            echo "::error::deploy/docker/Dockerfile removes lines present on main; develop must only append CL2K layers."
+          # Append-only = main's Dockerfile is an exact byte-PREFIX of develop's; a
+          # mid-file insertion adds no `-` line, so a diff `^-` check would miss it.
+          base="$(git merge-base origin/main HEAD)"
+          base_df="$(mktemp)"
+          git show "$base:deploy/docker/Dockerfile" > "$base_df"
+          n=$(wc -c < "$base_df")
+          if ! head -c "$n" deploy/docker/Dockerfile | cmp -s "$base_df" -; then
+            echo "::error::deploy/docker/Dockerfile is not append-only vs main (mid-file edit or removal); develop must only append CL2K layers."
             exit 1
           fi
           echo "OK: develop differs from main only by added files + append-only Dockerfile."
