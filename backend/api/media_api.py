@@ -425,7 +425,6 @@ async def get_collections(
                             ],
                             "total": 0,
                             "total_collisions": 2,
-                            "filter_applied": True,
                         },
                     }
                 }
@@ -465,39 +464,29 @@ async def get_duplicates(
         # quality group (configured in general.duplicate_exclude_groups).
         # e.g. [["radarr", "radarr4k"]] means radarr+radarr4k pairs
         # are intentional quality copies, not real duplicates.
-        filter_applied = True
-        try:
-            raw_groups = load_config().general.duplicate_exclude_groups
-            if raw_groups:
-                # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}].
-                # The field is List[Any] — skip malformed entries, don't raise.
-                exclude_sets = []
-                for g in raw_groups:
-                    members = g.get("instances") if isinstance(g, dict) else g
-                    if isinstance(members, (list, tuple, set)):
-                        exclude_sets.append(set(members))
-                exclude_sets = [s for s in exclude_sets if len(s) >= 2]
+        raw_groups = load_config().general.duplicate_exclude_groups
+        if raw_groups:
+            # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}].
+            # The field is List[Any] — skip malformed entries, don't raise.
+            exclude_sets = []
+            for g in raw_groups:
+                members = g.get("instances") if isinstance(g, dict) else g
+                if isinstance(members, (list, tuple, set)) and all(
+                    isinstance(m, str) and m.strip() for m in members
+                ):
+                    exclude_sets.append({m.strip() for m in members})
+            exclude_sets = [s for s in exclude_sets if len(s) >= 2]
 
-                if exclude_sets:
+            if exclude_sets:
 
-                    def _not_excluded(dup):
-                        raw = dup.get("instances", "")
-                        instances = {s.strip() for s in raw.split(",") if s.strip()}
-                        return not any(
-                            instances.issubset(group) for group in exclude_sets
-                        )
+                def _not_excluded(dup):
+                    """True when this group isn't wholly inside one exclude set."""
+                    raw = dup.get("instances", "")
+                    instances = {s.strip() for s in raw.split(",") if s.strip()}
+                    return not any(instances.issubset(group) for group in exclude_sets)
 
-                    duplicates = [d for d in duplicates if _not_excluded(d)]
-                    folder_collisions = [
-                        d for d in folder_collisions if _not_excluded(d)
-                    ]
-        except ConfigError as cfg_err:
-            # Unfiltered results would report intentional quality pairs as
-            # duplicates next to a bulk-delete button — say so in the payload.
-            filter_applied = False
-            logger.warning(
-                f"duplicate_exclude_groups not applied (config unreadable): {cfg_err}"
-            )
+                duplicates = [d for d in duplicates if _not_excluded(d)]
+                folder_collisions = [d for d in folder_collisions if _not_excluded(d)]
 
         return ok(
             f"Found {len(duplicates)} duplicate groups, "
@@ -507,10 +496,13 @@ async def get_duplicates(
                 "folder_collisions": folder_collisions,
                 "total": len(duplicates),
                 "total_collisions": len(folder_collisions),
-                "filter_applied": filter_applied,
             },
         )
 
+    except ConfigError:
+        # Deny: unfiltered results report intentional quality pairs as
+        # duplicates next to a bulk-delete button. main.py's handler answers.
+        raise
     except Exception as e:
         logger.error(f"Error finding duplicates: {e}")
         return error(
@@ -2043,6 +2035,7 @@ async def generate_collection_from_tag(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Build a poster_collection from every media row carrying `tag`."""
     try:
         payload = await request.json()
         tag = (payload.get("tag") or "").strip()

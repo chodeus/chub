@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 
 from backend.util.backup import get_backup_dir, save_backup
+from backend.util.config import load_config
+from backend.util.path_safety import is_path_allowed
 
 
 def _log_base() -> Path:
@@ -54,17 +56,10 @@ def prune_old_logs(retention_days: int, logger=None) -> int:
     return removed
 
 
-def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
-    """Keep only the newest `keep` chub-backup archives. Returns the count removed."""
+def prune_old_backups(backup_dir: Path, keep: int, logger=None, config=None) -> int:
+    """Keep only the newest `keep` chub-backup archives; returns the count removed.
+    `config` re-confines the RESOLVED root right before deleting (stale-check guard)."""
     if keep <= 0:
-        return 0
-    try:
-        backups = sorted(
-            backup_dir.glob("chub-backup-*.zip"),
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
-    except OSError:
         return 0
 
     try:
@@ -75,12 +70,24 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
 
     removed = 0
     try:
+        # Before any listing: a component of backup_dir can be re-pointed
+        # after get_backup_dir() authorised it, so resolve() may land outside.
+        if config is not None and not is_path_allowed(str(root), config):
+            if logger:
+                logger.error(f"Refusing to prune '{root}': outside the allowed roots")
+            return 0
+
+        backups = sorted(
+            root.glob("chub-backup-*.zip"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
         for old in backups[keep:]:
             try:
                 # NEVER resolve-then-unlink: that deletes a symlink's TARGET.
-                # lstat + S_ISREG rejects links and dirs; unlinking by name
-                # against dir_fd stops a swapped parent redirecting the delete.
-                st = os.lstat(os.path.join(str(root), old.name))
+                # lstat + S_ISREG rejects links and dirs; both it and the
+                # unlink go through dir_fd so a swapped parent can't redirect.
+                st = os.lstat(old.name, dir_fd=dir_fd)
                 if not stat.S_ISREG(st.st_mode):
                     if logger:
                         logger.warning(f"Skipping non-regular backup entry: {old}")
@@ -90,6 +97,8 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
             except OSError as e:
                 if logger:
                     logger.debug(f"Could not prune backup {old}: {e}")
+    except OSError:
+        return removed
     finally:
         os.close(dir_fd)
     if removed and logger:
@@ -100,7 +109,8 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
 def run_auto_backup(keep: int, logger=None) -> None:
     """Write one backup and trim the directory to `keep` archives."""
     save_backup(logger)
-    prune_old_backups(get_backup_dir(logger), keep, logger)
+    root = get_backup_dir(logger)
+    prune_old_backups(root, keep, logger, config=load_config())
 
 
 def _run_once(config, logger) -> None:
@@ -131,11 +141,10 @@ def start_maintenance(config, logger, interval: int = 86400) -> threading.Thread
     """
 
     def loop():
+        """Wake once per `interval` and run a pass against freshly loaded config."""
         while True:
             time.sleep(interval)
             try:
-                from backend.util.config import load_config
-
                 current = load_config()
             except Exception:
                 current = config

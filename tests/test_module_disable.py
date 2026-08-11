@@ -45,6 +45,7 @@ def test_module_is_disabled_fails_closed_on_config_error(monkeypatch):
     """An unreadable config must skip the run — these modules mutate the disk."""
 
     def boom(*_a, **_kw):
+        """Stand-in load_config that fails."""
         raise RuntimeError("config.yml is unparseable")
 
     monkeypatch.setattr("backend.util.config.load_config", boom)

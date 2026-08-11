@@ -428,6 +428,7 @@ async def module_events(request: Request):
     from backend.modules import MODULES
 
     async def event_generator():
+        """Yield an SSE frame whenever any module's run state changes."""
         previous_states = {}
         try:
             while True:
@@ -439,6 +440,7 @@ async def module_events(request: Request):
                 # the event loop — otherwise each tick blocks the loop (and all
                 # other requests/streams) for the duration of the queries.
                 def _poll_states():
+                    """Read every module's current run state from the db."""
                     states_by_name = {}
                     with ChubDB(request.app.state.logger, quiet=True) as db:
                         run_states = db.run_state.get_all()

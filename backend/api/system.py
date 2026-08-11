@@ -580,6 +580,8 @@ def create_backup(
             headers={"Content-Disposition": f"attachment; filename={backup_path.name}"},
         )
 
+    except ConfigError:
+        raise  # deny — main.py's handler returns CONFIG_INVALID
     except Exception as e:
         logger.error(f"Backup creation failed: {e}")
         return error(
@@ -609,6 +611,8 @@ async def list_backups(logger: Any = Depends(get_logger)) -> JSONResponse:
                 }
             )
         return ok(f"Found {len(backups)} backups", {"backups": backups})
+    except ConfigError:
+        raise  # deny — main.py's handler returns CONFIG_INVALID
     except Exception as e:
         logger.error(f"Error listing backups: {e}")
         return error("Error listing backups", code="BACKUP_LIST_ERROR", status_code=500)
@@ -657,6 +661,7 @@ async def restore_backup(
         # The zip parse + yaml validation + file writes are blocking; run them
         # off the event loop so a large upload doesn't stall the whole server.
         def _do_restore() -> JSONResponse:
+            """Validate the zip and write config.yml back; blocking."""
             buf = io.BytesIO(content)
 
             if not zipfile.is_zipfile(buf):
@@ -737,6 +742,8 @@ async def restore_backup(
 
         return await run_in_threadpool(_do_restore)
 
+    except ConfigError:
+        raise  # deny — main.py's handler returns CONFIG_INVALID
     except Exception as e:
         logger.error(f"Restore failed: {e}")
         return error("Restore failed", code="RESTORE_ERROR", status_code=500)

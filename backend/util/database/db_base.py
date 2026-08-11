@@ -9,19 +9,19 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 from backend.util.logger import Logger
 
 
-# Files this process has already schema-synced (by _schema_file_identity) — every
-# interface construction calls init_schema, else one request re-syncs 24 tables N×.
+# Files already schema-synced (by _schema_file_state) — every construction calls
+# init_schema, else 24-table re-syncs N×. RLock: SchemaManager imports under it.
 _SCHEMA_SYNCED: set = set()
-_SCHEMA_SYNCED_LOCK = threading.Lock()
+_SCHEMA_SYNCED_LOCK = threading.RLock()
 
 
-def _schema_file_identity(db_path: str):
-    """Identity of the db FILE (device+inode); None when it doesn't exist yet."""
+def _schema_file_state(db_path: str) -> Tuple[Optional[Tuple], int]:
+    """(identity, size) of the db FILE; (None, 0) when it doesn't exist yet."""
     try:
         st = os.stat(db_path)
     except OSError:
-        return None
-    return (os.path.abspath(db_path), st.st_dev, st.st_ino)
+        return None, 0
+    return (os.path.abspath(db_path), st.st_dev, st.st_ino), st.st_size
 
 
 def escape_like(value: str) -> str:
@@ -188,22 +188,23 @@ class DatabaseBase:
         """Initialize database schema — skips files already synced this process."""
         from .schema import SchemaManager
 
-        # Gated per db FILE: a replaced/deleted db gets a new identity and
-        # re-syncs itself, so only an in-place definition change needs force.
-        identity = _schema_file_identity(db_path)
-        if not force and identity is not None:
-            with _SCHEMA_SYNCED_LOCK:
-                if identity in _SCHEMA_SYNCED:
-                    return
+        # Held across the DDL, not just the lookup: two threads that both miss
+        # the set would otherwise run SchemaManager concurrently and collide.
+        with _SCHEMA_SYNCED_LOCK:
+            # size: a deleted+recreated db can REUSE the inode, so identity
+            # alone would skip a 0-byte file that has no schema yet.
+            identity, size = _schema_file_state(db_path)
+            if not force and size > 0 and identity in _SCHEMA_SYNCED:
+                return
 
-        conn = sqlite3.connect(db_path)
-        try:
-            SchemaManager.init_database(conn)
-        finally:
-            conn.close()
+            conn = sqlite3.connect(db_path, timeout=30)
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+                SchemaManager.init_database(conn)
+            finally:
+                conn.close()
 
-        # Re-stat: the file may not have existed before connect() created it.
-        identity = _schema_file_identity(db_path)
-        if identity is not None:
-            with _SCHEMA_SYNCED_LOCK:
+            # Re-stat: the file may not have existed before connect() created it.
+            identity, _ = _schema_file_state(db_path)
+            if identity is not None:
                 _SCHEMA_SYNCED.add(identity)

@@ -15,6 +15,9 @@ from typing import Any
 from backend.util.config import get_config_path, load_config
 from backend.util.path_safety import is_path_allowed
 
+# Suffixes tried when two backups land in the same second (-1 .. -N).
+_SAVE_COLLISION_RETRIES = 100
+
 
 def _get_db_path() -> str:
     """Get the SQLite database path."""
@@ -33,19 +36,14 @@ def _default_backup_dir() -> Path:
 
 
 def get_backup_dir(logger: Any = None) -> Path:
-    """Resolve general.backup_dir, falling back to CONFIG_DIR/backups."""
+    """Resolve general.backup_dir (default CONFIG_DIR/backups); propagates
+    ConfigError — callers must deny rather than guess a location."""
     default = _default_backup_dir()
 
-    configured = ""
-    config = None
-    try:
-        config = load_config()
-        configured = (getattr(config.general, "backup_dir", "") or "").strip()
-    except Exception as exc:
-        if logger:
-            logger.error(f"Could not read backup_dir from config: {exc}")
+    config = load_config()
+    configured = (getattr(config.general, "backup_dir", "") or "").strip()
 
-    if configured and config is not None:
+    if configured:
         if not is_path_allowed(configured, config):
             if logger:
                 logger.error(
@@ -106,10 +104,25 @@ def build_backup_bytes() -> bytes:
 
 def save_backup(logger: Any = None) -> Path:
     """Write a timestamped backup into the backups directory; return its path."""
+    # Resolve the destination first — a config error must not cost a full dump.
+    directory = get_backup_dir(logger)
     data = build_backup_bytes()
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_path = get_backup_dir(logger) / f"chub-backup-{timestamp}.zip"
-    backup_path.write_bytes(data)
+    stem = f"chub-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+    for attempt in range(_SAVE_COLLISION_RETRIES):
+        suffix = "" if attempt == 0 else f"-{attempt}"
+        backup_path = directory / f"{stem}{suffix}.zip"
+        try:
+            # "xb", never write_bytes: the name is second-precision, so a
+            # concurrent API + maintenance backup would truncate each other.
+            with open(backup_path, "xb") as fh:
+                fh.write(data)
+        except FileExistsError:
+            continue
+        break
+    else:
+        raise OSError(f"No free backup filename for {stem} in {directory}")
+
     if logger:
         logger.info(f"Backup created: {backup_path.name}")
     return backup_path

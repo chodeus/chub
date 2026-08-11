@@ -10,6 +10,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend.api.main import handle_config_error
+from backend.util.config import ChubConfig, ConfigError, ConfigParseError
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
 
@@ -463,24 +465,32 @@ def test_redact_oauth_tokens_in_yaml_form():
 
 
 class _StubLog:
+    """Swallows every log call; get_adapter returns itself."""
+
     def __getattr__(self, _):
+        """Any log method is a no-op."""
         return lambda *a, **k: None
 
     def get_adapter(self, *_a, **_kw):
+        """Adapters are the same sink."""
         return self
 
 
 def _app(router, db=None):
+    """Mount `router` on a bare app carrying main.py's real ConfigError handler."""
     app = FastAPI()
     app.state.logger = _StubLog()
     app.state.db = db
+    app.add_exception_handler(ConfigError, handle_config_error)
     app.include_router(router)
-    return TestClient(app)
+    # raise_server_exceptions=False so the handler answers instead of re-raising.
+    return TestClient(app, raise_server_exceptions=False)
 
 
 # 18. /api/posters/list must resolve through STATIC_DIR, not a hardcoded
 #     templates/ path that doesn't exist in the Docker image (empty list).
 def test_poster_list_uses_static_dir(monkeypatch, tmp_path):
+    """The list endpoint reads STATIC_DIR/posters, not templates/posters."""
     import backend.api.posters as posters
 
     posters_dir = tmp_path / "posters"
@@ -497,6 +507,7 @@ def test_poster_list_uses_static_dir(monkeypatch, tmp_path):
 # 19a. has_rows_under_prefix must escape LIKE metacharacters, or a sibling
 #      folder makes the skip-on-zero-change guard wrongly believe rows exist.
 def test_has_rows_under_prefix_escapes_like_wildcards(db):
+    """`_` in a folder name must not wildcard-match a sibling folder."""
     db.poster.upsert(_poster("/data/MyXMovies/p.jpg", "/data/MyXMovies"))
 
     assert db.poster.has_rows_under_prefix("/data/MyXMovies") is True
@@ -506,6 +517,7 @@ def test_has_rows_under_prefix_escapes_like_wildcards(db):
 # 19b. poster_cache.search must escape too — the raw `title LIKE` branch keeps
 #      the metacharacters that normalize_titles strips.
 def test_poster_search_escapes_like_wildcards(db):
+    """The raw `title LIKE` branch keeps metacharacters — escape them too."""
     for title, tmdb_id in (("My_Movies", 1), ("MyXMovies", 2)):
         item = _poster(f"/data/{title}/p.jpg", f"/data/{title}")
         item.update(
@@ -520,6 +532,7 @@ def test_poster_search_escapes_like_wildcards(db):
 # 19c. The tag→collection query must escape as well, or one tag silently
 #      sweeps in every similarly-named tag's media.
 def test_collection_from_tag_escapes_like_wildcards(db):
+    """One tag must not sweep in every similarly-named tag's media."""
     import backend.api.media_api as media_api
 
     for title, tag in (("Dune", "4K_UHD"), ("Sicario", "4KxUHD")):
@@ -542,23 +555,42 @@ def test_collection_from_tag_escapes_like_wildcards(db):
     assert resp.json()["data"]["matched_media"] == 1
 
 
-# 20. The duplicate-exclusion filter must not silently fail open: a config it
-#     can't read has to be flagged, since a bulk-delete button sits next to it.
-def test_duplicates_reports_when_exclusion_filter_not_applied(db, monkeypatch):
+# 20. The duplicate-exclusion filter must fail CLOSED: a config it can't read
+#     has to deny, since a bulk-delete button sits next to these results.
+def test_duplicates_denies_when_config_unreadable(db, monkeypatch):
+    """An unreadable config yields CONFIG_INVALID, never unfiltered duplicates."""
     import backend.api.media_api as media_api
-    from backend.util.config import ChubConfig, ConfigError
 
     client = _app(media_api.router, db)
 
     cfg = ChubConfig()
     cfg.general.duplicate_exclude_groups = [["radarr", "radarr4k"]]
     monkeypatch.setattr(media_api, "load_config", lambda: cfg)
-    assert client.get("/api/media/duplicates").json()["data"]["filter_applied"] is True
+    assert client.get("/api/media/duplicates").status_code == 200
 
     def boom():
-        raise ConfigError("corrupt config")
+        """Stand-in load_config that fails."""
+        raise ConfigParseError("corrupt config")
 
     monkeypatch.setattr(media_api, "load_config", boom)
     body = client.get("/api/media/duplicates")
-    assert body.status_code == 200
-    assert body.json()["data"]["filter_applied"] is False
+    assert body.status_code == 500
+    assert body.json()["error_code"] == "CONFIG_INVALID"
+
+
+# 20b. duplicate_exclude_groups is List[Any] — a non-string member must skip
+#      that group, not blow up set() and surface as DUPLICATES_ERROR.
+def test_duplicates_skips_malformed_exclude_group_members(db, monkeypatch):
+    """A group holding an unhashable member is skipped, not a 500."""
+    import backend.api.media_api as media_api
+
+    cfg = ChubConfig()
+    cfg.general.duplicate_exclude_groups = [
+        [{"instances": "nope"}, "radarr4k"],
+        ["radarr", "radarr4k"],
+    ]
+    monkeypatch.setattr(media_api, "load_config", lambda: cfg)
+
+    resp = _app(media_api.router, db).get("/api/media/duplicates")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
