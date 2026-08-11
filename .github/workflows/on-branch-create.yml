@@ -21,11 +21,17 @@ jobs:
     # CI fix can be re-tested against an existing branch without having
     # to delete + recreate it).
     if: github.event_name == 'workflow_dispatch' || github.event.ref_type == 'branch'
+    # `create` sets GITHUB_REF to the default branch; REF is the real target
+    # (event.ref on create, ref_name on dispatch). Kept out of run: shells.
+    env:
+      REF: ${{ github.event_name == 'create' && github.event.ref || github.ref_name }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          # Build the CREATED branch, not the default one github.ref points at.
+          ref: ${{ github.event_name == 'create' && github.event.ref || github.ref_name }}
           fetch-depth: 0
 
       - name: Set up QEMU
@@ -37,13 +43,21 @@ jobs:
       - name: Get the new branch name
         id: get_branch
         run: |
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          # Docker tags can't contain `/` — convention-style names like
-          # feat/foo or fix/bar would otherwise fail with "invalid reference
-          # format". Keep BRANCH_NAME as the human-readable build-arg, but
-          # expose a sanitized BRANCH_TAG for the registry tag.
-          BRANCH_TAG="${BRANCH_NAME//\//-}"
-          echo "BRANCH_NAME=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
+          # REF is the real branch (event.ref on create/delete, ref_name on
+          # dispatch); GITHUB_REF would be the default branch on create/delete.
+          name="${REF#refs/heads/}"
+          # Collision-safe tag (shared with codeql-lint docker-push): clean names
+          # <=128 chars pass through, else truncate+digest so feat/foo != feat-foo.
+          sanitized="${name//[^A-Za-z0-9_.-]/-}"
+          sanitized="$(printf '%s' "$sanitized" | sed -E 's/^[.-]+//')"
+          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ] && [ "${#sanitized}" -le 128 ]; then
+            BRANCH_TAG="$sanitized"
+          else
+            hash="$(printf '%s' "$name" | sha256sum | cut -c1-12)"
+            base="${sanitized:0:100}"; [ -n "$base" ] || base="branch"
+            BRANCH_TAG="${base}-${hash}"
+          fi
+          echo "BRANCH_NAME=${name}" >> "$GITHUB_OUTPUT"
           echo "BRANCH_TAG=${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Set build number
