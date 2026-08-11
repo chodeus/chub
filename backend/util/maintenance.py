@@ -56,9 +56,9 @@ def prune_old_logs(retention_days: int, logger=None) -> int:
     return removed
 
 
-def prune_old_backups(backup_dir: Path, keep: int, logger=None, config=None) -> int:
+def prune_old_backups(backup_dir: Path, keep: int, config, logger=None) -> int:
     """Keep only the newest `keep` chub-backup archives; returns the count removed.
-    `config` re-confines the RESOLVED root right before deleting (stale-check guard)."""
+    `config` is REQUIRED — it re-confines the RESOLVED root right before deleting."""
     if keep <= 0:
         return 0
 
@@ -72,7 +72,7 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None, config=None) -> 
     try:
         # Before any listing: a component of backup_dir can be re-pointed
         # after get_backup_dir() authorised it, so resolve() may land outside.
-        if config is not None and not is_path_allowed(str(root), config):
+        if not is_path_allowed(str(root), config):
             if logger:
                 logger.error(f"Refusing to prune '{root}': outside the allowed roots")
             return 0
@@ -85,8 +85,7 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None, config=None) -> 
         for old in backups[keep:]:
             try:
                 # NEVER resolve-then-unlink: that deletes a symlink's TARGET.
-                # lstat + S_ISREG rejects links and dirs; both it and the
-                # unlink go through dir_fd so a swapped parent can't redirect.
+                # lstat+S_ISREG rejects links/dirs; dir_fd anchors both calls.
                 st = os.lstat(old.name, dir_fd=dir_fd)
                 if not stat.S_ISREG(st.st_mode):
                     if logger:
@@ -110,7 +109,7 @@ def run_auto_backup(keep: int, logger=None) -> None:
     """Write one backup and trim the directory to `keep` archives."""
     save_backup(logger)
     root = get_backup_dir(logger)
-    prune_old_backups(root, keep, logger, config=load_config())
+    prune_old_backups(root, keep, load_config(), logger)
 
 
 def _run_once(config, logger) -> None:
@@ -131,14 +130,9 @@ def _run_once(config, logger) -> None:
             logger.error(f"Log pruning failed: {e}")
 
 
-def start_maintenance(config, logger, interval: int = 86400) -> threading.Thread:
-    """Start the daily maintenance daemon thread and return it.
-
-    Config is loaded fresh each pass (the reference on config-reload is replaced,
-    not mutated) so settings changes take effect without a restart. The first
-    pass runs after `interval` so a just-restarted container doesn't back up on
-    every boot.
-    """
+def start_maintenance(logger, interval: int = 86400) -> threading.Thread:
+    """Start the daily maintenance daemon thread and return it. Config is loaded
+    fresh each pass; the first pass waits `interval` (no backup on every boot)."""
 
     def loop():
         """Wake once per `interval` and run a pass against freshly loaded config."""
@@ -146,8 +140,12 @@ def start_maintenance(config, logger, interval: int = 86400) -> threading.Thread
             time.sleep(interval)
             try:
                 current = load_config()
-            except Exception:
-                current = config
+            except Exception as e:
+                # Never fall back to the startup snapshot: these passes delete
+                # files, and stale retention/paths would delete the wrong ones.
+                if logger:
+                    logger.warning(f"Maintenance pass skipped, config unreadable: {e}")
+                continue
             _run_once(current, logger)
 
     thread = threading.Thread(target=loop, name="maintenance", daemon=True)

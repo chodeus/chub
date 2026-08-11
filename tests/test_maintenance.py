@@ -3,7 +3,15 @@
 import time
 from unittest.mock import MagicMock
 
+from backend.util.config import ChubConfig
 from backend.util.maintenance import prune_old_backups, prune_old_logs
+
+
+def _allowing(root):
+    """A config whose allowed roots cover `root`, so prune may delete under it."""
+    config = ChubConfig()
+    config.poster_renamerr.source_dirs = [str(root)]
+    return config
 
 
 def _touch(path, age_days=0):
@@ -40,11 +48,14 @@ def test_prune_old_logs_removes_only_stale(tmp_path, monkeypatch):
 
 
 def test_prune_old_backups_keeps_newest(tmp_path):
+    """Only the newest `keep` archives survive a prune."""
     for i in range(5):
         f = tmp_path / f"chub-backup-2026010{i}-000000.zip"
         _touch(f, age_days=5 - i)  # i=0 oldest, i=4 newest
 
-    removed = prune_old_backups(tmp_path, keep=2, logger=MagicMock())
+    removed = prune_old_backups(
+        tmp_path, keep=2, config=_allowing(tmp_path), logger=MagicMock()
+    )
     assert removed == 3
     remaining = sorted(p.name for p in tmp_path.glob("chub-backup-*.zip"))
     # Newest two (i=3, i=4) survive
@@ -55,6 +66,12 @@ def test_prune_old_backups_keeps_newest(tmp_path):
 
 
 def test_prune_old_backups_keep_zero_is_noop(tmp_path):
+    """keep=0 disables pruning entirely."""
     _touch(tmp_path / "chub-backup-20260101-000000.zip")
-    assert prune_old_backups(tmp_path, keep=0, logger=MagicMock()) == 0
+    assert (
+        prune_old_backups(
+            tmp_path, keep=0, config=_allowing(tmp_path), logger=MagicMock()
+        )
+        == 0
+    )
     assert list(tmp_path.glob("chub-backup-*.zip"))

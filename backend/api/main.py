@@ -301,7 +301,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             if "startup_config" in locals() and startup_config is not None:
                 from backend.util.maintenance import start_maintenance
 
-                app.state.maintenance_thread = start_maintenance(startup_config, logger)
+                app.state.maintenance_thread = start_maintenance(logger)
         except Exception as e:
             if log:
                 log.error(f"Failed to start maintenance thread: {e}")

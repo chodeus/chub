@@ -1,10 +1,12 @@
 """Deletion safety for prune_old_backups.
 
 backup_dir is user-configurable, so the prune loop deletes from a path the user
-supplied. It must remove the directory entry itself, never follow a link, and —
-given a config — re-confine the RESOLVED root before touching anything."""
+supplied. It must remove the directory entry itself, never follow a link, and
+re-confine the RESOLVED root against the config before touching anything — and
+the maintenance thread must never drive it from a stale config."""
 
 import os
+import threading
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -38,6 +40,13 @@ class _Log:
         self.errors.append(str(msg))
 
 
+def _allowing(root):
+    """A config whose allowed roots cover `root`, so prune may delete under it."""
+    config = ChubConfig()
+    config.poster_renamerr.source_dirs = [str(root)]
+    return config
+
+
 def _archive(directory, name, age=0, body="zip"):
     """Write an archive whose mtime is `age` days before the base timestamp."""
     path = directory / name
@@ -57,7 +66,9 @@ def test_prunes_oldest_and_keeps_newest(tmp_path):
     for i in range(5):
         _archive(tmp_path, f"chub-backup-2026080{i}-000000.zip", age=i)
 
-    removed = maintenance.prune_old_backups(tmp_path, keep=2)
+    removed = maintenance.prune_old_backups(
+        tmp_path, keep=2, config=_allowing(tmp_path)
+    )
 
     assert removed == 3
     survivors = {p.name for p in tmp_path.glob("chub-backup-*.zip")}
@@ -83,7 +94,9 @@ def test_a_symlinked_backup_never_unlinks_its_target(tmp_path):
     link.symlink_to(precious)
 
     logger = _Log()
-    maintenance.prune_old_backups(backups, keep=2, logger=logger)
+    maintenance.prune_old_backups(
+        backups, keep=2, config=_allowing(tmp_path), logger=logger
+    )
 
     assert precious.exists(), "prune followed the symlink and deleted its target"
     assert link.is_symlink(), "the link itself should be left alone, not resolved"
@@ -99,7 +112,9 @@ def test_a_directory_named_like_a_backup_is_skipped(tmp_path):
     _age(stray, 2)
 
     logger = _Log()
-    removed = maintenance.prune_old_backups(tmp_path, keep=2, logger=logger)
+    removed = maintenance.prune_old_backups(
+        tmp_path, keep=2, config=_allowing(tmp_path), logger=logger
+    )
 
     assert removed == 0
     assert (tmp_path / "chub-backup-20260801-000000.zip").is_dir()
@@ -109,14 +124,16 @@ def test_keep_zero_or_negative_is_a_noop(tmp_path):
     """keep <= 0 disables pruning entirely."""
     _archive(tmp_path, "chub-backup-20260803-000000.zip")
 
-    assert maintenance.prune_old_backups(tmp_path, keep=0) == 0
-    assert maintenance.prune_old_backups(tmp_path, keep=-1) == 0
+    config = _allowing(tmp_path)
+    assert maintenance.prune_old_backups(tmp_path, keep=0, config=config) == 0
+    assert maintenance.prune_old_backups(tmp_path, keep=-1, config=config) == 0
     assert len(list(tmp_path.glob("chub-backup-*.zip"))) == 1
 
 
 def test_missing_directory_returns_zero(tmp_path):
     """A backup_dir that doesn't exist prunes nothing rather than raising."""
-    assert maintenance.prune_old_backups(tmp_path / "nope", keep=1) == 0
+    config = _allowing(tmp_path)
+    assert maintenance.prune_old_backups(tmp_path / "nope", keep=1, config=config) == 0
 
 
 def test_unconfined_root_deletes_nothing(tmp_path):
@@ -126,7 +143,9 @@ def test_unconfined_root_deletes_nothing(tmp_path):
     logger = _Log()
 
     # A default ChubConfig's allowed roots are CONFIG_DIR + mounts, never tmp_path.
-    removed = maintenance.prune_old_backups(tmp_path, keep=1, logger=logger, config=ChubConfig())
+    removed = maintenance.prune_old_backups(
+        tmp_path, keep=1, config=ChubConfig(), logger=logger
+    )
 
     assert removed == 0
     assert len(list(tmp_path.glob("chub-backup-*.zip"))) == 4
@@ -140,15 +159,14 @@ def test_confined_root_still_prunes(tmp_path):
     for i in range(4):
         _archive(backups, f"chub-backup-2026080{i}-000000.zip", age=i)
 
-    config = ChubConfig()
-    config.poster_renamerr.source_dirs = [str(tmp_path)]
-
-    assert maintenance.prune_old_backups(backups, keep=1, config=config) == 3
+    assert (
+        maintenance.prune_old_backups(backups, keep=1, config=_allowing(tmp_path)) == 3
+    )
     assert len(list(backups.glob("chub-backup-*.zip"))) == 1
 
 
 def test_auto_backup_hands_prune_a_config(monkeypatch, tmp_path):
-    """The confinement is fail-open without a config — the caller must pass one."""
+    """The caller must hand prune the config that authorises the delete."""
     captured = {}
     monkeypatch.setattr(maintenance, "save_backup", lambda logger=None: None)
     monkeypatch.setattr(maintenance, "get_backup_dir", lambda logger=None: tmp_path)
@@ -156,7 +174,7 @@ def test_auto_backup_hands_prune_a_config(monkeypatch, tmp_path):
     monkeypatch.setattr(
         maintenance,
         "prune_old_backups",
-        lambda d, k, lg=None, config=None: captured.update(config=config),
+        lambda d, k, config, lg=None: captured.update(config=config),
     )
 
     maintenance.run_auto_backup(3)
@@ -174,3 +192,40 @@ def test_auto_backup_failure_skips_the_cycle_without_killing_the_thread():
         maintenance._run_once(SimpleNamespace(general=general), logger)
 
     assert any("Auto-backup failed" in e for e in logger.errors)
+
+
+class _OneShotClock:
+    """time stand-in that lets exactly one loop iteration through."""
+
+    def __init__(self):
+        """Start with no sleeps recorded."""
+        self.sleeps = 0
+        self.done = threading.Event()
+
+    def sleep(self, _seconds):
+        """Park the daemon thread on the second wake rather than raising out of it."""
+        self.sleeps += 1
+        if self.sleeps > 1:
+            self.done.set()
+            threading.Event().wait()
+
+
+def test_pass_is_skipped_when_config_will_not_load(monkeypatch):
+    """A pass must never run against the startup snapshot — retention goes stale."""
+    ran = []
+    logger = _Log()
+    clock = _OneShotClock()
+
+    def boom():
+        """Stand-in load_config that fails."""
+        raise ConfigParseError("config.yml is unparseable")
+
+    monkeypatch.setattr(maintenance, "time", clock)
+    monkeypatch.setattr(maintenance, "load_config", boom)
+    monkeypatch.setattr(maintenance, "_run_once", lambda cfg, lg: ran.append(cfg))
+
+    maintenance.start_maintenance(logger, interval=0)
+    assert clock.done.wait(timeout=5), "the maintenance loop never completed a pass"
+
+    assert ran == [], "ran the destructive pass against the stale startup config"
+    assert any("config unreadable" in w for w in logger.warnings)
