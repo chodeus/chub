@@ -11,6 +11,12 @@ permissions:
 jobs:
   docker-tag:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Shares codeql-lint/release-please's ghcr-push group so same-ref builds take
+    # turns; caps a wedged arm64 build at 45m instead of the 6h default.
+    concurrency:
+      group: ghcr-push-${{ github.ref }}
+      cancel-in-progress: false
     # Run on `create` events for branches, and on manual dispatch (so a
     # CI fix can be re-tested against an existing branch without having
     # to delete + recreate it).

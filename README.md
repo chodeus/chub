@@ -9,7 +9,7 @@
 A self-hosted, all-in-one media asset manager for your Plex/ARR stack.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-463fbc?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/badge/python-3.8%2B-1992f3?style=flat-square)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.13%2B-1992f3?style=flat-square)](https://www.python.org/)
 [![Docker Image](https://img.shields.io/badge/ghcr.io-chodeus%2Fchub-463fbc?style=flat-square&logo=docker&logoColor=white)](https://github.com/chodeus/chub/pkgs/container/chub)
 [![GitHub Issues](https://img.shields.io/github/issues/chodeus/chub?color=463fbc&style=flat-square)](https://github.com/chodeus/chub/issues)
 [![GitHub Stars](https://img.shields.io/github/stars/chodeus/chub?color=53e8f0&style=flat-square)](https://github.com/chodeus/chub/stargazers)
