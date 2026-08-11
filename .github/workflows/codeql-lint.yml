@@ -368,7 +368,23 @@ jobs:
 
       - name: Get the current branch name
         id: get_branch
-        run: echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+        run: |
+          name="${GITHUB_REF#refs/heads/}"
+          # Emit a branch tag only on branch refs; encode it collision-safe to
+          # match on-branch-create/delete (clean names pass through, else digest).
+          if [[ "$GITHUB_REF" == refs/heads/* ]]; then IS_BRANCH=true; else IS_BRANCH=false; fi
+          sanitized="${name//[^A-Za-z0-9_.-]/-}"
+          sanitized="$(printf '%s' "$sanitized" | sed -E 's/^[.-]+//')"
+          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ]; then
+            BRANCH_TAG="$sanitized"
+          else
+            hash="$(printf '%s' "$name" | sha256sum | cut -c1-12)"
+            base="${sanitized:0:100}"; [ -n "$base" ] || base="branch"
+            BRANCH_TAG="${base}-${hash}"
+          fi
+          echo "BRANCH_NAME=${name}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_TAG=${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "IS_BRANCH=${IS_BRANCH}" >> "$GITHUB_OUTPUT"
 
       - name: Set build number
         run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
@@ -386,7 +402,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/chub
           tags: |
-            type=ref,event=branch
+            type=raw,value=${{ steps.get_branch.outputs.BRANCH_TAG }},enable=${{ steps.get_branch.outputs.IS_BRANCH }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
