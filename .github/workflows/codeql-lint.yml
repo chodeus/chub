@@ -279,21 +279,17 @@ jobs:
             | grep -Ev '^A[[:space:]]' \
             | grep -Ev '^M[[:space:]]+deploy/docker/Dockerfile$' || true)
           if [ -n "$bad" ]; then
-            echo "::error::develop diverges from main beyond added files + an append-only Dockerfile:"
+            echo "::error::develop diverges from main beyond added files + an insertion-only Dockerfile:"
             echo "$bad"
             exit 1
           fi
-          # Append-only = main's Dockerfile is an exact byte-PREFIX of develop's; a
-          # mid-file insertion adds no `-` line, so a diff `^-` check would miss it.
-          base="$(git merge-base origin/main HEAD)"
-          base_df="$(mktemp)"
-          git show "$base:deploy/docker/Dockerfile" > "$base_df"
-          n=$(wc -c < "$base_df")
-          if ! head -c "$n" deploy/docker/Dockerfile | cmp -s "$base_df" -; then
-            echo "::error::deploy/docker/Dockerfile is not append-only vs main (mid-file edit or removal); develop must only append CL2K layers."
+          # Pure-insertion hunks: no main line removed or edited. CL2K blocks are
+          # inserted MID-FILE (per build stage), so a byte-prefix check would false-fail.
+          if git diff origin/main...HEAD -- deploy/docker/Dockerfile | grep -q '^-[^-]'; then
+            echo "::error::deploy/docker/Dockerfile removes or edits lines present on main; develop may only insert CL2K blocks."
             exit 1
           fi
-          echo "OK: develop differs from main only by added files + append-only Dockerfile."
+          echo "OK: develop differs from main only by added files + an insertion-only Dockerfile."
 
   # ---- Docker Build (gated by all quality checks) ----
   docker-validate:
