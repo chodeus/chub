@@ -9,34 +9,61 @@ permissions:
 jobs:
   ghcr-delete-tag:
     runs-on: ubuntu-latest
+    timeout-minutes: 5  # a stalled GHCR request can't keep cleanup running
     if: github.event.ref_type == 'branch'
+    # Serialize with the create/push publisher for this branch (raw ref matches
+    # their ghcr-push group) so a delete never races a mid-publish.
+    concurrency:
+      group: ghcr-push-refs/heads/${{ github.event.ref }}
+      cancel-in-progress: false
+    # REF via env (not ${{ }} inlined into run:) so a crafted branch name can't inject shell.
+    env:
+      REF: ${{ github.event.ref }}
 
     steps:
-      - name: Get the deleted branch name
-        id: get_branch
-        run: echo "BRANCH_NAME=${{ github.event.ref }}" >> $GITHUB_OUTPUT
-
       - name: Skip protected branches
+        id: guard
         run: |
-          BRANCH="${{ steps.get_branch.outputs.BRANCH_NAME }}"
-          if [[ "$BRANCH" == "main" || "$BRANCH" == "master" || "$BRANCH" == "experimental" ]]; then
-            echo "Skipping deletion for protected branch: $BRANCH"
-            exit 0
+          if [[ "$REF" == "main" || "$REF" == "master" || "$REF" == "experimental" || "$REF" == "develop" ]]; then
+            echo "Skipping deletion for protected branch: $REF"
+            echo "protected=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Delete tag from GHCR
+        if: steps.guard.outputs.protected != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.get_branch.outputs.BRANCH_NAME }}
         run: |
           REPO="${{ github.repository_owner }}/chub"
-          DIGEST=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
-            "https://ghcr.io/v2/${REPO}/manifests/${TAG_NAME}" \
-            -I | grep -i 'docker-content-digest:' | awk '{print $2}' | tr -d '\r')
-          if [[ -z "$DIGEST" ]]; then
-            echo "Tag not found on GHCR"
+          # Mirror on-branch-create's `/`->`-` tag sanitization so we target the tag
+          # that was actually published, not the raw branch name.
+          TAG="${REF//\//-}"
+          # Branch on the HTTP status, not an empty digest: 404 = nothing to delete;
+          # 401/429/5xx must fail loudly instead of being masked as "not found".
+          headers="$(mktemp)"
+          status=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -D "$headers" -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -I "https://ghcr.io/v2/${REPO}/manifests/${TAG}")
+          if [[ "$status" == "404" ]]; then
+            echo "Tag not found on GHCR: $TAG"
             exit 0
           fi
-          curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
-            "https://ghcr.io/v2/${REPO}/manifests/${DIGEST}" \
-            && echo "Deleted GHCR tag: ${TAG_NAME}" || echo "Failed to delete GHCR tag: ${TAG_NAME}"
+          if [[ "$status" != 2* ]]; then
+            echo "::error::GHCR HEAD for $TAG failed with HTTP $status"
+            exit 1
+          fi
+          DIGEST=$(grep -i '^docker-content-digest:' "$headers" | awk '{print $2}' | tr -d '\r' || true)
+          if [[ -z "$DIGEST" ]]; then
+            echo "::error::GHCR returned $status for $TAG but no docker-content-digest header"
+            exit 1
+          fi
+          del_status=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' -X DELETE \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://ghcr.io/v2/${REPO}/manifests/${DIGEST}")
+          # A concurrent delete may have already removed it, so treat 404 as success too.
+          if [[ "$del_status" == 2* || "$del_status" == "404" ]]; then
+            echo "Deleted GHCR tag $TAG ($del_status)"
+          else
+            echo "::error::GHCR DELETE for $TAG ($DIGEST) failed with HTTP $del_status"
+            exit 1
+          fi

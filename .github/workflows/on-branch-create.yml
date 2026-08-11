@@ -11,6 +11,12 @@ permissions:
 jobs:
   docker-tag:
     runs-on: ubuntu-latest
+    timeout-minutes: 45  # caps a wedged arm64 build at 45m instead of the 6h default
+    # `create` sets github.ref to the DEFAULT branch, so key the shared ghcr-push
+    # group off the created branch (event.ref); ref_name is the dispatch fallback.
+    concurrency:
+      group: ghcr-push-refs/heads/${{ github.event_name == 'create' && github.event.ref || github.ref_name }}
+      cancel-in-progress: false
     # Run on `create` events for branches, and on manual dispatch (so a
     # CI fix can be re-tested against an existing branch without having
     # to delete + recreate it).
