@@ -10,33 +10,33 @@ jobs:
   ghcr-delete-tag:
     runs-on: ubuntu-latest
     if: github.event.ref_type == 'branch'
+    # REF via env (not ${{ }} inlined into run:) so a crafted branch name can't inject shell.
+    env:
+      REF: ${{ github.event.ref }}
 
     steps:
-      - name: Get the deleted branch name
-        id: get_branch
-        run: echo "BRANCH_NAME=${{ github.event.ref }}" >> $GITHUB_OUTPUT
-
       - name: Skip protected branches
+        id: guard
         run: |
-          BRANCH="${{ steps.get_branch.outputs.BRANCH_NAME }}"
-          if [[ "$BRANCH" == "main" || "$BRANCH" == "master" || "$BRANCH" == "experimental" ]]; then
-            echo "Skipping deletion for protected branch: $BRANCH"
-            exit 0
+          if [[ "$REF" == "main" || "$REF" == "master" || "$REF" == "experimental" || "$REF" == "develop" ]]; then
+            echo "Skipping deletion for protected branch: $REF"
+            echo "protected=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Delete tag from GHCR
+        if: steps.guard.outputs.protected != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.get_branch.outputs.BRANCH_NAME }}
         run: |
           REPO="${{ github.repository_owner }}/chub"
           DIGEST=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
-            "https://ghcr.io/v2/${REPO}/manifests/${TAG_NAME}" \
+            "https://ghcr.io/v2/${REPO}/manifests/${REF}" \
             -I | grep -i 'docker-content-digest:' | awk '{print $2}' | tr -d '\r')
           if [[ -z "$DIGEST" ]]; then
             echo "Tag not found on GHCR"
             exit 0
           fi
-          curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
+          # -f so an HTTP error is a real failure, and no `|| echo` mask so it fails the step.
+          curl -sf -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
             "https://ghcr.io/v2/${REPO}/manifests/${DIGEST}" \
-            && echo "Deleted GHCR tag: ${TAG_NAME}" || echo "Failed to delete GHCR tag: ${TAG_NAME}"
+            && echo "Deleted GHCR tag: $REF"
