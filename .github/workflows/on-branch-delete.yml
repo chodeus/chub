@@ -37,10 +37,10 @@ jobs:
           # dispatch); GITHUB_REF would be the default branch on create/delete.
           name="${REF#refs/heads/}"
           # Collision-safe tag (shared with codeql-lint docker-push): clean names
-          # pass through, else append a short digest so feat/foo != feat-foo.
+          # <=128 chars pass through, else truncate+digest so feat/foo != feat-foo.
           sanitized="${name//[^A-Za-z0-9_.-]/-}"
           sanitized="$(printf '%s' "$sanitized" | sed -E 's/^[.-]+//')"
-          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ]; then
+          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ] && [ "${#sanitized}" -le 128 ]; then
             BRANCH_TAG="$sanitized"
           else
             hash="$(printf '%s' "$name" | sha256sum | cut -c1-12)"

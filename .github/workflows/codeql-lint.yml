@@ -371,7 +371,7 @@ jobs:
           if [[ "$GITHUB_REF" == refs/heads/* ]]; then IS_BRANCH=true; else IS_BRANCH=false; fi
           sanitized="${name//[^A-Za-z0-9_.-]/-}"
           sanitized="$(printf '%s' "$sanitized" | sed -E 's/^[.-]+//')"
-          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ]; then
+          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ] && [ "${#sanitized}" -le 128 ]; then
             BRANCH_TAG="$sanitized"
           else
             hash="$(printf '%s' "$name" | sha256sum | cut -c1-12)"
