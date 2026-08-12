@@ -68,7 +68,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-bg-secondary rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-default">
                         <strong>Expected behavior:</strong>
                         <ul>
                             <li>Sections align left and right</li>
@@ -126,7 +126,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-bg-secondary rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-default">
                         <strong>Test instructions:</strong>
                         <ol>
                             <li>Resize browser window to test responsive behavior</li>
@@ -179,7 +179,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-bg-secondary rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-default">
                         <strong>Expected behavior:</strong>
                         <ul>
                             <li>
@@ -220,7 +220,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-bg-secondary rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-default">
                         <strong>Test validation:</strong>
                         <ul>
                             <li>Disabled button should have reduced opacity</li>
@@ -260,7 +260,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-bg-secondary rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-default">
                         <strong>Expected behavior:</strong>
                         <ul>
                             <li>Loading button shows spinner instead of icon</li>
@@ -305,7 +305,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-bg-secondary rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-default">
                         <strong>Test instructions:</strong>
                         <ol>
                             <li>At desktop width, separator should be visible between sections</li>
@@ -364,7 +364,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-bg-secondary rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-default">
                         <strong>Expected behavior:</strong>
                         <ul>
                             <li>Overflow button shows &quot;More (3)&quot; at desktop</li>
@@ -381,7 +381,7 @@ const ToolbarCompoundTest = () => {
                 {/* Action Log */}
                 <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Action Log</h2>
-                    <div className="p-4 bg-bg-secondary rounded-lg border border-default">
+                    <div className="p-4 bg-surface-alt rounded-lg border border-default">
                         {actionLog.length === 0 ? (
                             <p className="text-fg-muted text-center py-4">
                                 No actions yet. Click buttons above to see logs.

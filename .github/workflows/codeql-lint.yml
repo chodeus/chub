@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - '*'
+      - '**'
     tags:
       - 'v*'
     paths:
@@ -21,13 +21,14 @@ on:
       - 'deploy/docker/compose.yaml'
       - 'frontend/package-lock.json'
       - 'deploy/docker/Dockerfile'
+      - 'deploy/docker/**'
       - '.dockerignore'
       - 'scripts/start.sh'
       - '.release-please-manifest.json'
       - '.github/workflows/codeql-lint.yml'
   pull_request:
     branches:
-      - '*'
+      - '**'
     paths:
       - '**.py'
       - '**.js'
@@ -42,6 +43,7 @@ on:
       - 'deploy/docker/compose.yaml'
       - 'frontend/package-lock.json'
       - 'deploy/docker/Dockerfile'
+      - 'deploy/docker/**'
       - '.dockerignore'
       - 'scripts/start.sh'
       - '.release-please-manifest.json'
@@ -50,9 +52,7 @@ on:
     - cron: '25 4 * * 1'  # Weekly on Monday at 04:25 UTC
 
 permissions:
-  security-events: write
   contents: read
-  packages: write
 
 concurrency:
   group: codeql-lint-${{ github.ref }}
@@ -63,6 +63,9 @@ jobs:
   codeql-python:
     name: CodeQL - Python
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
 
     steps:
       - name: Checkout code
@@ -82,6 +85,9 @@ jobs:
   codeql-javascript:
     name: CodeQL - JavaScript
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
 
     steps:
       - name: Checkout code
@@ -106,11 +112,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: '3.11'
+          python-version: '3.13'
           cache: 'pip'
 
       - name: Install linting tools
@@ -127,25 +135,29 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: '3.11'
+          python-version: '3.13'
           cache: 'pip'
 
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          # pytest + httpx (Starlette's TestClient) — kept out of requirements.txt
+          # so the runtime image never installs a test stack.
+          pip install -r requirements-dev.txt
           # Develop-only extensions keep their extra deps in requirements-*.txt
           # (e.g. requirements-cl2k.txt) so requirements.txt stays identical to
           # main. Install any that exist — no-op on main.
           for extra in requirements-*.txt; do
-            if [ -e "$extra" ]; then pip install -r "$extra"; fi
+            if [ -e "$extra" ] && [ "$extra" != "requirements-dev.txt" ]; then
+              pip install -r "$extra"
+            fi
           done
-          # httpx is required by Starlette's TestClient (used in tests/test_api_smoke.py)
-          # but isn't a runtime dep, so it lives outside requirements.txt.
-          pip install httpx
 
       - name: Verify FastAPI app imports cleanly
         run: |
@@ -199,6 +211,16 @@ jobs:
         working-directory: frontend
         run: npm run test:run
 
+      # Tailwind silently drops classes it cannot resolve, so the built CSS is
+      # the only place a dead utility shows up — check:classes reads dist/.
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check for used-but-unemitted Tailwind classes
+        working-directory: frontend
+        run: npm run check:classes
+
   # ---- Branch isolation guard ----
   # Develop-only extensions (e.g. the CL2K poster maker) must never reach main.
   # On main (and PRs targeting main) fail if any extension code is present:
@@ -222,15 +244,64 @@ jobs:
             echo "Not a main-bound ref — branch-isolation check not applicable."
             exit 0
           fi
-          leaks=$(git ls-files -- '*cl2k*' \
+          # :(icase) — git globs are case-sensitive (else Cl2kMakerPage.jsx slips
+          # through); cover both extensions dirs, poster_self_heal, and the fonts.
+          leaks=$(git ls-files -- \
+            ':(icase)*cl2k*' \
+            ':(icase)*poster_self_heal*' ':(icase)*posterselfheal*' ':(icase)*posterheal*' \
             'backend/extensions/*' ':!backend/extensions/__init__.py' \
-            'frontend/src/extensions/*' ':!frontend/src/extensions/index.js')
+            'frontend/src/extensions/*' ':!frontend/src/extensions/index.js' \
+            'deploy/docker/fonts/*')
           if [ -n "$leaks" ]; then
             echo "::error::Develop-only extension files found on a main-bound ref:"
             echo "$leaks"
             exit 1
           fi
           echo "OK: no develop-only extension code present."
+
+  # ---- Develop invariant guard ----
+  # Mirror of branch-isolation-guard for the develop half: develop may differ from
+  # main ONLY by added files plus an append-only deploy/docker/Dockerfile.
+  develop-invariant-guard:
+    name: Develop Invariant Guard
+    # Always runs (no job-level if) so it stays a satisfiable needs on every ref;
+    # the step no-ops on non-develop-bound refs.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Assert develop only adds files (shared files byte-identical to main)
+        run: |
+          set -eu
+          # Only develop-bound refs carry the extension delta; pass on any other ref.
+          if [ "${GITHUB_REF}" != "refs/heads/develop" ] && [ "${GITHUB_BASE_REF:-}" != "develop" ]; then
+            echo "Not a develop-bound ref — develop-invariant check not applicable."
+            exit 0
+          fi
+          git fetch --quiet origin main
+          # Merge-base diff (origin/main...HEAD): main being ahead of an unsynced
+          # develop must not false-positive; only develop's own delta is inspected.
+          bad=$(git diff origin/main...HEAD --name-status \
+            | grep -Ev '^A[[:space:]]' \
+            | grep -Ev '^M[[:space:]]+deploy/docker/Dockerfile$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::develop diverges from main beyond added files + an insertion-only Dockerfile:"
+            echo "$bad"
+            exit 1
+          fi
+          # Pure-insertion hunks: no main line removed or edited. CL2K blocks are
+          # inserted MID-FILE (per build stage), so a byte-prefix check would false-fail.
+          if git diff origin/main...HEAD -- deploy/docker/Dockerfile | grep -q '^-[^-]'; then
+            echo "::error::deploy/docker/Dockerfile removes or edits lines present on main; develop may only insert CL2K blocks."
+            exit 1
+          fi
+          echo "OK: develop differs from main only by added files + an insertion-only Dockerfile."
 
   # ---- Docker Build (gated by all quality checks) ----
   docker-validate:
@@ -240,7 +311,7 @@ jobs:
     # needs-failure SKIPS this job — which GitHub reports as Success for a
     # required check, turning a hard gate into a free pass. Promote
     # "Frontend Tests" in branch protection to make it block instead.
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard, develop-invariant-guard]
     runs-on: ubuntu-latest
 
     steps:
@@ -277,9 +348,12 @@ jobs:
   docker-push:
     name: Docker Build & Push
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard, develop-invariant-guard]
     runs-on: ubuntu-latest
     timeout-minutes: 45  # see release-please.yml docker-version
+    permissions:
+      contents: read
+      packages: write
     # Serialize with the release-please docker-version job so concurrent pushes
     # to the same :latest tag don't race on GHCR auth. cancel-in-progress is
     # false because both jobs publish artifacts we want to keep — they just
@@ -302,7 +376,23 @@ jobs:
 
       - name: Get the current branch name
         id: get_branch
-        run: echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+        run: |
+          name="${GITHUB_REF#refs/heads/}"
+          # Emit a branch tag only on branch refs; encode it collision-safe to
+          # match on-branch-create/delete (clean names pass through, else digest).
+          if [[ "$GITHUB_REF" == refs/heads/* ]]; then IS_BRANCH=true; else IS_BRANCH=false; fi
+          sanitized="${name//[^A-Za-z0-9_.-]/-}"
+          sanitized="$(printf '%s' "$sanitized" | sed -E 's/^[.-]+//')"
+          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ] && [ "${#sanitized}" -le 128 ]; then
+            BRANCH_TAG="$sanitized"
+          else
+            hash="$(printf '%s' "$name" | sha256sum | cut -c1-12)"
+            base="${sanitized:0:100}"; [ -n "$base" ] || base="branch"
+            BRANCH_TAG="${base}-${hash}"
+          fi
+          echo "BRANCH_NAME=${name}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_TAG=${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "IS_BRANCH=${IS_BRANCH}" >> "$GITHUB_OUTPUT"
 
       - name: Set build number
         run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
@@ -320,7 +410,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/chub
           tags: |
-            type=ref,event=branch
+            type=raw,value=${{ steps.get_branch.outputs.BRANCH_TAG }},enable=${{ steps.get_branch.outputs.IS_BRANCH }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
@@ -341,7 +431,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   notify-failure:
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard, docker-push]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard, develop-invariant-guard, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@aae195c19ec7069d2e91aca88107220ce807ef7e # main
     with:

@@ -17,6 +17,7 @@ from backend.util.config import (
     ChubConfig,
     ConfigError,
     ConfigValidationError,
+    clear_config_cache,
     format_validation_errors,
     get_config_path,
     load_config,
@@ -370,6 +371,9 @@ class ChubApplication:
         """
         log = self.logger.get_adapter("MAIN") if self.logger else None
         try:
+            # The watcher fires on external edits, which the cache's stat key
+            # may not distinguish on a coarse-mtime filesystem.
+            clear_config_cache()
             new_config = load_config()
             self.config = new_config
             if self.scheduler:

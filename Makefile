@@ -22,9 +22,12 @@ bootstrap: install ui-install ## Setup everything
 install: ## Install backend dependencies
 	@echo "Installing backend..."
 	@test -d $(VENV) || $(PY) -m venv $(VENV)
+	@$(VENV)/bin/python -c 'import sys; sys.exit(sys.version_info < (3, 10))' || \
+		{ echo "ERROR: $(VENV) is $$($(VENV)/bin/python -V); requirements-dev.txt needs Python >= 3.10 (repo targets 3.13). Recreate the venv with a newer PY=."; exit 1; }
 	@$(VENV)/bin/python -m pip install --upgrade pip
 	@$(VENV)/bin/pip install -r requirements.txt
-	@$(VENV)/bin/pip install black isort ruff pytest
+	@$(VENV)/bin/pip install -r requirements-dev.txt
+	@$(VENV)/bin/pip install black isort ruff
 	@echo "Backend ready"
 
 ui-install: ## Install UI dependencies

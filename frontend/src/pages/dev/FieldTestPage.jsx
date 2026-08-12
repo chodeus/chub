@@ -690,7 +690,7 @@ const FieldTestPage = () => {
         <div className="max-w-6xl mx-auto p-4">
             <div className="text-center mb-8 pb-4 border-b">
                 <h1 className="text-2xl font-bold text-fg mb-2">Field Development Testing</h1>
-                <p className="text-base text-fg-muted max-w-60ch mx-auto mb-4">
+                <p className="text-base text-fg-muted max-w-[60ch] mx-auto mb-4">
                     Development interface for testing and approving field implementations. Focus on
                     working field types and approval workflow.
                 </p>

@@ -9,13 +9,13 @@ line_length = 88
 # For Black, set target-version to the lowest Python version you support, e.g., "py39", "py310", "py311"
 [tool.black]
 line-length = 88
-target-version = ["py39"]
+target-version = ["py313"]
 skip-string-normalization = false
 skip-magic-trailing-comma = false
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py313"
 
 [tool.ruff.lint]
 extend-select = []

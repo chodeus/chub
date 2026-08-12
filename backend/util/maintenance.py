@@ -9,11 +9,16 @@ Both tasks are no-ops unless enabled in config, so the thread is cheap to leave
 running. All work is wrapped so a transient failure never kills the thread.
 """
 
+import fnmatch
 import os
 import stat
 import threading
 import time
 from pathlib import Path
+
+from backend.util.backup import get_backup_dir, save_backup
+from backend.util.config import load_config
+from backend.util.path_safety import is_path_allowed
 
 
 def _log_base() -> Path:
@@ -52,42 +57,69 @@ def prune_old_logs(retention_days: int, logger=None) -> int:
     return removed
 
 
-def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
-    """Keep only the newest `keep` chub-backup archives. Returns the count removed."""
+def prune_old_backups(backup_dir: Path, keep: int, config, logger=None) -> int:
+    """Keep only the newest `keep` chub-backup archives; returns the count removed.
+    `config` is REQUIRED — it re-confines the RESOLVED root right before deleting."""
     if keep <= 0:
-        return 0
-    try:
-        backups = sorted(
-            backup_dir.glob("chub-backup-*.zip"),
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
-    except OSError:
         return 0
 
     try:
         root = backup_dir.resolve(strict=True)
+    except OSError:
+        return 0
+
+    # Authorise BEFORE opening anything: a component of backup_dir can be
+    # re-pointed after get_backup_dir() cleared it, so resolve() may land out.
+    if not is_path_allowed(str(root), config):
+        if logger:
+            logger.error(f"Refusing to prune '{root}': outside the allowed roots")
+        return 0
+
+    try:
         dir_fd = os.open(str(root), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     except OSError:
         return 0
 
     removed = 0
     try:
-        for old in backups[keep:]:
+        # The path can be swapped between the check and the open, so pin the
+        # descriptor to the directory that was actually authorised.
+        opened, authorised = os.fstat(dir_fd), os.stat(root)
+        if (opened.st_dev, opened.st_ino) != (authorised.st_dev, authorised.st_ino):
+            if logger:
+                logger.error(f"Refusing to prune '{root}': it changed under us")
+            return 0
+
+        entries = []
+        for name in os.listdir(dir_fd):
+            if not fnmatch.fnmatch(name, "chub-backup-*.zip"):
+                continue
             try:
-                # NEVER resolve-then-unlink: that deletes a symlink's TARGET.
-                # lstat + S_ISREG rejects links and dirs; unlinking by name
-                # against dir_fd stops a swapped parent redirecting the delete.
-                st = os.lstat(os.path.join(str(root), old.name))
-                if not stat.S_ISREG(st.st_mode):
-                    if logger:
-                        logger.warning(f"Skipping non-regular backup entry: {old}")
-                    continue
-                os.unlink(old.name, dir_fd=dir_fd)
+                # ONE nofollow stat through dir_fd: following a link to read
+                # its mtime would stat a target the link owner chose.
+                st = os.lstat(name, dir_fd=dir_fd)
+            except OSError as e:
+                if logger:
+                    logger.debug(f"Could not read backup {root / name}: {e}")
+                continue
+            entries.append((st.st_mtime, name, stat.S_ISREG(st.st_mode)))
+        entries.sort(key=lambda entry: entry[0], reverse=True)
+
+        for _mtime, name, is_regular in entries[keep:]:
+            # NEVER resolve-then-unlink: that deletes a symlink's TARGET.
+            # S_ISREG rejects links/dirs; dir_fd anchors the unlink.
+            if not is_regular:
+                if logger:
+                    logger.warning(f"Skipping non-regular backup entry: {root / name}")
+                continue
+            try:
+                os.unlink(name, dir_fd=dir_fd)
                 removed += 1
             except OSError as e:
                 if logger:
-                    logger.debug(f"Could not prune backup {old}: {e}")
+                    logger.debug(f"Could not prune backup {root / name}: {e}")
+    except OSError:
+        return removed
     finally:
         os.close(dir_fd)
     if removed and logger:
@@ -97,12 +129,9 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
 
 def run_auto_backup(keep: int, logger=None) -> None:
     """Write one backup and trim the directory to `keep` archives."""
-    # Imported lazily — backend.api.system pulls in FastAPI/router state that we
-    # don't want to import at module load (this util is imported early).
-    from backend.api.system import _get_backup_dir, save_backup
-
     save_backup(logger)
-    prune_old_backups(_get_backup_dir(logger), keep, logger)
+    root = get_backup_dir(logger)
+    prune_old_backups(root, keep, load_config(), logger)
 
 
 def _run_once(config, logger) -> None:
@@ -123,24 +152,22 @@ def _run_once(config, logger) -> None:
             logger.error(f"Log pruning failed: {e}")
 
 
-def start_maintenance(config, logger, interval: int = 86400) -> threading.Thread:
-    """Start the daily maintenance daemon thread and return it.
-
-    Config is loaded fresh each pass (the reference on config-reload is replaced,
-    not mutated) so settings changes take effect without a restart. The first
-    pass runs after `interval` so a just-restarted container doesn't back up on
-    every boot.
-    """
+def start_maintenance(logger, interval: int = 86400) -> threading.Thread:
+    """Start the daily maintenance daemon thread and return it. Config is loaded
+    fresh each pass; the first pass waits `interval` (no backup on every boot)."""
 
     def loop():
+        """Wake once per `interval` and run a pass against freshly loaded config."""
         while True:
             time.sleep(interval)
             try:
-                from backend.util.config import load_config
-
                 current = load_config()
-            except Exception:
-                current = config
+            except Exception as e:
+                # Never fall back to the startup snapshot: these passes delete
+                # files, and stale retention/paths would delete the wrong ones.
+                if logger:
+                    logger.warning(f"Maintenance pass skipped, config unreadable: {e}")
+                continue
             _run_once(current, logger)
 
     thread = threading.Thread(target=loop, name="maintenance", daemon=True)

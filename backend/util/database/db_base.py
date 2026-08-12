@@ -9,6 +9,27 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 from backend.util.logger import Logger
 
 
+# Files already schema-synced (by _schema_file_state) — every construction calls
+# init_schema, else 24-table re-syncs N×. RLock: SchemaManager imports under it.
+_SCHEMA_SYNCED: set = set()
+_SCHEMA_SYNCED_LOCK = threading.RLock()
+
+
+def _schema_file_state(db_path: str) -> Tuple[Optional[Tuple], int]:
+    """(identity, size) of the db FILE; (None, 0) when it doesn't exist yet."""
+    try:
+        st = os.stat(db_path)
+    except OSError:
+        return None, 0
+    return (os.path.abspath(db_path), st.st_dev, st.st_ino), st.st_size
+
+
+def escape_like(value: str) -> str:
+    """Escape LIKE metacharacters so `value` matches literally."""
+    # The SQL MUST carry ESCAPE '\\' too, or this silently does nothing.
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class DatabaseBase:
     """Base class for all database operations with proper resource management."""
 
@@ -163,12 +184,27 @@ class DatabaseBase:
             conn.commit()
 
     @staticmethod
-    def init_schema(db_path: str) -> None:
-        """Initialize database schema - called by ChubDB."""
+    def init_schema(db_path: str, force: bool = False) -> None:
+        """Initialize database schema — skips files already synced this process."""
         from .schema import SchemaManager
 
-        conn = sqlite3.connect(db_path)
-        try:
-            SchemaManager.init_database(conn)
-        finally:
-            conn.close()
+        # Held across the DDL, not just the lookup: two threads that both miss
+        # the set would otherwise run SchemaManager concurrently and collide.
+        with _SCHEMA_SYNCED_LOCK:
+            # size: a deleted+recreated db can REUSE the inode, so identity
+            # alone would skip a 0-byte file that has no schema yet.
+            identity, size = _schema_file_state(db_path)
+            if not force and size > 0 and identity in _SCHEMA_SYNCED:
+                return
+
+            conn = sqlite3.connect(db_path, timeout=30)
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+                SchemaManager.init_database(conn)
+            finally:
+                conn.close()
+
+            # Re-stat: the file may not have existed before connect() created it.
+            identity, _ = _schema_file_state(db_path)
+            if identity is not None:
+                _SCHEMA_SYNCED.add(identity)

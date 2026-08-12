@@ -1,16 +1,20 @@
-"""
-Media cache management API endpoints for CHUB.
-
-Provides media cache operations including retrieval, deletion,
-and cache refresh functionality for media, collections, and Plex data.
-"""
+"""Read/delete endpoints for the media, collection and Plex caches, plus the
+background refresh trigger."""
 
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import (
+    BODY_TOO_LARGE,
+    build_cache_refresh_payload,
+    error,
+    get_database,
+    get_logger,
+    ok,
+    read_request_json,
+)
 from backend.util.database import ChubDB
 
 router = APIRouter(
@@ -67,16 +71,7 @@ async def get_media_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    """
-    Retrieve the media cache from the database.
-
-    Returns cached media items including metadata, identifiers, and poster
-    information. Optional limit (max 500) and offset paginate the result;
-    without them the full cache is returned.
-
-    Returns:
-        List of cached media items plus the total row count
-    """
+    """Return media cache rows; without limit/offset the whole cache is returned."""
     try:
         logger.debug("Serving GET /api/cache/media")
 
@@ -91,7 +86,7 @@ async def get_media_cache(
     except Exception as e:
         logger.error(f"Error retrieving media cache: {e}")
         return error(
-            f"Error retrieving media cache: {str(e)}",
+            "Error retrieving media cache",
             code="MEDIA_CACHE_RETRIEVAL_ERROR",
             status_code=500,
         )
@@ -130,16 +125,7 @@ async def get_collection_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    """
-    Retrieve the collection cache from the database.
-
-    Returns cached collection items including metadata and identifiers.
-    Optional limit (max 500) and offset paginate the result; without them
-    the full cache is returned.
-
-    Returns:
-        List of cached collection items plus the total row count
-    """
+    """Return collection cache rows; without limit/offset the whole cache is returned."""
     try:
         logger.debug("Serving GET /api/cache/collection")
 
@@ -154,7 +140,7 @@ async def get_collection_cache(
     except Exception as e:
         logger.error(f"Error retrieving collection cache: {e}")
         return error(
-            f"Error retrieving collection cache: {str(e)}",
+            "Error retrieving collection cache",
             code="COLLECTION_CACHE_RETRIEVAL_ERROR",
             status_code=500,
         )
@@ -194,16 +180,7 @@ async def get_plex_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    """
-    Retrieve the Plex media cache from the database.
-
-    Returns cached Plex media items including Plex-specific identifiers and
-    library information. Optional limit (max 500) and offset paginate the
-    result; without them the full cache is returned.
-
-    Returns:
-        List of cached Plex media items plus the total row count
-    """
+    """Return Plex cache rows; without limit/offset the whole cache is returned."""
     try:
         logger.debug("Serving GET /api/cache/plex")
 
@@ -218,7 +195,7 @@ async def get_plex_cache(
     except Exception as e:
         logger.error(f"Error retrieving plex cache: {e}")
         return error(
-            f"Error retrieving plex cache: {str(e)}",
+            "Error retrieving plex cache",
             code="PLEX_CACHE_RETRIEVAL_ERROR",
             status_code=500,
         )
@@ -248,39 +225,25 @@ async def refresh_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    """
-    Initiate background cache refresh for specified services.
-
-    Creates a background job to refresh media cache data from
-    configured Radarr, Sonarr, and Plex instances with optional
-    library filtering and mapping updates.
-
-    Request body should contain:
-    - arr_instances: List of Radarr/Sonarr instances to refresh
-    - plex_instances: List of Plex instances to refresh
-    - libraries: List of specific libraries to refresh
-    - update_mappings: Whether to update media mappings
-
-    Returns:
-        Job ID for tracking the refresh operation
-    """
+    """Enqueue a cache_refresh job; empty instance lists mean auto-discover all."""
     try:
-        payload = await request.json()
+        payload = await read_request_json(request)
+        if payload is BODY_TOO_LARGE:
+            return error(
+                "Request body too large",
+                code="BODY_TOO_LARGE",
+                status_code=413,
+            )
+
         logger.debug(f"Serving POST /api/cache/refresh with payload: {payload}")
 
-        # Extract refresh configuration
-        arr_instances = payload.get("arr_instances", [])
-        plex_instances = payload.get("plex_instances", [])
-        libraries = payload.get("libraries", [])
-        update_mappings = payload.get("update_mappings", False)
-
-        # Create a background job for cache refresh
-        job_payload = {
-            "arr_instances": arr_instances,
-            "plex_instances": plex_instances,
-            "libraries": libraries,
-            "update_mappings": update_mappings,
-        }
+        job_payload = build_cache_refresh_payload(payload)
+        if job_payload is None:
+            return error(
+                "Invalid request body",
+                code="INVALID_BODY",
+                status_code=400,
+            )
 
         # Use existing job system
         result = db.worker.enqueue_job("jobs", job_payload, job_type="cache_refresh")
@@ -302,7 +265,7 @@ async def refresh_cache(
     except Exception as e:
         logger.error(f"Error serving POST /api/cache/refresh: {e}")
         return error(
-            f"Error initiating cache refresh: {str(e)}",
+            "Error initiating cache refresh",
             code="CACHE_REFRESH_ERROR",
             status_code=500,
         )
@@ -331,18 +294,7 @@ async def refresh_cache(
 async def delete_media_cache_item(
     item_id: int, logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> JSONResponse:
-    """
-    Delete a media cache item by its ID.
-
-    Permanently removes the specified media cache entry from the
-    database. This operation cannot be undone.
-
-    Args:
-        item_id: The unique identifier of the media cache item to delete
-
-    Returns:
-        Confirmation of deletion with the deleted item ID
-    """
+    """Delete one media cache row; 404 when the id is unknown. Not undoable."""
     try:
         logger.debug(f"Serving DELETE /api/cache/media/{item_id}")
 
@@ -364,7 +316,7 @@ async def delete_media_cache_item(
     except Exception as e:
         logger.error(f"Error deleting media cache item {item_id}: {e}")
         return error(
-            f"Error deleting media cache item: {str(e)}",
+            "Error deleting media cache item",
             code="MEDIA_CACHE_DELETE_ERROR",
             status_code=500,
         )
@@ -393,18 +345,7 @@ async def delete_media_cache_item(
 async def delete_collection_cache_item(
     item_id: int, logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> JSONResponse:
-    """
-    Delete a collection cache item by its ID.
-
-    Permanently removes the specified collection cache entry from the
-    database. This operation cannot be undone.
-
-    Args:
-        item_id: The unique identifier of the collection cache item to delete
-
-    Returns:
-        Confirmation of deletion with the deleted item ID
-    """
+    """Delete one collection cache row; 404 when the id is unknown. Not undoable."""
     try:
         logger.debug(f"Serving DELETE /api/cache/collection/{item_id}")
 
@@ -426,7 +367,7 @@ async def delete_collection_cache_item(
     except Exception as e:
         logger.error(f"Error deleting collection cache item {item_id}: {e}")
         return error(
-            f"Error deleting collection cache item: {str(e)}",
+            "Error deleting collection cache item",
             code="COLLECTION_CACHE_DELETE_ERROR",
             status_code=500,
         )

@@ -3,6 +3,7 @@ import os
 import pathlib
 import sys
 import tempfile
+import threading
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
@@ -1112,6 +1113,49 @@ def get_config_path() -> str:
     return config_file_path
 
 
+# Parsed configs keyed by path -> (file version, config). AuthMiddleware calls
+# load_config() per request; re-reading + revalidating 35 models costs ~3ms.
+_config_cache: Dict[str, tuple] = {}
+_config_cache_lock = threading.Lock()
+_CONFIG_CACHE_MAX = 8
+
+
+def _config_file_version(path: str) -> Optional[tuple]:
+    """Stat signature identifying a config file's contents; None if unreadable."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size, st.st_ino)
+
+
+def _cached_config(path: str, version: tuple) -> Optional[ChubConfig]:
+    """Return a private copy of the cached config for this file version, if any."""
+    with _config_cache_lock:
+        entry = _config_cache.get(path)
+    if entry is None or entry[0] != version:
+        return None
+    # A copy, not the cached object: callers (auth/setup/notifications) mutate
+    # what load_config returns before saving, and must not poison the cache.
+    return entry[1].model_copy(deep=True)
+
+
+def _cache_config(path: str, version: tuple, config: ChubConfig) -> None:
+    """Cache `config` under the file version it was parsed from."""
+    if _config_file_version(path) != version:
+        return  # rewritten while we read it (e.g. legacy migration) — don't cache
+    with _config_cache_lock:
+        if len(_config_cache) >= _CONFIG_CACHE_MAX:
+            _config_cache.clear()
+        _config_cache[path] = (version, config.model_copy(deep=True))
+
+
+def clear_config_cache() -> None:
+    """Drop every cached config (call after config.yml changes out of band)."""
+    with _config_cache_lock:
+        _config_cache.clear()
+
+
 def format_validation_errors(validation_error: ValidationError) -> List[str]:
     """Return one humanized "loc: msg" line per Pydantic field error.
 
@@ -1194,13 +1238,21 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
 
     Raises ConfigError subclasses on failure so callers can handle
     errors appropriately (API returns HTTP errors, CLI prints and exits).
+
+    Repeat loads are served from a cache keyed on the file's mtime/size, so an
+    edit (or save_config) is picked up but an unchanged file isn't re-parsed.
     """
     from backend.util.config_migrator import is_legacy_config
 
     config_path = path or get_config_path()
 
-    if not os.path.exists(config_path):
+    version = _config_file_version(config_path)
+    if version is None:
         return ChubConfig()
+
+    cached = _cached_config(config_path, version)
+    if cached is not None:
+        return cached
 
     try:
         with open(config_path, "r") as f:
@@ -1219,7 +1271,7 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
     _backfill_setup_completed(raw)
 
     try:
-        return ChubConfig.model_validate(raw)
+        config = ChubConfig.model_validate(raw)
     except ValidationError as e:
         raise ConfigValidationError(
             f"Configuration validation failed in {config_path}",
@@ -1227,6 +1279,9 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
         ) from e
     except Exception as e:
         raise ConfigError(f"Unexpected configuration error: {e}") from e
+
+    _cache_config(config_path, version, config)
+    return config
 
 
 def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
@@ -1338,8 +1393,14 @@ def module_is_disabled(module_name: str, config: Optional[ChubConfig] = None) ->
             getattr(getattr(cfg, "general", None), "disabled_modules", None) or []
         )
         return module_name in disabled
-    except Exception:
-        return False
+    except Exception as exc:
+        # Fail CLOSED: these modules mutate the filesystem, so a config we
+        # can't read must skip the run, not green-light it.
+        _config_log.warning(
+            f"Could not determine disabled state for '{module_name}' "
+            f"({exc}); treating it as disabled"
+        )
+        return True
 
 
 def save_config(config: ChubConfig, path: Optional[str] = None) -> None:
@@ -1353,6 +1414,9 @@ def save_config(config: ChubConfig, path: Optional[str] = None) -> None:
             with os.fdopen(fd, "w") as f:
                 yaml.safe_dump(config.model_dump(mode="python"), f, sort_keys=False)
             os.replace(tmp_path, config_path)
+            # The stat key catches this too; clearing makes it immediate even on
+            # a filesystem with coarse mtime granularity.
+            clear_config_cache()
         except BaseException:
             # Clean up temp file on any failure
             try:

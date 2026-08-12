@@ -383,7 +383,7 @@ async def get_all_run_states(
             from backend.modules import MODULES
 
             for mod_name in MODULES:
-                job_status = orchestrator.get_module_status(mod_name)
+                job_status = orchestrator.get_module_status(mod_name, db=db)
                 if job_status.get("running"):
                     if mod_name in states_by_name:
                         states_by_name[mod_name]["status"] = "running"
@@ -428,6 +428,7 @@ async def module_events(request: Request):
     from backend.modules import MODULES
 
     async def event_generator():
+        """Yield an SSE frame whenever any module's run state changes."""
         previous_states = {}
         try:
             while True:
@@ -439,6 +440,7 @@ async def module_events(request: Request):
                 # the event loop — otherwise each tick blocks the loop (and all
                 # other requests/streams) for the duration of the queries.
                 def _poll_states():
+                    """Read every module's current run state from the db."""
                     states_by_name = {}
                     with ChubDB(request.app.state.logger, quiet=True) as db:
                         run_states = db.run_state.get_all()
@@ -454,7 +456,9 @@ async def module_events(request: Request):
                         orchestrator = request.app.state.module_orchestrator
                         if orchestrator:
                             for mod_name in MODULES:
-                                job_status = orchestrator.get_module_status(mod_name)
+                                job_status = orchestrator.get_module_status(
+                                    mod_name, db=db
+                                )
                                 if job_status.get("running"):
                                     job_id = job_status.get("job_id")
                                     job = (

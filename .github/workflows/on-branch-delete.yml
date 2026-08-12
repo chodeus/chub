@@ -9,34 +9,108 @@ permissions:
 jobs:
   ghcr-delete-tag:
     runs-on: ubuntu-latest
+    timeout-minutes: 5  # a stalled GHCR request can't keep cleanup running
     if: github.event.ref_type == 'branch'
+    # Serialize with the create/push publisher for this branch (raw ref matches
+    # their ghcr-push group) so a delete never races a mid-publish.
+    concurrency:
+      group: ghcr-push-refs/heads/${{ github.event.ref }}
+      cancel-in-progress: false
+    # REF via env (not ${{ }} inlined into run:) so a crafted branch name can't inject shell.
+    env:
+      REF: ${{ github.event.ref }}
 
     steps:
-      - name: Get the deleted branch name
-        id: get_branch
-        run: echo "BRANCH_NAME=${{ github.event.ref }}" >> $GITHUB_OUTPUT
-
       - name: Skip protected branches
+        id: guard
         run: |
-          BRANCH="${{ steps.get_branch.outputs.BRANCH_NAME }}"
-          if [[ "$BRANCH" == "main" || "$BRANCH" == "master" || "$BRANCH" == "experimental" ]]; then
-            echo "Skipping deletion for protected branch: $BRANCH"
-            exit 0
+          if [[ "$REF" == "main" || "$REF" == "master" || "$REF" == "experimental" || "$REF" == "develop" ]]; then
+            echo "Skipping deletion for protected branch: $REF"
+            echo "protected=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Delete tag from GHCR
+      - name: Resolve GHCR tag for the deleted branch
+        id: get_branch
+        if: steps.guard.outputs.protected != 'true'
+        run: |
+          # REF is the real branch (event.ref on create/delete, ref_name on
+          # dispatch); GITHUB_REF would be the default branch on create/delete.
+          name="${REF#refs/heads/}"
+          # Collision-safe tag (shared with codeql-lint docker-push): clean names
+          # <=128 chars pass through, else truncate+digest so feat/foo != feat-foo.
+          sanitized="${name//[^A-Za-z0-9_.-]/-}"
+          sanitized="$(printf '%s' "$sanitized" | sed -E 's/^[.-]+//')"
+          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ] && [ "${#sanitized}" -le 128 ]; then
+            BRANCH_TAG="$sanitized"
+          else
+            hash="$(printf '%s' "$name" | sha256sum | cut -c1-12)"
+            base="${sanitized:0:100}"; [ -n "$base" ] || base="branch"
+            BRANCH_TAG="${base}-${hash}"
+          fi
+          echo "BRANCH_NAME=${name}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_TAG=${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Delete tag version from GHCR (sole-reference safe)
+        if: steps.guard.outputs.protected != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.get_branch.outputs.BRANCH_NAME }}
+          OWNER: ${{ github.repository_owner }}
+          TAG: ${{ steps.get_branch.outputs.BRANCH_TAG }}
+          PACKAGE: chub
         run: |
-          REPO="${{ github.repository_owner }}/chub"
-          DIGEST=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
-            "https://ghcr.io/v2/${REPO}/manifests/${TAG_NAME}" \
-            -I | grep -i 'docker-content-digest:' | awk '{print $2}' | tr -d '\r')
-          if [[ -z "$DIGEST" ]]; then
-            echo "Tag not found on GHCR"
+          api="https://api.github.com"
+          hdr=(-H "Accept: application/vnd.github+json"
+               -H "Authorization: Bearer $GH_TOKEN"
+               -H "X-GitHub-Api-Version: 2022-11-28")
+          # GHCR packages hang off a user OR an org path; probe user first, then org.
+          scope="users/$OWNER"
+          probe=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' \
+            "${hdr[@]}" "$api/$scope/packages/container/$PACKAGE/versions?per_page=1")
+          if [[ "$probe" == "404" ]]; then
+            scope="orgs/$OWNER"
+            probe=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' \
+              "${hdr[@]}" "$api/$scope/packages/container/$PACKAGE/versions?per_page=1")
+          fi
+          if [[ "$probe" == "404" ]]; then
+            echo "Package $PACKAGE not found for $OWNER; nothing to delete."; exit 0
+          fi
+          if [[ "$probe" != 2* ]]; then
+            echo "::error::Listing $PACKAGE versions failed with HTTP $probe"; exit 1
+          fi
+          # A tag maps to exactly one version; page until we find the version whose
+          # tags include $TAG, capturing its id and full tag list.
+          vid=""; tags_json=""; page=1
+          while [[ "$page" -le 100 ]]; do
+            body="$(mktemp)"
+            status=$(curl -s --connect-timeout 10 --max-time 30 -o "$body" -w '%{http_code}' \
+              "${hdr[@]}" "$api/$scope/packages/container/$PACKAGE/versions?per_page=100&page=$page")
+            if [[ "$status" != 2* ]]; then
+              echo "::error::Listing $PACKAGE versions (page $page) failed with HTTP $status"; exit 1
+            fi
+            match="$(jq -c --arg t "$TAG" '[.[] | select((.metadata.container.tags // []) | index($t))][0] // empty' "$body")"
+            if [[ -n "$match" ]]; then
+              vid="$(printf '%s' "$match" | jq -r '.id')"
+              tags_json="$(printf '%s' "$match" | jq -c '.metadata.container.tags // []')"
+              break
+            fi
+            if [[ "$(jq 'length' "$body")" -lt 100 ]]; then break; fi
+            page=$((page + 1))
+          done
+          if [[ -z "$vid" ]]; then
+            echo "Tag not found on GHCR: $TAG; nothing to delete."; exit 0
+          fi
+          # Deleting a version drops its manifest — shared-digest tags would go too,
+          # so only delete when $TAG is the SOLE tag on that version.
+          if [[ "$(printf '%s' "$tags_json" | jq 'length')" != "1" ]]; then
+            others="$(printf '%s' "$tags_json" | jq -r 'join(", ")')"
+            echo "Version $vid for $TAG also holds other tags: $others. Skipping to avoid removing them."
             exit 0
           fi
-          curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
-            "https://ghcr.io/v2/${REPO}/manifests/${DIGEST}" \
-            && echo "Deleted GHCR tag: ${TAG_NAME}" || echo "Failed to delete GHCR tag: ${TAG_NAME}"
+          del=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' -X DELETE \
+            "${hdr[@]}" "$api/$scope/packages/container/$PACKAGE/versions/$vid")
+          # A concurrent delete may have already removed it, so treat 404 as success.
+          if [[ "$del" == 2* || "$del" == "404" ]]; then
+            echo "Deleted GHCR version $vid ($TAG) [$del]"
+          else
+            echo "::error::Deleting version $vid ($TAG) failed with HTTP $del"; exit 1
+          fi

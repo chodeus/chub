@@ -10,10 +10,11 @@ on:
   schedule:
     - cron: "43 2 * * 1"
   pull_request:
+    # No Dockerfile here: this job scans lockfiles (below), not container base
+    # images, so triggering on it would imply base-image coverage it lacks.
     paths:
       - "requirements.txt"
       - "frontend/package-lock.json"
-      - "deploy/docker/Dockerfile"
       - ".github/workflows/dep-audit.yml"
 
 permissions: {}

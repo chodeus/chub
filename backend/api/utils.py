@@ -1,5 +1,6 @@
 # api/utils.py
 
+import json
 from typing import Any, Optional
 
 from fastapi import Request
@@ -78,3 +79,62 @@ def error(
     if data is not None:
         payload["data"] = data
     return JSONResponse(status_code=status_code, content=payload)
+
+
+MAX_REQUEST_BODY_BYTES = 1024 * 1024
+
+# Sentinel outcome, distinct from None (unparseable) and {} (no body).
+BODY_TOO_LARGE = object()
+
+
+async def read_request_json(
+    request: Request, max_bytes: int = MAX_REQUEST_BODY_BYTES
+) -> Any:
+    """Parsed JSON body; {} when empty, None when unparseable, BODY_TOO_LARGE past the cap."""
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > max_bytes:
+        return BODY_TOO_LARGE
+
+    # Chunked bodies carry no Content-Length, so the cap is re-checked per chunk
+    # rather than trusting the header — nothing is buffered past the limit.
+    chunks = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > max_bytes:
+            return BODY_TOO_LARGE
+        chunks.append(chunk)
+
+    body = b"".join(chunks)
+    # Whitespace-only counts as no body — a stray newline shouldn't be a 400.
+    if not body.strip():
+        return {}
+    try:
+        return json.loads(body)
+    except ValueError:
+        return None
+
+
+CACHE_REFRESH_LIST_FIELDS = ("arr_instances", "plex_instances", "libraries")
+
+
+def build_cache_refresh_payload(payload: Any) -> Optional[dict]:
+    """Validated cache_refresh job payload, or None if the body is the wrong shape."""
+    # Unknown keys are dropped by construction, so the frontend's {path, deep}
+    # body still yields three empty lists — which the worker reads as "refresh all".
+    if not isinstance(payload, dict):
+        return None
+    job_payload = {}
+    for field in CACHE_REFRESH_LIST_FIELDS:
+        value = payload.get(field, [])
+        if not isinstance(value, list):
+            return None
+        # Names are stripped here; anything beyond "non-empty string" is the
+        # worker's and config layer's call, not this validator's.
+        names = []
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                return None
+            names.append(item.strip())
+        job_payload[field] = names
+    return job_payload

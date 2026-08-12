@@ -16,10 +16,18 @@ from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import (
+    BODY_TOO_LARGE,
+    build_cache_refresh_payload,
+    error,
+    get_database,
+    get_logger,
+    ok,
+    read_request_json,
+)
 from backend.util.arr import create_arr_client
-from backend.util.config import load_config
-from backend.util.database import ChubDB
+from backend.util.config import ConfigError, load_config
+from backend.util.database import ChubDB, escape_like
 from backend.util.ssrf_guard import is_safe_url, safe_external_get
 
 router = APIRouter(
@@ -464,35 +472,29 @@ async def get_duplicates(
         # quality group (configured in general.duplicate_exclude_groups).
         # e.g. [["radarr", "radarr4k"]] means radarr+radarr4k pairs
         # are intentional quality copies, not real duplicates.
-        try:
-            from backend.util.config import load_config
+        raw_groups = load_config().general.duplicate_exclude_groups
+        if raw_groups:
+            # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}].
+            # The field is List[Any] — skip malformed entries, don't raise.
+            exclude_sets = []
+            for g in raw_groups:
+                members = g.get("instances") if isinstance(g, dict) else g
+                if isinstance(members, (list, tuple, set)) and all(
+                    isinstance(m, str) and m.strip() for m in members
+                ):
+                    exclude_sets.append({m.strip() for m in members})
+            exclude_sets = [s for s in exclude_sets if len(s) >= 2]
 
-            raw_groups = load_config().general.duplicate_exclude_groups
-            if raw_groups:
-                # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}]
-                exclude_sets = []
-                for g in raw_groups:
-                    if isinstance(g, dict):
-                        exclude_sets.append(set(g.get("instances", [])))
-                    else:
-                        exclude_sets.append(set(g))
-                exclude_sets = [s for s in exclude_sets if len(s) >= 2]
+            if exclude_sets:
 
-                if exclude_sets:
+                def _not_excluded(dup):
+                    """True when this group isn't wholly inside one exclude set."""
+                    raw = dup.get("instances", "")
+                    instances = {s.strip() for s in raw.split(",") if s.strip()}
+                    return not any(instances.issubset(group) for group in exclude_sets)
 
-                    def _not_excluded(dup):
-                        raw = dup.get("instances", "")
-                        instances = {s.strip() for s in raw.split(",") if s.strip()}
-                        return not any(
-                            instances.issubset(group) for group in exclude_sets
-                        )
-
-                    duplicates = [d for d in duplicates if _not_excluded(d)]
-                    folder_collisions = [
-                        d for d in folder_collisions if _not_excluded(d)
-                    ]
-        except Exception:
-            pass  # Config not loaded — skip filtering
+                duplicates = [d for d in duplicates if _not_excluded(d)]
+                folder_collisions = [d for d in folder_collisions if _not_excluded(d)]
 
         return ok(
             f"Found {len(duplicates)} duplicate groups, "
@@ -505,6 +507,10 @@ async def get_duplicates(
             },
         )
 
+    except ConfigError:
+        # Deny: unfiltered results report intentional quality pairs as
+        # duplicates next to a bulk-delete button. main.py's handler answers.
+        raise
     except Exception as e:
         logger.error(f"Error finding duplicates: {e}")
         return error(
@@ -519,7 +525,7 @@ async def get_duplicates(
     summary="Refresh media cache",
     description="Trigger a background cache refresh job. Accepts both frontend "
     "format (path, deep) and backend format (arr_instances, plex_instances, "
-    "libraries, update_mappings).",
+    "libraries).",
     responses={
         200: {
             "description": "Cache refresh job enqueued successfully",
@@ -540,35 +546,25 @@ async def refresh_media(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    """
-    Trigger a background cache refresh job.
-
-    Accepts two payload formats:
-    - Frontend format: ``path`` and ``deep`` keys trigger a full
-      refresh of all configured instances.
-    - Backend format: ``arr_instances``, ``plex_instances``,
-      ``libraries``, and ``update_mappings`` for targeted refresh.
-
-    Returns:
-        Job ID for tracking the refresh operation
-    """
+    """Enqueue a cache_refresh job; a {path, deep} body has no targeting, so refresh all."""
     try:
-        try:
-            payload = (
-                await request.json()
-                if request.headers.get("content-type") == "application/json"
-                else {}
+        payload = await read_request_json(request)
+        if payload is BODY_TOO_LARGE:
+            return error(
+                "Request body too large",
+                code="BODY_TOO_LARGE",
+                status_code=413,
             )
-        except Exception:
-            payload = {}
+
         logger.debug(f"Serving POST /api/media/refresh with payload: {payload}")
 
-        job_payload = {
-            "arr_instances": payload.get("arr_instances", []),
-            "plex_instances": payload.get("plex_instances", []),
-            "libraries": payload.get("libraries", []),
-            "update_mappings": payload.get("update_mappings", True),
-        }
+        job_payload = build_cache_refresh_payload(payload)
+        if job_payload is None:
+            return error(
+                "Invalid request body",
+                code="INVALID_BODY",
+                status_code=400,
+            )
 
         result = db.worker.enqueue_job("jobs", job_payload, job_type="cache_refresh")
 
@@ -2037,6 +2033,7 @@ async def generate_collection_from_tag(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Build a poster_collection from every media row carrying `tag`."""
     try:
         payload = await request.json()
         tag = (payload.get("tag") or "").strip()
@@ -2050,8 +2047,8 @@ async def generate_collection_from_tag(
         media_rows = (
             db.worker.execute_query(
                 "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
-                "FROM media_cache WHERE tags LIKE ?",
-                (f"%{tag}%",),
+                "FROM media_cache WHERE tags LIKE ? ESCAPE '\\'",
+                (f"%{escape_like(tag)}%",),
                 fetch_all=True,
             )
             or []

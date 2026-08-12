@@ -4,7 +4,7 @@ from typing import Optional
 from backend.util.helper import parse_search_id
 from backend.util.normalization import normalize_titles
 
-from .db_base import DatabaseBase
+from .db_base import DatabaseBase, escape_like
 
 
 # Additional-artwork image_type values (everything that isn't a poster and
@@ -79,13 +79,10 @@ class PosterCache(DatabaseBase):
         poster_cache.search / media_cache.search).
         """
 
-        def esc(s: str) -> str:
-            return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
         if "*" in query:
             parts = query.split("*")
-            norm_pat = "%".join(esc(normalize_titles(p)) for p in parts)
-            raw_pat = "%".join(esc(p) for p in parts)
+            norm_pat = "%".join(escape_like(normalize_titles(p)) for p in parts)
+            raw_pat = "%".join(escape_like(p) for p in parts)
             sub = [
                 "normalized_title LIKE ? ESCAPE '\\'",
                 "title LIKE ? ESCAPE '\\'",
@@ -97,8 +94,8 @@ class PosterCache(DatabaseBase):
                 "title LIKE ? ESCAPE '\\'",
             ]
             sub_params = [
-                f"%{esc(normalize_titles(query))}%",
-                f"%{esc(query)}%",
+                f"%{escape_like(normalize_titles(query))}%",
+                f"%{escape_like(query)}%",
             ]
 
         tmdb, tvdb, imdb = parse_search_id(query)
@@ -261,8 +258,8 @@ class PosterCache(DatabaseBase):
         """
         prefix = path_prefix.rstrip("/") + "/"
         row = self.execute_query(
-            "SELECT 1 FROM poster_cache WHERE file LIKE ? LIMIT 1",
-            (prefix + "%",),
+            "SELECT 1 FROM poster_cache WHERE file LIKE ? ESCAPE '\\' LIMIT 1",
+            (escape_like(prefix) + "%",),
             fetch_one=True,
         )
         return row is not None
@@ -414,7 +411,7 @@ class PosterCache(DatabaseBase):
         prefix = path_prefix.rstrip("/") + "/"
         # Escape LIKE metacharacters so a folder named e.g. `My_Movies` can't
         # match siblings via the `_`/`%` wildcards.
-        like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = escape_like(prefix)
         return self.execute_query(
             "DELETE FROM poster_cache WHERE file LIKE ? ESCAPE '\\'", (like + "%",)
         )
@@ -427,7 +424,7 @@ class PosterCache(DatabaseBase):
         shared poster_cache.
         """
         prefix = path_prefix.rstrip("/") + "/"
-        like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = escape_like(prefix)
         return self.execute_query(
             "DELETE FROM poster_cache WHERE file LIKE ? ESCAPE '\\' "
             "AND image_type != 'poster'",
@@ -467,8 +464,14 @@ class PosterCache(DatabaseBase):
             # column so hyphenated / special-char searches ("x-men") still
             # find rows where the stored value collapsed to "xmen". Fall back
             # to a raw `title LIKE` so exact stored substrings still hit too.
-            sub = ["normalized_title LIKE ?", "title LIKE ?"]
-            sub_params: list = [f"%{normalize_titles(query)}%", f"%{query}%"]
+            sub = [
+                "normalized_title LIKE ? ESCAPE '\\'",
+                "title LIKE ? ESCAPE '\\'",
+            ]
+            sub_params: list = [
+                f"%{escape_like(normalize_titles(query))}%",
+                f"%{escape_like(query)}%",
+            ]
             # Also match an id pasted from a filename tag ({tmdb-…}/{tvdb-…}/
             # {imdb-tt…}) or a bare IMDb id, so users can search by id.
             tmdb, tvdb, imdb = parse_search_id(query)
