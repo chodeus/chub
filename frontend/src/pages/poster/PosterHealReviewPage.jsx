@@ -321,11 +321,14 @@ export const PosterHealReviewPage = () => {
                         </div>
                     ) : (
                         <div className="flex flex-col gap-2.5">
+                            {/* Every row disables while ANY apply/dismiss is in flight —
+                                the handlers below no-op on a second one, so leaving the
+                                other rows enabled made their buttons dead clicks. */}
                             {reviews.map(review => (
                                 <ReviewRow
                                     key={review.id}
                                     review={review}
-                                    busy={busyId === review.id}
+                                    busy={busyId != null}
                                     onApply={handleApply}
                                     onDismiss={handleDismiss}
                                 />

@@ -162,6 +162,67 @@ const customSig = c =>
         ? `${c.name}:${c.b64?.length ?? 0}:${(c.b64 ?? '').slice(0, 32)}:${(c.b64 ?? '').slice(-32)}`
         : null;
 
+/** Live-mount flag for the background season polls. */
+// Set (not just cleared) on mount: a StrictMode double-mount runs the cleanup
+// first, which would otherwise leave the flag stuck false for the real mount.
+const useMountedRef = () => {
+    const ref = useRef(true);
+    useEffect(() => {
+        ref.current = true;
+        return () => {
+            ref.current = false;
+        };
+    }, []);
+    return ref;
+};
+
+/** Poll a season batch to its terminal status; null = the caller unmounted. */
+// The batch outlives a request timeout, so it is polled rather than awaited.
+// Both callers share this so the mounted re-check AFTER each request — the one
+// that stops a post-unmount progress update — can't drift between them.
+const pollSeasonsBatch = async (jobId, mountedRef, onProgress) => {
+    // Transient poll errors are tolerated, but a run of them (job evicted /
+    // server gone) throws, so the button never sticks in a spinner forever.
+    let fails = 0;
+    while (true) {
+        await new Promise(r => setTimeout(r, 1500));
+        if (!mountedRef.current) return null;
+        let d;
+        try {
+            d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
+        } catch {
+            if (++fails >= 10) throw new Error('Lost contact with the season job');
+            continue;
+        }
+        if (!mountedRef.current) return null; // unmounted while that request ran
+        if (!d) {
+            if (++fails >= 10) throw new Error('Lost contact with the season job');
+            continue;
+        }
+        fails = 0;
+        onProgress(`${d.done}/${d.total}`);
+        if (d.status === 'done' || d.status === 'error') return d;
+    }
+};
+
+/** Terminal toast for a season batch, including the partial-failure case. */
+// `outcome` / `failed` are additive backend fields — an older payload omits them
+// and falls through to the plain success line.
+const seasonsBatchToast = (toast, d) => {
+    if (d?.status === 'error') {
+        toast.error(d?.error || 'Season generation failed');
+        return;
+    }
+    const failed = d?.failed ?? 0;
+    if (d?.outcome === 'partial' && failed > 0) {
+        toast.warning(
+            `Seasons: ${d?.generated ?? 0}/${d?.total ?? 0} generated — ${failed} failed`
+        );
+        return;
+    }
+    toast.success(`Seasons: ${d?.generated ?? 0}/${d?.total ?? 0} generated`);
+};
+
 const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
     <div className="flex items-center gap-1 flex-wrap">
         {sources.map(s => (
@@ -1394,13 +1455,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // Live "n/total" readout while a background season batch runs (see runBulkSeasons).
     const [bulkProgress, setBulkProgress] = useState('');
     // Cleared on unmount so the season poll loop below stops (no setState leak).
-    const bulkMountedRef = useRef(true);
-    useEffect(
-        () => () => {
-            bulkMountedRef.current = false;
-        },
-        []
-    );
+    const bulkMountedRef = useMountedRef();
 
     // A real (chosen/custom) logo is drawn as a live overlay on the logo-less base
     // so the size/position sliders move it without a server render. No logo = a
@@ -1747,19 +1802,38 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [baseSig]);
 
-    // Manual full refresh: re-render from current inputs (no AI — text-removal is
-    // the separate "Send to AI" step, baked into the backdrop). Bake the logo only
-    // for the text-wordmark fallback (a chosen logo stays a live overlay so the
-    // sliders keep moving it).
+    // Manual full refresh from current inputs (no AI). Bake the logo only for the
+    // text-wordmark fallback — a chosen logo stays a live overlay for the sliders.
+    // Abort + sequence guard, matching the auto-render effect above: a second click
+    // supersedes the first, so a slow stale render can't overwrite a newer preview
+    // (or clear the spinner the newer one owns).
+    const previewSeq = useRef(0);
+    const previewAbort = useRef(null);
+    // Bump the sequence BEFORE aborting: the aborted call still reaches its
+    // `finally`, which must then see a newer seq and skip its setState.
+    useEffect(
+        () => () => {
+            previewSeq.current += 1;
+            previewAbort.current?.abort();
+        },
+        []
+    );
     const runPreview = useCallback(async () => {
+        previewAbort.current?.abort();
+        const aborter = new AbortController();
+        previewAbort.current = aborter;
+        const seq = ++previewSeq.current;
         setPreviewing(true);
         try {
-            const blob = await cl2kMakerAPI.preview({ ...baseRequest, place_logo: !hasLogo });
-            setPreview(blob);
+            const blob = await cl2kMakerAPI.preview(
+                { ...baseRequest, place_logo: !hasLogo },
+                { signal: aborter.signal }
+            );
+            if (seq === previewSeq.current) setPreview(blob);
         } catch (err) {
-            toast.error(err.message || 'Preview failed');
+            if (!aborter.signal.aborted) toast.error(err.message || 'Preview failed');
         } finally {
-            setPreviewing(false);
+            if (seq === previewSeq.current) setPreviewing(false);
         }
     }, [baseRequest, hasLogo, setPreview, toast]);
 
@@ -1843,43 +1917,18 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             const jobId = resp?.data?.job_id;
             if (!jobId) throw new Error(resp?.message || 'Could not start season batch');
 
-            // The batch runs server-side (it outlasts a request timeout) — poll its
-            // progress instead of blocking on one long request. Tolerate transient
-            // poll errors, but bail after a run of them (job evicted / server gone)
-            // so the button never sticks in a spinner forever.
-            let fails = 0;
-            while (true) {
-                await new Promise(r => setTimeout(r, 1500));
-                if (!bulkMountedRef.current) return; // unmounted — stop polling
-                let d;
-                try {
-                    d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
-                } catch {
-                    if (++fails >= 10) throw new Error('Lost contact with the season job');
-                    continue;
-                }
-                if (!d) {
-                    if (++fails >= 10) throw new Error('Lost contact with the season job');
-                    continue;
-                }
-                fails = 0;
-                setBulkProgress(`${d.done}/${d.total}`);
-                if (d.status === 'done' || d.status === 'error') {
-                    if (d.status === 'error') {
-                        toast.error(d.error || 'Season generation failed');
-                    } else {
-                        toast.success(`Seasons: ${d.generated}/${d.total} generated`);
-                    }
-                    break;
-                }
-            }
+            const d = await pollSeasonsBatch(jobId, bulkMountedRef, setBulkProgress);
+            if (d) seasonsBatchToast(toast, d); // null = unmounted, outcome unknown
         } catch (err) {
-            toast.error(err.message || 'Season generation failed');
+            if (bulkMountedRef.current) toast.error(err.message || 'Season generation failed');
         } finally {
-            setBusy(false);
-            setBulkProgress('');
+            if (bulkMountedRef.current) {
+                setBusy(false);
+                setBulkProgress('');
+            }
         }
     }, [
+        bulkMountedRef,
         bulkSeasons,
         item,
         backdrop,
@@ -2018,6 +2067,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     logoTouchUpUrl={processedBase?.dataUrl || null}
                     onLogoFlip={setLogoFlipB64}
                     onLogoErase={setLogoEraseB64}
+                    logoFlipB64={logoFlipB64}
                     logoEraseB64={logoEraseB64}
                     processedLogo={overlayLogo}
                     fitMode={fitMode}
@@ -2187,6 +2237,7 @@ const RenderPanel = ({
     logoTouchUpUrl,
     onLogoFlip,
     onLogoErase,
+    logoFlipB64,
     logoEraseB64,
     processedLogo,
     fitMode,
@@ -2268,16 +2319,16 @@ const RenderPanel = ({
     // Template guide lines over the rendered preview (the PSD's cyan guides).
     const [showGuides, setShowGuides] = useState(true);
 
-    const onBackdropFile = e => {
+    const onBackdropFile = async e => {
         const f = e.target.files?.[0];
         e.target.value = '';
         if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const url = String(reader.result);
+        try {
+            const url = await readFileAsDataURL(f);
             setCustomBackdrop({ b64: url.split(',').pop(), url, name: f.name });
-        };
-        reader.readAsDataURL(f);
+        } catch (err) {
+            toast.error(err.message || 'Could not read that image');
+        }
     };
 
     // GDrive grab: pull a synced poster at FULL resolution (the raw cached file,
@@ -2290,14 +2341,7 @@ const RenderPanel = ({
             try {
                 const resp = await fetch(postersAPI.getPreviewUrl(poster.folder, poster.file));
                 if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
-                const blob = await resp.blob();
-                const dataUrl = await new Promise((resolve, reject) => {
-                    const r = new FileReader();
-                    r.onload = () => resolve(r.result);
-                    r.onerror = () => reject(new Error('Could not read image'));
-                    r.readAsDataURL(blob);
-                });
-                const url = String(dataUrl);
+                const url = await readFileAsDataURL(await resp.blob());
                 setCustomBackdrop({ b64: url.split(',').pop(), url, name: poster.file });
             } catch (err) {
                 toast.error(err.message || 'Import failed');
@@ -2319,6 +2363,9 @@ const RenderPanel = ({
     const [gdriveLogos, setGdriveLogos] = useState(null);
     const [gdriveLogosLoading, setGdriveLogosLoading] = useState(false);
     const [gdriveLogosFor, setGdriveLogosFor] = useState(null);
+    // A browse failure is held here rather than toasted away: `gdriveLogos` stays
+    // null until a fetch lands, so without it the picker sits on "Searching…".
+    const [gdriveLogosError, setGdriveLogosError] = useState(null);
     const [importingLogo, setImportingLogo] = useState(false);
     // Keyed on the TRIMMED title; an empty title (an ID-only entry) skips the
     // fetch — the render side shows a "needs a title" hint instead of issuing an
@@ -2373,12 +2420,13 @@ const RenderPanel = ({
                 if (!cancelled) {
                     setGdriveLogos(resp?.data?.items || []);
                     setGdriveLogosFor(gdriveQuery);
+                    setGdriveLogosError(null);
                 }
             } catch (err) {
                 if (!cancelled) {
                     setGdriveLogos([]);
                     setGdriveLogosFor(gdriveQuery);
-                    toast.error(err.message || 'GDrive logo browse failed');
+                    setGdriveLogosError(err.message || 'GDrive logo browse failed');
                 }
             } finally {
                 if (!cancelled) setGdriveLogosLoading(false);
@@ -2387,7 +2435,7 @@ const RenderPanel = ({
         return () => {
             cancelled = true;
         };
-    }, [logoSource, gdriveLogosFor, gdriveQuery, toast]);
+    }, [logoSource, gdriveLogosFor, gdriveQuery]);
 
     // Pull the picked asset's bytes off disk and hand them to the render path as
     // a custom logo — identical to Upload from here on.
@@ -2397,14 +2445,7 @@ const RenderPanel = ({
             try {
                 const resp = await fetch(postersAPI.getPreviewUrl(asset.folder, asset.file));
                 if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
-                const blob = await resp.blob();
-                const dataUrl = await new Promise((resolve, reject) => {
-                    const r = new FileReader();
-                    r.onload = () => resolve(r.result);
-                    r.onerror = () => reject(new Error('Could not read image'));
-                    r.readAsDataURL(blob);
-                });
-                const url = String(dataUrl);
+                const url = await readFileAsDataURL(await resp.blob());
                 setCustomLogo({ b64: url.split(',').pop(), url, name: asset.file });
             } catch (err) {
                 toast.error(err.message || 'Import failed');
@@ -2413,6 +2454,34 @@ const RenderPanel = ({
             }
         },
         [setCustomLogo, toast]
+    );
+
+    // Everything the logo picker needs to render its own GDrive states. Re-arming
+    // `for` is what lets Retry re-run the effect above (its guard is for === query).
+    const logoGdrive = useMemo(
+        () => ({
+            items: gdriveLogos,
+            loading: gdriveLogosLoading || gdriveLogosFor !== gdriveQuery,
+            // Scoped to the query it came from — the grid checks error before
+            // loading, so an unscoped one shadows the new title's load.
+            error: gdriveLogosFor === gdriveQuery ? gdriveLogosError : null,
+            needsTitle: !gdriveQuery,
+            importing: importingLogo,
+            onPick: importLogoFromSync,
+            onRetry: () => {
+                setGdriveLogosError(null);
+                setGdriveLogosFor(null);
+            },
+        }),
+        [
+            gdriveLogos,
+            gdriveLogosLoading,
+            gdriveLogosFor,
+            gdriveLogosError,
+            gdriveQuery,
+            importingLogo,
+            importLogoFromSync,
+        ]
     );
 
     const bdSel = (
@@ -2438,22 +2507,28 @@ const RenderPanel = ({
     // full-CL2K batch's busy/bulkProgress are parent props for a different flow).
     const [asisBulkBusy, setAsisBulkBusy] = useState(false);
     const [asisBulkProgress, setAsisBulkProgress] = useState('');
+    // Stops the batch poll loop below once this panel is gone (its twin in Builder).
+    const asisMountedRef = useMountedRef();
 
-    // The source poster as a data URL — /retext decodes it and draws the new label.
+    // Source poster as a data URL, cached on the image's identity — the debounced
+    // auto-preview re-runs per keystroke and re-encoding a poster is the whole cost.
+    const asisEncodedRef = useRef(null);
     const asisDataUrlFromSource = useCallback(async () => {
         if (!backdrop && !customBackdrop) return null;
+        const key = customBackdrop ? customSig(customBackdrop) : backdrop;
+        if (asisEncodedRef.current?.key === key) return asisEncodedRef.current.dataUrl;
         // Mint the stream token before building the proxy URL so the client fetch
         // of local Plex art carries it (rather than racing render / BLANK_IMAGE).
         await ensureStreamToken();
         const url = customBackdrop?.url || urlForPath(backdrop);
         if (!url) return null;
-        const blob = await (await fetch(url)).blob();
-        return new Promise((resolve, reject) => {
-            const fr = new FileReader();
-            fr.onload = () => resolve(fr.result);
-            fr.onerror = reject;
-            fr.readAsDataURL(blob);
-        });
+        const resp = await fetch(url);
+        // fetch resolves on 4xx/5xx, so without this the error body base64s into
+        // /retext as the poster (same guard the sync-cache imports already make).
+        if (!resp.ok) throw new Error(`Could not load the poster image (${resp.status})`);
+        const dataUrl = await readFileAsDataURL(await resp.blob());
+        asisEncodedRef.current = { key, dataUrl };
+        return dataUrl;
     }, [backdrop, customBackdrop]);
 
     // Send to AI — erase the masked text from the backdrop via the configured
@@ -2628,10 +2703,11 @@ const RenderPanel = ({
     // backdrop currently is (the Send to AI button has already baked any erase in),
     // so this never spends AI credits.
     const runAsisPreview = useCallback(async () => {
-        const image_b64 = await asisDataUrlFromSource();
-        if (!image_b64) return;
-        setAsisPreviewing(true);
         try {
+            // Inside the try: the source read fetches + encodes, so it can reject.
+            const image_b64 = await asisDataUrlFromSource();
+            if (!image_b64) return;
+            setAsisPreviewing(true);
             const resp = await cl2kMakerAPI.retext({
                 image_b64,
                 mask_b64: null,
@@ -2651,10 +2727,10 @@ const RenderPanel = ({
     }, [asisDataUrlFromSource, asisExplicitLabel, asisTextY, asisBorder, asisIds, asisSig, toast]);
 
     const runAsisSave = useCallback(async () => {
-        const image_b64 = await asisDataUrlFromSource();
-        if (!image_b64) return;
-        setAsisSaving(true);
         try {
+            const image_b64 = await asisDataUrlFromSource();
+            if (!image_b64) return;
+            setAsisSaving(true);
             const resp = await cl2kMakerAPI.retext({
                 image_b64,
                 mask_b64: null,
@@ -2691,14 +2767,11 @@ const RenderPanel = ({
             toast.error('Enter season numbers, e.g. 1,2,3');
             return;
         }
-        const image_b64 = await asisDataUrlFromSource();
-        if (!image_b64) {
-            toast.error('Upload or grab a poster first.');
-            return;
-        }
-        setAsisBulkBusy(true);
-        setAsisBulkProgress(`0/${nums.length}`);
         try {
+            const image_b64 = await asisDataUrlFromSource();
+            if (!image_b64) throw new Error('Upload or grab a poster first.');
+            setAsisBulkBusy(true);
+            setAsisBulkProgress(`0/${nums.length}`);
             const resp = await cl2kMakerAPI.retextSeasons({
                 image_b64,
                 seasons: nums,
@@ -2714,38 +2787,18 @@ const RenderPanel = ({
             const jobId = resp?.data?.job_id;
             if (!jobId) throw new Error(resp?.message || 'Could not start season batch');
 
-            let fails = 0;
-            while (true) {
-                await new Promise(r => setTimeout(r, 1500));
-                let d;
-                try {
-                    d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
-                } catch {
-                    if (++fails >= 10) throw new Error('Lost contact with the season job');
-                    continue;
-                }
-                if (!d) {
-                    if (++fails >= 10) throw new Error('Lost contact with the season job');
-                    continue;
-                }
-                fails = 0;
-                setAsisBulkProgress(`${d.done}/${d.total}`);
-                if (d.status === 'done' || d.status === 'error') {
-                    if (d.status === 'error') {
-                        toast.error(d.error || 'Season generation failed');
-                    } else {
-                        toast.success(`Seasons: ${d.generated}/${d.total} generated`);
-                    }
-                    break;
-                }
-            }
+            const d = await pollSeasonsBatch(jobId, asisMountedRef, setAsisBulkProgress);
+            if (d) seasonsBatchToast(toast, d); // null = unmounted, outcome unknown
         } catch (err) {
-            toast.error(err.message || 'Season generation failed');
+            if (asisMountedRef.current) toast.error(err.message || 'Season generation failed');
         } finally {
-            setAsisBulkBusy(false);
-            setAsisBulkProgress('');
+            if (asisMountedRef.current) {
+                setAsisBulkBusy(false);
+                setAsisBulkProgress('');
+            }
         }
     }, [
+        asisMountedRef,
         bulkSeasons,
         asisDataUrlFromSource,
         item,
@@ -2783,10 +2836,10 @@ const RenderPanel = ({
         let cancelled = false;
         const handle = setTimeout(async () => {
             const p = asisPreviewInputsRef.current;
-            const image_b64 = await p.fromSource();
-            if (cancelled || !image_b64) return;
-            setAsisPreviewing(true);
             try {
+                const image_b64 = await p.fromSource();
+                if (cancelled || !image_b64) return;
+                setAsisPreviewing(true);
                 const resp = await cl2kMakerAPI.retext({
                     image_b64,
                     mask_b64: null,
@@ -3185,10 +3238,7 @@ const RenderPanel = ({
                             onSelect={setLogo}
                             customLogo={customLogo}
                             onCustomChange={setCustomLogo}
-                            gdriveLogos={gdriveLogos}
-                            gdriveLoading={gdriveLogosLoading}
-                            onGdrivePick={importLogoFromSync}
-                            gdriveImporting={importingLogo}
+                            gdrive={logoGdrive}
                             scale={logoScale}
                             onScale={setLogoScale}
                             yOffset={logoYOffset}
@@ -3514,6 +3564,7 @@ const RenderPanel = ({
                                     onInvert={setInvertLogo}
                                     touchUpUrl={logoTouchUpUrl}
                                     onFlipMask={onLogoFlip}
+                                    flipMask={logoFlipB64}
                                     source={logoSource}
                                     onSource={onLogoSource}
                                 />
@@ -4891,6 +4942,62 @@ const GuidesToggle = ({ show, onChange }) => (
 
 // ─── Logo selector (TMDB / fanart grid + custom upload) ─────────────────────
 
+/** GDrive `- logo` grid, with the no-title / failed / empty states the picker needs. */
+// Every branch is terminal: an unhandled one leaves the picker on "Searching…"
+// forever, which is what an ID-only title (no query) used to do.
+const GdriveLogoGrid = ({ gdrive }) => {
+    if (gdrive.needsTitle)
+        return (
+            <div className="text-xs text-fg-subtle py-2">
+                Pick a title first — GDrive logos are matched by title.
+            </div>
+        );
+    if (gdrive.error)
+        return (
+            <div className="text-xs text-fg-subtle py-2">
+                <span className="text-error">{gdrive.error}</span>{' '}
+                <button
+                    type="button"
+                    onClick={gdrive.onRetry}
+                    className="text-fg underline hover:no-underline"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    if (gdrive.loading || !gdrive.items)
+        return <div className="text-xs text-fg-subtle py-4">Searching your synced assets…</div>;
+    if (gdrive.items.length === 0)
+        return (
+            <div className="text-xs text-fg-subtle py-2">
+                No <span className="font-mono">- logo</span> assets match this title. They appear
+                here once sync_gdrive has pulled the folder down.
+            </div>
+        );
+    return (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
+            {gdrive.items.map(g => (
+                <button
+                    key={g.id || `${g.folder}/${g.file}`}
+                    type="button"
+                    disabled={gdrive.importing}
+                    onClick={() => gdrive.onPick?.(g)}
+                    title={g.file}
+                    className="relative rounded-md overflow-hidden border-2 border-border hover:border-primary disabled:opacity-50 bg-black"
+                >
+                    <AspectSpacer aspect="aspect-video" />
+                    <img
+                        src={postersAPI.getPreviewUrl(g.folder, g.file)}
+                        alt={g.file}
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-contain"
+                    />
+                </button>
+            ))}
+        </div>
+    );
+};
+
 // A logo source picker shared by the render + uploaded-canvas flows. Pick a
 // TMDB/fanart logo, or upload a custom PNG. A custom logo takes priority and
 // hides the grid until removed; the chosen logo is whitened + placed on the CL2K
@@ -4923,17 +5030,12 @@ const LogoSelector = ({
     onInvert,
     touchUpUrl, // processed (un-flipped) logo for the B/W touch-up brush
     onFlipMask,
+    flipMask = null, // strokes made so far, so a re-opened brush re-seeds its canvas
     source, // optional per-picker source ('tmdb'|'fanart'|'plex'|'upload'|'gdrive')
     onSource,
-    // 'gdrive' source: `- logo` assets from the local sync cache. Picking one
-    // imports its bytes as the custom logo (same route as Upload), so the render
-    // path is identical to an uploaded PNG.
-    // Default to null, not undefined: an unwired call site must land in the
-    // loading state rather than reach `.length` on undefined.
-    gdriveLogos = null,
-    gdriveLoading = false,
-    onGdrivePick,
-    gdriveImporting = false,
+    // 'gdrive': `- logo` assets from the sync cache; picking imports bytes like an
+    // upload. null = call site not wired for GDrive (also withholds the source tab).
+    gdrive = null,
     emptyText = 'No logos from this source — a text wordmark is used as fallback.',
     // Pure-presentational split for the 3-column studio: 'picker' renders only the
     // source tabs + grid (left column), 'controls' renders only the colour-mode
@@ -4942,6 +5044,8 @@ const LogoSelector = ({
     // variant — props still flow identically.
     variant,
 }) => {
+    // Read from context rather than threaded: four call sites, only this one error.
+    const toast = useToast();
     const [showTouchUp, setShowTouchUp] = useState(false);
     // Presentational split: 'picker' = grid only; 'controls' = colour mode +
     // sliders + invert (no touch-up); 'touchup' = the B/W touch-up brush only;
@@ -4949,18 +5053,16 @@ const LogoSelector = ({
     const showPicker = variant !== 'controls' && variant !== 'touchup';
     const showControls = variant !== 'picker' && variant !== 'touchup';
     const showTouchUpSection = variant !== 'picker' && variant !== 'controls';
-    const onFile = e => {
+    const onFile = async e => {
         const f = e.target.files?.[0];
         e.target.value = ''; // allow re-selecting the same file
         if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () =>
-            onCustomChange({
-                b64: String(reader.result).split(',').pop(),
-                name: f.name,
-                url: String(reader.result),
-            });
-        reader.readAsDataURL(f);
+        try {
+            const url = await readFileAsDataURL(f);
+            onCustomChange({ b64: url.split(',').pop(), name: f.name, url });
+        } catch (err) {
+            toast.error(err.message || 'Could not read that image');
+        }
     };
     const tabCls = active =>
         `flex-1 text-center px-3 py-1.5 rounded-md text-xs ${
@@ -5049,7 +5151,7 @@ const LogoSelector = ({
                                     // Only offer the GDrive tab where a picker
                                     // handler was actually wired — LogoAssetPanel
                                     // reuses this component without one.
-                                    sources={onGdrivePick ? LOGO_SOURCES : ART_SOURCES}
+                                    sources={gdrive?.onPick ? LOGO_SOURCES : ART_SOURCES}
                                 />
                             ) : (
                                 <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-fg-muted hover:border-primary cursor-pointer">
@@ -5080,38 +5182,8 @@ const LogoSelector = ({
                                 onChange={onFile}
                             />
                         </label>
-                    ) : onSource && source === 'gdrive' && !customLogo ? (
-                        gdriveLoading || !gdriveLogos ? (
-                            <div className="text-xs text-fg-subtle py-4">
-                                Searching your synced assets…
-                            </div>
-                        ) : gdriveLogos.length === 0 ? (
-                            <div className="text-xs text-fg-subtle py-2">
-                                No <span className="font-mono">- logo</span> assets match this
-                                title. They appear here once sync_gdrive has pulled the folder down.
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
-                                {gdriveLogos.map(g => (
-                                    <button
-                                        key={g.id || `${g.folder}/${g.file}`}
-                                        type="button"
-                                        disabled={gdriveImporting}
-                                        onClick={() => onGdrivePick?.(g)}
-                                        title={g.file}
-                                        className="relative rounded-md overflow-hidden border-2 border-border hover:border-primary disabled:opacity-50 bg-black"
-                                    >
-                                        <AspectSpacer aspect="aspect-video" />
-                                        <img
-                                            src={postersAPI.getPreviewUrl(g.folder, g.file)}
-                                            alt={g.file}
-                                            loading="lazy"
-                                            className="absolute inset-0 w-full h-full object-contain"
-                                        />
-                                    </button>
-                                ))}
-                            </div>
-                        )
+                    ) : onSource && source === 'gdrive' && gdrive && !customLogo ? (
+                        <GdriveLogoGrid gdrive={gdrive} />
                     ) : customLogo ? (
                         <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-black p-2">
                             <img
@@ -5252,6 +5324,7 @@ const LogoSelector = ({
                                     imageUrl={touchUpUrl}
                                     brushSize={10}
                                     onMaskChange={onFlipMask}
+                                    initialMask={flipMask}
                                 />
                             </div>
                         </div>
@@ -5692,18 +5765,18 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         [previewUrl]
     );
 
-    const onFile = e => {
+    const onFile = async e => {
         const f = e.target.files?.[0];
         e.target.value = '';
         if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const url = String(reader.result);
+        try {
+            const url = await readFileAsDataURL(f);
             setCustomBg({ b64: url.split(',').pop(), url, name: f.name });
             onSrcRatio(null);
             setBackdrop(null);
-        };
-        reader.readAsDataURL(f);
+        } catch (err) {
+            toast.error(err.message || 'Could not read that image');
+        }
     };
 
     const onGenerate = async () => {
@@ -5960,18 +6033,18 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         [previewUrl]
     );
 
-    const onFile = e => {
+    const onFile = async e => {
         const f = e.target.files?.[0];
         e.target.value = '';
         if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const url = String(reader.result);
+        try {
+            const url = await readFileAsDataURL(f);
             setCustomBg({ b64: url.split(',').pop(), url, name: f.name });
             onSrcRatio(null);
             setBackdrop(null);
-        };
-        reader.readAsDataURL(f);
+        } catch (err) {
+            toast.error(err.message || 'Could not read that image');
+        }
     };
 
     const onGenerate = async () => {
@@ -6249,18 +6322,18 @@ const LogoAssetPanel = ({
         setCustomPoster(null);
         setExtractMask(null);
     };
-    const onPosterFile = e => {
+    const onPosterFile = async e => {
         const f = e.target.files?.[0];
         e.target.value = '';
         if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const url = String(reader.result);
+        try {
+            const url = await readFileAsDataURL(f);
             setCustomPoster({ b64: url.split(',').pop(), url, name: f.name });
             setPosterPath(null);
             setExtractMask(null);
-        };
-        reader.readAsDataURL(f);
+        } catch (err) {
+            toast.error(err.message || 'Could not read that image');
+        }
     };
     // Synced GDrive posters matching the title — fetched lazily the first time the
     // GDrive source is shown, and again whenever the title changes (mirrors the
@@ -6314,14 +6387,7 @@ const LogoAssetPanel = ({
             try {
                 const resp = await fetch(postersAPI.getPreviewUrl(poster.folder, poster.file));
                 if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
-                const blob = await resp.blob();
-                const dataUrl = await new Promise((resolve, reject) => {
-                    const r = new FileReader();
-                    r.onload = () => resolve(r.result);
-                    r.onerror = () => reject(new Error('Could not read image'));
-                    r.readAsDataURL(blob);
-                });
-                const url = String(dataUrl);
+                const url = await readFileAsDataURL(await resp.blob());
                 setCustomPoster({ b64: url.split(',').pop(), url, name: poster.file });
                 setPosterPath(null);
                 setExtractMask(null);
@@ -6386,11 +6452,7 @@ const LogoAssetPanel = ({
                 mask_b64: extractMask,
                 mode: activeExtractMode,
             });
-            const url = await new Promise(resolve => {
-                const fr = new FileReader();
-                fr.onload = () => resolve(String(fr.result));
-                fr.readAsDataURL(blob);
-            });
+            const url = await readFileAsDataURL(blob);
             setCustomExclusive({ b64: url.split(',').pop(), url, name: 'extracted-logo.png' });
             setExtractOpen(false);
         } catch (err) {
@@ -6879,6 +6941,7 @@ const LogoAssetPanel = ({
                                         imageUrl={posterUrl}
                                         brushSize={18}
                                         onMaskChange={setExtractMask}
+                                        initialMask={extractMask}
                                         onDetectText={canDetect ? runPosterDetect : null}
                                         onTightenText={runPosterTighten}
                                     />
@@ -6912,6 +6975,7 @@ const LogoAssetPanel = ({
                                 imageUrl={previewUrl}
                                 brushSize={10}
                                 onMaskChange={setFlipB64}
+                                initialMask={flipB64}
                             />
                         </div>
                     </StudioAccordion>
@@ -6955,75 +7019,51 @@ const LogoAssetPanel = ({
 
 // ─── History ────────────────────────────────────────────────────────────────
 
+// Body only — call sites wrap this in the "Recently generated" StudioAccordion,
+// which owns the collapse and mounts children only while open (loading stays lazy).
 const HistorySection = ({ toast }) => {
     const [items, setItems] = useState(null);
-    const [open, setOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
-            const resp = await cl2kMakerAPI.generated(50);
-            setItems(resp?.data?.items || []);
-        } catch (err) {
-            toast.error(err.message || 'Failed to load history');
-        } finally {
-            setLoading(false);
-        }
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const resp = await cl2kMakerAPI.generated(50);
+                if (!cancelled) setItems(resp?.data?.items || []);
+            } catch (err) {
+                if (!cancelled) toast.error(err.message || 'Failed to load history');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
     }, [toast]);
 
-    const toggle = useCallback(() => {
-        setOpen(o => {
-            const next = !o;
-            if (next && items === null) load();
-            return next;
-        });
-    }, [items, load]);
-
+    if (loading) return <Spinner size="small" text="Loading…" />;
+    if (!items || items.length === 0)
+        return <div className="text-xs text-fg-subtle">Nothing generated yet.</div>;
     return (
-        <section className="mt-8 bg-surface border border-border rounded-lg">
-            <button
-                type="button"
-                onClick={toggle}
-                className="w-full flex items-center justify-between p-3 hover:bg-surface-alt"
-            >
-                <span className="text-sm font-medium text-fg">Recently generated</span>
-                <span className="material-symbols-outlined text-fg-subtle">
-                    {open ? 'expand_less' : 'expand_more'}
-                </span>
-            </button>
-            {open && (
-                <div className="p-3 border-t border-border-subtle">
-                    {loading ? (
-                        <Spinner size="small" text="Loading…" />
-                    ) : !items || items.length === 0 ? (
-                        <div className="text-xs text-fg-subtle">Nothing generated yet.</div>
-                    ) : (
-                        <ul className="divide-y divide-border text-sm">
-                            {items.map((it, idx) => (
-                                <li
-                                    key={`${it.file || idx}`}
-                                    className="py-2 flex items-center justify-between gap-3"
-                                >
-                                    <span className="text-fg truncate">
-                                        {it.title || it.file}
-                                        {it.season_number != null && (
-                                            <span className="text-fg-subtle">
-                                                {' '}
-                                                · S{it.season_number}
-                                            </span>
-                                        )}
-                                    </span>
-                                    <span className="text-xs text-fg-subtle shrink-0">
-                                        {it.kind} · logo: {it.logo_source || '—'}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            )}
-        </section>
+        <ul className="divide-y divide-border text-sm">
+            {items.map((it, idx) => (
+                <li
+                    key={`${it.file || idx}`}
+                    className="py-2 flex items-center justify-between gap-3"
+                >
+                    <span className="text-fg truncate">
+                        {it.title || it.file}
+                        {it.season_number != null && (
+                            <span className="text-fg-subtle"> · S{it.season_number}</span>
+                        )}
+                    </span>
+                    <span className="text-xs text-fg-subtle shrink-0">
+                        {it.kind} · logo: {it.logo_source || '—'}
+                    </span>
+                </li>
+            ))}
+        </ul>
     );
 };
 
@@ -7073,6 +7113,22 @@ const parseSeasonList = s =>
         .map(x => parseInt(x.trim(), 10))
         .filter(n => Number.isInteger(n) && n >= 0);
 
+/** Read a File/Blob as a data URL — the ONE FileReader wrapper this page uses. */
+// Every raw `new FileReader()` here must route through this: a read that fails
+// with no onerror never settles, hanging whatever spinner awaits it.
+export const readFileAsDataURL = fileOrBlob =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error || new Error('Could not read the image'));
+        reader.onabort = () => reject(new Error('Image read was cancelled'));
+        reader.readAsDataURL(fileOrBlob);
+    });
+
+// WebKit cancels a download whose blob URL is revoked in the same task as the
+// click (the .psd export), so the revoke waits a beat instead.
+const DOWNLOAD_REVOKE_DELAY_MS = 1000;
+
 const downloadBlob = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -7081,7 +7137,7 @@ const downloadBlob = (blob, filename) => {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_REVOKE_DELAY_MS);
 };
 
 // Toast for a save/generate that also surfaces partial-target failures (some
@@ -7103,9 +7159,8 @@ const savedToast = (toast, data, verb = 'Saved') => {
     }
     const local = data?.saved_local;
     const uploaded = data?.uploaded;
-    // upload_pending: the poster is on disk and the Drive copy runs in the
-    // background (rclone takes tens of seconds — longer than the request
-    // timeout), so this is "not yet", not a failure.
+    // upload_pending: the Drive copy runs in background (past the request timeout)
+    // — "not yet", not failure. Deferred saves have no local file either.
     if (data?.upload_pending) {
         toast.success(`${verb}: ${file} — uploading to Drive…`);
     } else if (local && uploaded) {
