@@ -572,6 +572,40 @@ def test_a_deferred_run_that_crashes_before_the_upload_still_reports(monkeypatch
     assert any("FAILED" in m for m in errors), "and must log at error level"
 
 
+def test_a_retext_save_defers_its_drive_upload(monkeypatch):
+    """End to end through the endpoint: /retext held rclone in the request thread
+    because nothing threaded a deferral down to _persist_poster at all."""
+    uploaded = []
+    full, notes = _drive_only(monkeypatch, uploaded)
+    monkeypatch.setattr(api, "load_config", lambda: full)
+    tasks = BackgroundTasks()
+
+    resp = api.retext(
+        api.RetextRequest(
+            image_b64=_b64(_poster_jpeg()),
+            kind="movie",
+            title="T",
+            tmdb_id=7,
+            label_text="SEASON TWO",
+        ),
+        background_tasks=tasks,
+        db=types.SimpleNamespace(poster=types.SimpleNamespace(bulk_upsert=lambda r: None)),
+        logger=_logger(),
+    )
+
+    body = _body(resp)
+    assert body["success"] is True, body
+    assert not uploaded, "rclone must not run inside the request"
+    # The response has to say so, or the page reports a save that hasn't landed.
+    assert "uploading to Drive" in body["message"]
+    assert body["data"]["upload_pending"] is True
+
+    assert len(tasks.tasks) == 1, "the upload must be queued on BackgroundTasks"
+    tasks.tasks[0].func()  # FastAPI runs this after the response is sent
+    assert uploaded == ["folder-A"]
+    assert not notes, "a clean deferred upload must stay quiet"
+
+
 # 6+7. the season poll can't disagree with itself, and can't fake success
 
 

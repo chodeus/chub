@@ -53,6 +53,7 @@ def review(monkeypatch):
 
 
 def _apply(logger):
+    """Call the apply endpoint for the fixture review."""
     return heal.apply_review(1, db=object(), logger=logger)
 
 
@@ -79,6 +80,7 @@ def test_a_rename_failure_keeps_its_reason_out_of_the_response(review, monkeypat
     )
 
     def _boom(*a, **k):
+        """Fail the rename with text that must not reach the response."""
         raise RuntimeError(_SECRET)
 
     monkeypatch.setattr(heal, "apply_proposal", _boom)
