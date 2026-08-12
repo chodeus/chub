@@ -370,12 +370,17 @@ def test_allowed_roots_returns_empty_when_no_config(monkeypatch, app_with_router
 def test_error_body_omits_exception_text(app_with_router):
     """A raising dependency yields the stable message — never the exception text."""
 
-    class _Boom:
-        """Stub db whose stats accessor raises like a real internal failure."""
+    class _BoomStats:
+        """Stats interface that raises like a real internal failure."""
 
-        def get_poster_stats(self, *a, **kw):
+        def get_matched_posters_stats(self, *a, **kw):
             """Simulate an arbitrary internal error carrying sensitive text."""
             raise RuntimeError("LEAK_MARKER /srv/secret/chub.db")
+
+    class _Boom:
+        """Stub db exposing the raising stats interface the route reads."""
+
+        stats = _BoomStats()
 
     app = app_with_router(posters_router.router)
     app.state.db = _Boom()
