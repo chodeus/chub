@@ -176,6 +176,35 @@ const useMountedRef = () => {
     return ref;
 };
 
+/** Poll a season batch to its terminal status; null = the caller unmounted. */
+// The batch outlives a request timeout, so it is polled rather than awaited.
+// Both callers share this so the mounted re-check AFTER each request — the one
+// that stops a post-unmount progress update — can't drift between them.
+const pollSeasonsBatch = async (jobId, mountedRef, onProgress) => {
+    // Transient poll errors are tolerated, but a run of them (job evicted /
+    // server gone) throws, so the button never sticks in a spinner forever.
+    let fails = 0;
+    while (true) {
+        await new Promise(r => setTimeout(r, 1500));
+        if (!mountedRef.current) return null;
+        let d;
+        try {
+            d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
+        } catch {
+            if (++fails >= 10) throw new Error('Lost contact with the season job');
+            continue;
+        }
+        if (!mountedRef.current) return null; // unmounted while that request ran
+        if (!d) {
+            if (++fails >= 10) throw new Error('Lost contact with the season job');
+            continue;
+        }
+        fails = 0;
+        onProgress(`${d.done}/${d.total}`);
+        if (d.status === 'done' || d.status === 'error') return d;
+    }
+};
+
 /** Terminal toast for a season batch, including the partial-failure case. */
 // `outcome` / `failed` are additive backend fields — an older payload omits them
 // and falls through to the plain success line.
@@ -1780,7 +1809,15 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // (or clear the spinner the newer one owns).
     const previewSeq = useRef(0);
     const previewAbort = useRef(null);
-    useEffect(() => () => previewAbort.current?.abort(), []);
+    // Bump the sequence BEFORE aborting: the aborted call still reaches its
+    // `finally`, which must then see a newer seq and skip its setState.
+    useEffect(
+        () => () => {
+            previewSeq.current += 1;
+            previewAbort.current?.abort();
+        },
+        []
+    );
     const runPreview = useCallback(async () => {
         previewAbort.current?.abort();
         const aborter = new AbortController();
@@ -1880,37 +1917,15 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             const jobId = resp?.data?.job_id;
             if (!jobId) throw new Error(resp?.message || 'Could not start season batch');
 
-            // The batch runs server-side (it outlasts a request timeout) — poll its
-            // progress instead of blocking on one long request. Tolerate transient
-            // poll errors, but bail after a run of them (job evicted / server gone)
-            // so the button never sticks in a spinner forever.
-            let fails = 0;
-            while (true) {
-                await new Promise(r => setTimeout(r, 1500));
-                if (!bulkMountedRef.current) return; // unmounted — stop polling
-                let d;
-                try {
-                    d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
-                } catch {
-                    if (++fails >= 10) throw new Error('Lost contact with the season job');
-                    continue;
-                }
-                if (!d) {
-                    if (++fails >= 10) throw new Error('Lost contact with the season job');
-                    continue;
-                }
-                fails = 0;
-                setBulkProgress(`${d.done}/${d.total}`);
-                if (d.status === 'done' || d.status === 'error') {
-                    seasonsBatchToast(toast, d);
-                    break;
-                }
-            }
+            const d = await pollSeasonsBatch(jobId, bulkMountedRef, setBulkProgress);
+            if (d) seasonsBatchToast(toast, d); // null = unmounted, outcome unknown
         } catch (err) {
-            toast.error(err.message || 'Season generation failed');
+            if (bulkMountedRef.current) toast.error(err.message || 'Season generation failed');
         } finally {
-            setBusy(false);
-            setBulkProgress('');
+            if (bulkMountedRef.current) {
+                setBusy(false);
+                setBulkProgress('');
+            }
         }
     }, [
         bulkMountedRef,
@@ -2447,7 +2462,9 @@ const RenderPanel = ({
         () => ({
             items: gdriveLogos,
             loading: gdriveLogosLoading || gdriveLogosFor !== gdriveQuery,
-            error: gdriveLogosError,
+            // Scoped to the query it came from — the grid checks error before
+            // loading, so an unscoped one shadows the new title's load.
+            error: gdriveLogosFor === gdriveQuery ? gdriveLogosError : null,
             needsTitle: !gdriveQuery,
             importing: importingLogo,
             onPick: importLogoFromSync,
@@ -2505,7 +2522,11 @@ const RenderPanel = ({
         await ensureStreamToken();
         const url = customBackdrop?.url || urlForPath(backdrop);
         if (!url) return null;
-        const dataUrl = await readFileAsDataURL(await (await fetch(url)).blob());
+        const resp = await fetch(url);
+        // fetch resolves on 4xx/5xx, so without this the error body base64s into
+        // /retext as the poster (same guard the sync-cache imports already make).
+        if (!resp.ok) throw new Error(`Could not load the poster image (${resp.status})`);
+        const dataUrl = await readFileAsDataURL(await resp.blob());
         asisEncodedRef.current = { key, dataUrl };
         return dataUrl;
     }, [backdrop, customBackdrop]);
@@ -2682,10 +2703,11 @@ const RenderPanel = ({
     // backdrop currently is (the Send to AI button has already baked any erase in),
     // so this never spends AI credits.
     const runAsisPreview = useCallback(async () => {
-        const image_b64 = await asisDataUrlFromSource();
-        if (!image_b64) return;
-        setAsisPreviewing(true);
         try {
+            // Inside the try: the source read fetches + encodes, so it can reject.
+            const image_b64 = await asisDataUrlFromSource();
+            if (!image_b64) return;
+            setAsisPreviewing(true);
             const resp = await cl2kMakerAPI.retext({
                 image_b64,
                 mask_b64: null,
@@ -2705,10 +2727,10 @@ const RenderPanel = ({
     }, [asisDataUrlFromSource, asisExplicitLabel, asisTextY, asisBorder, asisIds, asisSig, toast]);
 
     const runAsisSave = useCallback(async () => {
-        const image_b64 = await asisDataUrlFromSource();
-        if (!image_b64) return;
-        setAsisSaving(true);
         try {
+            const image_b64 = await asisDataUrlFromSource();
+            if (!image_b64) return;
+            setAsisSaving(true);
             const resp = await cl2kMakerAPI.retext({
                 image_b64,
                 mask_b64: null,
@@ -2745,14 +2767,11 @@ const RenderPanel = ({
             toast.error('Enter season numbers, e.g. 1,2,3');
             return;
         }
-        const image_b64 = await asisDataUrlFromSource();
-        if (!image_b64) {
-            toast.error('Upload or grab a poster first.');
-            return;
-        }
-        setAsisBulkBusy(true);
-        setAsisBulkProgress(`0/${nums.length}`);
         try {
+            const image_b64 = await asisDataUrlFromSource();
+            if (!image_b64) throw new Error('Upload or grab a poster first.');
+            setAsisBulkBusy(true);
+            setAsisBulkProgress(`0/${nums.length}`);
             const resp = await cl2kMakerAPI.retextSeasons({
                 image_b64,
                 seasons: nums,
@@ -2768,33 +2787,15 @@ const RenderPanel = ({
             const jobId = resp?.data?.job_id;
             if (!jobId) throw new Error(resp?.message || 'Could not start season batch');
 
-            let fails = 0;
-            while (true) {
-                await new Promise(r => setTimeout(r, 1500));
-                if (!asisMountedRef.current) return; // unmounted — stop polling
-                let d;
-                try {
-                    d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
-                } catch {
-                    if (++fails >= 10) throw new Error('Lost contact with the season job');
-                    continue;
-                }
-                if (!d) {
-                    if (++fails >= 10) throw new Error('Lost contact with the season job');
-                    continue;
-                }
-                fails = 0;
-                setAsisBulkProgress(`${d.done}/${d.total}`);
-                if (d.status === 'done' || d.status === 'error') {
-                    seasonsBatchToast(toast, d);
-                    break;
-                }
-            }
+            const d = await pollSeasonsBatch(jobId, asisMountedRef, setAsisBulkProgress);
+            if (d) seasonsBatchToast(toast, d); // null = unmounted, outcome unknown
         } catch (err) {
-            toast.error(err.message || 'Season generation failed');
+            if (asisMountedRef.current) toast.error(err.message || 'Season generation failed');
         } finally {
-            setAsisBulkBusy(false);
-            setAsisBulkProgress('');
+            if (asisMountedRef.current) {
+                setAsisBulkBusy(false);
+                setAsisBulkProgress('');
+            }
         }
     }, [
         asisMountedRef,
@@ -2835,10 +2836,10 @@ const RenderPanel = ({
         let cancelled = false;
         const handle = setTimeout(async () => {
             const p = asisPreviewInputsRef.current;
-            const image_b64 = await p.fromSource();
-            if (cancelled || !image_b64) return;
-            setAsisPreviewing(true);
             try {
+                const image_b64 = await p.fromSource();
+                if (cancelled || !image_b64) return;
+                setAsisPreviewing(true);
                 const resp = await cl2kMakerAPI.retext({
                     image_b64,
                     mask_b64: null,
