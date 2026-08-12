@@ -10,6 +10,7 @@ import { Button, LoadingButton, IconButton } from '../../components/ui/index.js'
 import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
+import { downloadBlob } from '../../utils/download.js';
 
 const fmtBytes = n => {
     if (!n) return '0 B';
@@ -572,14 +573,7 @@ const MediaManagePage = () => {
             const blob = new Blob([JSON.stringify(items, null, 2)], {
                 type: 'application/json',
             });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `chub-media-${new Date().toISOString().slice(0, 10)}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            downloadBlob(blob, `chub-media-${new Date().toISOString().slice(0, 10)}.json`);
             toast.success(`Exported ${items.length} media items`);
         } catch {
             toast.error('Export failed');
