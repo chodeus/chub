@@ -1101,11 +1101,21 @@ def _persist_poster(
                 f"CL2K uploaded {filename} but could not record provenance: {exc}"
             )
 
-    # Defer only uploads backed by a local copy (rclone outruns the UI timeout).
+    def _deferred() -> None:
+        """Run the deferred upload; report anything that escapes _run_uploads."""
+        try:
+            _run_uploads(reload_config=True)
+        except Exception as exc:
+            # Staging (mkdtemp/write) happens before the per-folder guard, so a
+            # raise here would leave the caller on "uploading to Drive" forever.
+            _report_deferred_failure([f"the upload task crashed: {exc}"], full_config)
+
+    # Every caller that supplies a deferral gets one, Drive-only included: rclone
+    # outruns the UI timeout, and _run_uploads stages its own temp copy from `blob`.
     deferred_upload = False
     if folder_ids:
-        if defer_upload is not None and written:
-            defer_upload(lambda: _run_uploads(reload_config=True))
+        if defer_upload is not None:
+            defer_upload(_deferred)
             deferred_upload = True
             logger.info(
                 f"CL2K queued Drive upload for {filename} "
@@ -1114,9 +1124,9 @@ def _persist_poster(
         else:
             _run_uploads()
 
-    # Nothing landed anywhere => error, not a misleading success. A deferred
-    # upload can't be the cause: `written` is non-empty whenever we defer.
-    if not written and not uploaded_folders:
+    # Nothing landed anywhere => error, not a misleading success. A queued upload
+    # has not failed yet — _report_deferred_failure carries that outcome instead.
+    if not written and not uploaded_folders and not deferred_upload:
         return {
             "status": "error",
             "reason": "; ".join(
@@ -1221,6 +1231,7 @@ def save_finished_poster(
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ) -> Dict[str, Any]:
     """File a pre-made poster (no rendering) into the selected destinations.
 
@@ -1249,6 +1260,8 @@ def save_finished_poster(
         imdb_id=imdb_id,
     )
     blob = _normalize_poster(image_bytes)
+    # The border rides along with the logo composite when both are wanted: two
+    # calls here meant decoding and re-encoding the JPEG between them.
     if logo_bytes:
         from backend.util.cl2k.renderer import overlay_logo
 
@@ -1262,8 +1275,9 @@ def save_finished_poster(
             flat_white=flat_white,
             logo_3d=logo_3d,
             invert=invert,
+            add_border=add_border,
         )
-    if add_border:
+    elif add_border:
         from backend.util.cl2k.renderer import apply_border
 
         blob = apply_border(blob)
@@ -1284,6 +1298,7 @@ def save_finished_poster(
         logo_source=logo_source,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
+        defer_upload=defer_upload,
         full_config=full_config,
     )
 
@@ -1348,6 +1363,7 @@ def retext_poster(
     keep_size: bool = False,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ):
     """Re-text a finished poster: AI-erase the brushed old text, then draw a new
     CL2K-style label (e.g. swap a season year).
@@ -1380,12 +1396,14 @@ def retext_poster(
     label = label_text
     if not label and kind == "season" and season_number is not None:
         label = season_band_text(season_number)
+    # The border rides along with the label draw when both are wanted: two calls
+    # here meant decoding and re-encoding the JPEG between them.
     if label:
         center_y = None
         if text_y_frac is not None:
             center_y = int(max(0.0, min(1.0, text_y_frac)) * geo.CANVAS_H)
-        img = overlay_label(img, label, center_y=center_y)
-    if add_border:
+        img = overlay_label(img, label, center_y=center_y, add_border=add_border)
+    elif add_border:
         img = apply_border(img)
     if not save:
         return img
@@ -1406,6 +1424,7 @@ def retext_poster(
         add_border=False,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
+        defer_upload=defer_upload,
     )
 
 
@@ -1494,7 +1513,11 @@ def generate_seasons(
             )
         except Exception as exc:  # one bad season must not sink the rest
             logger.error(f"cl2k: season {n} generation failed: {exc}", exc_info=True)
-            res = {"status": "error", "reason": str(exc)}
+            # /seasons-status serialises this reason, so it must not carry exc.
+            res = {
+                "status": "error",
+                "reason": f"season {n} failed — see the CL2K Maker log for the reason",
+            }
         entry = {"season": int(n), **res}
         results.append(entry)
         if progress_cb is not None:
@@ -1514,12 +1537,16 @@ def psd_for_item(
     title: str,
     tmdb_id: int,
     backdrop_path: Optional[str] = None,
+    backdrop_bytes: Optional[bytes] = None,  # uploaded art; wins over backdrop_path
     logo_path: Optional[str] = None,
+    custom_logo_bytes: Optional[bytes] = None,  # uploaded logo; wins over logo_path
     season_text: str = "",
     season_number: Optional[int] = None,
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
+    logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    logo_erase_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     focus_x: float = 0.5,
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
@@ -1538,6 +1565,11 @@ def psd_for_item(
     ``season_number`` (via season_band_text — same rule as the render path), and a
     ``band_label`` override wins over it, so the PSD carries the same label the
     flattened poster would, unless an explicit ``season_text`` is given.
+
+    The uploaded/brushed inputs (``backdrop_bytes`` / ``custom_logo_bytes`` /
+    ``logo_flip_bytes`` / ``logo_erase_bytes``) take the same precedence they do
+    in :func:`_resolve_and_render`, so the .psd is built from what the preview
+    showed rather than from a fresh TMDB auto-pick.
     """
     from backend.util.cl2k.psd_export import export_psd
 
@@ -1547,21 +1579,32 @@ def psd_for_item(
         season_text = season_band_text(season_number)
     tmdb = TMDBClient(full_config.tmdb, db, logger)
     backdrop_path, logo_path = _resolve_default_art(
-        tmdb, tmdb_id, kind, lang, backdrop_path, logo_path
+        tmdb,
+        tmdb_id,
+        kind,
+        lang,
+        backdrop_path,
+        logo_path,
+        need_backdrop=backdrop_bytes is None,
+        need_logo=custom_logo_bytes is None,
     )
-    if not backdrop_path:
-        return None
-    backdrop_bytes = renderer.frame_backdrop(
-        backdrop_bytes=image_fetch.download(backdrop_path),
+    if backdrop_bytes is None:
+        if not backdrop_path:
+            return None
+        backdrop_bytes = image_fetch.download(backdrop_path)
+    framed = renderer.frame_backdrop(
+        backdrop_bytes=backdrop_bytes,
         focus_x=focus_x,
         fit_mode=fit_mode,
         crop=crop,
         v_pos=v_pos,
         zoom=zoom,
     )
-    logo_bytes = image_fetch.download(logo_path) if logo_path else None
+    logo_bytes = custom_logo_bytes
+    if logo_bytes is None and logo_path:
+        logo_bytes = image_fetch.download(logo_path)
     return export_psd(
-        backdrop_bytes=backdrop_bytes,
+        backdrop_bytes=framed,
         kind=kind,
         logo_bytes=logo_bytes,
         title=title,
@@ -1569,6 +1612,8 @@ def psd_for_item(
         band_label=band_label,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
+        logo_flip_bytes=logo_flip_bytes,
+        logo_erase_bytes=logo_erase_bytes,
         whiten=cfg.whiten_logo if whiten is None else whiten,
         flat_white=flat_white,
         logo_3d=logo_3d,

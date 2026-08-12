@@ -956,6 +956,13 @@ def fill_dark_bodies(whitened_png: bytes, original_png: bytes) -> bytes:
     return buf.getvalue()
 
 
+def finish_two_tone(whitened_png: bytes, original_png: bytes) -> bytes:
+    """The post-whiten two-tone chain: colour-edge keylines, then dark-body fill.
+
+    The ONE owner of that pairing and its order, so no caller can run half of it."""
+    return fill_dark_bodies(ink_color_edges(whitened_png, original_png), original_png)
+
+
 # --- 3D / extruded logos (a whiten MODE, called from renderer.process_logo) -----
 _FACE_SOFT = 0.06  # +/- luma either side of the split, ramped for antialiasing
 _FACE_MIN_FRAC = 0.12  # kept fraction of the opaque area below this -> not a face
