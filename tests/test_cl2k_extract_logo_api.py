@@ -75,9 +75,10 @@ def provider(monkeypatch):
     return _set
 
 
-def _call(**kw):
+def _call(logger=None, **kw):
+    """Invoke /extract-logo in erase mode against the fixture poster."""
     req = cl2k_api.ExtractLogoRequest(image_b64=_POSTER_B64, mode="erase", **kw)
-    return cl2k_api.extract_logo(req, db=object(), logger=_logger())
+    return cl2k_api.extract_logo(req, db=object(), logger=logger or _logger())
 
 
 def _body(resp):
@@ -118,12 +119,22 @@ def test_erase_reports_a_provider_that_echoes_an_equal_copy(provider):
 
 
 def test_erase_reports_a_failing_provider(provider):
+    """The failure must reach the user — but the provider's exception text goes to
+    the log, not the response (py/stack-trace-exposure)."""
     provider(raises=RuntimeError("sidecar timeout"))
-    resp = _call(mask_b64=_mask_b64())
+    logged = []
+    logger = types.SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda m, *a, **k: logged.append(str(m)),
+        error=lambda m, *a, **k: logged.append(str(m)),
+    )
+    resp = _call(logger=logger, mask_b64=_mask_b64())
     assert resp.status_code == 400
     body = _body(resp)
     assert body["error_code"] == "CL2K_AI"
-    assert "sidecar timeout" in body["message"]
+    assert "sidecar timeout" not in body["message"]
+    assert any("sidecar timeout" in m for m in logged)
 
 
 def test_erase_keys_the_title_out_of_the_erased_result(provider, monkeypatch):
