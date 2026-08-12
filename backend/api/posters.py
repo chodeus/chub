@@ -3927,6 +3927,14 @@ async def delete_poster(
         except Exception:
             pass
 
+        # Authorize BEFORE the irreversible row delete: a malformed config must
+        # abort the whole request, not leave the row gone and the file orphaned.
+        config = None
+        if delete_file:
+            from backend.util.config import load_config
+
+            config = load_config()
+
         record = db.poster.delete_by_integer_id(poster_id)
         if not record:
             return error("Poster not found", code="POSTER_NOT_FOUND", status_code=404)
@@ -3938,22 +3946,13 @@ async def delete_poster(
             os.path.join(folder, file_path) if folder and file_path else file_path
         )
         # A poisoned row must never reach os.remove: resolve first, then require
-        # membership in a configured root. Unresolvable config == skip, not delete.
+        # membership in a configured root.
         file_deleted = False
         if delete_file and full_path:
-            from backend.util.config import load_config
             from backend.util.path_safety import is_path_allowed
 
-            try:
-                config = load_config()
-            except ConfigError:
-                config = None
             real = os.path.realpath(full_path)
-            if (
-                config is None
-                or real == os.path.realpath(os.sep)
-                or not is_path_allowed(real, config)
-            ):
+            if real == os.path.realpath(os.sep) or not is_path_allowed(real, config):
                 logger.error(f"Refusing to delete poster file outside roots: {real}")
             elif os.path.exists(real):
                 os.remove(real)

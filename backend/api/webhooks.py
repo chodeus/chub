@@ -156,12 +156,9 @@ async def process_poster_webhook(
         # proxy (general.trusted_proxies) — this recovers the arr's real IP for
         # instance matching. A forged XFF from an untrusted caller is ignored.
         peer_host = request.client.host if request.client else None
-        try:
-            trusted_proxies = load_config().general.trusted_proxies
-        except ConfigError:
-            raise
-        except Exception:
-            trusted_proxies = []
+        # Unguarded on purpose: this decides whether XFF is honoured, so an
+        # indeterminate trust model must reject the webhook, not guess at it.
+        trusted_proxies = load_config().general.trusted_proxies
         client_info = {
             "client_host": resolve_client_host(
                 peer_host,

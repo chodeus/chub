@@ -281,17 +281,11 @@ async def list_directory(
         Dictionary containing directories list and path metadata
     """
     try:
-        # Restrict to configured allowed roots
-        try:
-            config = load_config()
-        except ConfigError:
-            config = None
-
-        # Fail closed: if the config can't be loaded (corrupt/invalid existing
-        # file), deny rather than allowing arbitrary directory enumeration or
-        # creation. A fresh no-file install returns a default config (not None),
-        # so the setup flow is unaffected.
-        if config is None or not is_path_allowed(path, config):
+        # Restrict to configured allowed roots. A corrupt config propagates as
+        # CONFIG_INVALID rather than masquerading as "path not allowed"; a fresh
+        # no-file install loads defaults, so the setup flow is unaffected.
+        config = load_config()
+        if not is_path_allowed(path, config):
             return error(
                 "Access denied — path outside allowed directories",
                 code="PATH_NOT_ALLOWED",
@@ -371,17 +365,11 @@ async def create_directory(
     try:
         path = request_data.path
 
-        # Restrict to configured allowed roots
-        try:
-            config = load_config()
-        except ConfigError:
-            config = None
-
-        # Fail closed: if the config can't be loaded (corrupt/invalid existing
-        # file), deny rather than allowing arbitrary directory enumeration or
-        # creation. A fresh no-file install returns a default config (not None),
-        # so the setup flow is unaffected.
-        if config is None or not is_path_allowed(path, config):
+        # Restrict to configured allowed roots. A corrupt config propagates as
+        # CONFIG_INVALID rather than masquerading as "path not allowed"; a fresh
+        # no-file install loads defaults, so the setup flow is unaffected.
+        config = load_config()
+        if not is_path_allowed(path, config):
             return error(
                 "Access denied — path outside allowed directories",
                 code="PATH_NOT_ALLOWED",

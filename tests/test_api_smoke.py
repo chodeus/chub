@@ -378,6 +378,44 @@ def test_allowed_roots_propagates_config_error(monkeypatch, app_with_router):
     assert resp.json()["error_code"] == "CONFIG_INVALID"
 
 
+def test_delete_poster_aborts_before_row_delete_on_bad_config(
+    monkeypatch, app_with_router, tmp_path
+):
+    """deleteFile + malformed config must abort BEFORE the irreversible row delete."""
+    from backend.api.main import handle_config_error
+    from backend.util.config import ConfigError, clear_config_cache
+
+    (tmp_path / "config.yml").mkdir()  # OSError on open -> ConfigParseError
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    clear_config_cache()
+
+    deleted = []
+
+    class _Poster:
+        """Tripwire recording any row deletion the handler attempts."""
+
+        def delete_by_integer_id(self, poster_id):
+            """Record the destructive call so the test can assert it never ran."""
+            deleted.append(poster_id)
+            return {"file": "x.jpg", "folder": "/tmp", "normalized_title": None}
+
+    class _DB:
+        """Minimal db stub exposing only the poster repository."""
+
+        poster = _Poster()
+
+    app = app_with_router(posters_router.router)
+    app.state.db = _DB()
+    app.add_exception_handler(ConfigError, handle_config_error)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.request("DELETE", "/api/posters/1", json={"deleteFile": True})
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+    assert deleted == []  # the row survives a broken config
+    clear_config_cache()
+
+
 def test_delete_poster_refuses_file_outside_allowed_roots(
     monkeypatch, app_with_router, tmp_path
 ):
@@ -450,6 +488,48 @@ def test_webhook_rejected_when_config_malformed(monkeypatch, app_with_router):
     # without the user re-firing every missed event by hand.
     assert resp.status_code == 503
     assert db.touched == [], f"webhook body was processed: db.{db.touched}"
+
+
+def test_webhook_config_read_failure_rejects_without_enqueue(
+    monkeypatch, app_with_router, tmp_path
+):
+    """An unreadable config (OSError) rejects the webhook and enqueues nothing."""
+    from backend.api import webhooks as webhooks_router
+    from backend.api.main import handle_config_error
+    from backend.util.config import ConfigError, clear_config_cache
+
+    # A directory where config.yml belongs -> open() raises IsADirectoryError,
+    # which load_config wraps into ConfigParseError (a ConfigError).
+    (tmp_path / "config.yml").mkdir()
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    clear_config_cache()
+
+    enqueued = []
+
+    class _Worker:
+        """Tripwire: records any enqueue attempt instead of doing one."""
+
+        def enqueue_job(self, *a, **k):
+            """Record the call so the test can assert it never happened."""
+            enqueued.append(a)
+            return {"success": True, "data": {"job_id": 1}}
+
+    class _DB:
+        """Minimal db stub exposing only the job worker."""
+
+        worker = _Worker()
+
+    app = app_with_router(webhooks_router.router)
+    app.state.db = _DB()
+    app.add_exception_handler(ConfigError, handle_config_error)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
+
+    # 503 from verify_webhook_secret, not CONFIG_INVALID: the auth dependency
+    # runs first and already fails closed, so the handler body never starts.
+    assert resp.status_code == 503
+    assert enqueued == []
+    clear_config_cache()
 
 
 def test_webhook_signed_path_still_accepted(monkeypatch):
