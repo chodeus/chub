@@ -19,6 +19,7 @@ from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.config import (
     REDACTED_PLACEHOLDER,
     ChubConfig,
+    ConfigError,
     InstanceDetail,
     load_config,
     redact_secrets,
@@ -507,10 +508,10 @@ def check_all_health(
                     "response_time_ms": 0,
                 }
             except Exception as exc:
+                logger.error(f"Health probe failed for '{name}': {exc}")
                 return name, {
                     "service": service,
                     "status": "error",
-                    "error": str(exc),
                 }
 
         if probes:
@@ -593,7 +594,7 @@ async def get_instances(
     except Exception as e:
         logger.error(f"Error retrieving instances: {e}")
         return error(
-            f"Error retrieving instances: {str(e)}",
+            "Error retrieving instances",
             code="INSTANCES_RETRIEVAL_ERROR",
             status_code=500,
         )
@@ -602,9 +603,13 @@ async def get_instances(
 class _PlexFetchError(Exception):
     """Carries the API error code/status the libraries endpoints surface."""
 
-    def __init__(self, message: str, code: str, status_code: int) -> None:
+    def __init__(
+        self, message: str, code: str, status_code: int, detail: str = ""
+    ) -> None:
+        """Split the public message from the server-only `detail`."""
         super().__init__(message)
-        self.message = message
+        self.message = message  # public: returned to the client
+        self.detail = detail  # server-only: never put in a response
         self.code = code
         self.status_code = status_code
 
@@ -637,13 +642,16 @@ def _fetch_plex_libraries(plex_data: Any) -> list:
         res = requests.get(url, headers=headers, timeout=5, allow_redirects=False)
     except requests.exceptions.RequestException as req_exc:
         raise _PlexFetchError(
-            f"Failed to connect to Plex server: {req_exc}",
+            "Failed to connect to Plex server",
             "PLEX_CONNECTION_FAILED",
             502,
         ) from req_exc
     if not res.ok:
         raise _PlexFetchError(
-            f"Plex server error: {res.text}", "PLEX_SERVER_ERROR", res.status_code
+            "Plex server error",
+            "PLEX_SERVER_ERROR",
+            res.status_code,
+            detail=res.text[:500],
         )
 
     import defusedxml.ElementTree as ET
@@ -786,7 +794,13 @@ def get_plex_libraries(
         try:
             libraries = _fetch_plex_libraries(plex_data)
         except _PlexFetchError as fe:
-            logger.error("Plex libraries fetch failed: %s", fe.message)
+            # exc_info carries the __cause__ the public message no longer does
+            logger.error(
+                "Plex libraries fetch failed: %s %s",
+                fe.message,
+                fe.detail,
+                exc_info=True,
+            )
             return error(fe.message, code=fe.code, status_code=fe.status_code)
 
         libraries = _annotate_enabled(libraries, plex_data.enabled_libraries)
@@ -798,7 +812,7 @@ def get_plex_libraries(
     except Exception as e:
         logger.error(f"Unexpected error retrieving Plex libraries: {e}")
         return error(
-            f"Error retrieving Plex libraries: {str(e)}",
+            "Error retrieving Plex libraries",
             code="PLEX_LIBRARIES_ERROR",
             status_code=500,
         )
@@ -1041,10 +1055,12 @@ def test_instance(
             code="CONNECTION_FAILED",
             status_code=502,
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Connection test failed for {data.name} ({data.url}): {e}")
         return error(
-            f"Connection test error: {str(e)}",
+            "Connection test error",
             code="CONNECTION_TEST_ERROR",
             status_code=500,
         )
@@ -1148,10 +1164,12 @@ async def create_instance(
             {"service": service, "name": name},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to create instance {data.name}: {e}")
         return error(
-            f"Failed to create instance: {str(e)}",
+            "Failed to create instance",
             code="INSTANCE_CREATE_ERROR",
             status_code=500,
         )
@@ -1311,10 +1329,12 @@ async def update_instance(
             {"service": service, "name": new_name},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to update instance {instance_id}: {e}")
         return error(
-            f"Failed to update instance: {str(e)}",
+            "Failed to update instance",
             code="INSTANCE_UPDATE_ERROR",
             status_code=500,
         )
@@ -1398,10 +1418,12 @@ async def delete_instance(
             {"name": instance_id},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to delete instance {instance_id}: {e}")
         return error(
-            f"Failed to delete instance: {str(e)}",
+            "Failed to delete instance",
             code="INSTANCE_DELETE_ERROR",
             status_code=500,
         )
@@ -1755,6 +1777,8 @@ async def refresh_instance(
             job_id = result.get("data", {}).get("job_id")
             return ok(f"Refresh initiated for '{instance_id}'", {"job_id": job_id})
         return error("Error enqueuing refresh", code="REFRESH_ERROR", status_code=500)
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error refreshing instance {instance_id}: {e}")
         return error(
@@ -1814,6 +1838,8 @@ async def sync_instance(
             job_id = result.get("data", {}).get("job_id")
             return ok(f"Sync initiated for '{instance_id}'", {"job_id": job_id})
         return error("Error enqueuing sync", code="SYNC_ERROR", status_code=500)
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error syncing instance {instance_id}: {e}")
         return error(
@@ -1909,10 +1935,12 @@ async def toggle_instance(
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to toggle instance {instance_id}: {e}")
         return error(
-            f"Failed to toggle instance: {str(e)}",
+            "Failed to toggle instance",
             code="INSTANCE_TOGGLE_ERROR",
             status_code=500,
         )
@@ -2008,7 +2036,7 @@ def get_instance_logs(
     except Exception as e:
         logger.error(f"Error retrieving logs for instance {instance_id}: {e}")
         return error(
-            f"Error retrieving instance logs: {str(e)}",
+            "Error retrieving instance logs",
             code="INSTANCE_LOGS_ERROR",
             status_code=500,
         )
@@ -2117,11 +2145,11 @@ def check_instance_health(
                 "response_time_ms": 0,
             }
         except Exception as exc:
+            logger.error(f"Health check failed for '{instance_id}': {exc}")
             health_data = {
                 "name": instance_id,
                 "service": service,
                 "status": "error",
-                "error": str(exc),
             }
 
         return ok(f"Health check for '{instance_id}'", health_data)
