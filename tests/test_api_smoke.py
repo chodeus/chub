@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from backend.api import auth as auth_router  # noqa: E402
 from backend.api import border_replacerr as border_router  # noqa: E402
+from backend.api import posters as posters_router  # noqa: E402
 from backend.api import system as system_router  # noqa: E402
 from backend.util.config import ChubConfig  # noqa: E402
 
@@ -361,3 +362,26 @@ def test_allowed_roots_returns_empty_when_no_config(monkeypatch, app_with_router
     resp = client.get("/api/allowed-roots")
     assert resp.status_code == 200
     assert resp.json()["data"]["roots"] == []
+
+
+# --- Error-response hygiene ---
+
+
+def test_error_body_omits_exception_text(app_with_router):
+    """A raising dependency yields the stable message — never the exception text."""
+
+    class _Boom:
+        def __getattr__(self, _name):
+            raise RuntimeError("LEAK_MARKER /srv/secret/chub.db")
+
+    app = app_with_router(posters_router.router)
+    app.state.db = _Boom()
+    client = TestClient(app)
+    resp = client.get("/api/posters/stats")
+
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body["error_code"] == "POSTER_STATS_ERROR"
+    assert body["message"] == "Error retrieving poster statistics"
+    # The whole body, not just message — detail must not reach data/ either.
+    assert "LEAK_MARKER" not in resp.text

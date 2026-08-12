@@ -98,7 +98,7 @@ async def get_version_endpoint(logger: Any = Depends(get_logger)) -> JSONRespons
     except Exception as e:
         logger.error(f"Error getting version: {e}")
         return error(
-            f"Error getting version: {str(e)}", code="VERSION_ERROR", status_code=500
+            "Error getting version", code="VERSION_ERROR", status_code=500
         )
 
 
@@ -119,7 +119,7 @@ async def check_version_endpoint(logger: Any = Depends(get_logger)) -> JSONRespo
     except Exception as e:
         logger.error(f"Error checking for updates: {e}")
         return error(
-            f"Error checking for updates: {str(e)}",
+            "Error checking for updates",
             code="VERSION_CHECK_ERROR",
             status_code=500,
         )
@@ -325,7 +325,7 @@ async def list_directory(
     except Exception as e:
         logger.error(f"Error listing directory {path}: {e}")
         return error(
-            f"Error listing directory: {str(e)}",
+            "Error listing directory",
             code="DIRECTORY_LIST_ERROR",
             status_code=500,
         )
@@ -401,7 +401,7 @@ async def create_directory(
     except Exception as e:
         logger.error(f"Error creating folder {path}: {e}")
         return error(
-            f"Error creating folder: {str(e)}",
+            "Error creating folder",
             code="FOLDER_CREATION_ERROR",
             status_code=500,
         )
@@ -443,7 +443,7 @@ async def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
     except Exception as e:
         logger.error(f"Error listing allowed roots: {e}")
         return error(
-            f"Error listing allowed roots: {str(e)}",
+            "Error listing allowed roots",
             code="ALLOWED_ROOTS_ERROR",
             status_code=500,
         )
@@ -494,7 +494,7 @@ async def list_gdrive_presets(logger: Any = Depends(get_logger)) -> JSONResponse
     except Exception as e:
         logger.error(f"Error loading gdrive presets: {e}")
         return error(
-            f"Error loading gdrive presets: {str(e)}",
+            "Error loading gdrive presets",
             code="GDRIVE_PRESETS_ERROR",
             status_code=500,
         )
@@ -544,7 +544,7 @@ async def test(
     except Exception as e:
         logger.error(f"Error processing test request: {e}")
         return error(
-            f"Error processing test request: {str(e)}",
+            "Error processing test request",
             code="TEST_ENDPOINT_ERROR",
             status_code=400,
         )
@@ -585,7 +585,7 @@ def create_backup(
     except Exception as e:
         logger.error(f"Backup creation failed: {e}")
         return error(
-            f"Backup creation failed: {str(e)}",
+            "Backup creation failed",
             code="BACKUP_ERROR",
             status_code=500,
         )
@@ -706,8 +706,9 @@ async def restore_backup(
                     parsed = yaml.safe_load(raw_config)
                     ChubConfig.model_validate(parsed)
                 except Exception as e:
+                    logger.error(f"config.yml in backup is invalid: {e}")
                     return error(
-                        f"config.yml in backup is invalid: {e}",
+                        "config.yml in backup is invalid",
                         code="INVALID_BACKUP_CONFIG",
                         status_code=400,
                     )
@@ -781,7 +782,7 @@ async def get_health_snapshots(
     except Exception as e:
         logger.error(f"Error fetching health snapshots: {e}")
         return error(
-            f"Error fetching health snapshots: {str(e)}",
+            "Error fetching health snapshots",
             code="HEALTH_SNAPSHOT_ERROR",
             status_code=500,
         )
@@ -877,7 +878,7 @@ async def get_system_digest(
     except Exception as e:
         logger.error(f"Error building digest: {e}")
         return error(
-            f"Error building digest: {str(e)}",
+            "Error building digest",
             code="DIGEST_ERROR",
             status_code=500,
         )
@@ -921,7 +922,7 @@ async def get_cleanup_candidates(
     except Exception as e:
         logger.error(f"Error building cleanup candidates: {e}")
         return error(
-            f"Error building cleanup candidates: {str(e)}",
+            "Error building cleanup candidates",
             code="CLEANUP_CANDIDATES_ERROR",
             status_code=500,
         )
@@ -1023,7 +1024,7 @@ async def get_db_stats(
     except Exception as e:
         logger.error(f"Error building db stats: {e}")
         return error(
-            f"Error building db stats: {str(e)}",
+            "Error building db stats",
             code="DB_STATS_ERROR",
             status_code=500,
         )
@@ -1081,7 +1082,7 @@ def vacuum_database(
     except Exception as e:
         logger.error(f"Error running VACUUM: {e}")
         return error(
-            f"Error running VACUUM: {str(e)}",
+            "Error running VACUUM",
             code="DB_VACUUM_ERROR",
             status_code=500,
         )
@@ -1123,7 +1124,7 @@ async def clear_poster_cache(
     except Exception as e:
         logger.error(f"Error clearing poster_cache: {e}")
         return error(
-            f"Error clearing poster_cache: {str(e)}",
+            "Error clearing poster_cache",
             code="DB_CLEAR_POSTER_CACHE_ERROR",
             status_code=500,
         )
@@ -1160,7 +1161,7 @@ async def clear_artwork_matches(
     except Exception as e:
         logger.error(f"Error clearing media_asset_matches: {e}")
         return error(
-            f"Error clearing media_asset_matches: {str(e)}",
+            "Error clearing media_asset_matches",
             code="DB_CLEAR_ARTWORK_MATCHES_ERROR",
             status_code=500,
         )
@@ -1202,7 +1203,7 @@ async def reset_poster_matches(
     except Exception as e:
         logger.error(f"Error resetting poster match state: {e}")
         return error(
-            f"Error resetting poster match state: {str(e)}",
+            "Error resetting poster match state",
             code="DB_RESET_POSTER_MATCHES_ERROR",
             status_code=500,
         )
@@ -1240,7 +1241,7 @@ async def reset_artwork_matches(
     except Exception as e:
         logger.error(f"Error resetting artwork match state: {e}")
         return error(
-            f"Error resetting artwork match state: {str(e)}",
+            "Error resetting artwork match state",
             code="DB_RESET_ARTWORK_MATCHES_ERROR",
             status_code=500,
         )

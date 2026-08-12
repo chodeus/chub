@@ -51,5 +51,6 @@ async def complete_setup(logger: Any = Depends(get_logger)) -> JSONResponse:
         config.general.setup_completed = True
         save_config(config)
     except ConfigError as exc:
-        return error(f"Failed to save setup status: {exc}", status_code=500)
+        logger.error(f"Failed to save setup status: {exc}")
+        return error("Failed to save setup status", status_code=500)
     return ok("Setup marked complete", {"completed": True})

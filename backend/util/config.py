@@ -1080,7 +1080,11 @@ def resolve_secret_path(data: Any, path: str) -> str:
 
 
 class ConfigError(Exception):
-    """Base class for configuration errors."""
+    """Base class for configuration errors; `.message` is response-safe text."""
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(message)
+        self.message = message
 
 
 class ConfigNotFoundError(ConfigError):
@@ -1258,9 +1262,17 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
         with open(config_path, "r") as f:
             raw = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        raise ConfigParseError(f"Invalid YAML syntax in {config_path}: {e}") from e
+        # Position only — the raw text carries parser internals, plus the
+        # offending source line whenever YAML is parsed from a string.
+        mark = getattr(e, "problem_mark", None)
+        where = (
+            f" at line {mark.line + 1}, column {mark.column + 1}"
+            if mark is not None
+            else ""
+        )
+        raise ConfigParseError(f"Invalid YAML syntax in {config_path}{where}") from e
     except Exception as e:
-        raise ConfigParseError(f"Failed to read {config_path}: {e}") from e
+        raise ConfigParseError(f"Failed to read {config_path}") from e
 
     if raw is None:
         raise ConfigParseError(f"Configuration file is empty: {config_path}")
@@ -1278,7 +1290,7 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
             validation_error=e,
         ) from e
     except Exception as e:
-        raise ConfigError(f"Unexpected configuration error: {e}") from e
+        raise ConfigError(f"Unexpected configuration error in {config_path}") from e
 
     _cache_config(config_path, version, config)
     return config
@@ -1425,7 +1437,7 @@ def save_config(config: ChubConfig, path: Optional[str] = None) -> None:
                 pass  # Best-effort cleanup; re-raise original error
             raise
     except Exception as e:
-        raise ConfigError(f"Failed to save configuration: {e}") from e
+        raise ConfigError("Failed to save configuration") from e
 
 
 def seed_plex_enabled_libraries(

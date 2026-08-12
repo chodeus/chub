@@ -151,7 +151,7 @@ async def list_modules(
     except Exception as e:
         logger.error(f"Error listing modules: {e}")
         return error(
-            f"Error listing modules: {str(e)}",
+            "Error listing modules",
             code="MODULES_LIST_ERROR",
             status_code=500,
         )
@@ -245,7 +245,7 @@ async def get_modules_history(
     except Exception as e:
         logger.error(f"Error retrieving module history: {e}")
         return error(
-            f"Error retrieving history: {str(e)}",
+            "Error retrieving history",
             code="MODULE_HISTORY_ERROR",
             status_code=500,
         )
@@ -319,7 +319,7 @@ async def get_modules_stats(
     except Exception as e:
         logger.error(f"Error retrieving module stats: {e}")
         return error(
-            f"Error retrieving stats: {str(e)}",
+            "Error retrieving stats",
             code="MODULE_STATS_ERROR",
             status_code=500,
         )
@@ -400,7 +400,7 @@ async def get_all_run_states(
     except Exception as e:
         logger.error(f"Error getting run states: {e}")
         return error(
-            f"Error getting run states: {str(e)}",
+            "Error getting run states",
             code="RUN_STATE_ERROR",
             status_code=500,
         )
@@ -564,7 +564,7 @@ async def module_status(
     except Exception as e:
         logger.error(f"Error getting status for module {module}: {e}")
         return error(
-            f"Error getting module status: {str(e)}",
+            "Error getting module status",
             code="MODULE_STATUS_ERROR",
             status_code=500,
         )
@@ -654,7 +654,7 @@ async def get_module(
     except Exception as e:
         logger.error(f"Error retrieving module {name}: {e}")
         return error(
-            f"Error retrieving module: {str(e)}",
+            "Error retrieving module",
             code="MODULE_GET_ERROR",
             status_code=500,
         )
@@ -735,7 +735,7 @@ async def execute_module_by_name(
     except Exception as e:
         logger.error(f"Error executing module {name}: {e}")
         return error(
-            f"Error executing module: {str(e)}",
+            "Error executing module",
             code="MODULE_EXECUTE_ERROR",
             status_code=500,
         )
@@ -793,7 +793,7 @@ async def get_module_job_status(
     except Exception as e:
         logger.error(f"Error retrieving job {job_id}: {e}")
         return error(
-            f"Error retrieving job status: {str(e)}",
+            "Error retrieving job status",
             code="JOB_STATUS_ERROR",
             status_code=500,
         )
@@ -858,7 +858,7 @@ async def get_module_schema(
     except Exception as e:
         logger.error(f"Error retrieving schema for {name}: {e}")
         return error(
-            f"Error retrieving schema: {str(e)}", code="SCHEMA_ERROR", status_code=500
+            "Error retrieving schema", code="SCHEMA_ERROR", status_code=500
         )
 
 
@@ -945,15 +945,16 @@ async def update_module_config(
 
         return ok(f"Configuration for '{name}' updated", {"module": name})
     except ValueError as e:
+        logger.error(f"Config validation failed for {name}: {e}")
         return error(
-            f"Config validation failed: {str(e)}",
+            "Config validation failed",
             code="CONFIG_VALIDATION_ERROR",
             status_code=400,
         )
     except Exception as e:
         logger.error(f"Error updating config for {name}: {e}")
         return error(
-            f"Error updating config: {str(e)}",
+            "Error updating config",
             code="CONFIG_UPDATE_ERROR",
             status_code=500,
         )
@@ -1033,7 +1034,7 @@ async def toggle_module(
     except Exception as e:
         logger.error(f"Error toggling module {name}: {e}")
         return error(
-            f"Error toggling module: {str(e)}",
+            "Error toggling module",
             code="MODULE_TOGGLE_ERROR",
             status_code=500,
         )
@@ -1115,7 +1116,7 @@ async def get_module_history(
     except Exception as e:
         logger.error(f"Error retrieving history for {name}: {e}")
         return error(
-            f"Error retrieving history: {str(e)}",
+            "Error retrieving history",
             code="MODULE_HISTORY_ERROR",
             status_code=500,
         )
@@ -1178,7 +1179,7 @@ async def get_module_specific_stats(
     except Exception as e:
         logger.error(f"Error retrieving stats for {name}: {e}")
         return error(
-            f"Error retrieving stats: {str(e)}",
+            "Error retrieving stats",
             code="MODULE_STATS_ERROR",
             status_code=500,
         )
@@ -1270,7 +1271,7 @@ async def cancel_module_execution(
     except Exception as e:
         logger.error(f"Error cancelling job {job_id}: {e}", exc_info=True)
         return error(
-            f"Error cancelling execution: {str(e)}",
+            "Error cancelling execution",
             code="CANCEL_ERROR",
             status_code=500,
         )
@@ -1431,12 +1432,12 @@ def test_module(
                     {"instance": inst_name, "service": service, "status": "unreachable"}
                 )
             except Exception as exc:
+                logger.error(f"Instance test failed for '{inst_name}': {exc}")
                 results.append(
                     {
                         "instance": inst_name,
                         "service": service,
                         "status": "error",
-                        "error": str(exc),
                     }
                 )
 
@@ -1449,7 +1450,7 @@ def test_module(
     except Exception as e:
         logger.error(f"Error testing module {name}: {e}")
         return error(
-            f"Error testing module: {str(e)}",
+            "Error testing module",
             code="MODULE_TEST_ERROR",
             status_code=500,
         )
@@ -1532,7 +1533,7 @@ async def run_module(
     except Exception as e:
         logger.error(f"Error running module {module}: {e}", exc_info=True)
         return error(
-            f"Error running module: {str(e)}",
+            "Error running module",
             code="MODULE_START_ERROR",
             status_code=500,
         )

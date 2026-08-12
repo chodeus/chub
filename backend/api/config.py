@@ -121,14 +121,14 @@ async def get_config(
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
         return error(
-            f"Configuration error: {str(e)}",
+            "Configuration error",
             "CONFIG_ERROR",
             status_code=500,
         )
     except Exception as e:
         logger.error(f"Error retrieving configuration: {e}")
         return error(
-            f"Error retrieving configuration: {str(e)}",
+            "Error retrieving configuration",
             "CONFIG_RETRIEVAL_ERROR",
             status_code=500,
         )
@@ -232,21 +232,21 @@ async def update_config(
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
         return error(
-            f"Configuration error: {str(e)}",
+            "Configuration error",
             code="CONFIG_ERROR",
             status_code=500,
         )
     except ValueError as e:
         logger.error(f"Configuration validation failed: {e}")
         return error(
-            f"Configuration validation failed: {str(e)}",
+            "Configuration validation failed",
             "CONFIG_VALIDATION_ERROR",
             status_code=400,
         )
     except Exception as e:
         logger.error(f"Configuration update failed: {e}")
         return error(
-            f"Configuration update failed: {str(e)}",
+            "Configuration update failed",
             code="CONFIG_UPDATE_ERROR",
             status_code=500,
         )
@@ -294,7 +294,7 @@ async def reveal_secret(
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
         return error(
-            f"Configuration error: {str(e)}",
+            "Configuration error",
             "CONFIG_ERROR",
             status_code=500,
         )

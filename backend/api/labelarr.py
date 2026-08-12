@@ -198,7 +198,7 @@ async def sync_tags_to_plex(
     except Exception as e:
         logger.error(f"Error creating labelarr sync job: {e}", exc_info=True)
         return error(
-            f"Failed to create sync job: {str(e)}",
+            "Failed to create sync job",
             code="SYNC_JOB_ERROR",
             status_code=500,
         )
@@ -313,7 +313,7 @@ async def bulk_sync_tags(
     except Exception as e:
         logger.error(f"Error in bulk labelarr sync: {e}", exc_info=True)
         return error(
-            f"Bulk sync failed: {str(e)}",
+            "Bulk sync failed",
             code="BULK_SYNC_ERROR",
             status_code=500,
         )

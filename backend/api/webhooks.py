@@ -262,7 +262,7 @@ async def process_poster_webhook(
     except Exception as e:
         logger.error(f"Exception in webhook processing: {e}", exc_info=True)
         return error(
-            f"Webhook processing error: {str(e)}",
+            "Webhook processing error",
             code="WEBHOOK_PROCESSING_ERROR",
             status_code=500,
         )
@@ -418,7 +418,7 @@ async def get_webhook_wiring(
     except Exception as e:
         logger.error(f"Error retrieving webhook wiring: {e}")
         return error(
-            f"Error retrieving webhook wiring: {str(e)}",
+            "Error retrieving webhook wiring",
             code="WEBHOOK_WIRING_ERROR",
             status_code=500,
         )
@@ -484,15 +484,16 @@ async def get_provision_status(
         resp.headers["Cache-Control"] = "no-store"
         return resp
     except ConfigError as e:
+        logger.error(f"Configuration unavailable: {e}")
         return error(
-            f"Configuration unavailable: {e}",
+            "Configuration unavailable",
             code="CONFIG_UNAVAILABLE",
             status_code=503,
         )
     except Exception as e:
         logger.error(f"Error retrieving provisioning status: {e}", exc_info=True)
         return error(
-            f"Error retrieving provisioning status: {str(e)}",
+            "Error retrieving provisioning status",
             code="WEBHOOK_PROVISION_STATUS_ERROR",
             status_code=500,
         )
@@ -548,15 +549,16 @@ async def provision_webhooks(
         resp.headers["Cache-Control"] = "no-store"
         return resp
     except ConfigError as e:
+        logger.error(f"Configuration unavailable: {e}")
         return error(
-            f"Configuration unavailable: {e}",
+            "Configuration unavailable",
             code="CONFIG_UNAVAILABLE",
             status_code=503,
         )
     except Exception as e:
         logger.error(f"Error provisioning webhooks: {e}", exc_info=True)
         return error(
-            f"Error provisioning webhooks: {str(e)}",
+            "Error provisioning webhooks",
             code="WEBHOOK_PROVISION_ERROR",
             status_code=500,
         )
@@ -593,15 +595,16 @@ async def remove_webhooks(
         resp.headers["Cache-Control"] = "no-store"
         return resp
     except ConfigError as e:
+        logger.error(f"Configuration unavailable: {e}")
         return error(
-            f"Configuration unavailable: {e}",
+            "Configuration unavailable",
             code="CONFIG_UNAVAILABLE",
             status_code=503,
         )
     except Exception as e:
         logger.error(f"Error removing webhooks: {e}", exc_info=True)
         return error(
-            f"Error removing webhooks: {str(e)}",
+            "Error removing webhooks",
             code="WEBHOOK_REMOVE_ERROR",
             status_code=500,
         )
@@ -653,7 +656,7 @@ async def get_unmatched_webhook_status(
     except Exception as e:
         logger.error(f"Error retrieving unmatched status: {e}")
         return error(
-            f"Error retrieving unmatched status: {str(e)}",
+            "Error retrieving unmatched status",
             code="UNMATCHED_STATUS_ERROR",
             status_code=500,
         )
@@ -710,7 +713,7 @@ async def process_unmatched_webhook(
     except Exception as e:
         logger.error(f"Error processing unmatched webhook: {e}")
         return error(
-            f"Error processing unmatched webhook: {str(e)}",
+            "Error processing unmatched webhook",
             code="UNMATCHED_PROCESS_ERROR",
             status_code=500,
         )

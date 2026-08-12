@@ -69,7 +69,7 @@ async def list_logs(logger: Any = Depends(get_logger)) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error listing log modules: {e}")
         return error(
-            f"Error listing log modules: {str(e)}",
+            "Error listing log modules",
             code="LOG_MODULES_LIST_ERROR",
             status_code=500,
         )
@@ -120,7 +120,7 @@ async def list_logs_for_module(
     except Exception as e:
         logger.error(f"Error listing logs for module {module_name}: {e}")
         return error(
-            f"Error listing module logs: {str(e)}",
+            "Error listing module logs",
             code="MODULE_LOGS_LIST_ERROR",
             status_code=500,
         )
@@ -210,7 +210,7 @@ def read_log(
     except Exception as e:
         logger.error(f"Error reading log file {module}/{filename}: {e}")
         return error(
-            f"Error reading log file: {str(e)}",
+            "Error reading log file",
             code="LOG_READ_ERROR",
             status_code=500,
         )

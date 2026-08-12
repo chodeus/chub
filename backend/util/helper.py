@@ -2,7 +2,6 @@
 
 import copy
 import json
-import math
 import os
 import re
 from pathlib import Path
@@ -24,6 +23,7 @@ from backend.util.constants import (
     tvdb_id_regex,
     year_regex,
 )
+from backend.util.logger import create_bar  # re-exported: callers import it from here
 from backend.util.normalization import (
     normalize_titles,
 )
@@ -247,29 +247,6 @@ def create_table(data: List[List[Any]]) -> str:
 
     table += "‾" * (total_width + 2)
     return table
-
-
-def create_bar(middle_text: str) -> str:
-    """
-    Create a horizontal separator bar with centered text (80 chars total).
-
-    Args:
-        middle_text: Text to center in the bar
-
-    Returns:
-        Formatted horizontal bar string with centered text
-    """
-    total_length = 80
-    if len(middle_text) == 1:
-        remaining_length = total_length - len(middle_text) - 2
-        left_side_length = 0
-        right_side_length = remaining_length
-        return f"\n{middle_text * left_side_length}{middle_text}{middle_text * right_side_length}\n"
-
-    remaining_length = total_length - len(middle_text) - 4
-    left_side_length = math.floor(remaining_length / 2)
-    right_side_length = remaining_length - left_side_length
-    return f"\n{'*' * left_side_length} {middle_text} {'*' * right_side_length}\n"
 
 
 def progress(

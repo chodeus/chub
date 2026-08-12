@@ -93,6 +93,37 @@ def test_parse_error_returns_clear_envelope():
     assert any("line 309" in str(m) for m in logger.errors)
 
 
+def test_parse_error_omits_offending_line_content(tmp_path):
+    """Position reaches the operator; the broken line's content never does."""
+    from backend.util.config import load_config
+
+    bad = tmp_path / "config.yml"
+    # Unterminated quoted value — PyYAML's error text quotes this line verbatim,
+    # so a real config would leak whatever secret sat on the broken line.
+    bad.write_text('general:\n  log_level: info\nSECRET_MARKER: "unterminated\n')
+
+    app = FastAPI()
+    app.state.logger = StubLogger()
+    app.add_exception_handler(ConfigError, handle_config_error)
+
+    @app.get("/load")
+    def _load():
+        load_config(path=str(bad))
+
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.get("/load")
+
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body["error_code"] == "CONFIG_INVALID"
+    assert "while scanning" not in resp.text  # no parser text
+    # PyYAML embeds the source snippet only for string input, but a future
+    # read-then-parse refactor would leak the line — guard it now.
+    assert "SECRET_MARKER" not in resp.text
+    # ...position is still surfaced so the file stays fixable.
+    assert "at line" in body["message"]
+
+
 def test_validation_error_includes_per_field_detail():
     client, logger = _client()
     resp = client.get("/validate")

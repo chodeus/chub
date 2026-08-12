@@ -71,7 +71,7 @@ async def get_job_stats(
     except Exception as e:
         logger.error(f"Error fetching job stats: {e}")
         return error(
-            f"Error retrieving job statistics: {str(e)}",
+            "Error retrieving job statistics",
             "JOB_STATS_ERROR",
             status_code=500,
         )
@@ -120,7 +120,7 @@ async def list_jobs(
     except Exception as e:
         logger.error(f"Error listing jobs: {e}")
         return error(
-            f"Error listing jobs: {str(e)}", code="JOBS_LIST_ERROR", status_code=500
+            "Error listing jobs", code="JOBS_LIST_ERROR", status_code=500
         )
 
 
@@ -193,7 +193,7 @@ async def list_webhook_origins(
     except Exception as e:
         logger.error(f"Error summarizing webhook origins: {e}")
         return error(
-            f"Error summarizing webhook origins: {str(e)}",
+            "Error summarizing webhook origins",
             code="WEBHOOK_ORIGIN_ERROR",
             status_code=500,
         )
@@ -215,7 +215,7 @@ async def delete_old_jobs(
     except Exception as e:
         logger.error(f"Error cleaning up jobs: {e}")
         return error(
-            f"Error cleaning up jobs: {str(e)}",
+            "Error cleaning up jobs",
             code="JOBS_CLEANUP_ERROR",
             status_code=500,
         )
@@ -238,7 +238,7 @@ async def get_job_detail(
     except Exception as e:
         logger.error(f"Error fetching job {job_id}: {e}")
         return error(
-            f"Error retrieving job details: {str(e)}",
+            "Error retrieving job details",
             "JOB_RETRIEVAL_ERROR",
             status_code=500,
         )
@@ -329,7 +329,7 @@ async def get_job_log_tail(
         )
     except Exception as e:
         logger.error(f"Error tailing log for job {job_id}: {e}")
-        return error(f"Error tailing log: {str(e)}", "LOG_TAIL_ERROR", status_code=500)
+        return error("Error tailing log", "LOG_TAIL_ERROR", status_code=500)
 
 
 @router.post("/jobs/{job_id}/retry")
@@ -358,5 +358,5 @@ async def retry_job(
     except Exception as e:
         logger.error(f"Error retrying job {job_id}: {e}")
         return error(
-            f"Error retrying job: {str(e)}", "JOB_RETRY_ERROR", status_code=500
+            "Error retrying job", "JOB_RETRY_ERROR", status_code=500
         )

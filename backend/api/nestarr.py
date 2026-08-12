@@ -106,7 +106,7 @@ def _scan_nested_media_sync(logger, db: ChubDB):
     except Exception as e:
         logger.error(f"Scan failed: {e}", exc_info=True)
         return error(
-            message=f"Scan failed: {str(e)}",
+            message="Scan failed",
             code="SCAN_FAILED",
             status_code=500,
         )
@@ -271,7 +271,7 @@ def preview_fix(request: Request, body: FixRequest):
     except Exception as e:
         logger.error(f"Preview failed: {e}", exc_info=True)
         return error(
-            message=f"Preview failed: {str(e)}",
+            message="Preview failed",
             code="PREVIEW_FAILED",
             status_code=500,
         )
@@ -366,7 +366,7 @@ def fix_nested_media(
     except Exception as e:
         logger.error(f"Fix failed: {e}", exc_info=True)
         return error(
-            message=f"Fix failed: {str(e)}",
+            message="Fix failed",
             code="FIX_FAILED",
             status_code=500,
         )

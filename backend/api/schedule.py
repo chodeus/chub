@@ -178,7 +178,7 @@ async def get_all_schedules(
     except Exception as e:
         logger.error(f"Error retrieving schedules: {e}")
         return error(
-            f"Error retrieving schedules: {str(e)}",
+            "Error retrieving schedules",
             code="SCHEDULES_RETRIEVAL_ERROR",
             status_code=500,
         )
@@ -238,7 +238,7 @@ async def get_module_schedule(
     except Exception as e:
         logger.error(f"Error retrieving schedule for module {module_id}: {e}")
         return error(
-            f"Error retrieving schedule: {str(e)}",
+            "Error retrieving schedule",
             code="SCHEDULE_RETRIEVAL_ERROR",
             status_code=500,
         )
@@ -304,8 +304,9 @@ async def update_module_schedule(
         try:
             validate_schedule(schedule_string)
         except ValueError as exc:
+            logger.error(f"Invalid schedule '{schedule_string}': {exc}")
             return error(
-                f"Invalid schedule '{schedule_string}': {exc}",
+                f"Invalid schedule '{schedule_string}'",
                 code="INVALID_SCHEDULE",
                 status_code=400,
             )
@@ -328,7 +329,7 @@ async def update_module_schedule(
     except Exception as e:
         logger.error(f"Failed to update schedule for module {data.module}: {e}")
         return error(
-            f"Failed to update schedule: {str(e)}",
+            "Failed to update schedule",
             code="SCHEDULE_UPDATE_ERROR",
             status_code=500,
         )
@@ -362,8 +363,9 @@ async def update_module_schedule_blocks(
             try:
                 validate_schedule(b.schedule)
             except ValueError as exc:
+                logger.error(f"Invalid schedule in block '{b.label}': {exc}")
                 return error(
-                    f"Invalid schedule in block '{b.label}': {exc}",
+                    f"Invalid schedule in block '{b.label}'",
                     code="INVALID_SCHEDULE",
                     status_code=400,
                 )
@@ -399,7 +401,7 @@ async def update_module_schedule_blocks(
     except Exception as e:
         logger.error(f"Failed to update schedule blocks for module {data.module}: {e}")
         return error(
-            f"Failed to update schedule blocks: {str(e)}",
+            "Failed to update schedule blocks",
             code="SCHEDULE_BLOCKS_UPDATE_ERROR",
             status_code=500,
         )
@@ -470,7 +472,7 @@ async def delete_module_schedule(
     except Exception as e:
         logger.error(f"Failed to delete schedule for module {module_id}: {e}")
         return error(
-            f"Failed to delete schedule: {str(e)}",
+            "Failed to delete schedule",
             code="SCHEDULE_DELETE_ERROR",
             status_code=500,
         )
