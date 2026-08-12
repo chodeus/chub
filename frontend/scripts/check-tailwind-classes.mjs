@@ -19,7 +19,8 @@ function sourceFiles(dir) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
         const p = path.join(dir, e.name);
         if (e.isDirectory()) out.push(...sourceFiles(p));
-        else if (/\.(js|jsx)$/.test(p)) out.push(p);
+        // .test. files hold fixture markup (this checker's own included) — not UI.
+        else if (/\.(js|jsx)$/.test(p) && !/\.test\./.test(p)) out.push(p);
     }
     return out;
 }
