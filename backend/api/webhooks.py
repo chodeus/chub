@@ -35,14 +35,9 @@ def verify_webhook_secret(request: Request) -> None:
     is unset, webhooks are accepted unauthenticated. If it is set, callers
     must send it via `X-Webhook-Secret` header or `?secret=` query param.
     """
-    try:
-        cfg = load_config()
-    except ConfigError as exc:
-        # These endpoints are AuthMiddleware-exempt and gated ONLY by this
-        # secret; if config can't load we can't verify it — fail CLOSED.
-        raise HTTPException(
-            status_code=503, detail="Configuration unavailable"
-        ) from exc
+    # ConfigError propagates to the shared CONFIG_INVALID handler — these
+    # endpoints are secret-gated only, and an unverifiable secret fails closed.
+    cfg = load_config()
 
     expected = (cfg.general.webhook_secret or "").strip()
     if not expected:

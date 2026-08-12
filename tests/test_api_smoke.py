@@ -481,12 +481,16 @@ def test_webhook_rejected_when_config_malformed(monkeypatch, app_with_router):
     app = app_with_router(webhooks_router.router)
     db = _TripwireDB()
     app.state.db = db
+    from backend.api.main import handle_config_error
+    from backend.util.config import ConfigError as _CfgErr
+
+    app.add_exception_handler(_CfgErr, handle_config_error)
     client = TestClient(app, raise_server_exceptions=False)
     resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
 
-    # 503, not 401: Sonarr/Radarr retry 5xx, so a fixed config self-heals
-    # without the user re-firing every missed event by hand.
-    assert resp.status_code == 503
+    # The shared contract: ConfigError propagates from the secret dependency.
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
     assert db.touched == [], f"webhook body was processed: db.{db.touched}"
 
 
@@ -525,9 +529,10 @@ def test_webhook_config_read_failure_rejects_without_enqueue(
     client = TestClient(app, raise_server_exceptions=False)
     resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
 
-    # 503 from verify_webhook_secret, not CONFIG_INVALID: the auth dependency
-    # runs first and already fails closed, so the handler body never starts.
-    assert resp.status_code == 503
+    # The secret dependency propagates ConfigError to the shared handler
+    # before the body runs — CONFIG_INVALID, and nothing was enqueued.
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
     assert enqueued == []
     clear_config_cache()
 
