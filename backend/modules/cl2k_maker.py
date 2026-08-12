@@ -1101,12 +1101,21 @@ def _persist_poster(
                 f"CL2K uploaded {filename} but could not record provenance: {exc}"
             )
 
+    def _deferred() -> None:
+        """Run the deferred upload; report anything that escapes _run_uploads."""
+        try:
+            _run_uploads(reload_config=True)
+        except Exception as exc:
+            # Staging (mkdtemp/write) happens before the per-folder guard, so a
+            # raise here would leave the caller on "uploading to Drive" forever.
+            _report_deferred_failure([f"the upload task crashed: {exc}"], full_config)
+
     # Every caller that supplies a deferral gets one, Drive-only included: rclone
     # outruns the UI timeout, and _run_uploads stages its own temp copy from `blob`.
     deferred_upload = False
     if folder_ids:
         if defer_upload is not None:
-            defer_upload(lambda: _run_uploads(reload_config=True))
+            defer_upload(_deferred)
             deferred_upload = True
             logger.info(
                 f"CL2K queued Drive upload for {filename} "

@@ -47,6 +47,7 @@ _SECRET = "/srv/secret-path: token=hunter2 (rclone said no)"
 
 
 def _logger():
+    """Silent logger for calls whose log output no assertion reads."""
     noop = lambda *a, **k: None  # noqa: E731
     return types.SimpleNamespace(debug=noop, info=noop, warning=noop, error=noop)
 
@@ -64,6 +65,7 @@ def _recording_logger():
 
 
 def _png(w, h, draw_fn):
+    """PNG bytes of a transparent canvas painted by ``draw_fn``."""
     with Image(width=w, height=h, background=Color("transparent")) as img:
         with Drawing() as d:
             draw_fn(d)
@@ -81,6 +83,7 @@ def _two_colour_logo():
     """
 
     def draw(d):
+        """Paint the two abutting fills."""
         d.fill_color = Color("#e01b24")
         d.rectangle(left=0, top=0, width=499, height=299)
         d.fill_color = Color("#1c71d8")
@@ -90,38 +93,43 @@ def _two_colour_logo():
 
 
 def _mask_png(w=400, h=120):
-    def draw(d):
-        d.fill_color = Color("white")
-        d.rectangle(left=0, top=0, width=w - 1, height=h - 1)
-
-    return _png(w, h, draw)
+    """A fully-painted brush mask (white = act on every pixel)."""
+    with Image(width=w, height=h, background=Color("white")) as mask:
+        mask.format = "png"
+        return mask.make_blob()
 
 
 def _backdrop(w=1920, h=1080):
+    """Flat-colour JPEG standing in for a TMDB backdrop."""
     with Image(width=w, height=h, background=Color("#27408b")) as bg:
         bg.format = "jpeg"
         return bg.make_blob()
 
 
 def _poster_jpeg():
+    """A finished poster already on the locked 1000x1500 canvas."""
     with Image(width=geo.CANVAS_W, height=geo.CANVAS_H, background=Color("#123456")) as p:
         p.format = "jpeg"
         return p.make_blob()
 
 
 def _b64(raw: bytes) -> str:
+    """Base64 the bytes the way the frontend hands them over."""
     return base64.b64encode(raw).decode()
 
 
 def _body(resp):
+    """The decoded JSON envelope of a JSONResponse."""
     return json.loads(bytes(resp.body))
 
 
 def _rgba(im) -> np.ndarray:
+    """Float RGBA array of a PIL image, for pixel comparisons."""
     return np.asarray(im.convert("RGBA")).astype(np.float32)
 
 
 def _min_opaque_luma(im) -> float:
+    """Darkest luma among the opaque pixels — 0 means real black ink."""
     arr = _rgba(im)
     return float(arr[..., :3].mean(axis=2)[arr[..., 3] > 200].min())
 
@@ -249,6 +257,7 @@ def test_psd_logo_layer_applies_the_brush_masks():
     src = _two_colour_logo()
 
     def _opaque(erase):
+        """Opaque pixel count of the LOGO layer for one erase mask."""
         blob = export_psd(
             backdrop_bytes=framed, kind="movie", logo_bytes=src, logo_erase_bytes=erase
         )
@@ -303,10 +312,12 @@ def test_folding_the_border_in_matches_applying_it_separately():
 
 
 def _boom(*a, **kw):
+    """Stand-in for a call that fails on bad input."""
     raise RuntimeError("image host is not allowed")
 
 
 def _boom_secret(*a, **kw):
+    """Fails with text that must never reach a response body."""
     raise RuntimeError(_SECRET)
 
 
@@ -347,6 +358,7 @@ def test_a_saving_route_answers_bad_input_with_a_clean_400(route, monkeypatch):
 
 
 def test_psd_export_answers_bad_input_with_a_clean_400(monkeypatch):
+    """The .psd export was the last saving route with no guard at all."""
     monkeypatch.setattr(api, "load_config", object)
     monkeypatch.setattr(api, "psd_for_item", _boom)
     resp = api.psd_export(
@@ -426,6 +438,7 @@ def test_a_real_http_status_is_not_downgraded_to_400(monkeypatch):
     monkeypatch.setattr(api, "load_config", object)
 
     def _unauthorized(**kw):
+        """Fails the way an upstream 401 does."""
         raise HTTPException(status_code=401, detail="nope")
 
     monkeypatch.setattr(api, "generate_for_item", _unauthorized)
@@ -443,6 +456,7 @@ def test_a_real_http_status_is_not_downgraded_to_400(monkeypatch):
 
 
 def test_retext_can_defer_its_upload():
+    """Every /retext save uploaded inline; the wiring must reach all three."""
     import inspect
 
     assert "background_tasks" in inspect.signature(api.retext).parameters
@@ -451,7 +465,24 @@ def test_retext_can_defer_its_upload():
 
 
 def _drive_only(monkeypatch, uploaded):
-    """Route a Drive folder and NO local folder — the inline-upload case."""
+    """Route a Drive folder and NO local folder; returns (config, notifications)."""
+    notes = []
+
+    class FakeNotifier:
+        """Captures what a deferred failure would have told the user."""
+
+        def __init__(self, *a, **k):
+            """Accept whatever the real NotificationManager takes."""
+            pass
+
+        def send_notification(self, output, event="success"):
+            """Record the event instead of sending it."""
+            notes.append((event, output))
+            return {}
+
+    monkeypatch.setattr(
+        "backend.util.notification.NotificationManager", FakeNotifier, raising=False
+    )
     monkeypatch.setattr(maker, "_drive_targets", lambda cfg, image_type: ["folder-A"])
     monkeypatch.setattr(maker, "_local_targets", lambda cfg, image_type: [])
     monkeypatch.setattr(
@@ -471,19 +502,15 @@ def _drive_only(monkeypatch, uploaded):
     )
     full = types.SimpleNamespace(cl2k_maker=cfg, sync_gdrive=object())
     monkeypatch.setattr("backend.util.config.load_config", lambda: full, raising=False)
-    return full
+    return full, notes
 
 
-def test_a_drive_only_save_defers_instead_of_uploading_inline(monkeypatch):
-    """rclone ran in the request thread whenever no local folder was configured,
-    so a slow link 504'd a save that in fact succeeded."""
-    uploaded, queued = [], []
-    full = _drive_only(monkeypatch, uploaded)
-
-    result = maker._persist_poster(
+def _persist_drive_only(full, queued, logger):
+    """Run the Drive-only save under test (no local folder claims the type)."""
+    return maker._persist_poster(
         db=types.SimpleNamespace(poster=types.SimpleNamespace(bulk_upsert=lambda r: None)),
         cfg=full.cl2k_maker,
-        logger=_logger(),
+        logger=logger,
         sync_cfg=object(),
         blob=b"jpeg",
         kind="movie",
@@ -499,6 +526,15 @@ def test_a_drive_only_save_defers_instead_of_uploading_inline(monkeypatch):
         full_config=full,
     )
 
+
+def test_a_drive_only_save_defers_instead_of_uploading_inline(monkeypatch):
+    """rclone ran in the request thread whenever no local folder was configured,
+    so a slow link 504'd a save that in fact succeeded."""
+    uploaded, queued = [], []
+    full, notes = _drive_only(monkeypatch, uploaded)
+
+    result = _persist_drive_only(full, queued, _logger())
+
     assert not uploaded, "the upload must not run before the response"
     assert queued, "it must be queued instead"
     # Without a local copy this used to fall through to "nothing landed anywhere".
@@ -507,12 +543,40 @@ def test_a_drive_only_save_defers_instead_of_uploading_inline(monkeypatch):
 
     queued[0]()  # BackgroundTasks would call this after the response
     assert uploaded == ["folder-A"]
+    assert not notes, "a clean deferred upload must stay quiet"
+
+
+def test_a_deferred_run_that_crashes_before_the_upload_still_reports(monkeypatch):
+    """Staging runs BEFORE the per-folder guard, so a mkdtemp/write failure escaped
+    into the background task — the caller kept "uploading to Drive" for good."""
+    uploaded, queued, errors = [], [], []
+    full, notes = _drive_only(monkeypatch, uploaded)
+
+    def _no_tmpdir(*a, **k):
+        """Break staging the way a full disk would."""
+        raise OSError("no space left on device")
+
+    # Module-scoped swap, so no other test inherits a broken tempfile.
+    monkeypatch.setattr(maker, "tempfile", types.SimpleNamespace(mkdtemp=_no_tmpdir))
+    logger = _logger()
+    logger.error = errors.append
+
+    result = _persist_drive_only(full, queued, logger)
+    assert result["upload_pending"] is True
+    assert not notes, "nothing should be reported before the deferred task runs"
+
+    queued[0]()  # BackgroundTasks runs it after the response — must not raise
+
+    assert not uploaded, "staging failed, so nothing was uploaded"
+    assert any(e == "failure" for e, _ in notes), "the crash has to reach the user"
+    assert any("FAILED" in m for m in errors), "and must log at error level"
 
 
 # 6+7. the season poll can't disagree with itself, and can't fake success
 
 
 def _job(results, status="done", total=None):
+    """Register a season job already carrying ``results``."""
     jid = api._new_season_job(total if total is not None else len(results), "Show")
     with api._season_jobs_lock:
         api._season_jobs[jid]["results"] = list(results)
@@ -545,6 +609,7 @@ def test_an_all_failed_batch_is_not_reported_as_done():
 
 
 def test_a_partly_failed_batch_reports_its_failures():
+    """Some failed, some landed: additive fields carry it, status stays done."""
     jid = _job(
         [
             {"season": 1, "status": "generated"},
@@ -562,6 +627,7 @@ def test_a_partly_failed_batch_reports_its_failures():
 
 
 def test_a_clean_batch_still_reads_as_success():
+    """The escalation must not fire on a batch that generated everything."""
     jid = _job([{"season": n, "status": "generated"} for n in (1, 2)])
     data = _body(api.seasons_status(jid))["data"]
     assert (data["status"], data["outcome"], data["failed"]) == ("done", "ok", 0)
@@ -599,10 +665,12 @@ def test_a_prefixed_svg_is_still_recognised(prefix):
     ],
 )
 def test_a_raster_is_not_mistaken_for_an_svg(raw):
+    """The looser scan must not send real image bytes to the rasterizer."""
     assert not renderer._is_svg(raw)
 
 
 def test_a_prefixed_svg_is_rasterized_rather_than_handed_to_wand(monkeypatch):
+    """Recognising it is only half the fix — it must also take the safe path."""
     seen = []
     monkeypatch.setattr(
         renderer,
@@ -641,6 +709,7 @@ def test_a_real_title_still_falls_back_to_the_wordmark():
 
 
 def test_an_unplaceable_logo_with_no_title_still_renders():
+    """No logo and no title is a logo-less poster, not a failure."""
     blob = renderer.render_cl2k(
         backdrop_bytes=_backdrop(), kind="movie", logo_bytes=b"nope", title=""
     )
@@ -669,6 +738,7 @@ def test_a_late_brush_failure_is_logged_not_swallowed(fn, verb, monkeypatch, cap
     "fn, verb", [(renderer._flip_regions, "flip"), (renderer._erase_regions, "erase")]
 )
 def test_an_undecodable_brush_mask_stays_tolerant(fn, verb, caplog):
+    """The decode guard keeps its no-op behaviour, but says so now."""
     with Image(blob=_two_colour_logo()) as logo:
         with caplog.at_level(logging.WARNING, logger=renderer.__name__):
             fn(logo, b"not a png")

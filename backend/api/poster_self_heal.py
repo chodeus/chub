@@ -146,6 +146,7 @@ def apply_review(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_heal_logger),
 ) -> JSONResponse:
+    """Apply one proposed rename on Drive + locally, then close the review."""
     reviews = poster_heal_review_for(db)
     row = reviews.get(review_id)
     if not row:
@@ -163,8 +164,11 @@ def apply_review(
             "NO_PROPOSAL",
         )
 
+    # Outside the guard: a config fault is not a rename fault — it belongs to
+    # main.py's ConfigError handler (500 CONFIG_INVALID), not a 400 DRIVE_RENAME.
+    sync_cfg = load_config().sync_gdrive
     try:
-        note = apply_proposal(row, load_config().sync_gdrive, logger)
+        note = apply_proposal(row, sync_cfg, logger)
     except Exception as exc:
         # rclone errors quote paths and Drive ids — keep them out of the response.
         logger.error(f"poster-self-heal: Drive rename failed: {exc}", exc_info=True)

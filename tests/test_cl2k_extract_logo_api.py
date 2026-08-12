@@ -76,6 +76,7 @@ def provider(monkeypatch):
 
 
 def _call(logger=None, **kw):
+    """Invoke /extract-logo in erase mode against the fixture poster."""
     req = cl2k_api.ExtractLogoRequest(image_b64=_POSTER_B64, mode="erase", **kw)
     return cl2k_api.extract_logo(req, db=object(), logger=logger or _logger())
 

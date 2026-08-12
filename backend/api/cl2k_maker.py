@@ -586,6 +586,7 @@ def preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """Render a CL2K poster to JPEG and return the bytes, saving nothing."""
     try:
         mask_bytes = _mask_bytes(req.mask_b64)
     except Exception:
@@ -644,6 +645,7 @@ def generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """Render a CL2K poster and file it to every claiming save location."""
     if (bad := _require_any_id(req)) is not None:
         return bad
     try:
@@ -811,6 +813,7 @@ def square_preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """Render 1:1 square art and return the JPEG bytes, saving nothing."""
     return _art_preview(
         logger,
         req,
@@ -831,6 +834,7 @@ def square_generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """Render square art and file it as the item's ``- squareart.jpg`` asset."""
     if (bad := _require_any_id(req)) is not None:
         return bad
     cfg = load_config()  # outside the guard: a config fault is not a save fault
@@ -892,6 +896,7 @@ def background_preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """Render 16:9 background art and return the JPEG bytes, saving nothing."""
     # Preview at 1080p regardless of the save resolution — same 16:9 frame,
     # quarter the bytes of a 4K render.
     return _art_preview(
@@ -916,6 +921,7 @@ def background_generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """Render background art and file it as the ``- background.jpg`` asset."""
     if (bad := _require_any_id(req)) is not None:
         return bad
     cfg = load_config()  # outside the guard: a config fault is not a save fault
@@ -956,6 +962,7 @@ def logo_asset_preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """Return the processed clear logo as a transparent PNG, saving nothing."""
     try:
         raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
     except LogoFetchError as exc:
@@ -990,6 +997,7 @@ def logo_asset_generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """File a processed clear logo as the item's ``- logo.png`` asset."""
     if (bad := _require_any_id(req)) is not None:
         return bad
     cfg = load_config()  # outside the guard: a config fault is not a save fault
@@ -1031,6 +1039,7 @@ def extract_logo(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """Key a title out of poster art and return it as a transparent logo PNG."""
     if req.image_b64:
         try:
             raw = _b64_to_bytes(req.image_b64)
@@ -1095,6 +1104,7 @@ def psd_export(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """Export the poster the preview shows as a layered .psd (for Photopea)."""
     cfg = load_config()  # outside the guard: a config fault is not an export fault
     blob, bad = _run_or_error(
         logger,
@@ -1504,6 +1514,7 @@ def retext_seasons_endpoint(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """Start the background batch that re-files one poster per season, as is."""
     if (bad := _require_any_id(req)) is not None:
         return bad
     seasons = _clean_seasons(req.seasons)
@@ -1689,6 +1700,7 @@ def retext(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """Re-text a finished poster: AI-erase the old label, draw the new one."""
     # Only a save needs a matchable filename; a preview returns bytes to the caller.
     if not req.preview and (bad := _require_any_id(req)) is not None:
         return bad
@@ -1901,6 +1913,7 @@ def _probe_png() -> str:
 
 
 def _test_lama_sidecar(cfg, logger) -> JSONResponse:
+    """Probe the LaMa sidecar's authenticated route and report what it proves."""
     import requests
 
     url = text_removal._lama_route(cfg.ai_endpoint, "/api/v1/detect")
@@ -1959,6 +1972,7 @@ def _test_lama_sidecar(cfg, logger) -> JSONResponse:
 
 
 def _test_openai(cfg, logger) -> JSONResponse:
+    """Probe OpenAI's authenticated route and report whether the key works."""
     import requests
 
     try:

@@ -553,7 +553,11 @@ def _rasterize_svg_logo(svg_bytes: bytes, target_width: int = 2000) -> bytes:
     module import."""
     import cairosvg
 
-    return cairosvg.svg2png(bytestring=svg_bytes, output_width=target_width)
+    # unsafe=False is cairosvg's default, stated here so an upstream default flip
+    # can't silently re-enable external-entity/file loading (CWE-611).
+    return cairosvg.svg2png(
+        bytestring=svg_bytes, output_width=target_width, unsafe=False
+    )
 
 
 # BOM + whitespace, so a UTF-8-signed or indented SVG is not read as a raster.
