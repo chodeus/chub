@@ -95,11 +95,13 @@ function usedClasses(text) {
     const strings =
         /'([^'\\\n]*(?:\\.[^'\\\n]*)*)'|"([^"\\\n]*(?:\\.[^"\\\n]*)*)"|`([^`\\]*(?:\\.[^`\\]*)*)`/gs;
     for (const start of text.matchAll(REGION_START)) {
+        // In a className expression a quoted object key IS a class (clsx
+        // conditionals); in a *Classes map it's a lookup key — skip only there.
+        const isAttr = start[0].startsWith('className');
         const region = sliceRegion(text, start.index + start[0].length);
         for (const m of region.matchAll(strings)) {
-            // Prettier leaves no space before an object key's colon, so this
-            // skips the lookup keys of a variant->classes map, not a ternary.
-            if (region[m.index + m[0].length] === ':') continue;
+            // Key-colon has no space before it (prettier), a ternary's does.
+            if (!isAttr && region[m.index + m[0].length] === ':') continue;
             const chunks = (m[1] ?? m[2] ?? m[3]).split(/\$\{[^}]*\}/s);
             chunks.forEach((chunk, i) => {
                 const parts = chunk.split(/\s+/).filter(Boolean);
