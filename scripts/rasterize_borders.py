@@ -1,17 +1,8 @@
 #!/usr/bin/env python3
-"""Rasterize holiday border SVGs to 1000x1500 PNGs for runtime use.
+"""Rasterize holiday border SVGs to 1000x1500 PNGs at Docker build time."""
 
-Run after editing any SVG under backend/assets/borders/. The PNGs are
-checked into the repo so the Docker image stays simple (no build-time
-rasterization). Cairosvg is intentionally a dev-time-only dependency.
-
-Install once (cairosvg needs the libcairo system library):
-    macOS:  brew install cairo && pip install cairosvg
-    Debian: apt install libcairo2 && pip install cairosvg
-
-Usage:
-    python scripts/rasterize_borders.py
-"""
+# PNGs are gitignored build artifacts, not committed sources; cairosvg is
+# installed and removed inside the builder stage (deploy/docker/Dockerfile).
 
 from __future__ import annotations
 

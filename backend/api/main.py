@@ -17,12 +17,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend.api import (
     auth as auth_router,
     border_replacerr as border_replacerr_router,
+    cache as cache_router,
     config as config_router,
     instances as instances_router,
     jobs as jobs_router,
     labelarr as labelarr_router,
     logs as logs_router,
-    media as media_router,
     media_api as media_api_router,
     modules as modules_router,
     nestarr as nestarr_router,
@@ -511,7 +511,7 @@ app.include_router(schedule_router.router)
 app.include_router(jobs_router.router)
 app.include_router(modules_router.router)
 app.include_router(logs_router.router)
-app.include_router(media_router.router)
+app.include_router(cache_router.router)
 app.include_router(media_api_router.router)
 app.include_router(posters_router.router)
 app.include_router(webhooks_router.router)

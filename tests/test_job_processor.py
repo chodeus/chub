@@ -115,30 +115,37 @@ def test_process_media_record_movie_passthrough():
 
 
 def _media_sync_conn(calls):
-    import types
+    """Build a Connector stub that appends a tag for each sync step it runs."""
 
     class _Conn:
+        """Connector double whose forced plex walk must never be reached."""
+
         def __init__(self, *a, **k):
-            self.connection_manager = types.SimpleNamespace(
+            """Expose a connection manager that records close_all_connections."""
+            self.connection_manager = SimpleNamespace(
                 close_all_connections=lambda: calls.append("close")
             )
 
         def update_arr_database(self):
+            """Return one succeeding and one failing ARR sync result."""
             calls.append("arr")
             return [
-                types.SimpleNamespace(success=True),
-                types.SimpleNamespace(success=False),
+                SimpleNamespace(success=True),
+                SimpleNamespace(success=False),
             ]
 
         def update_plex_database(self):  # the FORCED full walk — must NOT be used
+            """Record the forbidden forced walk so the test can assert it never ran."""
             calls.append("plex_FORCED")
             return []
 
         def update_collections_database(self):
+            """Record the collections sync step."""
             calls.append("coll")
             return []
 
         def update_media_plex_mappings(self):
+            """Record the media/plex mapping step."""
             calls.append("map")
             return {}
 
@@ -146,14 +153,12 @@ def _media_sync_conn(calls):
 
 
 def _cfg_with_plex(plex):
-    import types
-
-    return types.SimpleNamespace(instances=types.SimpleNamespace(plex=plex))
+    """Minimal config double exposing only instances.plex."""
+    return SimpleNamespace(instances=SimpleNamespace(plex=plex))
 
 
 def test_media_sync_uses_gentle_plex_refresh_not_forced_walk(monkeypatch):
-    import types
-
+    """Media sync takes the stale-gated plex refresh, never the forced full walk."""
     calls = []
     refresh_args = []
     monkeypatch.setattr("backend.util.connector.Connector", _media_sync_conn(calls))
@@ -162,7 +167,7 @@ def test_media_sync_uses_gentle_plex_refresh_not_forced_walk(monkeypatch):
         "backend.util.plex_refresh.refresh_plex_cache_if_stale",
         lambda db, cfg, logger, enabled, **k: refresh_args.append(enabled) or True,
     )
-    cfg = _cfg_with_plex({"Chodeus": types.SimpleNamespace(enabled=True)})
+    cfg = _cfg_with_plex({"Chodeus": SimpleNamespace(enabled=True)})
     monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: cfg)
 
     res = jp._process_media_sync_job({}, _logger(), 1, db=object())

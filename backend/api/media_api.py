@@ -16,7 +16,15 @@ from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import (
+    BODY_TOO_LARGE,
+    build_cache_refresh_payload,
+    error,
+    get_database,
+    get_logger,
+    ok,
+    read_request_json,
+)
 from backend.util.arr import create_arr_client
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB, escape_like
@@ -517,7 +525,7 @@ async def get_duplicates(
     summary="Refresh media cache",
     description="Trigger a background cache refresh job. Accepts both frontend "
     "format (path, deep) and backend format (arr_instances, plex_instances, "
-    "libraries, update_mappings).",
+    "libraries).",
     responses={
         200: {
             "description": "Cache refresh job enqueued successfully",
@@ -538,35 +546,25 @@ async def refresh_media(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    """
-    Trigger a background cache refresh job.
-
-    Accepts two payload formats:
-    - Frontend format: ``path`` and ``deep`` keys trigger a full
-      refresh of all configured instances.
-    - Backend format: ``arr_instances``, ``plex_instances``,
-      ``libraries``, and ``update_mappings`` for targeted refresh.
-
-    Returns:
-        Job ID for tracking the refresh operation
-    """
+    """Enqueue a cache_refresh job; a {path, deep} body has no targeting, so refresh all."""
     try:
-        try:
-            payload = (
-                await request.json()
-                if request.headers.get("content-type") == "application/json"
-                else {}
+        payload = await read_request_json(request)
+        if payload is BODY_TOO_LARGE:
+            return error(
+                "Request body too large",
+                code="BODY_TOO_LARGE",
+                status_code=413,
             )
-        except Exception:
-            payload = {}
+
         logger.debug(f"Serving POST /api/media/refresh with payload: {payload}")
 
-        job_payload = {
-            "arr_instances": payload.get("arr_instances", []),
-            "plex_instances": payload.get("plex_instances", []),
-            "libraries": payload.get("libraries", []),
-            "update_mappings": payload.get("update_mappings", True),
-        }
+        job_payload = build_cache_refresh_payload(payload)
+        if job_payload is None:
+            return error(
+                "Invalid request body",
+                code="INVALID_BODY",
+                status_code=400,
+            )
 
         result = db.worker.enqueue_job("jobs", job_payload, job_type="cache_refresh")
 

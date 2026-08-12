@@ -1214,10 +1214,10 @@ def _process_cache_refresh_job(
         arr_instances = payload.get("arr_instances", [])
         plex_instances = payload.get("plex_instances", [])
         libraries = payload.get("libraries", [])
-        update_mappings = payload.get("update_mappings", False)
 
+        # sync_all_databases() always refreshes plex mappings — no opt-out.
         log.info(
-            f"[JOB:{job_id}] Refresh config - ARR: {len(arr_instances)}, Plex: {len(plex_instances)}, Libraries: {len(libraries)}, Mappings: {update_mappings}"
+            f"[JOB:{job_id}] Refresh config - ARR: {len(arr_instances)}, Plex: {len(plex_instances)}, Libraries: {len(libraries)}"
         )
 
         # Construct instance_map from payload data for Connector

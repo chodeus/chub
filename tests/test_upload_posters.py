@@ -200,8 +200,9 @@ def test_has_overlay_missing_labels():
 
 
 def test_throttle_sleeps_when_configured(monkeypatch):
+    """upload_delay_ms sleeps for that many milliseconds, expressed in seconds."""
     from types import SimpleNamespace
-    import backend.util.upload_posters as up_mod
+    from backend.util import upload_posters as up_mod
 
     up = object.__new__(PosterUploader)
     up.config = SimpleNamespace(upload_delay_ms=50)
@@ -212,8 +213,9 @@ def test_throttle_sleeps_when_configured(monkeypatch):
 
 
 def test_throttle_noop_when_zero(monkeypatch):
+    """A zero upload_delay_ms must not call sleep at all."""
     from types import SimpleNamespace
-    import backend.util.upload_posters as up_mod
+    from backend.util import upload_posters as up_mod
 
     up = object.__new__(PosterUploader)
     up.config = SimpleNamespace(upload_delay_ms=0)
@@ -855,7 +857,7 @@ def test_write_music_sidecar_failure_preserves_existing_cover(tmp_path, monkeypa
     """A crash mid-copy (partial write + OSError) must leave the user's
     existing cover untouched, warn instead of raising, and leave no temp
     litter in the music folder."""
-    import backend.util.upload_posters as up_mod
+    from backend.util import upload_posters as up_mod
 
     poster = tmp_path / "poster.jpg"
     poster.write_bytes(b"poster-bytes")

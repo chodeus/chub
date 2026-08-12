@@ -144,11 +144,13 @@ def test_unconfined_root_deletes_nothing(tmp_path, monkeypatch):
 
     opened = []
     real_open = os.open
-    monkeypatch.setattr(
-        maintenance.os,
-        "open",
-        lambda path, *a, **k: (opened.append(path), real_open(path, *a, **k))[1],
-    )
+
+    def _recording_open(path, *a, **k):
+        """Record every path opened, then delegate to the real os.open."""
+        opened.append(path)
+        return real_open(path, *a, **k)
+
+    monkeypatch.setattr(maintenance.os, "open", _recording_open)
 
     # A default ChubConfig's allowed roots are CONFIG_DIR + mounts, never tmp_path.
     removed = maintenance.prune_old_backups(

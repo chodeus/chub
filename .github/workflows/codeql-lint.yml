@@ -147,15 +147,17 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          # pytest + httpx (Starlette's TestClient) — kept out of requirements.txt
+          # so the runtime image never installs a test stack.
+          pip install -r requirements-dev.txt
           # Develop-only extensions keep their extra deps in requirements-*.txt
           # (e.g. requirements-cl2k.txt) so requirements.txt stays identical to
           # main. Install any that exist — no-op on main.
           for extra in requirements-*.txt; do
-            if [ -e "$extra" ]; then pip install -r "$extra"; fi
+            if [ -e "$extra" ] && [ "$extra" != "requirements-dev.txt" ]; then
+              pip install -r "$extra"
+            fi
           done
-          # httpx is required by Starlette's TestClient (used in tests/test_api_smoke.py)
-          # but isn't a runtime dep, so it lives outside requirements.txt.
-          pip install httpx
 
       - name: Verify FastAPI app imports cleanly
         run: |
