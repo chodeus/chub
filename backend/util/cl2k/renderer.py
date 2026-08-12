@@ -19,6 +19,7 @@ Run standalone for a quick visual check::
 from __future__ import annotations
 
 import itertools
+import logging
 from typing import List, Optional, Tuple
 
 from wand.color import Color
@@ -27,11 +28,9 @@ from wand.image import COMPOSITE_OPERATORS, Image
 
 from backend.util.cl2k import color, geometry as geo
 from backend.util.cl2k.limits import apply_magick_limits
-from backend.util.cl2k.logo_extract import (
-    fill_dark_bodies,
-    flatten_3d_logo,
-    ink_color_edges,
-)
+from backend.util.cl2k.logo_extract import finish_two_tone, flatten_3d_logo
+
+_log = logging.getLogger(__name__)
 
 # ImageMagick ships no resource limits without a policy.xml, which only exists in
 # the container. This is the sole wand entry point, so cap the process here.
@@ -403,7 +402,8 @@ def _flip_regions(logo: Image, mask_bytes: bytes) -> None:
     """
     try:
         mask = Image(blob=mask_bytes)
-    except Exception:
+    except Exception as exc:
+        _log.warning(f"cl2k: logo flip mask is undecodable ({exc}) — regions not flipped")
         return
     try:
         # Brush strokes are white-on-transparent: flatten onto black so the
@@ -420,8 +420,10 @@ def _flip_regions(logo: Image, mask_bytes: bytes) -> None:
                 alpha.composite(mask, operator="multiply")
                 flipped.composite(alpha, operator=_COPY_ALPHA)
             logo.composite(flipped, left=0, top=0)
-    except Exception:
-        pass  # fail open: an unreadable mask must not break the render
+    except Exception as exc:
+        # Fail open like every other per-logo pass here, but never silently: the
+        # mask decoded, so this dropped edits the user made and saw in the preview.
+        _log.warning(f"cl2k: logo flip failed ({exc}) — regions left un-flipped")
     finally:
         mask.close()
 
@@ -438,7 +440,8 @@ def _erase_regions(logo: Image, mask_bytes: bytes) -> None:
     """
     try:
         mask = Image(blob=mask_bytes)
-    except Exception:
+    except Exception as exc:
+        _log.warning(f"cl2k: logo erase mask is undecodable ({exc}) — nothing erased")
         return
     try:
         # Brush strokes are white-on-transparent: flatten onto black so the mask
@@ -453,8 +456,10 @@ def _erase_regions(logo: Image, mask_bytes: bytes) -> None:
             alpha.alpha_channel = "extract"
             alpha.composite(mask, operator="multiply")  # zero alpha where erased
             logo.composite(alpha, operator=_COPY_ALPHA)
-    except Exception:
-        pass  # fail open: an unreadable mask must not break the render
+    except Exception as exc:
+        # Fail open like every other per-logo pass here, but never silently: the
+        # mask decoded, so this dropped edits the user made and saw in the preview.
+        _log.warning(f"cl2k: logo erase failed ({exc}) — regions left un-erased")
     finally:
         mask.close()
 
@@ -528,8 +533,7 @@ def _apply_whiten(logo: Image, *, invert: bool) -> None:
     original_png = logo.make_blob("png")  # colours the post-passes key against
     if _whiten(logo, flat_fallback=True):
         return  # flat-white fallback — leave the clean silhouette untouched
-    stepped = ink_color_edges(logo.make_blob("png"), original_png)
-    stepped = fill_dark_bodies(stepped, original_png)
+    stepped = finish_two_tone(logo.make_blob("png"), original_png)
     with Image(blob=stepped) as img2:
         logo.composite(img2, left=0, top=0, operator="copy")
 
@@ -537,35 +541,42 @@ def _apply_whiten(logo: Image, *, invert: bool) -> None:
 def _rasterize_svg_logo(svg_bytes: bytes, target_width: int = 2000) -> bytes:
     """Rasterize an SVG clear-logo to PNG bytes at ~``target_width`` content width.
 
-    CL2K's logo pipeline is raster (Wand). Relying on ImageMagick's own SVG
-    delegate is fragile — it is absent from the runtime image (ImageMagick then
-    raises ``no decode delegate for image format 'SVG'``), which would 500 any
-    title whose best logo is an SVG, and :func:`select_logo` *prefers* SVGs. We
-    rasterize with cairosvg instead (pure-Python, the same rasterizer the holiday
-    borders use; needs only libcairo2, already present via librsvg2-2). Vectors
-    are resolution-free, so ~2000px keeps the logo sharp once scaled to the box.
+    CL2K's logo pipeline is raster (Wand), and :func:`select_logo` *prefers* SVGs.
+    ImageMagick can read them in the runtime image (librsvg2-2 ships there), but
+    its delegate has no equivalent of cairosvg's ``unsafe=False``, so a hostile
+    SVG could pull external resources through it — every SVG is routed here
+    instead. Vectors are resolution-free, so ~2000px keeps the logo sharp once
+    scaled to the box.
 
     Imported lazily so a build without cairosvg surfaces the ImportError to the
     caller's decode-failure fallback (the typeset wordmark) instead of breaking
-    module import. cairosvg's default (``unsafe=False``) blocks external-resource
-    loading, so a hostile SVG can't read local files or reach the network."""
+    module import."""
     import cairosvg
 
     return cairosvg.svg2png(bytestring=svg_bytes, output_width=target_width)
+
+
+# BOM + whitespace, so a UTF-8-signed or indented SVG is not read as a raster.
+_SVG_LEAD = b"\xef\xbb\xbf \t\r\n\f\v"
+_SVG_SCAN = 1024
+
+
+def _is_svg(logo_bytes: bytes) -> bool:
+    """True when the bytes are an SVG document, whatever precedes the root tag."""
+    head = logo_bytes[:_SVG_SCAN].lstrip(_SVG_LEAD).lower()
+    # Requiring markup first is what keeps a raster whose metadata mentions "<svg"
+    # out: no image format's magic bytes begin with "<".
+    return head.startswith(b"<") and b"<svg" in head
 
 
 def _read_logo_image(logo_bytes: bytes) -> Image:
     """Decode logo bytes, rasterizing SVG sources at high density.
 
     SVG logos are rasterized to PNG via cairosvg at ~2000px content width (see
-    :func:`_rasterize_svg_logo`) — Wand's own SVG delegate is unavailable in the
-    runtime image. Raster formats pass through untouched.
+    :func:`_rasterize_svg_logo`), never through ImageMagick's own delegate.
+    Raster formats pass through untouched.
     """
-    head = logo_bytes[:512].lstrip().lower()
-    is_svg = head.startswith(b"<svg") or (
-        head.startswith(b"<?xml") and b"<svg" in logo_bytes[:2048].lower()
-    )
-    if not is_svg:
+    if not _is_svg(logo_bytes):
         return Image(blob=logo_bytes)
     return Image(blob=_rasterize_svg_logo(logo_bytes, target_width=2000))
 
@@ -1121,16 +1132,20 @@ def render_cl2k(
         # logo is baked in only on a real generate (or when a text-wordmark
         # fallback is needed, which the overlay can't reproduce client-side).
         if place_logo:
-            if not logo_bytes and title:
-                # No clear logo found (TMDB -> fanart exhausted): synthesise a
-                # typeset wordmark and place it through the same logo path so the
-                # poster stays logo-shaped. The wordmark is already white-on-
-                # transparent — inverting it would erase it, so invert is real-
-                # logo only.
+            # strip(): a whitespace-only title typesets to b"", which Wand cannot
+            # decode — the crash this guard (and the hoist below) exists to avoid.
+            has_title = bool((title or "").strip())
+            wordmark_used = False
+            if not logo_bytes and has_title:
+                # No clear logo found (TMDB -> fanart exhausted): the typeset
+                # wordmark goes through the same logo path so the poster stays
+                # logo-shaped. It is already white-on-transparent — inverting it
+                # would erase it, so invert is real-logo only.
                 logo_bytes = generate_text_logo(
                     title, title_font, stroke_width=text_logo_stroke
                 )
-                invert = False
+                invert, wordmark_used = False, True
+            placed = False
             if logo_bytes:
                 try:
                     _place_logo(
@@ -1147,28 +1162,33 @@ def render_cl2k(
                         flat_white=flat_white,
                         logo_3d=logo_3d,
                     )
-                except Exception:
-                    # A clear logo we can't decode/place (e.g. an SVG when the SVG
-                    # rasterizer is unavailable, or corrupt logo bytes) must never
-                    # fail the whole render. Fall back to the typeset wordmark,
-                    # which is always placeable, so the poster keeps a title rather
-                    # than 500ing. Per-logo brush strokes (flip/erase) belong to the
-                    # dropped logo, so they don't carry over to the wordmark.
-                    if title:
-                        _place_logo(
-                            base,
-                            generate_text_logo(
-                                title, title_font, stroke_width=text_logo_stroke
-                            ),
-                            baseline,
-                            logo_max_width,
-                            whiten,
-                            logo_scale,
-                            logo_y_offset,
-                            invert=False,
-                            flat_white=flat_white,
-                            logo_3d=logo_3d,
-                        )
+                    placed = True
+                except Exception as exc:
+                    # A clear logo we can't decode/place (corrupt bytes, an SVG with
+                    # no rasterizer) must never fail the whole render.
+                    _log.warning(f"cl2k: could not place the clear logo ({exc})")
+            # Hoisted OUT of the handler above: typesetting the fallback can itself
+            # yield unplaceable bytes, which in there would 500 the whole render.
+            fallback = (
+                generate_text_logo(title, title_font, stroke_width=text_logo_stroke)
+                if (not placed and not wordmark_used and has_title)
+                else b""
+            )
+            if fallback:
+                # Per-logo brush strokes (flip/erase) belong to the dropped logo, so
+                # they don't carry over to the wordmark.
+                _place_logo(
+                    base,
+                    fallback,
+                    baseline,
+                    logo_max_width,
+                    whiten,
+                    logo_scale,
+                    logo_y_offset,
+                    invert=False,
+                    flat_white=flat_white,
+                    logo_3d=logo_3d,
+                )
 
         # Every branch derives its tracking from the label itself, exactly as the
         # PSD exporter does. Pinning collection/season to a flat LABEL_TRACKING
@@ -1203,15 +1223,19 @@ def overlay_label(
     text: str,
     center_y: Optional[int] = None,
     font_path: Optional[str] = None,
+    add_border: bool = False,
 ) -> bytes:
     """Draw a CL2K-style label (white, centred, tracked Arial) onto an existing
     image and return JPEG bytes.
 
     Used to re-text a finished poster — e.g. swap a season year — without running
-    the full CL2K render (no logo/gradient/border added). ``center_y`` defaults to
+    the full CL2K render (no logo/gradient added). ``center_y`` defaults to
     the locked CL2K season-label y; pass another value to match a custom poster's
     band. Pairs with AI text-removal: erase the old label, then draw the new one
     here so the new text is always crisp and in the CL2K font.
+
+    ``add_border`` paints :func:`apply_border`'s frame onto the SAME decoded image
+    so the save path encodes once instead of round-tripping JPEG between steps.
     """
     if center_y is None:
         center_y = geo.SEASON_TEXT_Y
@@ -1227,6 +1251,8 @@ def overlay_label(
             geo.LABEL_FONT_PX,
             kerning=geo.tracking_to_kerning(tracking),
         )
+        if add_border:
+            _draw_border(base)
         return _encode_jpeg(base)
 
 
@@ -1256,6 +1282,7 @@ def overlay_logo(
     flat_white: bool = False,
     logo_3d: bool = False,  # extruded art -> flat-white lit face
     invert: bool = False,
+    add_border: bool = False,
 ) -> bytes:
     """Composite a clear logo onto a finished poster at the locked CL2K baseline.
 
@@ -1265,6 +1292,9 @@ def overlay_logo(
     already-finished uploaded poster (the save-as-is flow), where no full render
     happens. The poster should already be the locked 1000×1500 canvas. Returns
     JPEG bytes.
+
+    ``add_border`` paints :func:`apply_border`'s frame onto the SAME decoded image
+    so the save path encodes once instead of round-tripping JPEG between steps.
     """
     baseline = geo.logo_baseline((kind or "movie").lower())
     with Image(blob=image_bytes) as base:
@@ -1280,6 +1310,8 @@ def overlay_logo(
             flat_white=flat_white,
             logo_3d=logo_3d,
         )
+        if add_border:
+            _draw_border(base)
         return _encode_jpeg(base)
 
 

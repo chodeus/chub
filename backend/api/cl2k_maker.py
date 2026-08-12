@@ -193,6 +193,35 @@ def _ai_config_or_error(logger: Any, what: str):
     return cfg, None
 
 
+def _run_or_error(logger: Any, what: str, code: str, run):
+    """``(value, None)`` from ``run``, else ``(None, 400)`` naming what failed.
+
+    Bad input (truncated data-URL, disallowed art host, provider down) only
+    surfaces deep inside the render/save chain — this is where it becomes a
+    readable 4xx plus a CL2K log line rather than a bare 500 and silence.
+    """
+    try:
+        return run(), None
+    except HTTPException:
+        raise  # a real HTTP status (auth, upstream) must not become a 400
+    except Exception as exc:
+        logger.warning(f"cl2k: {what} failed: {exc}")
+        return None, error(f"Could not {what}: {exc}", code)
+
+
+def _save_response(logger: Any, *, done: str, what: str, run) -> JSONResponse:
+    """Run one of the save/generate flows and shape its result dict into JSON."""
+    result, bad = _run_or_error(logger, what, "CL2K_GENERATE", run)
+    if bad is not None:
+        return bad
+    if result.get("status") == "generated":
+        pending = result.get("upload_pending")
+        return ok(f"{done} — uploading to Drive" if pending else done, result)
+    return error(
+        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    )
+
+
 def _crop_tuple(req: Any):
     """Assemble the (x, y, w, h) fit crop from a request, or None if unset.
 
@@ -530,8 +559,11 @@ def preview(
     except Exception:
         return error("invalid mask data", "BAD_MASK")
     cfg = load_config()  # outside the guard: a config fault is not a render fault
-    try:
-        blob = render_preview(
+    blob, bad = _run_or_error(
+        logger,
+        "render that preview",
+        "PREVIEW_RENDER",
+        lambda: render_preview(
             db,
             cfg,
             logger,
@@ -562,14 +594,10 @@ def preview(
             logo_3d=req.logo_3d,
             invert=req.invert,
             place_logo=req.place_logo,
-        )
-    except HTTPException:
-        raise  # a real HTTP status (auth, upstream) must not become a 400
-    except Exception as exc:
-        # Bad input (undecodable logo/backdrop), not a server fault — surface the
-        # reason instead of a bare 500.
-        logger.warning(f"cl2k: preview render failed: {exc}")
-        return error(f"Could not render that preview: {exc}", "PREVIEW_RENDER")
+        ),
+    )
+    if bad is not None:
+        return bad
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
     return Response(
@@ -590,50 +618,50 @@ def generate(
         mask_bytes = _mask_bytes(req.mask_b64)
     except Exception:
         return error("invalid mask data", "BAD_MASK")
-    result = generate_for_item(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        kind=req.kind,
-        title=req.title,
-        tmdb_id=req.tmdb_id,
-        year=req.year,
-        tvdb_id=req.tvdb_id,
-        imdb_id=req.imdb_id,
-        season_number=req.season_number,
-        backdrop_path=req.backdrop_path,
-        backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
-        logo_path=req.logo_path,
-        custom_logo_bytes=_b64_to_bytes(req.logo_b64),
-        mask_bytes=mask_bytes,
-        apply_ai=req.remove_text,
-        focus_x=req.focus_x,
-        fit_mode=req.fit_mode,
-        crop=_crop_tuple(req),
-        v_pos=req.v_pos,
-        zoom=req.zoom,
-        band_label=req.band_label,
-        logo_scale=req.logo_scale,
-        logo_y_offset=req.logo_y_offset,
-        logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
-        logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
-        whiten=req.whiten,
-        flat_white=req.flat_white,
-        logo_3d=req.logo_3d,
-        invert=req.invert,
-        force=req.force,
-        save_local=req.save_local,
-        upload_gdrive=req.upload_gdrive,
-        # Every interactive save defers alike (posters and the asset makers); the
-        # batch run() stays inline. A deferred failure notifies — see _run_uploads.
-        defer_upload=background_tasks.add_task,
-    )
-    if result.get("status") == "generated":
-        if result.get("upload_pending"):
-            return ok("Poster generated — uploading to Drive", result)
-        return ok("Poster generated", result)
-    return error(
-        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    cfg = load_config()  # outside the guard: a config fault is not a save fault
+    return _save_response(
+        logger,
+        done="Poster generated",
+        what="save that poster",
+        run=lambda: generate_for_item(
+            db=db,
+            full_config=cfg,
+            logger=logger,
+            kind=req.kind,
+            title=req.title,
+            tmdb_id=req.tmdb_id,
+            year=req.year,
+            tvdb_id=req.tvdb_id,
+            imdb_id=req.imdb_id,
+            season_number=req.season_number,
+            backdrop_path=req.backdrop_path,
+            backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
+            logo_path=req.logo_path,
+            custom_logo_bytes=_b64_to_bytes(req.logo_b64),
+            mask_bytes=mask_bytes,
+            apply_ai=req.remove_text,
+            focus_x=req.focus_x,
+            fit_mode=req.fit_mode,
+            crop=_crop_tuple(req),
+            v_pos=req.v_pos,
+            zoom=req.zoom,
+            band_label=req.band_label,
+            logo_scale=req.logo_scale,
+            logo_y_offset=req.logo_y_offset,
+            logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
+            logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
+            whiten=req.whiten,
+            flat_white=req.flat_white,
+            logo_3d=req.logo_3d,
+            invert=req.invert,
+            force=req.force,
+            save_local=req.save_local,
+            upload_gdrive=req.upload_gdrive,
+            # Every interactive save defers alike (posters and the asset makers);
+            # the batch run() stays inline. A deferred failure notifies — see
+            # _run_uploads.
+            defer_upload=background_tasks.add_task,
+        ),
     )
 
 
@@ -717,12 +745,32 @@ class ExtractLogoRequest(BaseModel):
     hi: Optional[float] = Field(None, ge=0.0, le=441.0)
 
 
-def _square_backdrop_bytes(req: SquareArtRequest) -> Optional[bytes]:
+def _source_art_bytes(req: Any) -> Optional[bytes]:
+    """Source art for an asset request: an upload wins over a fetched path."""
     if req.backdrop_b64:
         return _b64_to_bytes(req.backdrop_b64)
     if req.backdrop_path:
         return download_image(req.backdrop_path)
     return None
+
+
+def _art_preview(logger: Any, req: Any, render):
+    """Fetch the source art and render an asset preview, or a clean 4xx."""
+    raw, bad = _run_or_error(
+        logger, "fetch that source art", "IMAGE_FETCH", lambda: _source_art_bytes(req)
+    )
+    if bad is not None:
+        return bad
+    if not raw:
+        return error("No source art selected", "NO_BACKDROP")
+    blob, bad = _run_or_error(
+        logger, "render that preview", "PREVIEW_RENDER", lambda: render(raw)
+    )
+    if bad is not None:
+        return bad
+    return Response(
+        content=blob, media_type="image/jpeg", headers={"Cache-Control": "no-store"}
+    )
 
 
 @router.post("/square-preview", summary="Render square art (1:1) without saving")
@@ -731,18 +779,16 @@ def square_preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
-    raw = _square_backdrop_bytes(req)
-    if not raw:
-        return error("No source art selected", "NO_BACKDROP")
-    blob = render_square_art(
-        backdrop_bytes=raw,
-        focus_x=req.focus_x,
-        fit_mode=req.fit_mode,
-        v_pos=req.v_pos,
-        zoom=req.zoom,
-    )
-    return Response(
-        content=blob, media_type="image/jpeg", headers={"Cache-Control": "no-store"}
+    return _art_preview(
+        logger,
+        req,
+        lambda raw: render_square_art(
+            backdrop_bytes=raw,
+            focus_x=req.focus_x,
+            fit_mode=req.fit_mode,
+            v_pos=req.v_pos,
+            zoom=req.zoom,
+        ),
     )
 
 
@@ -755,33 +801,32 @@ def square_generate(
 ) -> JSONResponse:
     if (bad := _require_any_id(req)) is not None:
         return bad
-    result = generate_square_art(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        kind=req.kind,
-        title=req.title,
-        tmdb_id=req.tmdb_id,
-        year=req.year,
-        tvdb_id=req.tvdb_id,
-        imdb_id=req.imdb_id,
-        backdrop_path=req.backdrop_path,
-        backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
-        focus_x=req.focus_x,
-        fit_mode=req.fit_mode,
-        v_pos=req.v_pos,
-        zoom=req.zoom,
-        season_number=req.season_number,
-        save_local=req.save_local,
-        upload_gdrive=req.upload_gdrive,
-        defer_upload=background_tasks.add_task,
-    )
-    if result.get("status") == "generated":
-        if result.get("upload_pending"):
-            return ok("Square art generated — uploading to Drive", result)
-        return ok("Square art generated", result)
-    return error(
-        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    cfg = load_config()  # outside the guard: a config fault is not a save fault
+    return _save_response(
+        logger,
+        done="Square art generated",
+        what="save that square art",
+        run=lambda: generate_square_art(
+            db=db,
+            full_config=cfg,
+            logger=logger,
+            kind=req.kind,
+            title=req.title,
+            tmdb_id=req.tmdb_id,
+            year=req.year,
+            tvdb_id=req.tvdb_id,
+            imdb_id=req.imdb_id,
+            backdrop_path=req.backdrop_path,
+            backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
+            focus_x=req.focus_x,
+            fit_mode=req.fit_mode,
+            v_pos=req.v_pos,
+            zoom=req.zoom,
+            season_number=req.season_number,
+            save_local=req.save_local,
+            upload_gdrive=req.upload_gdrive,
+            defer_upload=background_tasks.add_task,
+        ),
     )
 
 
@@ -815,26 +860,20 @@ def background_preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
-    raw = None
-    if req.backdrop_b64:
-        raw = _b64_to_bytes(req.backdrop_b64)
-    elif req.backdrop_path:
-        raw = download_image(req.backdrop_path)
-    if not raw:
-        return error("No source art selected", "NO_BACKDROP")
     # Preview at 1080p regardless of the save resolution — same 16:9 frame,
     # quarter the bytes of a 4K render.
-    blob = render_framed_art(
-        backdrop_bytes=raw,
-        width=1920,
-        height=1080,
-        focus_x=req.focus_x,
-        fit_mode=req.fit_mode,
-        v_pos=req.v_pos,
-        zoom=req.zoom,
-    )
-    return Response(
-        content=blob, media_type="image/jpeg", headers={"Cache-Control": "no-store"}
+    return _art_preview(
+        logger,
+        req,
+        lambda raw: render_framed_art(
+            backdrop_bytes=raw,
+            width=1920,
+            height=1080,
+            focus_x=req.focus_x,
+            fit_mode=req.fit_mode,
+            v_pos=req.v_pos,
+            zoom=req.zoom,
+        ),
     )
 
 
@@ -847,34 +886,33 @@ def background_generate(
 ) -> JSONResponse:
     if (bad := _require_any_id(req)) is not None:
         return bad
-    result = generate_background_art(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        kind=req.kind,
-        title=req.title,
-        tmdb_id=req.tmdb_id,
-        year=req.year,
-        tvdb_id=req.tvdb_id,
-        imdb_id=req.imdb_id,
-        backdrop_path=req.backdrop_path,
-        backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
-        focus_x=req.focus_x,
-        fit_mode=req.fit_mode,
-        v_pos=req.v_pos,
-        zoom=req.zoom,
-        resolution=req.resolution,
-        season_number=req.season_number,
-        save_local=req.save_local,
-        upload_gdrive=req.upload_gdrive,
-        defer_upload=background_tasks.add_task,
-    )
-    if result.get("status") == "generated":
-        if result.get("upload_pending"):
-            return ok("Background art generated — uploading to Drive", result)
-        return ok("Background art generated", result)
-    return error(
-        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    cfg = load_config()  # outside the guard: a config fault is not a save fault
+    return _save_response(
+        logger,
+        done="Background art generated",
+        what="save that background art",
+        run=lambda: generate_background_art(
+            db=db,
+            full_config=cfg,
+            logger=logger,
+            kind=req.kind,
+            title=req.title,
+            tmdb_id=req.tmdb_id,
+            year=req.year,
+            tvdb_id=req.tvdb_id,
+            imdb_id=req.imdb_id,
+            backdrop_path=req.backdrop_path,
+            backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
+            focus_x=req.focus_x,
+            fit_mode=req.fit_mode,
+            v_pos=req.v_pos,
+            zoom=req.zoom,
+            resolution=req.resolution,
+            season_number=req.season_number,
+            save_local=req.save_local,
+            upload_gdrive=req.upload_gdrive,
+            defer_upload=background_tasks.add_task,
+        ),
     )
 
 
@@ -893,15 +931,22 @@ def logo_asset_preview(
         return error(f"Could not fetch that logo from its source: {exc}", "LOGO_FETCH")
     if not raw:
         return error("No logo selected", "NO_LOGO")
-    png, _w, _h = process_logo(
-        raw,
-        whiten=req.whiten,
-        flat_white=req.flat_white,
-        logo_3d=req.logo_3d,
-        flip_mask_bytes=_b64_to_bytes(req.flip_b64),
-        erase_mask_bytes=_b64_to_bytes(req.erase_b64),
-        invert=req.invert,
+    png, bad = _run_or_error(
+        logger,
+        "process that logo",
+        "LOGO_PROCESS",
+        lambda: process_logo(
+            raw,
+            whiten=req.whiten,
+            flat_white=req.flat_white,
+            logo_3d=req.logo_3d,
+            flip_mask_bytes=_b64_to_bytes(req.flip_b64),
+            erase_mask_bytes=_b64_to_bytes(req.erase_b64),
+            invert=req.invert,
+        )[0],
     )
+    if bad is not None:
+        return bad
     return Response(
         content=png, media_type="image/png", headers={"Cache-Control": "no-store"}
     )
@@ -916,34 +961,33 @@ def logo_asset_generate(
 ) -> JSONResponse:
     if (bad := _require_any_id(req)) is not None:
         return bad
-    result = generate_logo_asset(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        kind=req.kind,
-        title=req.title,
-        tmdb_id=req.tmdb_id,
-        year=req.year,
-        tvdb_id=req.tvdb_id,
-        imdb_id=req.imdb_id,
-        logo_path=req.logo_path,
-        logo_bytes=_b64_to_bytes(req.logo_b64),
-        whiten=req.whiten,
-        flat_white=req.flat_white,
-        logo_3d=req.logo_3d,
-        invert=req.invert,
-        flip_mask_bytes=_b64_to_bytes(req.flip_b64),
-        erase_mask_bytes=_b64_to_bytes(req.erase_b64),
-        save_local=req.save_local,
-        upload_gdrive=req.upload_gdrive,
-        defer_upload=background_tasks.add_task,
-    )
-    if result.get("status") == "generated":
-        if result.get("upload_pending"):
-            return ok("Logo asset filed — uploading to Drive", result)
-        return ok("Logo asset filed", result)
-    return error(
-        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    cfg = load_config()  # outside the guard: a config fault is not a save fault
+    return _save_response(
+        logger,
+        done="Logo asset filed",
+        what="file that logo asset",
+        run=lambda: generate_logo_asset(
+            db=db,
+            full_config=cfg,
+            logger=logger,
+            kind=req.kind,
+            title=req.title,
+            tmdb_id=req.tmdb_id,
+            year=req.year,
+            tvdb_id=req.tvdb_id,
+            imdb_id=req.imdb_id,
+            logo_path=req.logo_path,
+            logo_bytes=_b64_to_bytes(req.logo_b64),
+            whiten=req.whiten,
+            flat_white=req.flat_white,
+            logo_3d=req.logo_3d,
+            invert=req.invert,
+            flip_mask_bytes=_b64_to_bytes(req.flip_b64),
+            erase_mask_bytes=_b64_to_bytes(req.erase_b64),
+            save_local=req.save_local,
+            upload_gdrive=req.upload_gdrive,
+            defer_upload=background_tasks.add_task,
+        ),
     )
 
 
@@ -1022,29 +1066,41 @@ def psd_export(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
-    blob = psd_for_item(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        kind=req.kind,
-        title=req.title,
-        tmdb_id=req.tmdb_id,
-        backdrop_path=req.backdrop_path,
-        logo_path=req.logo_path,
-        season_number=req.season_number,
-        band_label=req.band_label,
-        logo_scale=req.logo_scale,
-        logo_y_offset=req.logo_y_offset,
-        focus_x=req.focus_x,
-        fit_mode=req.fit_mode,
-        crop=_crop_tuple(req),
-        v_pos=req.v_pos,
-        zoom=req.zoom,
-        whiten=req.whiten,
-        flat_white=req.flat_white,
-        logo_3d=req.logo_3d,
-        invert=req.invert,
+    cfg = load_config()  # outside the guard: a config fault is not an export fault
+    blob, bad = _run_or_error(
+        logger,
+        "export that .psd",
+        "PSD_EXPORT",
+        lambda: psd_for_item(
+            db=db,
+            full_config=cfg,
+            logger=logger,
+            kind=req.kind,
+            title=req.title,
+            tmdb_id=req.tmdb_id,
+            backdrop_path=req.backdrop_path,
+            backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
+            logo_path=req.logo_path,
+            custom_logo_bytes=_b64_to_bytes(req.logo_b64),
+            season_number=req.season_number,
+            band_label=req.band_label,
+            logo_scale=req.logo_scale,
+            logo_y_offset=req.logo_y_offset,
+            logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
+            logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
+            focus_x=req.focus_x,
+            fit_mode=req.fit_mode,
+            crop=_crop_tuple(req),
+            v_pos=req.v_pos,
+            zoom=req.zoom,
+            whiten=req.whiten,
+            flat_white=req.flat_white,
+            logo_3d=req.logo_3d,
+            invert=req.invert,
+        ),
     )
+    if bad is not None:
+        return bad
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
     return Response(
@@ -1147,9 +1203,13 @@ def _new_season_job(total: int, title: str) -> int:
 
 
 def _season_job_snapshot(jid: int) -> Optional[Dict[str, Any]]:
+    """A self-consistent copy — ``results`` is copied too, never aliased.
+
+    A shallow copy left it pointing at the live list the worker appends to, so a
+    poll could serialise more entries than the ``done`` it read a line earlier."""
     with _season_jobs_lock:
         job = _season_jobs.get(jid)
-        return dict(job) if job else None
+        return {**job, "results": list(job["results"])} if job else None
 
 
 # A show has nowhere near this many seasons; a huge list is a malformed/abusive
@@ -1291,20 +1351,39 @@ def generate_seasons_endpoint(
 
 @router.get("/seasons-status/{job_id}", summary="Progress of a background season batch")
 def seasons_status(job_id: int) -> JSONResponse:
+    """Progress + outcome of a season batch.
+
+    ``status`` stays the LIFECYCLE (running / done / error) — the page treats any
+    other value as "still going" — and escalates to ``error`` only for a finished
+    batch that produced nothing, which used to toast a green "0/N generated".
+    ``failed`` and ``outcome`` (ok | partial | error) carry the finer verdict."""
     job = _season_job_snapshot(job_id)
     if job is None:
         return error("Unknown season job", "CL2K_NO_JOB", status_code=404)
-    generated = sum(1 for r in job["results"] if r.get("status") == "generated")
+    results = job["results"]
+    generated = sum(1 for r in results if r.get("status") == "generated")
+    # A skip ("already generated") is an outcome, not a failure.
+    failed = sum(1 for r in results if r.get("status") not in ("generated", "skipped"))
+    status, detail = job["status"], job["error"]
+    if failed:
+        outcome = "partial" if (generated or status == "running") else "error"
+    else:
+        outcome = "error" if status == "error" else "ok"
+    if outcome == "error" and status == "done":
+        status = "error"
+        detail = detail or f"all {failed} of {job['total']} seasons failed"
     return ok(
         "Season job status",
         {
             "job_id": job["id"],
-            "status": job["status"],
+            "status": status,
+            "outcome": outcome,
             "total": job["total"],
             "done": job["done"],
             "generated": generated,
-            "results": job["results"],
-            "error": job["error"],
+            "failed": failed,
+            "results": results,
+            "error": detail,
         },
     )
 
@@ -1578,6 +1657,7 @@ class RetextRequest(BaseModel):
 )
 def retext(
     req: RetextRequest,
+    background_tasks: BackgroundTasks,
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
@@ -1637,6 +1717,9 @@ def retext(
             keep_size=req.keep_size,
             save_local=req.save_local,
             upload_gdrive=req.upload_gdrive,
+            # A save uploads via rclone, which outruns the request timeout on a slow
+            # link. A preview never persists, so it has nothing to defer.
+            defer_upload=None if req.preview else background_tasks.add_task,
         )
     except Exception as exc:
         # Without this, an AI/timeout failure produced a bare 500 with nothing in
@@ -1646,6 +1729,8 @@ def retext(
     if req.preview:
         return ok("ok", {"preview_b64": base64.b64encode(out).decode()})
     if isinstance(out, dict) and out.get("status") == "generated":
+        if out.get("upload_pending"):
+            return ok("Poster saved — uploading to Drive", out)
         return ok("Poster saved", out)
     reason = (
         out.get("reason", "retext failed") if isinstance(out, dict) else "retext failed"

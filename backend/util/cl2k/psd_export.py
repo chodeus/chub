@@ -2,10 +2,11 @@
 
 Assembles the creator-template structure — POSTER>Main, GRADIENT>live gradient
 fill, LOGO>Layer 1, an editable type layer for the label, and an effects-only
-BORDER LAYER carrying live Stroke + Inner Glow — using Pillow for the pixels
-and psd-tools to write the file (live pieces built in :mod:`psd_live`). The
-embedded preview is our own flat composite; geometry comes from
-:mod:`geometry`.
+BORDER LAYER carrying live Stroke + Inner Glow — using Pillow for layout and
+psd-tools to write the file (live pieces built in :mod:`psd_live`). The POSTER
+and LOGO pixels come from the renderer's own framing/logo passes, so the
+document matches the flattened poster. The embedded preview is our own flat
+composite; geometry comes from :mod:`geometry`.
 """
 
 from __future__ import annotations
@@ -32,100 +33,6 @@ def _cover(im: Image.Image, w: int, h: int) -> Image.Image:
     left = (im.width - w) // 2
     top = (im.height - h) // 2
     return im.crop((left, top, left + w, top + h))
-
-
-def _flat_white(logo: Image.Image) -> Image.Image:
-    white = Image.new("RGBA", logo.size, (255, 255, 255, 0))
-    white.putalpha(logo.split()[3])
-    return white
-
-
-def _face_only(logo: Image.Image) -> Image.Image:
-    """3D logo face — Pillow mirror of ``renderer._face_only``, re-trim included."""
-    from backend.util.cl2k.logo_extract import flatten_3d_logo
-
-    buf = io.BytesIO()
-    logo.save(buf, "PNG")
-    faced = flatten_3d_logo(buf.getvalue())
-    if faced is None:
-        return _flat_white(logo)
-    face = Image.open(io.BytesIO(faced)).convert("RGBA")
-    # Mirrors renderer._face_only: the freed extrusion padding must go, or the
-    # layer is placed by the old silhouette's box (see geo.LOGO_TRIM_ALPHA).
-    bbox = face.getchannel("A").point(lambda v: 255 if v > geo.LOGO_TRIM_ALPHA else 0).getbbox()
-    return face.crop(bbox) if bbox else face
-
-
-def _whiten(logo: Image.Image, flat_fallback: bool = True) -> Image.Image:
-    """CL2K two-tone whiten — Pillow mirror of ``renderer._whiten``.
-
-    Same recipe and constants (see :mod:`geometry`, "logo whitening") so the
-    PSD's LOGO layer matches the rendered poster: white fills, black keylines,
-    local-contrast pass for interior accents, flat-white fallback for logos
-    that would come out mostly black (suppressed when the invert pass follows,
-    mirroring the renderer).
-    """
-    import numpy as np
-    from PIL import ImageFilter
-
-    logo = logo.convert("RGBA")
-    rgba = np.asarray(logo, dtype=np.float32) / 255.0
-    rgb, alpha = rgba[..., :3], rgba[..., 3]
-    mx, mn = rgb.max(axis=2), rgb.min(axis=2)
-    light = (mx + mn) / 2.0
-    denom = 1.0 - np.abs(2.0 * light - 1.0)
-    sat = np.where(denom > 1e-6, (mx - mn) / np.where(denom > 1e-6, denom, 1.0), 0.0)
-    key = np.clip(
-        (np.maximum(sat, light) - geo.WHITEN_KEY_BLACK)
-        / (geo.WHITEN_KEY_WHITE - geo.WHITEN_KEY_BLACK),
-        0.0,
-        1.0,
-    )
-    luma = rgb @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
-    sigma = max(2.0, logo.width * geo.WHITEN_DETAIL_SIGMA)
-    blurred = (
-        np.asarray(
-            Image.fromarray((luma * 255.0).round().astype("uint8")).filter(
-                ImageFilter.GaussianBlur(sigma)
-            ),
-            dtype=np.float32,
-        )
-        / 255.0
-    )
-    detail = np.clip(
-        (blurred - luma - geo.WHITEN_DETAIL_LO)
-        / (geo.WHITEN_DETAIL_HI - geo.WHITEN_DETAIL_LO),
-        0.0,
-        1.0,
-    )
-    key *= 1.0 - detail
-    a_sum = float(alpha.sum())
-    if (
-        flat_fallback
-        and a_sum > 1e-3
-        and float((key * alpha).sum()) / a_sum < geo.WHITEN_FALLBACK_MEAN
-    ):
-        return _flat_white(logo)
-    out = np.empty_like(rgba)
-    out[..., 0] = out[..., 1] = out[..., 2] = key
-    out[..., 3] = alpha
-    return Image.fromarray((out * 255.0).round().astype("uint8"), "RGBA")
-
-
-def _invert_to_clear(logo: Image.Image) -> Image.Image:
-    """Invert logo — Pillow mirror of ``renderer._invert_to_clear``.
-
-    White → transparent, black → white: darkness becomes opacity, so a
-    plate-style logo's LOGO layer matches the rendered poster's clearlogo.
-    """
-    import numpy as np
-
-    rgba = np.asarray(logo.convert("RGBA"), dtype=np.float32) / 255.0
-    luma = rgba[..., :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
-    out = np.empty_like(rgba)
-    out[..., 0] = out[..., 1] = out[..., 2] = 1.0
-    out[..., 3] = (1.0 - luma) * rgba[..., 3]
-    return Image.fromarray((out * 255.0).round().astype("uint8"), "RGBA")
 
 
 def _layer_name(text: str, fallback: str) -> str:
@@ -199,6 +106,8 @@ def export_psd(
     logo_max_width: Optional[int] = None,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
+    logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    logo_erase_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     whiten: bool = True,
     flat_white: bool = False,
     logo_3d: bool = False,
@@ -223,8 +132,7 @@ def export_psd(
     # of the wordmark can't drift. NOTE the parity is for DEFAULTS only: render_cl2k
     # can pass a custom title_font and text_logo_stroke, which export_psd has no
     # parameters for, so a request setting either gets a .psd wordmark that differs
-    # from its flattened poster. The wordmark is already CL2K white-on-transparent,
-    # so it skips the whiten/invert passes a sourced logo needs.
+    # from its flattened poster.
     wordmark = False
     if not logo_bytes and title:
         from backend.util.cl2k.renderer import generate_text_logo
@@ -234,25 +142,27 @@ def export_psd(
 
     logo_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     if logo_bytes:
-        lg = Image.open(io.BytesIO(logo_bytes)).convert("RGBA")
-        # Mirrors renderer._trim_logo: plain getbbox() keeps ANY non-zero alpha,
-        # which places this layer off-centre vs the render. See geo.LOGO_TRIM_ALPHA.
-        alpha = lg.getchannel("A").point(
-            lambda v: 255 if v > geo.LOGO_TRIM_ALPHA else 0
-        )
-        bbox = alpha.getbbox()
-        if bbox:
-            lg = lg.crop(bbox)
+        from backend.util.cl2k.renderer import process_logo
+
+        # ONE owner for trim + recolour + brush + invert — the render path's own
+        # pass, so the LOGO layer and its embedded preview cannot drift from the
+        # flattened JPEG (Pillow mirrors of it did, missing the two-tone
+        # post-passes). Everything below is placement, which the .psd owns.
         if wordmark:
-            pass
-        elif logo_3d:
-            lg = _face_only(lg)
-        elif flat_white:
-            lg = _flat_white(lg)
-        elif whiten:
-            lg = _whiten(lg, flat_fallback=not invert)
-        if invert and not flat_white and not logo_3d and not wordmark:
-            lg = _invert_to_clear(lg)
+            # Already CL2K white-on-transparent: only the trim applies — whitening
+            # or inverting a wordmark would mangle or erase it.
+            processed, _pw, _ph = process_logo(logo_bytes, whiten=False)
+        else:
+            processed, _pw, _ph = process_logo(
+                logo_bytes,
+                whiten=whiten,
+                flat_white=flat_white,
+                logo_3d=logo_3d,
+                flip_mask_bytes=logo_flip_bytes,
+                erase_mask_bytes=logo_erase_bytes,
+                invert=invert,
+            )
+        lg = Image.open(io.BytesIO(processed)).convert("RGBA")
         if logo_max_width is None:
             tw, th = geo.auto_logo_size(lg.width, lg.height, baseline)
         else:

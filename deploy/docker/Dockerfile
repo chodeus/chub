@@ -85,6 +85,11 @@ RUN pip3 install --no-cache-dir cairosvg && \
     python3 scripts/rasterize_borders.py && \
     pip3 uninstall -y cairosvg
 
+# ---- CL2K maker (develop-only extension) ----
+# The rasterize step above uninstalls its build-only cairosvg, which also strips
+# the copy requirements-cl2k pinned for SVG logo rendering — put it back.
+RUN pip3 install --no-cache-dir cairosvg==2.9.0
+
 # Frontend assets come from the native-platform `frontend` stage above — dist is
 # just JS/CSS, so emulating the bundler for arm64 bought nothing and hung it.
 COPY --from=frontend /app/frontend/dist ./frontend/dist
