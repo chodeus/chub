@@ -24,7 +24,8 @@ install: ## Install backend dependencies
 	@test -d $(VENV) || $(PY) -m venv $(VENV)
 	@$(VENV)/bin/python -m pip install --upgrade pip
 	@$(VENV)/bin/pip install -r requirements.txt
-	@$(VENV)/bin/pip install black isort ruff pytest
+	@$(VENV)/bin/pip install -r requirements-dev.txt
+	@$(VENV)/bin/pip install black isort ruff
 	@echo "Backend ready"
 
 ui-install: ## Install UI dependencies

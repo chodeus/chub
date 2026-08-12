@@ -1184,7 +1184,7 @@ def test_is_unchanged_upload_none_indexes_preserves_legacy(tmp_path):
 def test_adhoc_match_runs_under_rebuild_lock(monkeypatch):
     """A second webhook worker's clear() must not empty poster_cache mid-match:
     the adhoc rebuild lock has to still be held while match_item reads it."""
-    import backend.modules.poster_renamerr as pr_mod
+    from backend.modules import poster_renamerr as pr_mod
 
     class _StubLogger:
         def __getattr__(self, _name):

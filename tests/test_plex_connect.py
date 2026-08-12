@@ -1,7 +1,7 @@
 """Tests for backend.util.plex.connect_plex_with_retry — the shared
 server-level connect-with-retry used by poster_cleanarr and plex_maintenance."""
 
-import backend.util.plex as plex_mod
+from backend.util import plex as plex_mod
 from backend.util.plex import connect_plex_with_retry
 
 

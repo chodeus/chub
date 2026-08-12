@@ -2,8 +2,8 @@ import json
 import subprocess
 import threading
 
-import backend.modules.jduparr as jduparr_module
 import backend.util.base_module as base_module
+from backend.modules import jduparr as jduparr_module
 from backend.modules.jduparr import Jduparr
 from backend.util.config import ChubConfig, ConfigNotifications, JduparrConfig
 from backend.util.notification import NotificationManager

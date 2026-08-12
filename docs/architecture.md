@@ -50,7 +50,7 @@ All state lives in `chub.db` (SQLite) and the configured filesystem volumes. The
 backend/
 ├── api/                # FastAPI routers (one per resource)
 │   ├── auth.py
-│   ├── media.py        │ media_api.py
+│   ├── cache.py        │ media_api.py
 │   ├── posters.py
 │   ├── modules.py
 │   ├── jobs.py
@@ -62,7 +62,8 @@ backend/
 │   ├── logs.py
 │   ├── labelarr.py  │ nestarr.py
 │   ├── config.py
-│   └── server.py       # FastAPI app factory + router registration
+│   ├── main.py         # FastAPI app + router registration + SPA static mounts
+│   └── server.py       # uvicorn launcher (daemon thread) + app.state injection
 ├── modules/            # Scheduled/on-demand work units
 │   ├── poster_renamerr.py
 │   ├── asset_renamerr.py   # clear logo / square art / background
@@ -76,6 +77,7 @@ backend/
 │   ├── renameinatorr.py
 │   ├── health_checkarr.py
 │   ├── nestarr.py
+│   ├── plex_maintenance.py
 │   └── sync_gdrive.py
 └── util/
     ├── base_module.py        # ChubModule ABC + cooperative cancellation
@@ -137,8 +139,7 @@ Each module class is registered in `backend/modules/__init__.py`'s `MODULES` dic
 - `job_processor.py` owns a **cancel registry** mapping `job_id` → `threading.Event`.
 - `DELETE /api/modules/{name}/execution/{job_id}` sets the event.
 - Long-running modules check `self.is_cancelled()` inside loops and exit early.
-- Currently wired: `upgradinatorr`, `jduparr`, `nohl`, `sync_gdrive`, `unmatched_assets`.
-- Not yet wired (tracked in `CLAUDE.md`): `poster_renamerr`, `labelarr`, `nestarr`, `renameinatorr`, `health_checkarr`, `border_replacerr`, `poster_cleanarr`.
+- Wired in every module except `border_replacerr`.
 
 ### Lifecycle
 
@@ -185,10 +186,10 @@ persist result to jobs table, emit SSE update
 
 `backend/api/webhooks.py` + `backend/util/webhook_processor.py`. End-user setup (where to copy the URL from, how to wire it into Sonarr/Radarr, accepted events, troubleshooting) lives in the [Webhooks wiki page](https://github.com/chodeus/chub/wiki/Webhooks); this section covers the internal model.
 
-- Accepts Sonarr/Radarr/Tautulli event payloads. The accepted-event allow-list is `Download`, `MovieAdded`, `SeriesAdd`, `EpisodeFileImported`, `MovieFileImported`. `Test` events are 200-acked separately. Anything else (Grab, *FileDelete, Rename, HealthIssue, *Delete) is 200-acked and dropped before dedup.
+- Accepts Sonarr/Radarr/Tautulli event payloads. The accepted-event allow-list is `Download`, `MovieAdded`, `SeriesAdd`. `Test` events are 200-acked separately. Anything else (Grab, *FileDelete, Rename, HealthIssue, *Delete) is 200-acked and dropped before dedup.
 - Optional shared-secret auth: if `general.webhook_secret` is set, requests must provide either `X-Webhook-Secret` header or `?secret=` query param (HMAC-compared). If unset, webhooks are accepted unauthenticated (matches Sonarr/Radarr's default posture).
 - Dedup is persistent: `webhook_cache` table with a 600s TTL keyed on `(item_type, sha256(identifying fields))`. Survives restart so Sonarr/Radarr retries (minutes apart) coalesce.
-- Sonarr `Download` / `EpisodeFileImported` payloads carry `episodes[*].seasonNumber`; the validator extracts it and the webhook job narrows `stored_media` to `(show row + matching season row)` so the renamer only re-walks what actually changed.
+- Sonarr `Download` payloads carry `episodes[*].seasonNumber`; the validator extracts it and the webhook job narrows `stored_media` to `(show row + matching season row)` so the renamer only re-walks what actually changed.
 - Each radarr/sonarr/lidarr `InstanceDetail` carries `webhook_force_reupload` (default `False`). When set, webhook-triggered uploads from that instance bypass the uploader's hash-equal short-circuit so an unchanged-on-disk poster is still re-pushed to Plex.
 - Recently-added retry: after enqueue, `wait_for_plex_availability` polls each Plex section's recently-added list with `webhook_initial_delay` warmup + `webhook_max_retries × webhook_retry_delay` (defaults 30s + 10×30s = ~5.5 min).
 - Each inbound webhook creates a job with origin metadata — enables downstream filtering and auditing.
@@ -214,15 +215,16 @@ Schema is defined in `backend/util/database/schema.py`; additive changes use `ad
 | --- | --- |
 | `media_cache` | Unified Radarr/Sonarr/Lidarr item cache with `created_at` for time-window queries |
 | `media_edit_history` | Audit trail: every inline metadata edit (field, old, new, edited_by, ts) |
-| `collection_cache` | Plex collection snapshots + poster_collection-from-tag output |
-| `plex_cache` | Plex library items keyed by ratingKey |
+| `collections_cache` | Plex collection snapshots + poster_collection-from-tag output |
+| `plex_media_cache` | Plex library items keyed by ratingKey |
 | `poster_cache` | File poster index with `width`, `height`, `created_at` |
 | `jobs` | Queue + history; supports filtering/pagination |
 | `system_health_snapshots` | 6-hour cadence; 30-day retention |
 | `run_state` | Latest per-module run state (drives SSE + dashboard) |
-| `users` | bcrypt-hashed auth |
+| `webhook_cache` | Inbound-webhook dedup keys, 600s TTL |
 
-Per-table helpers live in `backend/util/database/*.py` (one file per concern).
+Per-table helpers live in `backend/util/database/*.py` (one file per concern). The
+single admin credential is not a table — it lives in `config.yml` under `auth`.
 
 ---
 
@@ -231,9 +233,10 @@ Per-table helpers live in `backend/util/database/*.py` (one file per concern).
 ### Stack
 
 - React 19 + Vite 8 (dev server on `:5174`, proxies `/api` to `:8000`)
-- React Router DOM 7
+- React Router 8
 - PropTypes for runtime validation (no TypeScript)
-- CSS custom properties for theming (no Tailwind, no CSS-in-JS)
+- Tailwind v4, CSS-first: config lives in `css/tailwind.css` (`@theme` / `@source`), there is no `tailwind.config.js`. Preflight is deliberately not imported
+- CSS custom properties carry the light/dark palette (no CSS-in-JS)
 - Context API for state (no Redux/Zustand)
 
 ### Provider tree (`App.jsx`)
@@ -279,16 +282,16 @@ ToastProvider
 ### CSS layers
 
 ```css
-@layer reset, base, components, utilities, pages;
+@layer reset, theme, base, components, utilities, pages;
 ```
 
-Utilities always win over component rules. Stylelint enforces BEM naming (`.block__element--modifier`) in `components/`; the `utilities/` tree is excluded.
+Declared in `css/tailwind.css`, which `main.jsx` imports first — that declaration sets the real cascade order. Utilities always win over component rules. `stylelint.config.js` enforces BEM naming (`.block__element--modifier`) across `src/**/*.css`, with the pattern widened to accept Tailwind utility forms and `tailwind.css` itself exempted.
 
 ### Build / deploy
 
 - `vite build` emits to `frontend/dist/`.
-- `scripts/build.sh` copies `dist/` into `backend/api/templates/` so FastAPI can serve it as static files.
-- FastAPI mounts `/assets` and a SPA catch-all that returns `index.html` for any non-`/api/*` path.
+- `build_frontend.sh` copies `dist/` into repo-root `templates/`, the default `get_static_dir()` root. The Docker image instead copies it to `/app/public` and sets `STATIC_DIR` there — `templates/` is not in the image.
+- FastAPI mounts `/assets`, `/icons`, `/img` and `/posters`, plus a SPA catch-all that returns `index.html` for any path outside those and `/api/*`.
 
 ---
 

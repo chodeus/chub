@@ -115,19 +115,17 @@ def test_process_media_record_movie_passthrough():
 
 
 def _media_sync_conn(calls):
-    import types
-
     class _Conn:
         def __init__(self, *a, **k):
-            self.connection_manager = types.SimpleNamespace(
+            self.connection_manager = SimpleNamespace(
                 close_all_connections=lambda: calls.append("close")
             )
 
         def update_arr_database(self):
             calls.append("arr")
             return [
-                types.SimpleNamespace(success=True),
-                types.SimpleNamespace(success=False),
+                SimpleNamespace(success=True),
+                SimpleNamespace(success=False),
             ]
 
         def update_plex_database(self):  # the FORCED full walk — must NOT be used
@@ -146,14 +144,10 @@ def _media_sync_conn(calls):
 
 
 def _cfg_with_plex(plex):
-    import types
-
-    return types.SimpleNamespace(instances=types.SimpleNamespace(plex=plex))
+    return SimpleNamespace(instances=SimpleNamespace(plex=plex))
 
 
 def test_media_sync_uses_gentle_plex_refresh_not_forced_walk(monkeypatch):
-    import types
-
     calls = []
     refresh_args = []
     monkeypatch.setattr("backend.util.connector.Connector", _media_sync_conn(calls))
@@ -162,7 +156,7 @@ def test_media_sync_uses_gentle_plex_refresh_not_forced_walk(monkeypatch):
         "backend.util.plex_refresh.refresh_plex_cache_if_stale",
         lambda db, cfg, logger, enabled, **k: refresh_args.append(enabled) or True,
     )
-    cfg = _cfg_with_plex({"Chodeus": types.SimpleNamespace(enabled=True)})
+    cfg = _cfg_with_plex({"Chodeus": SimpleNamespace(enabled=True)})
     monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: cfg)
 
     res = jp._process_media_sync_job({}, _logger(), 1, db=object())

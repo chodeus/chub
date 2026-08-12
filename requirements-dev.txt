@@ -1,0 +1,8 @@
+# Test-only dependencies — never installed into the runtime image.
+# httpx backs Starlette's TestClient; the rest are pytest and its own deps.
+httpx==0.28.1
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
+Pygments==2.20.0
+pytest==9.1.1

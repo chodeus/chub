@@ -7,7 +7,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 import plexapi
-from plexapi import utils as plexutils
+import plexapi.utils as plexutils
 from plexapi.exceptions import NotFound
 from pathvalidate import sanitize_filename
 from plexapi.server import PlexServer
