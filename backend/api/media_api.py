@@ -538,7 +538,9 @@ async def get_duplicates(
                     }
                 }
             },
-        }
+        },
+        400: {"description": "Malformed JSON, or not an object of string lists"},
+        413: {"description": "Request body too large"},
     },
 )
 async def refresh_media(
