@@ -11,6 +11,7 @@
     "test:run": "vitest run",
     "lint": "eslint src --ext .js,.jsx && node scripts/check-field-types.js",
     "check:schema": "node scripts/check-field-types.js",
+    "check:classes": "node scripts/check-tailwind-classes.mjs",
     "format": "prettier --write \"src/**/*.{js,jsx,css,json,md}\"",
     "stylelint": "stylelint 'src/**/*.css' --fix"
   },

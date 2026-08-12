@@ -542,7 +542,7 @@ const AccordionTestPage = () => {
                                 <Modal.Footer align="right">
                                     <button
                                         onClick={() => setControlledModalOpen(false)}
-                                        className="bg-surface-alt text-white px-4 py-2 rounded hover:bg-secondary-hover min-h-11"
+                                        className="bg-surface-alt text-white px-4 py-2 rounded hover:bg-surface-elevated min-h-11"
                                     >
                                         Close
                                     </button>
@@ -595,7 +595,7 @@ const AccordionTestPage = () => {
                                     <Modal.Footer align="space-between">
                                         <button
                                             onClick={() => setModalOpen(false)}
-                                            className="bg-surface-alt text-white px-4 py-2 rounded hover:bg-secondary-hover min-h-11"
+                                            className="bg-surface-alt text-white px-4 py-2 rounded hover:bg-surface-elevated min-h-11"
                                         >
                                             Cancel
                                         </button>

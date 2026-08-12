@@ -209,6 +209,16 @@ jobs:
         working-directory: frontend
         run: npm run test:run
 
+      # Tailwind silently drops classes it cannot resolve, so the built CSS is
+      # the only place a dead utility shows up — check:classes reads dist/.
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check for used-but-unemitted Tailwind classes
+        working-directory: frontend
+        run: npm run check:classes
+
   # ---- Branch isolation guard ----
   # Develop-only extensions (e.g. the CL2K poster maker) must never reach main.
   # On main (and PRs targeting main) fail if any extension code is present:

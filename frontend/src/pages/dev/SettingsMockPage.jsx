@@ -108,7 +108,7 @@ const SettingsMockPage = () => {
                 </p>
 
                 {/* Note about header search integration */}
-                <div className="p-4 bg-bg-secondary border border-border-subtle rounded-md mb-6">
+                <div className="p-4 bg-surface-alt border border-border-subtle rounded-md mb-6">
                     <p className="text-sm text-fg mb-2">
                         <span
                             className="material-symbols-outlined text-fg mr-2"
@@ -164,7 +164,7 @@ const SettingsMockPage = () => {
                                 )}
                             </AccordionItem.Header>
 
-                            <AccordionItem.Body className="border-t border-border-subtle bg-bg-secondary/30">
+                            <AccordionItem.Body className="border-t border-border-subtle bg-surface-alt/30">
                                 {module.fields && module.fields.length > 0 ? (
                                     <div className="p-6 bg-surface-elevated">
                                         <div className="space-y-4">
@@ -257,7 +257,7 @@ const SettingsMockPage = () => {
                                                                                     key={
                                                                                         nestedField.key
                                                                                     }
-                                                                                    className="inline-block px-2 py-1 bg-bg-secondary text-xs rounded mr-2 mb-1"
+                                                                                    className="inline-block px-2 py-1 bg-surface-alt text-xs rounded mr-2 mb-1"
                                                                                 >
                                                                                     {
                                                                                         nestedField.label
