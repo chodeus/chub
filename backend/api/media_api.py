@@ -517,7 +517,7 @@ async def get_duplicates(
     summary="Refresh media cache",
     description="Trigger a background cache refresh job. Accepts both frontend "
     "format (path, deep) and backend format (arr_instances, plex_instances, "
-    "libraries, update_mappings).",
+    "libraries).",
     responses={
         200: {
             "description": "Cache refresh job enqueued successfully",
@@ -544,8 +544,8 @@ async def refresh_media(
     Accepts two payload formats:
     - Frontend format: ``path`` and ``deep`` keys trigger a full
       refresh of all configured instances.
-    - Backend format: ``arr_instances``, ``plex_instances``,
-      ``libraries``, and ``update_mappings`` for targeted refresh.
+    - Backend format: ``arr_instances``, ``plex_instances`` and
+      ``libraries`` for targeted refresh.
 
     Returns:
         Job ID for tracking the refresh operation
@@ -565,7 +565,6 @@ async def refresh_media(
             "arr_instances": payload.get("arr_instances", []),
             "plex_instances": payload.get("plex_instances", []),
             "libraries": payload.get("libraries", []),
-            "update_mappings": payload.get("update_mappings", True),
         }
 
         result = db.worker.enqueue_job("jobs", job_payload, job_type="cache_refresh")

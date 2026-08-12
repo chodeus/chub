@@ -200,6 +200,7 @@ def test_has_overlay_missing_labels():
 
 
 def test_throttle_sleeps_when_configured(monkeypatch):
+    """upload_delay_ms sleeps for that many milliseconds, expressed in seconds."""
     from types import SimpleNamespace
     from backend.util import upload_posters as up_mod
 
@@ -212,6 +213,7 @@ def test_throttle_sleeps_when_configured(monkeypatch):
 
 
 def test_throttle_noop_when_zero(monkeypatch):
+    """A zero upload_delay_ms must not call sleep at all."""
     from types import SimpleNamespace
     from backend.util import upload_posters as up_mod
 

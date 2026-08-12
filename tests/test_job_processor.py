@@ -115,13 +115,19 @@ def test_process_media_record_movie_passthrough():
 
 
 def _media_sync_conn(calls):
+    """Build a Connector stub that appends a tag for each sync step it runs."""
+
     class _Conn:
+        """Connector double whose forced plex walk must never be reached."""
+
         def __init__(self, *a, **k):
+            """Expose a connection manager that records close_all_connections."""
             self.connection_manager = SimpleNamespace(
                 close_all_connections=lambda: calls.append("close")
             )
 
         def update_arr_database(self):
+            """Return one succeeding and one failing ARR sync result."""
             calls.append("arr")
             return [
                 SimpleNamespace(success=True),
@@ -129,14 +135,17 @@ def _media_sync_conn(calls):
             ]
 
         def update_plex_database(self):  # the FORCED full walk — must NOT be used
+            """Record the forbidden forced walk so the test can assert it never ran."""
             calls.append("plex_FORCED")
             return []
 
         def update_collections_database(self):
+            """Record the collections sync step."""
             calls.append("coll")
             return []
 
         def update_media_plex_mappings(self):
+            """Record the media/plex mapping step."""
             calls.append("map")
             return {}
 
@@ -144,10 +153,12 @@ def _media_sync_conn(calls):
 
 
 def _cfg_with_plex(plex):
+    """Minimal config double exposing only instances.plex."""
     return SimpleNamespace(instances=SimpleNamespace(plex=plex))
 
 
 def test_media_sync_uses_gentle_plex_refresh_not_forced_walk(monkeypatch):
+    """Media sync takes the stale-gated plex refresh, never the forced full walk."""
     calls = []
     refresh_args = []
     monkeypatch.setattr("backend.util.connector.Connector", _media_sync_conn(calls))
