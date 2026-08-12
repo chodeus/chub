@@ -16,7 +16,6 @@ degrades to the colour-key rather than breaking. The model
 
 from __future__ import annotations
 
-import io
 import logging
 import os
 import threading
@@ -24,6 +23,8 @@ from typing import Optional
 
 import numpy as np
 from PIL import Image
+
+from backend.util.cl2k.limits import open_bounded
 
 _log = logging.getLogger(__name__)
 
@@ -36,6 +37,9 @@ _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 # skipped whole title lines on real posters; the smaller passes bring huge
 # lettering back into range. Only-downscale, so tiny images dedupe to one pass.
 _SCALES = (960, 640, 448, 320)
+# Working long side the map is built (and returned) at. Every pass downsamples to
+# 960 or less anyway, so 2x that costs no accuracy and bounds the float buffers.
+_MAX_WORK_SIDE = 2048
 
 
 _SESSION = None
@@ -81,18 +85,24 @@ def available() -> bool:
 def detect_text_probmap(image_bytes: bytes) -> Optional[np.ndarray]:
     """DBNet text-probability heatmap for ``image_bytes``.
 
-    Returns an ``HxW`` float array in ``[0, 1]`` at the image's own pixel size
-    (high on text, low elsewhere), or ``None`` when the detector is unavailable
-    or errors. High values are text-line cores (DBNet predicts a shrunk kernel),
-    so a threshold gives a polarity-agnostic text-line mask, not per-glyph.
-    Runs the ``_SCALES`` pyramid and max-merges, so both huge display titles and
-    small credit lines register in one map.
+    Returns an ``HxW`` float array in ``[0, 1]`` (high on text, low elsewhere),
+    or ``None`` when the detector is unavailable or errors. High values are
+    text-line cores (DBNet predicts a shrunk kernel), so a threshold gives a
+    polarity-agnostic text-line mask, not per-glyph. Runs the ``_SCALES`` pyramid
+    and max-merges, so both huge display titles and small credit lines register
+    in one map.
+
+    The map is at the ``_MAX_WORK_SIDE`` working size, NOT the source's: a big
+    source would otherwise cost a full-resolution float buffer per pyramid level.
+    Callers scale it to their own array (see ``logo_extract._sized_probmap``).
     """
     sess = _session()
     if sess is None:
         return None
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = open_bounded(image_bytes, "RGB")
+        if max(img.size) > _MAX_WORK_SIDE:
+            img.thumbnail((_MAX_WORK_SIDE, _MAX_WORK_SIDE), Image.LANCZOS)
         w, h = img.size
         name = sess.get_inputs()[0].name
         merged = None

@@ -27,6 +27,8 @@ from typing import Optional
 import numpy as np
 from PIL import Image
 
+from backend.util.cl2k.limits import open_bounded
+
 
 def _despeckle(alpha: np.ndarray, min_area: int = 12) -> np.ndarray:
     """Drop isolated specks by connected-component area on the binary alpha.
@@ -37,6 +39,10 @@ def _despeckle(alpha: np.ndarray, min_area: int = 12) -> np.ndarray:
     union-find, no scipy/cv2) and zeroes only components under ``min_area`` px:
     a 1-2px hairline survives as long as it touches its glyph, while isolated
     speckle dies. Kept components retain their original soft alpha.
+
+    Both run lists are in ascending column order and disjoint, so the row-to-row
+    overlap test is a two-pointer merge, not a nested scan: a grainy no-mask
+    extract hits thousands of runs per row, where the pairwise version stalls.
     """
     binary = alpha > 40
     h, _w = binary.shape
@@ -65,14 +71,18 @@ def _despeckle(alpha: np.ndarray, min_area: int = 12) -> np.ndarray:
         starts = np.concatenate(([0], breaks + 1))
         ends = np.concatenate((breaks, [idx.size - 1]))
         cur_runs = []
+        p = 0  # first prev run that can still reach a later cur run
         for s, e in zip(starts, ends):
             cs, ce = int(idx[s]), int(idx[e])
             lbl = next_id
             next_id += 1
             parent[lbl] = lbl
-            for ps, pe, plbl in prev_runs:  # 8-connectivity: overlap within 1 col
-                if pe >= cs - 1 and ps <= ce + 1:
-                    union(lbl, plbl)
+            while p < len(prev_runs) and prev_runs[p][1] < cs - 1:
+                p += 1  # ends left of this run's reach, and cs only grows
+            q = p
+            while q < len(prev_runs) and prev_runs[q][0] <= ce + 1:
+                union(lbl, prev_runs[q][2])  # 8-connectivity: overlap within 1 col
+                q += 1
             cur_runs.append((cs, ce, lbl))
             all_runs.append((y, cs, ce, lbl))
         prev_runs = cur_runs
@@ -108,7 +118,7 @@ def _load_mask(mask_bytes: Optional[bytes], size) -> Optional[np.ndarray]:
     """Decode a brush PNG to a bool array (white = keep), resized to ``size``."""
     if not mask_bytes:
         return None
-    m = Image.open(io.BytesIO(mask_bytes)).convert("L")
+    m = open_bounded(mask_bytes, "L")
     if m.size != size:
         m = m.resize(size, Image.NEAREST)
     return np.asarray(m) > 127
@@ -276,8 +286,8 @@ def _background_distance(arr: np.ndarray, bg: np.ndarray) -> np.ndarray:
     return np.sqrt((diff * diff).sum(axis=-1)).min(axis=-1)
 
 
-# Cap the input so the (H×W×N×3) float buffers below can't OOM the worker on an
-# oversized/decompression-bomb image. Posters are well under this.
+# Working cap so the (H×W×N×3) float buffers below stay small. Bombs are rejected
+# before decode by limits.open_bounded; this only bounds the analysis arrays.
 _MAX_SIDE = 3000
 
 # White-union guard: reject when the union would cover more of the brush than a
@@ -398,7 +408,8 @@ def _text_zone_filter(
 
 
 def _open_rgb_bounded(image_bytes: bytes) -> Image.Image:
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    """Decode to RGB under the bomb ceiling, then downscale to ``_MAX_SIDE``."""
+    img = open_bounded(image_bytes, "RGB")
     if max(img.size) > _MAX_SIDE:
         img.thumbnail((_MAX_SIDE, _MAX_SIDE), Image.LANCZOS)
     return img
@@ -503,7 +514,7 @@ def extract_title_logo(
     )  # smoothstep keeps soft edges
 
     if mask_bytes:
-        m = Image.open(io.BytesIO(mask_bytes)).convert("L")
+        m = open_bounded(mask_bytes, "L")
         if m.size != img.size:
             m = m.resize(img.size, Image.NEAREST)
         alpha = (
@@ -588,7 +599,7 @@ def _sized_probmap(image_bytes, shape):
     prob = detect_text_probmap(image_bytes)
     if prob is None:
         return None
-    if prob.shape != shape:  # e.g. _open_rgb_bounded downscaled a huge image
+    if prob.shape != shape:  # detector works at its own capped size; rescale here
         prob = (
             np.asarray(
                 Image.fromarray((np.clip(prob, 0, 1) * 255).astype(np.uint8)).resize(
@@ -859,8 +870,8 @@ def ink_color_edges(whitened_png: bytes, original_png: bytes) -> bytes:
     (fail open — a bad decode must never break the render).
     """
     try:
-        white = Image.open(io.BytesIO(whitened_png)).convert("RGBA")
-        orig = Image.open(io.BytesIO(original_png)).convert("RGBA")
+        white = open_bounded(whitened_png, "RGBA")
+        orig = open_bounded(original_png, "RGBA")
     except Exception:
         return whitened_png
     if white.size != orig.size:
@@ -917,8 +928,8 @@ def fill_dark_bodies(whitened_png: bytes, original_png: bytes) -> bytes:
     failure or when there is nothing thick and dark to fill.
     """
     try:
-        white = Image.open(io.BytesIO(whitened_png)).convert("RGBA")
-        orig = Image.open(io.BytesIO(original_png)).convert("RGBA")
+        white = open_bounded(whitened_png, "RGBA")
+        orig = open_bounded(original_png, "RGBA")
     except Exception:
         return whitened_png
     if white.size != orig.size:
@@ -960,7 +971,7 @@ def flatten_3d_logo(logo_png: bytes) -> Optional[bytes]:
     letterforms); the caller falls back to the flat silhouette.
     """
     try:
-        src = Image.open(io.BytesIO(logo_png)).convert("RGBA")
+        src = open_bounded(logo_png, "RGBA")
     except Exception:
         return None
     arr = np.asarray(src).astype(np.float32) / 255.0

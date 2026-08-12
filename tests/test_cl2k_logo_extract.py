@@ -806,3 +806,128 @@ def test_diff_keeps_repaint_when_the_detector_is_absent(monkeypatch):
     )
     res = Image.open(io.BytesIO(out))
     assert res.height >= 100  # spans the junk at y=30 down to the bar at y=140
+
+
+# --------------------------------------------------------------------------
+# despeckle: two-pointer row merge must match the old pairwise scan exactly
+# --------------------------------------------------------------------------
+
+
+def _despeckle_pairwise(alpha, min_area=12):
+    """The pre-two-pointer despeckle, verbatim, as the equivalence oracle."""
+    import numpy as np
+
+    binary = alpha > 40
+    h, _w = binary.shape
+    parent = {}
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    next_id = 0
+    prev_runs = []
+    all_runs = []
+    for y in range(h):
+        idx = np.flatnonzero(binary[y])
+        if idx.size == 0:
+            prev_runs = []
+            continue
+        breaks = np.flatnonzero(np.diff(idx) > 1)
+        starts = np.concatenate(([0], breaks + 1))
+        ends = np.concatenate((breaks, [idx.size - 1]))
+        cur_runs = []
+        for s, e in zip(starts, ends):
+            cs, ce = int(idx[s]), int(idx[e])
+            lbl = next_id
+            next_id += 1
+            parent[lbl] = lbl
+            for ps, pe, plbl in prev_runs:
+                if pe >= cs - 1 and ps <= ce + 1:
+                    union(lbl, plbl)
+            cur_runs.append((cs, ce, lbl))
+            all_runs.append((y, cs, ce, lbl))
+        prev_runs = cur_runs
+
+    area = {}
+    for _y, cs, ce, lbl in all_runs:
+        r = find(lbl)
+        area[r] = area.get(r, 0) + (ce - cs + 1)
+    keep = np.zeros_like(binary)
+    for y, cs, ce, lbl in all_runs:
+        if area[find(lbl)] >= min_area:
+            keep[y, cs : ce + 1] = True
+    return (alpha * keep).astype(np.uint8)
+
+
+def test_despeckle_matches_the_pairwise_oracle_on_random_runs():
+    import numpy as np
+
+    from backend.util.cl2k import logo_extract
+
+    rng = np.random.default_rng(20260812)
+    for _ in range(60):
+        h, w = int(rng.integers(1, 30)), int(rng.integers(1, 45))
+        on = rng.random((h, w)) < float(rng.random())
+        alpha = (on * rng.integers(0, 256, (h, w))).astype(np.uint8)
+        for min_area in (1, 4, 12, 40):
+            assert np.array_equal(
+                logo_extract._despeckle(alpha, min_area),
+                _despeckle_pairwise(alpha, min_area),
+            )
+
+
+def test_despeckle_matches_the_oracle_on_adversarial_run_patterns():
+    import numpy as np
+
+    from backend.util.cl2k import logo_extract
+
+    cases = {}
+    cases["solid"] = np.full((20, 30), 255, np.uint8)
+    cases["empty"] = np.zeros((20, 30), np.uint8)
+    checker = np.zeros((21, 31), np.uint8)
+    checker[::2, ::2] = 255  # every run 1px wide: the worst case for the merge
+    cases["checker"] = checker
+    diagonal = np.zeros((40, 40), np.uint8)
+    diagonal[np.arange(40), np.arange(40)] = 255  # 8-connectivity corner touches
+    cases["diagonal"] = diagonal
+    stripes = np.zeros((30, 60), np.uint8)
+    stripes[:, ::3] = 200
+    cases["stripes"] = stripes
+    line = (np.random.default_rng(7).random(200) < 0.5).astype(np.uint8) * 255
+    cases["single_row"] = line.reshape(1, 200)
+    cases["single_col"] = line.reshape(200, 1)
+    grain = np.random.default_rng(11).random((120, 400))
+    cases["grain"] = ((grain < 0.5) * 255).astype(np.uint8)  # ~100 runs per row
+    for name, alpha in cases.items():
+        for min_area in (1, 12, 40):
+            assert np.array_equal(
+                logo_extract._despeckle(alpha, min_area),
+                _despeckle_pairwise(alpha, min_area),
+            ), f"{name} @ min_area={min_area}"
+
+
+def test_despeckle_handles_a_grainy_no_mask_extract_in_budget():
+    """The pathological case: thousands of tiny runs per row, which the pairwise
+    row scan turned into O(runs^2) and stalled the render worker on."""
+    import time
+
+    import numpy as np
+
+    from backend.util.cl2k import logo_extract
+
+    rng = np.random.default_rng(4)
+    alpha = ((rng.random((1000, 2000)) < 0.5) * 255).astype(np.uint8)
+    start = time.perf_counter()
+    out = logo_extract._despeckle(alpha)
+    elapsed = time.perf_counter() - start
+    assert out.shape == alpha.shape
+    assert (out > 0).any()  # the mask survived; the oracle checks exact equality
+    assert elapsed < 12.0  # ~0.6s here; the pairwise scan took ~7s

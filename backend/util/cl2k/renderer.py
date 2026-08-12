@@ -26,11 +26,16 @@ from wand.drawing import Drawing
 from wand.image import COMPOSITE_OPERATORS, Image
 
 from backend.util.cl2k import color, geometry as geo
+from backend.util.cl2k.limits import apply_magick_limits
 from backend.util.cl2k.logo_extract import (
     fill_dark_bodies,
     flatten_3d_logo,
     ink_color_edges,
 )
+
+# ImageMagick ships no resource limits without a policy.xml, which only exists in
+# the container. This is the sole wand entry point, so cap the process here.
+apply_magick_limits()
 
 # ImageMagick 7 renamed CopyOpacity to CopyAlpha; wand exposes whichever the
 # linked library supports (IM6 = Debian/CI runners, IM7 = homebrew dev). Both
