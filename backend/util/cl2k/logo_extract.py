@@ -40,9 +40,8 @@ def _despeckle(alpha: np.ndarray, min_area: int = 12) -> np.ndarray:
     a 1-2px hairline survives as long as it touches its glyph, while isolated
     speckle dies. Kept components retain their original soft alpha.
 
-    Both run lists are in ascending column order and disjoint, so the row-to-row
-    overlap test is a two-pointer merge, not a nested scan: a grainy no-mask
-    extract hits thousands of runs per row, where the pairwise version stalls.
+    Sorted, disjoint run lists make the row-to-row overlap test a two-pointer
+    merge (see the pairwise oracle in tests for the reference behavior).
     """
     binary = alpha > 40
     h, _w = binary.shape

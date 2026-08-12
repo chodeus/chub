@@ -1,13 +1,5 @@
 """Decode-size caps for the CL2K image paths — one owner for "how big an image
-may we decode", in Pillow and in ImageMagick.
-
-Every CL2K entry point takes bytes from somewhere the user pointed at (Plex,
-TMDB, fanart, an upload), so a decompression bomb — a few KB of PNG declaring
-30000x30000 — is a real input. Pillow's own bomb guard only *errors* past ~178
-MP and every path here decodes before it looks at the size, so the allocation
-happens first; ImageMagick ships no limits at all unless a policy.xml says so,
-which only exists in the container image. Both are capped here instead.
-"""
+may we decode", in Pillow (header-checked ceiling) and ImageMagick (wand limits)."""
 
 from __future__ import annotations
 
