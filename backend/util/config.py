@@ -1160,34 +1160,55 @@ def clear_config_cache() -> None:
         _config_cache.clear()
 
 
-def format_validation_errors(validation_error: ValidationError) -> List[str]:
-    """Return one humanized "loc: msg" line per Pydantic field error.
+def _humanize_validation_msg(msg: str) -> str:
+    """Rewrite common Pydantic phrasing for non-developer readers."""
+    if "field required" in msg or "Field required" in msg:
+        return "missing required field"
+    if "not a valid integer" in msg or "valid integer" in msg:
+        return "must be a number"
+    if "not a valid boolean" in msg or "valid boolean" in msg:
+        return "must be true or false"
+    if "not a valid string" in msg or "valid string" in msg:
+        return "must be text"
+    if "invalid or missing URL scheme" in msg:
+        return "must be a valid URL (http:// or https://)"
+    return msg
 
-    Used by both the CLI error printer and runtime loggers so the user sees
-    the same per-field detail regardless of which path surfaced the failure.
+
+def format_validation_errors(validation_error: ValidationError) -> List[str]:
+    """Return one humanized "loc: msg (got: value)" line per Pydantic field error.
+
+    Server-side only — the input values make this unsafe to return in a
+    response. Use ``format_validation_errors_public`` for that.
     """
     lines: List[str] = []
     for error in validation_error.errors():
         location = " -> ".join(str(loc) for loc in error["loc"])
-        msg = error["msg"]
-
-        # Simplify common Pydantic phrasing for non-developer readers
-        if "field required" in msg or "Field required" in msg:
-            msg = "missing required field"
-        elif "not a valid integer" in msg or "valid integer" in msg:
-            msg = "must be a number"
-        elif "not a valid boolean" in msg or "valid boolean" in msg:
-            msg = "must be true or false"
-        elif "not a valid string" in msg or "valid string" in msg:
-            msg = "must be text"
-        elif "invalid or missing URL scheme" in msg:
-            msg = "must be a valid URL (http:// or https://)"
+        msg = _humanize_validation_msg(error["msg"])
 
         input_value = error.get("input")
         if input_value is not None and not isinstance(input_value, (dict, list)):
             lines.append(f"{location}: {msg} (got: {input_value!r})")
         else:
             lines.append(f"{location}: {msg}")
+    return lines
+
+
+def format_validation_errors_public(validation_error: ValidationError) -> List[str]:
+    """Return response-safe "loc: msg" lines — no input values, secrets masked."""
+    lines: List[str] = []
+    for error in validation_error.errors():
+        loc = error["loc"]
+        location = " -> ".join(str(part) for part in loc)
+        leaf = str(loc[-1]) if loc else ""
+        # A sensitive leaf gets a fixed msg too: Pydantic phrasing can quote the
+        # offending value (enum/pattern errors), which would echo the secret.
+        msg = (
+            "invalid value"
+            if leaf in SENSITIVE_FIELD_NAMES
+            else _humanize_validation_msg(error["msg"])
+        )
+        lines.append(f"{location}: {msg}")
     return lines
 
 

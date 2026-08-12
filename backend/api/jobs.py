@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import error, get_database, get_logger, ok, worker_error
 from backend.util.database import ChubDB
 
 
@@ -64,7 +64,10 @@ async def get_job_stats(
         result = db.worker.job_stats("jobs", error_limit=10)
 
         if isinstance(result, dict) and "success" in result:
-            return result
+            failed = worker_error(
+                result, logger, "Error retrieving job statistics", "JOB_STATS_ERROR"
+            )
+            return failed or result
         else:
             return ok("Job statistics retrieved", result if result else {"stats": {}})
 
@@ -109,6 +112,11 @@ async def list_jobs(
         )
 
         if isinstance(result, dict) and "success" in result:
+            failed = worker_error(
+                result, logger, "Error listing jobs", "JOBS_LIST_ERROR"
+            )
+            if failed:
+                return failed
             jobs = result.get("data", {}).get("jobs", [])
             _enrich_jobs(jobs)
             return result
@@ -210,7 +218,10 @@ async def delete_old_jobs(
     try:
         result = db.worker.cleanup_jobs("jobs", days=days)
         if isinstance(result, dict) and "success" in result:
-            return result
+            failed = worker_error(
+                result, logger, "Error cleaning up jobs", "JOBS_CLEANUP_ERROR"
+            )
+            return failed or result
         return ok(f"Cleaned up jobs older than {days}d", result or {})
     except Exception as e:
         logger.error(f"Error cleaning up jobs: {e}")

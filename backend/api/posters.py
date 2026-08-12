@@ -15,9 +15,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
-from backend.api.utils import error, get_database, get_logger, get_module_logger, ok
+from backend.api.utils import (
+    error,
+    get_database,
+    get_logger,
+    get_module_logger,
+    ok,
+    worker_error,
+)
 from backend.modules.sync_gdrive import SyncGDrive
 from backend.modules.unmatched_assets import UnmatchedAssets
+from backend.util.config import ConfigError
 from backend.util.database import ChubDB, escape_like
 from backend.util.helper import get_static_dir
 
@@ -374,6 +382,8 @@ async def search_gdrive_sources(
             item["last_updated"] = loc_stats.get("last_updated")
 
         return ok(f"Found {len(gdrive_list)} GDrive sources", {"sources": gdrive_list})
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error searching GDrive sources: {e}")
         return error(
@@ -536,12 +546,16 @@ async def browse_posters(
                     head = name.split(None, 1)[0]
                     if head:
                         configured_styles.add(head)
+        except ConfigError:
+            raise
         except Exception as e:
             logger.debug(f"Could not derive configured styles from config: {e}")
         result["styles"] = sorted(db_styles | configured_styles)
         return ok(
             f"Retrieved {len(result['items'])} of {result['total']} posters", result
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error browsing posters: {e}")
         return error(
@@ -661,6 +675,8 @@ async def upload_poster(
             {"filename": safe_name, "path": dest_path, "size_bytes": len(contents)},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error uploading poster: {e}")
         return error(
@@ -2334,6 +2350,8 @@ async def delete_gdrive_local(
         # Fail closed: without config we can't verify the path is a real drive.
         try:
             config = load_config()
+        except ConfigError:
+            raise
         except Exception:  # noqa: S110 — treated as unavailable below
             config = None
         if config is None:
@@ -2382,6 +2400,16 @@ async def delete_gdrive_local(
         # match above — never the raw request path, so a validated request string
         # can't reach rmtree. target == req_real by that match.
         target = os.path.realpath(matched.location)
+        # Re-confine the RE-RESOLVED path right before deleting: a symlink
+        # component can change between the membership check above and here.
+        if target != req_real or target == os.path.realpath(os.sep):
+            logger.error(f"Refusing to delete '{target}': resolved path changed")
+            return error(
+                "Location is not a configured Google Drive folder",
+                code="GDRIVE_LOCATION_NOT_CONFIGURED",
+                status_code=400,
+            )
+
         folder_removed = False
         if os.path.isdir(target):
             shutil.rmtree(target)
@@ -2404,6 +2432,8 @@ async def delete_gdrive_local(
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error deleting local GDrive folder: {e}")
         return error(
@@ -2462,6 +2492,8 @@ async def analyze_poster_directory(
 
         try:
             config = load_config()
+        except ConfigError:
+            raise
         except Exception:  # noqa: S110 — config may not be loaded at boot
             config = None
 
@@ -2529,6 +2561,8 @@ async def analyze_poster_directory(
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error analyzing poster location: {e}")
         return error(
@@ -2597,6 +2631,8 @@ async def preview_poster_file(
 
         try:
             config = load_config()
+        except ConfigError:
+            raise
         except Exception:  # noqa: S110 — fail closed below
             config = None
 
@@ -2660,6 +2696,8 @@ async def preview_poster_file(
 
         return FileResponse(str(file_path))
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error serving poster preview: {e}")
         return error(
@@ -2721,10 +2759,11 @@ def upload_media_posters(
                 result.get("data", {}),
             )
         else:
-            return error(
-                f"Upload failed for media cache item {media_id}: {result.get('message', 'Unknown error')}",
-                code="MEDIA_UPLOAD_FAILED",
-                status_code=500,
+            return worker_error(
+                result,
+                logger,
+                f"Upload failed for media cache item {media_id}",
+                "MEDIA_UPLOAD_FAILED",
             )
 
     except Exception as e:
@@ -2790,10 +2829,11 @@ def upload_collection_posters(
                 result.get("data", {}),
             )
         else:
-            return error(
-                f"Upload failed for collection cache item {collection_id}: {result.get('message', 'Unknown error')}",
-                code="COLLECTION_UPLOAD_FAILED",
-                status_code=500,
+            return worker_error(
+                result,
+                logger,
+                f"Upload failed for collection cache item {collection_id}",
+                "COLLECTION_UPLOAD_FAILED",
             )
 
     except Exception as e:
@@ -2994,6 +3034,8 @@ def _get_plex_path(request: Request) -> Optional[str]:
         from backend.util.config import load_config
 
         cfg = load_config()
+    except ConfigError:
+        raise
     except Exception:
         return None
     section = getattr(cfg, "poster_cleanarr", None)
@@ -3008,14 +3050,17 @@ def _get_cleanarr_excluded_libraries(request: Request) -> List[str]:
     """Plex library names the user opted out of in poster_cleanarr config.
 
     Display-side mirror of the module's deletion-side deny-list — hides excluded
-    libraries from the by-media view and its libraries[] catalog. Best-effort: a
-    config failure returns [] (show everything). This is a UI filter, not a
-    safety guard — the in-use set is global regardless of any opt-out.
+    libraries from the by-media view and its libraries[] catalog. A malformed
+    config propagates (CONFIG_INVALID); other failures return [] (show
+    everything). This is a UI filter, not a safety guard — the in-use set is
+    global regardless of any opt-out.
     """
     try:
         from backend.util.config import load_config
 
         cfg = load_config()
+    except ConfigError:
+        raise
     except Exception:
         return []
     section = getattr(cfg, "poster_cleanarr", None)
@@ -3437,6 +3482,8 @@ async def set_plex_metadata_active(
         return ok(
             "Active poster updated", {"rating_key": rating_key, "path": safe_path}
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error setting active poster: {e}")
         return error(
@@ -3890,9 +3937,28 @@ async def delete_poster(
         full_path = (
             os.path.join(folder, file_path) if folder and file_path else file_path
         )
-        if delete_file and full_path and os.path.exists(full_path):
-            os.remove(full_path)
-            logger.info(f"Deleted poster file: {full_path}")
+        # A poisoned row must never reach os.remove: resolve first, then require
+        # membership in a configured root. Unresolvable config == skip, not delete.
+        file_deleted = False
+        if delete_file and full_path:
+            from backend.util.config import load_config
+            from backend.util.path_safety import is_path_allowed
+
+            try:
+                config = load_config()
+            except ConfigError:
+                config = None
+            real = os.path.realpath(full_path)
+            if (
+                config is None
+                or real == os.path.realpath(os.sep)
+                or not is_path_allowed(real, config)
+            ):
+                logger.error(f"Refusing to delete poster file outside roots: {real}")
+            elif os.path.exists(real):
+                os.remove(real)
+                file_deleted = True
+                logger.info(f"Deleted poster file: {real}")
 
         # Mark associated media items as unmatched
         unmatched_count = 0
@@ -3931,10 +3997,12 @@ async def delete_poster(
             f"Poster {poster_id} deleted",
             {
                 "deleted_id": poster_id,
-                "file_deleted": delete_file,
+                "file_deleted": file_deleted,
                 "media_unmatched": unmatched_count,
             },
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error deleting poster {poster_id}: {e}")
         return error(

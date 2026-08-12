@@ -322,6 +322,8 @@ async def list_directory(
                 "writable": os.access(resolved, os.W_OK),
             },
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error listing directory {path}: {e}")
         return error(
@@ -398,6 +400,8 @@ async def create_directory(
             code="FOLDER_EXISTS",
             status_code=400,
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error creating folder {path}: {e}")
         return error(
@@ -429,10 +433,9 @@ async def create_directory(
 async def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Return the configured allowed roots for the directory picker."""
     try:
-        try:
-            config = load_config()
-        except ConfigError:
-            return ok("0 allowed roots", {"roots": []})
+        # A malformed config must surface as CONFIG_INVALID, not an empty
+        # picker list. A *missing* config loads defaults and never raises.
+        config = load_config()
 
         # The picker only wants top-level directories — file paths and
         # nested subdirs of an already-allowed root just create noise.
@@ -440,6 +443,8 @@ async def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
         # so write checks aren't affected by this filtering.
         roots = sorted({str(p) for p in get_browse_roots(config)})
         return ok(f"{len(roots)} allowed roots", {"roots": roots})
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error listing allowed roots: {e}")
         return error(

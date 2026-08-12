@@ -30,6 +30,7 @@ from backend.modules import MODULES
 from backend.util.config import (
     ALL_MODULES_SENTINEL,
     ChubConfig,
+    ConfigError,
     ConfigNotifications,
     load_config,
     redact_secrets,
@@ -183,6 +184,7 @@ async def get_all_notifications(
 async def create_destination(
     payload: DestinationPayload, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
+    """Add one notification destination to the saved config."""
     try:
         method_err = _validate_method(payload.method)
         if method_err:
@@ -214,6 +216,8 @@ async def create_destination(
             "Notification destination created successfully",
             {"destination": redact_secrets(new_dest)},
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to create notification destination: {e}")
         return error(
@@ -234,6 +238,7 @@ async def update_destination(
     payload: DestinationPayload,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Replace one saved notification destination by id."""
     try:
         method_err = _validate_method(payload.method)
         if method_err:
@@ -280,6 +285,8 @@ async def update_destination(
             "Notification destination updated successfully",
             {"destination": redact_secrets(updated)},
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to update notification destination {destination_id}: {e}")
         return error(
@@ -297,6 +304,7 @@ async def update_destination(
 async def delete_destination(
     destination_id: str, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
+    """Remove one saved notification destination by id."""
     try:
         config = load_config()
         destinations = _destinations_as_dicts(config)
@@ -318,6 +326,8 @@ async def delete_destination(
             "Notification destination deleted successfully",
             {"id": destination_id},
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to delete notification destination {destination_id}: {e}")
         return error(
@@ -340,6 +350,7 @@ async def delete_destination(
 def test_notification(
     payload: TestPayload, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
+    """Send a one-off test message through the supplied destination."""
     try:
         logger.debug("Serving POST /api/notifications/test (%s)", payload.method)
 
@@ -388,6 +399,8 @@ def test_notification(
             code="NOTIFICATION_CONNECTION_FAILED",
             status_code=502,
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Test notification failed: {e}")
         return error(

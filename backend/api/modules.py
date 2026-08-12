@@ -16,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
+from backend.util.config import ConfigError
 from backend.util.database import ChubDB
 
 
@@ -148,6 +149,8 @@ async def list_modules(
             )
 
         return ok(f"Retrieved {len(modules_list)} modules", {"modules": modules_list})
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error listing modules: {e}")
         return error(
@@ -651,6 +654,8 @@ async def get_module(
         }
 
         return ok(f"Module '{name}' details retrieved", module_info)
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving module {name}: {e}")
         return error(
@@ -951,6 +956,8 @@ async def update_module_config(
             code="CONFIG_VALIDATION_ERROR",
             status_code=400,
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error updating config for {name}: {e}")
         return error(
@@ -1031,6 +1038,8 @@ async def toggle_module(
             f"Module '{name}' {'enabled' if actual_enabled else 'disabled'}",
             {"module": name, "enabled": actual_enabled},
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error toggling module {name}: {e}")
         return error(
@@ -1447,6 +1456,8 @@ def test_module(
             {"results": results},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error testing module {name}: {e}")
         return error(

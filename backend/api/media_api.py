@@ -1058,6 +1058,8 @@ def _remove_media_item(db, logger, rid, delete_files, add_exclusion):
                 logger.warning(
                     f"Instance {instance_name} not found in config, skipping ARR delete"
                 )
+        except ConfigError:
+            raise
         except Exception as e:
             logger.error(f"ARR delete failed for id={rid}: {e}")
             # Continue with cache deletion even if ARR delete fails
@@ -1361,6 +1363,7 @@ def get_orphaned_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """List cache rows whose ARR source no longer has the item."""
     try:
         config = load_config()
         live = _live_arr_ids_by_instance(config, logger)
@@ -1386,6 +1389,8 @@ def get_orphaned_cache(
                 "instances_checked": sorted(live.keys()),
             },
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error finding orphaned cache: {e}", exc_info=True)
         return error(
@@ -1580,6 +1585,8 @@ def get_duplicate_members(
         with ThreadPoolExecutor(max_workers=min(8, len(body.ids))) as pool:
             members = list(pool.map(_resolve, body.ids))
         return ok("Duplicate members resolved", {"members": members})
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error fetching duplicate members: {e}", exc_info=True)
         return error(
@@ -1961,6 +1968,7 @@ async def delete_media_item(
         # If deleteFiles requested, remove from ARR first. The connect probe +
         # delete request are blocking, so run them off the event loop.
         def _delete_from_arr() -> None:
+            """Best-effort removal of the item from its source ARR instance."""
             if not (delete_files and item.get("arr_id") and item.get("instance_name")):
                 return
             try:
@@ -1996,6 +2004,8 @@ async def delete_media_item(
                     logger.warning(
                         f"Instance {instance_name} not found in config, skipping ARR delete"
                     )
+            except ConfigError:
+                raise
             except Exception as arr_err:
                 logger.error(f"ARR delete failed for {media_id}: {arr_err}")
                 # Continue with cache deletion even if ARR delete fails
@@ -2009,6 +2019,8 @@ async def delete_media_item(
             {"deleted_id": media_id, "files_deleted": delete_files},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error deleting media item {media_id}: {e}")
         return error(
@@ -2168,6 +2180,7 @@ def get_import_exclusion(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Report whether a media item is excluded from ARR import lists."""
     try:
         item = db.media.get_by_id(media_id)
         if not item:
@@ -2228,6 +2241,8 @@ def get_import_exclusion(
                 "exclusion_count": len(entries or []),
             },
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error resolving import exclusion: {e}")
         return error(

@@ -13,7 +13,13 @@ from pydantic import BaseModel
 
 from backend.api.utils import error, get_logger, ok
 from backend.modules import MODULES
-from backend.util.config import ChubConfig, ScheduleBlock, load_config, save_config
+from backend.util.config import (
+    ChubConfig,
+    ConfigError,
+    ScheduleBlock,
+    load_config,
+    save_config,
+)
 from backend.util.scheduler import (
     _profile_value,
     _upgradinatorr_profile_label,
@@ -326,6 +332,8 @@ async def update_module_schedule(
             {"module": module_name, "schedule": schedule_string},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to update schedule for module {data.module}: {e}")
         return error(
@@ -398,6 +406,8 @@ async def update_module_schedule_blocks(
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to update schedule blocks for module {data.module}: {e}")
         return error(
@@ -469,6 +479,8 @@ async def delete_module_schedule(
             {"module": module_id},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to delete schedule for module {module_id}: {e}")
         return error(

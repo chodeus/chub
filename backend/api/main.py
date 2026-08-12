@@ -40,6 +40,7 @@ from backend.util.config import (
     ConfigError,
     ConfigValidationError,
     format_validation_errors,
+    format_validation_errors_public,
     load_config,
 )
 from backend.util.database import ChubDB
@@ -446,16 +447,17 @@ async def handle_config_error(request: Request, exc: ConfigError) -> JSONRespons
     logger = get_logger(request, "ERROR")
     # exc_info carries the __cause__ the curated message deliberately omits
     logger.error(f"Configuration error: {exc}", exc_info=True)
-    detail_lines = []
+    public_lines = []
     if isinstance(exc, ConfigValidationError) and exc.validation_error:
-        detail_lines = format_validation_errors(exc.validation_error)
-        for line in detail_lines:
+        # The logged lines carry the offending values; the returned ones must not.
+        for line in format_validation_errors(exc.validation_error):
             logger.error(f"  • {line}")
+        public_lines = format_validation_errors_public(exc.validation_error)
     return error(
         # Read the curated attribute, never the exception object itself
         "Configuration invalid: " + exc.message,
         code="CONFIG_INVALID",
-        data={"errors": detail_lines} if detail_lines else None,
+        data={"errors": public_lines} if public_lines else None,
         status_code=500,
     )
 

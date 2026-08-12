@@ -349,19 +349,121 @@ def test_allowed_roots_returns_configured_paths(monkeypatch, app_with_router, tm
     assert str(posters.resolve()) in roots
 
 
-def test_allowed_roots_returns_empty_when_no_config(monkeypatch, app_with_router):
-    """Pre-onboarding (no config yet) the endpoint returns [] without crashing."""
-    from backend.util.config import ConfigError
-
-    def _raise(*_a, **_kw):
-        raise ConfigError("no config")
-
-    monkeypatch.setattr(system_router, "load_config", _raise)
+def test_allowed_roots_ok_when_config_file_absent(monkeypatch, app_with_router, tmp_path):
+    """Real pre-onboarding: a missing file loads defaults, so the picker still answers."""
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     app = app_with_router(system_router.router)
     client = TestClient(app)
     resp = client.get("/api/allowed-roots")
     assert resp.status_code == 200
-    assert resp.json()["data"]["roots"] == []
+    assert isinstance(resp.json()["data"]["roots"], list)
+
+
+def test_allowed_roots_propagates_config_error(monkeypatch, app_with_router):
+    """A malformed config must not masquerade as an empty allow-list."""
+    from backend.util.config import ConfigError
+
+    def _raise(*_a, **_kw):
+        """Stand in for load_config on a malformed config file."""
+        raise ConfigError("corrupt config")
+
+    from backend.api.main import handle_config_error
+
+    monkeypatch.setattr(system_router, "load_config", _raise)
+    app = app_with_router(system_router.router)
+    app.add_exception_handler(ConfigError, handle_config_error)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.get("/api/allowed-roots")
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_delete_poster_refuses_file_outside_allowed_roots(
+    monkeypatch, app_with_router, tmp_path
+):
+    """A poisoned folder/file row must not delete outside the configured roots."""
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "cfg"))
+    victim_dir = tmp_path / "elsewhere"
+    victim_dir.mkdir()
+    victim = victim_dir / "victim.txt"
+    victim.write_text("do not delete")
+
+    class _Poster:
+        """Stub returning a row that points outside every configured root."""
+
+        def delete_by_integer_id(self, _pid):
+            """Return the poisoned row and report it as deleted."""
+            return {
+                "file": victim.name,
+                "folder": str(victim_dir),
+                "normalized_title": None,
+            }
+
+    class _DB:
+        """Minimal db stub exposing only the poster repository."""
+
+        poster = _Poster()
+
+    app = app_with_router(posters_router.router)
+    app.state.db = _DB()
+    client = TestClient(app)
+    resp = client.request("DELETE", "/api/posters/1", json={"deleteFile": True})
+
+    assert resp.status_code == 200
+    # The row is still cleaned up, but the out-of-root file survives.
+    assert resp.json()["data"]["file_deleted"] is False
+    assert victim.exists()
+
+
+# --- Inbound webhook verification under a broken config ---
+
+
+def test_webhook_rejected_when_config_malformed(monkeypatch, app_with_router):
+    """A malformed config must reject the webhook, never wave it through."""
+    from backend.api import webhooks as webhooks_router
+    from backend.util.config import ConfigError
+
+    def _raise(*_a, **_kw):
+        """Stand in for load_config on a malformed config file."""
+        raise ConfigError("corrupt config")
+
+    class _ExplodingDB:
+        """Any attribute touch means the request body got processed."""
+
+        def __getattr__(self, name):
+            """Fail loudly if the handler ran despite verification failing."""
+            raise AssertionError(f"webhook body was processed: db.{name}")
+
+    monkeypatch.setattr(webhooks_router, "load_config", _raise)
+    app = app_with_router(webhooks_router.router)
+    app.state.db = _ExplodingDB()
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
+
+    # 503, not 401: Sonarr/Radarr retry 5xx, so a fixed config self-heals
+    # without the user re-firing every missed event by hand.
+    assert resp.status_code == 503
+
+
+def test_webhook_signed_path_still_accepted(monkeypatch):
+    """A valid config still accepts the right secret and rejects a wrong one."""
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from backend.api import webhooks as webhooks_router
+
+    cfg = ChubConfig()
+    cfg.general.webhook_secret = "s3cret"
+    monkeypatch.setattr(webhooks_router, "load_config", lambda *a, **k: cfg)
+
+    good = SimpleNamespace(headers={"X-Webhook-Secret": "s3cret"}, query_params={})
+    assert webhooks_router.verify_webhook_secret(good) is None
+
+    bad = SimpleNamespace(headers={"X-Webhook-Secret": "nope"}, query_params={})
+    with pytest.raises(HTTPException) as excinfo:
+        webhooks_router.verify_webhook_secret(bad)
+    assert excinfo.value.status_code == 401
 
 
 # --- Error-response hygiene ---

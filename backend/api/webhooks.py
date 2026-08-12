@@ -158,6 +158,8 @@ async def process_poster_webhook(
         peer_host = request.client.host if request.client else None
         try:
             trusted_proxies = load_config().general.trusted_proxies
+        except ConfigError:
+            raise
         except Exception:
             trusted_proxies = []
         client_info = {
@@ -259,6 +261,8 @@ async def process_poster_webhook(
             {"job_id": job_id, "status": "enqueued"},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Exception in webhook processing: {e}", exc_info=True)
         return error(
@@ -395,12 +399,12 @@ def _is_test_event(data: Dict[str, Any]) -> bool:
 async def get_webhook_wiring(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Return the inbound webhook path and secret for the UI's paste-ready URLs."""
     try:
         logger.debug("Serving GET /api/webhooks/wiring")
-        try:
-            secret = (load_config().general.webhook_secret or "").strip()
-        except ConfigError:
-            secret = ""
+        # A malformed config must not render as "no secret configured" — that
+        # reads to the admin as a working unauthenticated setup.
+        secret = (load_config().general.webhook_secret or "").strip()
 
         resp = ok(
             "Webhook wiring retrieved",
@@ -415,6 +419,8 @@ async def get_webhook_wiring(
         # Forbid caching so it never lands in browser/proxy caches.
         resp.headers["Cache-Control"] = "no-store"
         return resp
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving webhook wiring: {e}")
         return error(
@@ -458,6 +464,7 @@ async def get_provision_status(
     request: Request,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Report per-instance CHUB webhook wiring state (never the secret URL)."""
     try:
         cfg = load_config()
         secret = (cfg.general.webhook_secret or "").strip() or None
@@ -483,13 +490,8 @@ async def get_provision_status(
         resp = ok("Webhook provisioning status", payload)
         resp.headers["Cache-Control"] = "no-store"
         return resp
-    except ConfigError as e:
-        logger.error(f"Configuration unavailable: {e}")
-        return error(
-            "Configuration unavailable",
-            code="CONFIG_UNAVAILABLE",
-            status_code=503,
-        )
+    except ConfigError:
+        raise  # shared CONFIG_INVALID contract in main.py
     except Exception as e:
         logger.error(f"Error retrieving provisioning status: {e}", exc_info=True)
         return error(
@@ -518,6 +520,7 @@ async def provision_webhooks(
     request: Request,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Create or repair the CHUB notification on each selected ARR instance."""
     try:
         cfg = load_config()
         body = await request.json()
@@ -548,13 +551,8 @@ async def provision_webhooks(
         )
         resp.headers["Cache-Control"] = "no-store"
         return resp
-    except ConfigError as e:
-        logger.error(f"Configuration unavailable: {e}")
-        return error(
-            "Configuration unavailable",
-            code="CONFIG_UNAVAILABLE",
-            status_code=503,
-        )
+    except ConfigError:
+        raise  # shared CONFIG_INVALID contract in main.py
     except Exception as e:
         logger.error(f"Error provisioning webhooks: {e}", exc_info=True)
         return error(
@@ -578,6 +576,7 @@ async def remove_webhooks(
     request: Request,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Delete the CHUB notification from each selected ARR instance."""
     try:
         cfg = load_config()
         body = await request.json()
@@ -594,13 +593,8 @@ async def remove_webhooks(
         resp = ok("Webhook removal complete", {"instances": results})
         resp.headers["Cache-Control"] = "no-store"
         return resp
-    except ConfigError as e:
-        logger.error(f"Configuration unavailable: {e}")
-        return error(
-            "Configuration unavailable",
-            code="CONFIG_UNAVAILABLE",
-            status_code=503,
-        )
+    except ConfigError:
+        raise  # shared CONFIG_INVALID contract in main.py
     except Exception as e:
         logger.error(f"Error removing webhooks: {e}", exc_info=True)
         return error(

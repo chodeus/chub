@@ -19,6 +19,7 @@ from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.config import (
     REDACTED_PLACEHOLDER,
     ChubConfig,
+    ConfigError,
     InstanceDetail,
     load_config,
     redact_secrets,
@@ -602,9 +603,13 @@ async def get_instances(
 class _PlexFetchError(Exception):
     """Carries the API error code/status the libraries endpoints surface."""
 
-    def __init__(self, message: str, code: str, status_code: int) -> None:
+    def __init__(
+        self, message: str, code: str, status_code: int, detail: str = ""
+    ) -> None:
+        """Split the public message from the server-only `detail`."""
         super().__init__(message)
-        self.message = message
+        self.message = message  # public: returned to the client
+        self.detail = detail  # server-only: never put in a response
         self.code = code
         self.status_code = status_code
 
@@ -643,7 +648,10 @@ def _fetch_plex_libraries(plex_data: Any) -> list:
         ) from req_exc
     if not res.ok:
         raise _PlexFetchError(
-            f"Plex server error: {res.text}", "PLEX_SERVER_ERROR", res.status_code
+            "Plex server error",
+            "PLEX_SERVER_ERROR",
+            res.status_code,
+            detail=res.text[:500],
         )
 
     import defusedxml.ElementTree as ET
@@ -787,7 +795,12 @@ def get_plex_libraries(
             libraries = _fetch_plex_libraries(plex_data)
         except _PlexFetchError as fe:
             # exc_info carries the __cause__ the public message no longer does
-            logger.error("Plex libraries fetch failed: %s", fe.message, exc_info=True)
+            logger.error(
+                "Plex libraries fetch failed: %s %s",
+                fe.message,
+                fe.detail,
+                exc_info=True,
+            )
             return error(fe.message, code=fe.code, status_code=fe.status_code)
 
         libraries = _annotate_enabled(libraries, plex_data.enabled_libraries)
@@ -1042,6 +1055,8 @@ def test_instance(
             code="CONNECTION_FAILED",
             status_code=502,
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Connection test failed for {data.name} ({data.url}): {e}")
         return error(
@@ -1149,6 +1164,8 @@ async def create_instance(
             {"service": service, "name": name},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to create instance {data.name}: {e}")
         return error(
@@ -1312,6 +1329,8 @@ async def update_instance(
             {"service": service, "name": new_name},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to update instance {instance_id}: {e}")
         return error(
@@ -1399,6 +1418,8 @@ async def delete_instance(
             {"name": instance_id},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to delete instance {instance_id}: {e}")
         return error(
@@ -1756,6 +1777,8 @@ async def refresh_instance(
             job_id = result.get("data", {}).get("job_id")
             return ok(f"Refresh initiated for '{instance_id}'", {"job_id": job_id})
         return error("Error enqueuing refresh", code="REFRESH_ERROR", status_code=500)
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error refreshing instance {instance_id}: {e}")
         return error(
@@ -1815,6 +1838,8 @@ async def sync_instance(
             job_id = result.get("data", {}).get("job_id")
             return ok(f"Sync initiated for '{instance_id}'", {"job_id": job_id})
         return error("Error enqueuing sync", code="SYNC_ERROR", status_code=500)
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error syncing instance {instance_id}: {e}")
         return error(
@@ -1910,6 +1935,8 @@ async def toggle_instance(
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Failed to toggle instance {instance_id}: {e}")
         return error(
