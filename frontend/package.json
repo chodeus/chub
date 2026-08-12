@@ -44,7 +44,7 @@
     "stylelint-config-standard": "^40.0.0",
     "tailwindcss": "^4.3.3",
     "vite": "^8.2.1",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "brace-expansion": "1.1.18"
