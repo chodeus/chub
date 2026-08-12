@@ -2513,23 +2513,28 @@ const RenderPanel = ({
     // Source poster as a data URL, cached on the image's identity — the debounced
     // auto-preview re-runs per keystroke and re-encoding a poster is the whole cost.
     const asisEncodedRef = useRef(null);
-    const asisDataUrlFromSource = useCallback(async () => {
-        if (!backdrop && !customBackdrop) return null;
-        const key = customBackdrop ? customSig(customBackdrop) : backdrop;
-        if (asisEncodedRef.current?.key === key) return asisEncodedRef.current.dataUrl;
-        // Mint the stream token before building the proxy URL so the client fetch
-        // of local Plex art carries it (rather than racing render / BLANK_IMAGE).
-        await ensureStreamToken();
-        const url = customBackdrop?.url || urlForPath(backdrop);
-        if (!url) return null;
-        const resp = await fetch(url);
-        // fetch resolves on 4xx/5xx, so without this the error body base64s into
-        // /retext as the poster (same guard the sync-cache imports already make).
-        if (!resp.ok) throw new Error(`Could not load the poster image (${resp.status})`);
-        const dataUrl = await readFileAsDataURL(await resp.blob());
-        asisEncodedRef.current = { key, dataUrl };
-        return dataUrl;
-    }, [backdrop, customBackdrop]);
+    // `signal` is optional — effect callers pass their cleanup aborter's; the
+    // user-invoked handlers rely on the mounted ref instead.
+    const asisDataUrlFromSource = useCallback(
+        async signal => {
+            if (!backdrop && !customBackdrop) return null;
+            const key = customBackdrop ? customSig(customBackdrop) : backdrop;
+            if (asisEncodedRef.current?.key === key) return asisEncodedRef.current.dataUrl;
+            // Mint the stream token before building the proxy URL so the client fetch
+            // of local Plex art carries it (rather than racing render / BLANK_IMAGE).
+            await ensureStreamToken();
+            const url = customBackdrop?.url || urlForPath(backdrop);
+            if (!url) return null;
+            const resp = await fetch(url, { signal });
+            // fetch resolves on 4xx/5xx, so without this the error body base64s into
+            // /retext as the poster (same guard the sync-cache imports already make).
+            if (!resp.ok) throw new Error(`Could not load the poster image (${resp.status})`);
+            const dataUrl = await readFileAsDataURL(await resp.blob());
+            asisEncodedRef.current = { key, dataUrl };
+            return dataUrl;
+        },
+        [backdrop, customBackdrop]
+    );
 
     // Send to AI — erase the masked text from the backdrop via the configured
     // inpainter, then adopt the cleaned image as the (custom) backdrop so the
@@ -2706,7 +2711,9 @@ const RenderPanel = ({
         try {
             // Inside the try: the source read fetches + encodes, so it can reject.
             const image_b64 = await asisDataUrlFromSource();
-            if (!image_b64) return;
+            // Re-checked after every await — the panel unmounts on a build-tab
+            // switch, and a settled read must not start work on the dead one.
+            if (!asisMountedRef.current || !image_b64) return;
             setAsisPreviewing(true);
             const resp = await cl2kMakerAPI.retext({
                 image_b64,
@@ -2718,18 +2725,28 @@ const RenderPanel = ({
                 preview: true,
                 ...asisIds,
             });
-            setAsisPreview({ b64: resp?.data?.preview_b64 || null, sig: asisSig });
+            if (asisMountedRef.current)
+                setAsisPreview({ b64: resp?.data?.preview_b64 || null, sig: asisSig });
         } catch (err) {
-            toast.error(err.message || 'Preview failed');
+            if (asisMountedRef.current) toast.error(err.message || 'Preview failed');
         } finally {
-            setAsisPreviewing(false);
+            if (asisMountedRef.current) setAsisPreviewing(false);
         }
-    }, [asisDataUrlFromSource, asisExplicitLabel, asisTextY, asisBorder, asisIds, asisSig, toast]);
+    }, [
+        asisMountedRef,
+        asisDataUrlFromSource,
+        asisExplicitLabel,
+        asisTextY,
+        asisBorder,
+        asisIds,
+        asisSig,
+        toast,
+    ]);
 
     const runAsisSave = useCallback(async () => {
         try {
             const image_b64 = await asisDataUrlFromSource();
-            if (!image_b64) return;
+            if (!asisMountedRef.current || !image_b64) return;
             setAsisSaving(true);
             const resp = await cl2kMakerAPI.retext({
                 image_b64,
@@ -2742,13 +2759,15 @@ const RenderPanel = ({
                 ...asisIds,
                 ...saveTargets.fields,
             });
+            // The save completed — feedback fires even if the tab switched.
             savedToast(toast, resp?.data);
         } catch (err) {
             toast.error(err.message || 'Save failed');
         } finally {
-            setAsisSaving(false);
+            if (asisMountedRef.current) setAsisSaving(false);
         }
     }, [
+        asisMountedRef,
         asisDataUrlFromSource,
         asisExplicitLabel,
         asisTextY,
@@ -2769,6 +2788,7 @@ const RenderPanel = ({
         }
         try {
             const image_b64 = await asisDataUrlFromSource();
+            if (!asisMountedRef.current) return;
             if (!image_b64) throw new Error('Upload or grab a poster first.');
             setAsisBulkBusy(true);
             setAsisBulkProgress(`0/${nums.length}`);
@@ -2784,6 +2804,9 @@ const RenderPanel = ({
                 border: asisBorder,
                 ...saveTargets.fields,
             });
+            // The batch is already running server-side; unmounting just stops us
+            // watching it, exactly as the poll loop's own mounted check does.
+            if (!asisMountedRef.current) return;
             const jobId = resp?.data?.job_id;
             if (!jobId) throw new Error(resp?.message || 'Could not start season batch');
 
@@ -2834,22 +2857,28 @@ const RenderPanel = ({
     useEffect(() => {
         if (!isAsis || !hasBackdrop) return undefined;
         let cancelled = false;
+        // Abort as well as flag: `cancelled` only stops the setState, it leaves the
+        // source fetch + retext running (same idiom as the base auto-render above).
+        const aborter = new AbortController();
         const handle = setTimeout(async () => {
             const p = asisPreviewInputsRef.current;
             try {
-                const image_b64 = await p.fromSource();
+                const image_b64 = await p.fromSource(aborter.signal);
                 if (cancelled || !image_b64) return;
                 setAsisPreviewing(true);
-                const resp = await cl2kMakerAPI.retext({
-                    image_b64,
-                    mask_b64: null,
-                    apply_ai: false,
-                    label_text: p.label_text,
-                    text_y: p.text_y,
-                    border: p.border,
-                    preview: true,
-                    ...p.ids,
-                });
+                const resp = await cl2kMakerAPI.retext(
+                    {
+                        image_b64,
+                        mask_b64: null,
+                        apply_ai: false,
+                        label_text: p.label_text,
+                        text_y: p.text_y,
+                        border: p.border,
+                        preview: true,
+                        ...p.ids,
+                    },
+                    { signal: aborter.signal }
+                );
                 if (!cancelled)
                     setAsisPreview({ b64: resp?.data?.preview_b64 || null, sig: p.sig });
             } catch {
@@ -2860,6 +2889,7 @@ const RenderPanel = ({
         }, 300);
         return () => {
             cancelled = true;
+            aborter.abort();
             clearTimeout(handle);
         };
     }, [asisSig, isAsis, hasBackdrop]);
@@ -7027,9 +7057,12 @@ const HistorySection = ({ toast }) => {
 
     useEffect(() => {
         let cancelled = false;
+        // Collapsing the accordion unmounts this, so the fetch is dropped rather
+        // than left running; `cancelled` keeps the abort rejection silent.
+        const aborter = new AbortController();
         (async () => {
             try {
-                const resp = await cl2kMakerAPI.generated(50);
+                const resp = await cl2kMakerAPI.generated(50, { signal: aborter.signal });
                 if (!cancelled) setItems(resp?.data?.items || []);
             } catch (err) {
                 if (!cancelled) toast.error(err.message || 'Failed to load history');
@@ -7039,6 +7072,7 @@ const HistorySection = ({ toast }) => {
         })();
         return () => {
             cancelled = true;
+            aborter.abort();
         };
     }, [toast]);
 

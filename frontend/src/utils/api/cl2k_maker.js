@@ -172,9 +172,9 @@ export const cl2kMakerAPI = {
      *  Blob. `req` = { image_b64 | image_path, mask_b64, lo, hi }. */
     extractLogo: req => postBlob('/cl2k-maker/extract-logo', req),
 
-    /** Recently generated posters (provenance). */
-    generated: (limit = 200) =>
-        apiCore.get(`/cl2k-maker/generated?${qs({ limit })}`, { useCache: false }),
+    /** Recently generated posters (provenance). `opts` carries a caller signal. */
+    generated: (limit = 200, opts) =>
+        apiCore.get(`/cl2k-maker/generated?${qs({ limit })}`, { useCache: false, ...opts }),
 
     /** Export the poster as a layered .psd. Returns a Blob. */
     psdExport: req => postBlob('/cl2k-maker/psd-export', req),
@@ -191,8 +191,10 @@ export const cl2kMakerAPI = {
      * Uses a long client timeout — the OpenAI gpt-image-1 edit can take 30–120s
      * (backend ai_timeout defaults to 120s). The default 30s client timeout would
      * abort while the backend is still working, surfacing nothing in the logs.
+     * `opts` carries a caller signal; spread last so it can't drop the timeout.
      */
-    retext: req => apiCore.post('/cl2k-maker/retext', req, { timeout: AI_TIMEOUT_MS }),
+    retext: (req, opts) =>
+        apiCore.post('/cl2k-maker/retext', req, { timeout: AI_TIMEOUT_MS, ...opts }),
 
     /** Detect text regions on a poster for mask prefill. `req` = { image_b64 |
      *  image_path, min_score }; returns { regions: [{polygon, score}...], mask:
