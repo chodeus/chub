@@ -14,6 +14,9 @@ export default defineConfig({
         globals: true,
         setupFiles: ['./src/test/setup.js'],
         include: ['src/**/*.test.{js,jsx}'],
+        // Vitest 4's restoreMocks only restores vi.spyOn spies; module-scope
+        // vi.fn() call history accumulates across tests without mockReset.
         restoreMocks: true,
+        mockReset: true,
     },
 });
