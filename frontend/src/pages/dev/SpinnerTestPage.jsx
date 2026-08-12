@@ -131,7 +131,7 @@ const LoadingStateSimulation = React.memo(() => {
                     <button
                         onClick={() => simulateLoading('form', 3000)}
                         disabled={loadingStates.form}
-                        className="w-full px-4 py-2 bg-success text-white rounded hover:bg-success-hover disabled:opacity-50 flex items-center justify-center gap-2 min-h-11"
+                        className="w-full px-4 py-2 bg-success text-white rounded hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 min-h-11"
                     >
                         {loadingStates.form && <Spinner size="small" />}
                         {loadingStates.form ? 'Submitting...' : 'Submit Form'}
@@ -144,7 +144,7 @@ const LoadingStateSimulation = React.memo(() => {
                     <button
                         onClick={() => simulateLoading('data', 1500)}
                         disabled={loadingStates.data}
-                        className="w-full px-4 py-2 bg-info text-white rounded hover:bg-info-hover disabled:opacity-50 flex items-center justify-center gap-2 min-h-11"
+                        className="w-full px-4 py-2 bg-info text-white rounded hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 min-h-11"
                     >
                         {loadingStates.data && <Spinner size="small" />}
                         {loadingStates.data ? 'Loading Data...' : 'Fetch Data'}
@@ -157,7 +157,7 @@ const LoadingStateSimulation = React.memo(() => {
                     <button
                         onClick={() => simulateLoading('save', 2500)}
                         disabled={loadingStates.save}
-                        className="w-full px-4 py-2 bg-warning text-white rounded hover:bg-warning-hover disabled:opacity-50 flex items-center justify-center gap-2 min-h-11"
+                        className="w-full px-4 py-2 bg-warning text-white rounded hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 min-h-11"
                     >
                         {loadingStates.save && <Spinner size="small" />}
                         {loadingStates.save ? 'Saving...' : 'Save Changes'}
@@ -205,7 +205,7 @@ const AnimationPerformanceTest = React.memo(() => {
                     <button
                         onClick={stressTest}
                         disabled={isStressed}
-                        className="px-3 py-1 text-sm bg-error text-white rounded hover:bg-error-hover disabled:opacity-50"
+                        className="px-3 py-1 text-sm bg-error text-white rounded hover:opacity-90 disabled:opacity-50"
                     >
                         {isStressed ? 'Testing...' : 'Stress Test (50 spinners)'}
                     </button>

@@ -100,7 +100,7 @@ export const ButtonBase = React.memo(
             ghost: 'bg-transparent',
             warning: 'bg-warning',
             info: 'bg-info',
-            muted: 'bg-muted',
+            muted: 'bg-surface-inset',
             surface: 'bg-surface',
         };
 
@@ -108,8 +108,8 @@ export const ButtonBase = React.memo(
         const variantTextClasses = {
             primary: 'text-on-color',
             secondary: 'text-fg',
-            success: 'text-success-contrast',
-            danger: 'text-danger-contrast',
+            success: 'text-on-color',
+            danger: 'text-on-color',
             ghost: 'text-fg',
             warning: 'text-on-color', // White text on warning bg
             info: 'text-on-color', // White text on info bg

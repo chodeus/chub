@@ -40,7 +40,7 @@ const ToolBar = ({
     children,
     enableOverflow = true,
     mobileBreakpoint = 768,
-    className = 'flex justify-between flex-none px-2 md:px-4 h-header bg-surface text-fg border-b border-border',
+    className = 'flex justify-between flex-none px-2 md:px-4 bg-surface text-fg border-b border-border',
 }) => {
     const toolbarRef = useRef(null);
 

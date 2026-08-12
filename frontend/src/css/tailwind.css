@@ -91,6 +91,7 @@
     --color-error-border: var(--error);
     --color-sidebar-secondary: var(--sidebar-text-secondary);
     --color-primary-hover: var(--focus);
+    --color-canvas: var(--bg); /* page canvas (.bg-canvas) */
 
     /* form controls */
     --color-input: var(--input-bg);
@@ -177,16 +178,32 @@
     border-top-left-radius: 0.75rem;
     border-bottom-left-radius: 0.75rem;
 }
+@utility rounded-t-xl {
+    border-top-left-radius: 1rem;
+    border-top-right-radius: 1rem;
+}
 
 /* Named component sizes (utilities/sizing.css). */
 @utility max-w-dropdown {
     max-width: 160px;
+}
+@utility max-w-dropdown-desktop {
+    max-width: 320px;
+}
+@utility min-w-dropdown {
+    min-width: 120px;
+}
+@utility w-max-content {
+    width: max-content;
 }
 @utility min-w-sidebar {
     min-width: 210px;
 }
 @utility max-h-dropdown {
     max-height: 300px;
+}
+@utility max-h-modal-body {
+    max-height: 60vh;
 }
 @utility transition-input {
     transition: all 150ms ease-in-out;
@@ -266,6 +283,14 @@
         outline: none;
         border-color: var(--primary);
         box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+    }
+
+    /* After focus:ring-primary so an invalid field's ring wins (inputs carry
+       both); Tailwind's own focus:ring-error is colour-only and renders nothing. */
+    .focus\:ring-error:focus {
+        outline: none;
+        border-color: var(--error);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 20%, transparent);
     }
     .focus-within\:ring-primary:focus-within {
         box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);

@@ -358,7 +358,7 @@ ToastTestComponent.displayName = 'ToastTestComponent';
  */
 const ApiTestPage = () => {
     return (
-        <div className="max-w-container mx-auto p-3 md:p-4">
+        <div className="max-w-[75rem] mx-auto p-3 md:p-4">
             <div className="text-center mb-8 pb-4 border-b border-border">
                 <h1 className="text-2xl font-bold text-fg mb-2">API Integration Testing</h1>
                 <p className="text-base text-fg-muted max-w-prose mx-auto">

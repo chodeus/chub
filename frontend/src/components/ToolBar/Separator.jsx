@@ -27,7 +27,7 @@ const Separator = ({ className = '' }) => {
         return null;
     }
 
-    const baseClasses = 'w-px h-5 bg-text-secondary mx-3 flex-shrink-0 self-center';
+    const baseClasses = 'w-px h-5 bg-border-light mx-3 flex-shrink-0 self-center';
     return <div className={`${baseClasses} ${className}`} aria-hidden="true" />;
 };
 

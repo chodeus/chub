@@ -62,24 +62,103 @@ const BorderPreviewPage = React.lazy(() => import('./pages/poster/BorderPreviewP
 const UnmatchedAssetsPage = React.lazy(() => import('./pages/poster/UnmatchedAssetsPage.jsx'));
 const PosterStatsPage = React.lazy(() => import('./pages/poster/PosterStatsPage.jsx'));
 
-// Lazy-loaded dev pages
-const ErrorTestPage = React.lazy(() => import('./pages/dev/ErrorTestPage.jsx'));
-const FieldTestPage = React.lazy(() => import('./pages/dev/FieldTestPage.jsx'));
-const ApiTestPage = React.lazy(() => import('./pages/dev/ApiTestPage.jsx'));
-const ToolbarTestPage = React.lazy(() => import('./pages/dev/ToolbarTestPage.jsx'));
-const ToolbarCompoundTest = React.lazy(() => import('./pages/dev/ToolbarCompoundTest.jsx'));
-const SpinnerTestPage = React.lazy(() => import('./pages/dev/SpinnerTestPage.jsx'));
-const SettingsMockPage = React.lazy(() => import('./pages/dev/SettingsMockPage.jsx'));
-const ArrayObjectFieldPage = React.lazy(() => import('./pages/dev/ArrayObjectFieldPage.jsx'));
-const AccordionTestPage = React.lazy(() => import('./pages/dev/AccordionTestPage.jsx'));
-const StatsPrimitivesTestPage = React.lazy(() => import('./pages/dev/StatsPrimitivesTestPage.jsx'));
-const ButtonPrimitivesTestPage = React.lazy(
-    () => import('./pages/dev/ButtonPrimitivesTestPage.jsx')
-);
-const CardPrimitivesTestPage = React.lazy(() => import('./pages/dev/CardPrimitivesTestPage.jsx'));
-const FormCompoundsTest = React.lazy(() => import('./pages/dev/FormCompoundsTest.jsx'));
-const ModalsTestPage = React.lazy(() => import('./pages/dev/ModalsTestPage.jsx'));
-const LogPerformance = React.lazy(() => import('./pages/dev/LogPerformance.jsx'));
+// Dev-only pages. The React.lazy() calls MUST stay inside this conditional —
+// DEV is statically false in prod, so vite drops the routes AND their chunks.
+const devRoutes = import.meta.env.DEV
+    ? [
+          {
+              path: 'dev/error',
+              pageName: 'Error Test',
+              pageDescription: 'Error handling demonstration page',
+              Component: React.lazy(() => import('./pages/dev/ErrorTestPage.jsx')),
+          },
+          {
+              path: 'dev/fields',
+              pageName: 'Field Test',
+              pageDescription: 'Field system development testing interface',
+              Component: React.lazy(() => import('./pages/dev/FieldTestPage.jsx')),
+          },
+          {
+              path: 'dev/api',
+              pageName: 'API Test',
+              pageDescription: 'API Testing',
+              Component: React.lazy(() => import('./pages/dev/ApiTestPage.jsx')),
+          },
+          {
+              path: 'dev/toolbar',
+              pageName: 'Toolbar Test',
+              pageDescription: 'Toolbar overflow testing',
+              Component: React.lazy(() => import('./pages/dev/ToolbarTestPage.jsx')),
+          },
+          {
+              path: 'dev/toolbar-compound',
+              pageName: 'Toolbar Compound Pattern Test',
+              pageDescription: 'Toolbar compound component pattern testing',
+              Component: React.lazy(() => import('./pages/dev/ToolbarCompoundTest.jsx')),
+          },
+          {
+              path: 'dev/spinner',
+              pageName: 'Spinner Test',
+              pageDescription: 'Spinner component testing and development',
+              Component: React.lazy(() => import('./pages/dev/SpinnerTestPage.jsx')),
+          },
+          {
+              path: 'dev/settings',
+              pageName: 'Settings Mock',
+              pageDescription: 'Settings accordion interface mockup and design exploration',
+              Component: React.lazy(() => import('./pages/dev/SettingsMockPage.jsx')),
+          },
+          {
+              path: 'dev/array-object-field',
+              pageName: 'Array Object Field',
+              pageDescription: 'Unified ArrayObjectField component demonstration',
+              Component: React.lazy(() => import('./pages/dev/ArrayObjectFieldPage.jsx')),
+          },
+          {
+              path: 'dev/accordion',
+              pageName: 'Accordion Test',
+              pageDescription: 'AccordionItem compound component validation and testing',
+              Component: React.lazy(() => import('./pages/dev/AccordionTestPage.jsx')),
+          },
+          {
+              path: 'dev/stats',
+              pageName: 'Statistics Primitives Test',
+              pageDescription: 'Statistics System primitive composition and layout testing',
+              Component: React.lazy(() => import('./pages/dev/StatsPrimitivesTestPage.jsx')),
+          },
+          {
+              path: 'dev/buttons',
+              pageName: 'Button Primitives Test',
+              pageDescription: 'Button System primitive composition and component testing',
+              Component: React.lazy(() => import('./pages/dev/ButtonPrimitivesTestPage.jsx')),
+          },
+          {
+              path: 'dev/card',
+              pageName: 'Card Primitives Test',
+              pageDescription: 'Card System primitive composition and variant testing',
+              Component: React.lazy(() => import('./pages/dev/CardPrimitivesTestPage.jsx')),
+          },
+          {
+              path: 'dev/form-compounds',
+              pageName: 'Form Compounds Test',
+              pageDescription:
+                  'Form System compound composition validation (Header, Section, Actions)',
+              Component: React.lazy(() => import('./pages/dev/FormCompoundsTest.jsx')),
+          },
+          {
+              path: 'dev/modals',
+              pageName: 'Modal Test',
+              pageDescription: 'Modal System comprehensive testing and real-world examples',
+              Component: React.lazy(() => import('./pages/dev/ModalsTestPage.jsx')),
+          },
+          {
+              path: 'dev/log-performance',
+              pageName: 'Log Performance Test',
+              pageDescription: 'Phase 2 Log Output component performance validation',
+              Component: React.lazy(() => import('./pages/dev/LogPerformance.jsx')),
+          },
+      ]
+    : [];
 
 const SuspenseFallback = () => <Spinner size="large" text="Loading..." center />;
 
@@ -499,172 +578,30 @@ const App = () => {
                                                         }
                                                     />
 
-                                                    {/* Development Routes */}
-                                                    <Route
-                                                        path="dev/error"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Error Test"
-                                                                pageDescription="Error handling demonstration page"
-                                                            >
-                                                                <ErrorTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/fields"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Field Test"
-                                                                pageDescription="Field system development testing interface"
-                                                            >
-                                                                <FieldTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/api"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="API Test"
-                                                                pageDescription="API Testing"
-                                                            >
-                                                                <ApiTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/toolbar"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Toolbar Test"
-                                                                pageDescription="Toolbar overflow testing"
-                                                            >
-                                                                <ToolbarTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/toolbar"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Toolbar Compound Pattern Test"
-                                                                pageDescription="Toolbar compound component pattern testing"
-                                                            >
-                                                                <ToolbarCompoundTest />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/spinner"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Spinner Test"
-                                                                pageDescription="Spinner component testing and development"
-                                                            >
-                                                                <SpinnerTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/settings"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Settings Mock"
-                                                                pageDescription="Settings accordion interface mockup and design exploration"
-                                                            >
-                                                                <SettingsMockPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/array-object-field"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Array Object Field"
-                                                                pageDescription="Unified ArrayObjectField component demonstration"
-                                                            >
-                                                                <ArrayObjectFieldPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/accordion"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Accordion Test"
-                                                                pageDescription="AccordionItem compound component validation and testing"
-                                                            >
-                                                                <AccordionTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/stats"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Statistics Primitives Test"
-                                                                pageDescription="Statistics System primitive composition and layout testing"
-                                                            >
-                                                                <StatsPrimitivesTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/buttons"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Button Primitives Test"
-                                                                pageDescription="Button System primitive composition and component testing"
-                                                            >
-                                                                <ButtonPrimitivesTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/card"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Card Primitives Test"
-                                                                pageDescription="Card System primitive composition and variant testing"
-                                                            >
-                                                                <CardPrimitivesTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/form-compounds"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Form Compounds Test"
-                                                                pageDescription="Form System compound composition validation (Header, Section, Actions)"
-                                                            >
-                                                                <FormCompoundsTest />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/modals"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Modal Test"
-                                                                pageDescription="Modal System comprehensive testing and real-world examples"
-                                                            >
-                                                                <ModalsTestPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="dev/log-performance"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Log Performance Test"
-                                                                pageDescription="Phase 2 Log Output component performance validation"
-                                                            >
-                                                                <LogPerformance />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
+                                                    {/* Development routes — dev builds only */}
+                                                    {devRoutes.map(
+                                                        ({
+                                                            path,
+                                                            pageName,
+                                                            pageDescription,
+                                                            Component,
+                                                        }) => (
+                                                            <Route
+                                                                key={path}
+                                                                path={path}
+                                                                element={
+                                                                    <PageErrorBoundary
+                                                                        pageName={pageName}
+                                                                        pageDescription={
+                                                                            pageDescription
+                                                                        }
+                                                                    >
+                                                                        <Component />
+                                                                    </PageErrorBoundary>
+                                                                }
+                                                            />
+                                                        )
+                                                    )}
                                                 </Route>
                                                 <Route
                                                     path="*"
