@@ -104,6 +104,59 @@ class TestSchemaManager:
             os.unlink(db_path)
 
 
+def _stub_sync(syncs):
+    """init_database stand-in that records the call and leaves the file non-empty."""
+
+    def _init(cls, conn, **_kw):
+        """Record one sync and write a marker table."""
+        syncs.append(1)
+        conn.execute("CREATE TABLE IF NOT EXISTS marker (x INTEGER)")
+        conn.commit()
+
+    return classmethod(_init)
+
+
+def test_init_schema_syncs_each_db_file_once(monkeypatch, tmp_path):
+    """Every interface construction calls init_schema; only the first may sync."""
+    from backend.util.database import db_base
+
+    syncs = []
+    monkeypatch.setattr(SchemaManager, "init_database", _stub_sync(syncs))
+
+    db_path = str(tmp_path / "chub.db")
+    db_base.DatabaseBase.init_schema(db_path)
+    db_base.DatabaseBase.init_schema(db_path)
+    assert len(syncs) == 1
+
+    # A different file still syncs, and force re-runs an already-synced one.
+    db_base.DatabaseBase.init_schema(str(tmp_path / "other.db"))
+    db_base.DatabaseBase.init_schema(db_path, force=True)
+    assert len(syncs) == 3
+
+
+def test_init_schema_resyncs_a_recreated_empty_db(monkeypatch, tmp_path):
+    """Inode reuse can hand a brand-new empty db an already-synced identity."""
+    from backend.util.database import db_base
+
+    syncs = []
+    monkeypatch.setattr(SchemaManager, "init_database", _stub_sync(syncs))
+
+    db_path = str(tmp_path / "chub.db")
+    db_base.DatabaseBase.init_schema(db_path)
+    assert len(syncs) == 1
+
+    # Stand in for delete+recreate landing on the SAME inode: a 0-byte file
+    # whose identity the registry already holds.
+    os.unlink(db_path)
+    open(db_path, "wb").close()
+    identity, size = db_base._schema_file_state(db_path)
+    db_base._SCHEMA_SYNCED.add(identity)
+    assert size == 0
+
+    db_base.DatabaseBase.init_schema(db_path)
+    assert len(syncs) == 2, "an empty db at a reused identity must re-sync"
+
+
 def test_collection_update_persists_file_hash_and_mtime():
     """collection_cache.update must accept file_hash/file_mtime (previously it
     didn't, so collection poster hashes were never stored → re-upload every run)."""

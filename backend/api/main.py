@@ -1,8 +1,6 @@
-import os
 import threading
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
@@ -45,6 +43,7 @@ from backend.util.config import (
     load_config,
 )
 from backend.util.database import ChubDB
+from backend.util.helper import get_static_dir
 from backend.util.job_processor import process_job
 from backend.util.notification import install_error_notify_handler
 
@@ -302,7 +301,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             if "startup_config" in locals() and startup_config is not None:
                 from backend.util.maintenance import start_maintenance
 
-                app.state.maintenance_thread = start_maintenance(startup_config, logger)
+                app.state.maintenance_thread = start_maintenance(logger)
         except Exception as e:
             if log:
                 log.error(f"Failed to start maintenance thread: {e}")
@@ -415,9 +414,7 @@ app.add_middleware(AuthMiddleware)
 
 # Frontend static directory — configurable via STATIC_DIR env var.
 # Defaults to templates/ (local dev); Docker sets STATIC_DIR=/app/public.
-STATIC_DIR = Path(
-    os.environ.get("STATIC_DIR", str(Path(__file__).parents[2] / "templates"))
-)
+STATIC_DIR = get_static_dir()
 
 app.mount(
     "/assets",

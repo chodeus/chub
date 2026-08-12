@@ -1,6 +1,6 @@
 # util/module_orchestrator.py
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from backend.modules import MODULES
 from backend.util.database import ChubDB
@@ -226,14 +226,22 @@ class ModuleOrchestrator:
             self._log("error", f"Error in run_modules_cli: {e}", "cli", exc_info=True)
             raise
 
-    def get_module_status(self, module_name: str) -> Dict[str, Any]:
+    def get_module_status(
+        self, module_name: str, db: Optional[ChubDB] = None
+    ) -> Dict[str, Any]:
         """
         Get current status of a module by checking active jobs.
+
+        Pass `db` to reuse an open context — callers that poll every module on a
+        tick would otherwise open one ChubDB per module per tick.
         """
         try:
-            # Always use a new context to avoid race conditions with FastAPI lifespan
-            with ChubDB(self.logger, quiet=True) as db:
+            if db is not None:
                 running_job = db.worker.get_running_module_job(module_name)
+            else:
+                # Otherwise a new context, to avoid racing the FastAPI lifespan.
+                with ChubDB(self.logger, quiet=True) as own_db:
+                    running_job = own_db.worker.get_running_module_job(module_name)
 
             if running_job:
                 return {
