@@ -16,7 +16,14 @@ from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import (
+    build_cache_refresh_payload,
+    error,
+    get_database,
+    get_logger,
+    ok,
+    read_request_json,
+)
 from backend.util.arr import create_arr_client
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB, escape_like
@@ -538,34 +545,18 @@ async def refresh_media(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    """
-    Trigger a background cache refresh job.
-
-    Accepts two payload formats:
-    - Frontend format: ``path`` and ``deep`` keys trigger a full
-      refresh of all configured instances.
-    - Backend format: ``arr_instances``, ``plex_instances`` and
-      ``libraries`` for targeted refresh.
-
-    Returns:
-        Job ID for tracking the refresh operation
-    """
+    """Enqueue a cache_refresh job; a {path, deep} body has no targeting, so refresh all."""
     try:
-        try:
-            payload = (
-                await request.json()
-                if request.headers.get("content-type") == "application/json"
-                else {}
-            )
-        except Exception:
-            payload = {}
+        payload = await read_request_json(request)
         logger.debug(f"Serving POST /api/media/refresh with payload: {payload}")
 
-        job_payload = {
-            "arr_instances": payload.get("arr_instances", []),
-            "plex_instances": payload.get("plex_instances", []),
-            "libraries": payload.get("libraries", []),
-        }
+        job_payload = build_cache_refresh_payload(payload)
+        if job_payload is None:
+            return error(
+                "Invalid request body",
+                code="INVALID_BODY",
+                status_code=400,
+            )
 
         result = db.worker.enqueue_job("jobs", job_payload, job_type="cache_refresh")
 

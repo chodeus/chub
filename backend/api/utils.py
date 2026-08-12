@@ -1,5 +1,6 @@
 # api/utils.py
 
+import json
 from typing import Any, Optional
 
 from fastapi import Request
@@ -78,3 +79,33 @@ def error(
     if data is not None:
         payload["data"] = data
     return JSONResponse(status_code=status_code, content=payload)
+
+
+async def read_request_json(request: Request) -> Any:
+    """Parsed JSON body; {} when the request carries no body, None when it won't parse."""
+    body = await request.body()
+    # Whitespace-only counts as no body — a stray newline shouldn't be a 400.
+    if not body.strip():
+        return {}
+    try:
+        return json.loads(body)
+    except ValueError:
+        return None
+
+
+CACHE_REFRESH_LIST_FIELDS = ("arr_instances", "plex_instances", "libraries")
+
+
+def build_cache_refresh_payload(payload: Any) -> Optional[dict]:
+    """Validated cache_refresh job payload, or None if the body is the wrong shape."""
+    # Unknown keys are dropped by construction, so the frontend's {path, deep}
+    # body still yields three empty lists — which the worker reads as "refresh all".
+    if not isinstance(payload, dict):
+        return None
+    job_payload = {}
+    for field in CACHE_REFRESH_LIST_FIELDS:
+        value = payload.get(field, [])
+        if not isinstance(value, list):
+            return None
+        job_payload[field] = value
+    return job_payload

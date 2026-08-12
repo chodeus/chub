@@ -1,7 +1,10 @@
-"""Request-shape contract for POST /api/cache/refresh.
+"""Request-shape contract for the two routes that enqueue cache_refresh jobs.
 
-A body that is valid JSON but not an object (e.g. ``[]``) used to reach
-``payload.get`` and surface as a 500; it must be a 400 instead.
+POST /api/cache/refresh and POST /api/media/refresh share one validator
+(backend.api.utils.build_cache_refresh_payload), so every body rule is asserted
+against both. A body that is valid JSON but not an object (e.g. ``[]``) used to
+reach ``payload.get`` — a 500 on the cache route, a silent all-instance refresh
+on the media route.
 """
 
 import os
@@ -17,6 +20,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.api import cache as cache_router  # noqa: E402
+from backend.api import media_api as media_router  # noqa: E402
 
 
 class _StubLogger:
@@ -60,23 +64,30 @@ class _StubDB:
         self.worker = _StubWorker()
 
 
-@pytest.fixture
-def client_and_db():
-    """Mount the cache router alone so no lifespan/database startup is needed."""
+_ROUTERS = {"cache": cache_router.router, "media": media_router.router}
+
+
+@pytest.fixture(params=sorted(_ROUTERS))
+def refresh(request):
+    """Yield (client, path, db) for each route sharing the cache_refresh contract."""
     app = FastAPI()
     app.state.logger = _StubLogger()
     db = _StubDB()
     app.state.db = db
-    app.include_router(cache_router.router)
-    return TestClient(app), db
+    app.include_router(_ROUTERS[request.param])
+    return TestClient(app), f"/api/{request.param}/refresh", db
 
 
-def test_valid_body_enqueues_only_the_list_fields(client_and_db):
+def test_valid_body_enqueues_only_the_list_fields(refresh):
     """A well-formed body enqueues exactly the three list fields."""
-    client, db = client_and_db
+    client, path, db = refresh
     resp = client.post(
-        "/api/cache/refresh",
-        json={"arr_instances": ["Radarr"], "plex_instances": [], "libraries": ["Movies"]},
+        path,
+        json={
+            "arr_instances": ["Radarr"],
+            "plex_instances": [],
+            "libraries": ["Movies"],
+        },
     )
     assert resp.status_code == 200
     assert resp.json()["data"]["job_id"] == 42
@@ -89,10 +100,49 @@ def test_valid_body_enqueues_only_the_list_fields(client_and_db):
     }
 
 
-def test_empty_body_defaults_to_auto_discovery(client_and_db):
+def test_empty_body_defaults_to_auto_discovery(refresh):
     """An empty object is valid: empty lists mean auto-discover everything."""
-    client, db = client_and_db
-    resp = client.post("/api/cache/refresh", json={})
+    client, path, db = refresh
+    resp = client.post(path, json={})
+    assert resp.status_code == 200
+    assert db.worker.jobs[0][1] == {
+        "arr_instances": [],
+        "plex_instances": [],
+        "libraries": [],
+    }
+
+
+def test_bodyless_post_is_a_full_refresh(refresh):
+    """No body at all means no options — a full refresh, not a 400."""
+    client, path, db = refresh
+    resp = client.post(path)
+    assert resp.status_code == 200
+    assert db.worker.jobs[0][1] == {
+        "arr_instances": [],
+        "plex_instances": [],
+        "libraries": [],
+    }
+
+
+@pytest.mark.parametrize("body", [b"", b"   \n"])
+def test_empty_body_with_json_content_type_is_a_full_refresh(refresh, body):
+    """An empty/whitespace body is "no content" even when declared as JSON."""
+    client, path, db = refresh
+    resp = client.post(
+        path, content=body, headers={"content-type": "application/json"}
+    )
+    assert resp.status_code == 200
+    assert db.worker.jobs[0][1] == {
+        "arr_instances": [],
+        "plex_instances": [],
+        "libraries": [],
+    }
+
+
+def test_frontend_format_still_enqueues_a_full_refresh(refresh):
+    """The frontend's {path, deep} body carries no targeting keys, so it refreshes all."""
+    client, path, db = refresh
+    resp = client.post(path, json={"path": "/media/movies", "deep": True})
     assert resp.status_code == 200
     assert db.worker.jobs[0][1] == {
         "arr_instances": [],
@@ -102,42 +152,67 @@ def test_empty_body_defaults_to_auto_discovery(client_and_db):
 
 
 @pytest.mark.parametrize("body", [[], "text", 3, True])
-def test_non_object_body_is_rejected(client_and_db, body):
-    """Valid JSON that is not an object must 400, not blow up as a 500."""
-    client, db = client_and_db
-    resp = client.post("/api/cache/refresh", json=body)
+def test_non_object_body_is_rejected(refresh, body):
+    """Valid JSON that is not an object must 400, not blow up or refresh silently."""
+    client, path, db = refresh
+    resp = client.post(path, json=body)
     assert resp.status_code == 400
     assert resp.json()["error_code"] == "INVALID_BODY"
     assert db.worker.jobs == []
 
 
-@pytest.mark.parametrize("field", ["arr_instances", "plex_instances", "libraries"])
-def test_non_list_field_is_rejected(client_and_db, field):
-    """Each list field must actually be a list."""
-    client, db = client_and_db
-    resp = client.post("/api/cache/refresh", json={field: "Radarr"})
-    assert resp.status_code == 400
-    assert resp.json()["error_code"] == "INVALID_BODY"
-    assert db.worker.jobs == []
-
-
-def test_malformed_json_is_rejected(client_and_db):
-    """An unparseable body is a client error, not a server error."""
-    client, db = client_and_db
+def test_json_null_body_is_rejected(refresh):
+    """A literal JSON null parses fine but is not an object — still a 400."""
+    client, path, db = refresh
     resp = client.post(
-        "/api/cache/refresh",
-        content=b"{not json",
-        headers={"content-type": "application/json"},
+        path, content=b"null", headers={"content-type": "application/json"}
     )
     assert resp.status_code == 400
     assert resp.json()["error_code"] == "INVALID_BODY"
     assert db.worker.jobs == []
 
 
-@pytest.mark.parametrize("value", [True, False])
-def test_update_mappings_is_no_longer_part_of_the_contract(client_and_db, value):
-    """The dead flag is accepted but dropped — the worker always syncs mappings."""
-    client, db = client_and_db
-    resp = client.post("/api/cache/refresh", json={"update_mappings": value})
+@pytest.mark.parametrize("field", ["arr_instances", "plex_instances", "libraries"])
+def test_non_list_field_is_rejected(refresh, field):
+    """Each list field must actually be a list."""
+    client, path, db = refresh
+    resp = client.post(path, json={field: "Radarr"})
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "INVALID_BODY"
+    assert db.worker.jobs == []
+
+
+def test_malformed_json_is_rejected(refresh):
+    """An unparseable body is a client error, not a silent full refresh."""
+    client, path, db = refresh
+    resp = client.post(
+        path, content=b"{not json", headers={"content-type": "application/json"}
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "INVALID_BODY"
+    assert db.worker.jobs == []
+
+
+def test_charset_content_type_is_still_parsed(refresh):
+    """A charset suffix must not bypass parsing into an unfiltered full refresh."""
+    client, path, db = refresh
+    resp = client.post(
+        path,
+        content=b'{"arr_instances": ["Radarr"]}',
+        headers={"content-type": "application/json; charset=utf-8"},
+    )
     assert resp.status_code == 200
-    assert "update_mappings" not in db.worker.jobs[0][1]
+    assert db.worker.jobs[0][1]["arr_instances"] == ["Radarr"]
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_update_mappings_is_dropped_but_siblings_survive(refresh, value):
+    """The dead flag is stripped while real targeting keys pass through untouched."""
+    client, path, db = refresh
+    resp = client.post(
+        path, json={"arr_instances": ["Radarr"], "update_mappings": value}
+    )
+    assert resp.status_code == 200
+    payload = db.worker.jobs[0][1]
+    assert payload["arr_instances"] == ["Radarr"]
+    assert "update_mappings" not in payload

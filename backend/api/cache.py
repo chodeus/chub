@@ -6,7 +6,14 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import (
+    build_cache_refresh_payload,
+    error,
+    get_database,
+    get_logger,
+    ok,
+    read_request_json,
+)
 from backend.util.database import ChubDB
 
 router = APIRouter(
@@ -27,22 +34,6 @@ def _page(rows: list, limit: Optional[int], offset: int) -> list:
         return rows
     end = offset + limit if limit is not None else None
     return rows[offset:end]
-
-
-_REFRESH_LIST_FIELDS = ("arr_instances", "plex_instances", "libraries")
-
-
-def _refresh_job_payload(payload: Any) -> Optional[dict]:
-    """Build the refresh job payload, or None if the body is not the expected shape."""
-    if not isinstance(payload, dict):
-        return None
-    job_payload = {}
-    for field in _REFRESH_LIST_FIELDS:
-        value = payload.get(field, [])
-        if not isinstance(value, list):
-            return None
-        job_payload[field] = value
-    return job_payload
 
 
 @router.get(
@@ -235,14 +226,10 @@ async def refresh_cache(
 ) -> JSONResponse:
     """Enqueue a cache_refresh job; empty instance lists mean auto-discover all."""
     try:
-        try:
-            payload = await request.json()
-        except Exception:
-            payload = None
-
+        payload = await read_request_json(request)
         logger.debug(f"Serving POST /api/cache/refresh with payload: {payload}")
 
-        job_payload = _refresh_job_payload(payload)
+        job_payload = build_cache_refresh_payload(payload)
         if job_payload is None:
             return error(
                 "Invalid request body",
