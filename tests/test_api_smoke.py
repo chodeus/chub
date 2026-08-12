@@ -427,22 +427,29 @@ def test_webhook_rejected_when_config_malformed(monkeypatch, app_with_router):
         """Stand in for load_config on a malformed config file."""
         raise ConfigError("corrupt config")
 
-    class _ExplodingDB:
-        """Any attribute touch means the request body got processed."""
+    class _TripwireDB:
+        """Records any attribute touch — a touch means the body got processed."""
+
+        def __init__(self):
+            """Start with no touches recorded."""
+            self.touched = []
 
         def __getattr__(self, name):
-            """Fail loudly if the handler ran despite verification failing."""
-            raise AssertionError(f"webhook body was processed: db.{name}")
+            """Record the access and honor the special-method contract."""
+            self.touched.append(name)
+            raise AttributeError(name)
 
     monkeypatch.setattr(webhooks_router, "load_config", _raise)
     app = app_with_router(webhooks_router.router)
-    app.state.db = _ExplodingDB()
+    db = _TripwireDB()
+    app.state.db = db
     client = TestClient(app, raise_server_exceptions=False)
     resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
 
     # 503, not 401: Sonarr/Radarr retry 5xx, so a fixed config self-heals
     # without the user re-firing every missed event by hand.
     assert resp.status_code == 503
+    assert db.touched == [], f"webhook body was processed: db.{db.touched}"
 
 
 def test_webhook_signed_path_still_accepted(monkeypatch):
