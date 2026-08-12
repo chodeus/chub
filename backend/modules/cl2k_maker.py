@@ -1504,7 +1504,11 @@ def generate_seasons(
             )
         except Exception as exc:  # one bad season must not sink the rest
             logger.error(f"cl2k: season {n} generation failed: {exc}", exc_info=True)
-            res = {"status": "error", "reason": str(exc)}
+            # /seasons-status serialises this reason, so it must not carry exc.
+            res = {
+                "status": "error",
+                "reason": f"season {n} failed — see the CL2K Maker log for the reason",
+            }
         entry = {"season": int(n), **res}
         results.append(entry)
         if progress_cb is not None:

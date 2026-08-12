@@ -39,6 +39,8 @@ import backend.modules.cl2k_maker as maker  # noqa: E402
 from backend.util.cl2k import geometry as geo, renderer  # noqa: E402
 
 _SVG = b'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10"></svg>'
+# Stands in for what a real exception leaks: a path, a credential, a provider reply.
+_SECRET = "/srv/secret-path: token=hunter2 (rclone said no)"
 
 
 # fixtures
@@ -131,7 +133,7 @@ def test_psd_export_forwards_the_uploaded_and_brushed_art(monkeypatch):
     """It forwarded only the *paths*, so the .psd came out of TMDB art while the
     preview beside it showed the user's upload and brush strokes."""
     seen = {}
-    monkeypatch.setattr(api, "load_config", lambda: object())
+    monkeypatch.setattr(api, "load_config", object)
     monkeypatch.setattr(
         api, "psd_for_item", lambda **kw: (seen.update(kw), b"psd-bytes")[1]
     )
@@ -304,13 +306,17 @@ def _boom(*a, **kw):
     raise RuntimeError("image host is not allowed")
 
 
+def _boom_secret(*a, **kw):
+    raise RuntimeError(_SECRET)
+
+
 _SAVE_ROUTES = ("generate", "square_generate", "background_generate", "logo_asset_generate")
 
 
 @pytest.mark.parametrize("route", _SAVE_ROUTES)
 def test_a_saving_route_answers_bad_input_with_a_clean_400(route, monkeypatch):
     """They 500'd with an empty CL2K log for bodies the previews already 400'd."""
-    monkeypatch.setattr(api, "load_config", lambda: object())
+    monkeypatch.setattr(api, "load_config", object)
     for name in (
         "generate_for_item",
         "generate_square_art",
@@ -334,12 +340,14 @@ def test_a_saving_route_answers_bad_input_with_a_clean_400(route, monkeypatch):
     assert resp.status_code == 400
     body = _body(resp)
     assert body["error_code"] == "CL2K_GENERATE"
-    assert "image host is not allowed" in body["message"]
+    # Readable, but the exception text stays server-side (py/stack-trace-exposure).
+    assert "image host is not allowed" not in body["message"]
+    assert "CL2K Maker log" in body["message"]
     assert any("image host is not allowed" in line for line in lines), "and it must be logged"
 
 
 def test_psd_export_answers_bad_input_with_a_clean_400(monkeypatch):
-    monkeypatch.setattr(api, "load_config", lambda: object())
+    monkeypatch.setattr(api, "load_config", object)
     monkeypatch.setattr(api, "psd_for_item", _boom)
     resp = api.psd_export(
         api.GenerateRequest(kind="movie", title="T", tmdb_id=7),
@@ -367,11 +375,55 @@ def test_an_art_preview_answers_a_disallowed_host_with_a_clean_400(route, monkey
     assert _body(resp)["error_code"] == "IMAGE_FETCH"
 
 
+_ART = "http://x/y.jpg"
+_FETCH_ROUTES = [
+    # retext needs an id (a save must be matchable) and its own BackgroundTasks.
+    pytest.param("retext", api.RetextRequest, {"tmdb_id": 7}, True, id="retext"),
+    pytest.param("detect_text", api.DetectTextRequest, {}, False, id="detect-text"),
+    pytest.param("tighten_mask", api.TightenMaskRequest, {}, False, id="tighten-mask"),
+]
+
+
+@pytest.mark.parametrize("route, req_cls, fields, needs_tasks", _FETCH_ROUTES)
+def test_no_route_puts_exception_text_in_the_response(
+    route, req_cls, fields, needs_tasks, monkeypatch
+):
+    """py/stack-trace-exposure: exception text names paths, hosts and tokens, so
+    it belongs in the CL2K log and never in the body the browser reads."""
+    monkeypatch.setattr(api, "download_image", _boom_secret)
+    lines, logger = _recording_logger()
+    extra = {"background_tasks": BackgroundTasks()} if needs_tasks else {}
+
+    resp = getattr(api, route)(
+        req_cls(image_path=_ART, **fields), db=object(), logger=logger, **extra
+    )
+
+    assert resp.status_code == 400
+    assert _SECRET not in _body(resp)["message"]
+    assert any(_SECRET in line for line in lines), "the reason must still be logged"
+
+
+def test_a_failing_season_worker_keeps_its_reason_out_of_the_poll(monkeypatch):
+    """/seasons-status serialises job["error"] and each result's reason straight to
+    the browser, so a raw str(exc) there is the same leak by another route."""
+    monkeypatch.setattr(api, "load_config", object)
+    monkeypatch.setattr(api, "retext_poster", _boom_secret)
+    _lines, logger = _recording_logger()
+    jid = api._new_season_job(1, "Show")
+    api._run_retext_seasons_job(
+        jid, object(), logger, b"", api.RetextSeasonsRequest(seasons=[1], tmdb_id=1)
+    )
+
+    data = _body(api.seasons_status(jid))["data"]
+    assert data["failed"] == 1
+    assert _SECRET not in json.dumps(data)
+
+
 def test_a_real_http_status_is_not_downgraded_to_400(monkeypatch):
     """An upstream 401/403 must keep its status — only bad input becomes a 400."""
     from fastapi import HTTPException
 
-    monkeypatch.setattr(api, "load_config", lambda: object())
+    monkeypatch.setattr(api, "load_config", object)
 
     def _unauthorized(**kw):
         raise HTTPException(status_code=401, detail="nope")

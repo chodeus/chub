@@ -193,6 +193,38 @@ def _ai_config_or_error(logger: Any, what: str):
     return cfg, None
 
 
+def _failed(
+    logger: Any,
+    what: str,
+    exc: BaseException,
+    code: str,
+    *,
+    status_code: int = 400,
+    trace: bool = False,
+) -> JSONResponse:
+    """Log a failure in full; answer with a stable message that omits ``exc``.
+
+    THE owner of that split for this router. Exception text carries filesystem
+    paths, internal hostnames and provider payloads, so it stays server-side
+    (CodeQL py/stack-trace-exposure); the code and status the caller sees are
+    unchanged, and the reason is one log line away under Logs → CL2K Maker.
+    """
+    if trace:
+        logger.error(f"cl2k: {what} failed: {exc}", exc_info=True)
+    else:
+        logger.warning(f"cl2k: {what} failed: {exc}")
+    return error(
+        f"Could not {what} — see the CL2K Maker log for the reason.",
+        code,
+        status_code=status_code,
+    )
+
+
+# Worker-side twin of _failed's public half: job registries are read back by
+# /seasons-status, so a raw str(exc) there reaches the browser just the same.
+_JOB_FAILED = "failed — see the CL2K Maker log for the reason"
+
+
 def _run_or_error(logger: Any, what: str, code: str, run):
     """``(value, None)`` from ``run``, else ``(None, 400)`` naming what failed.
 
@@ -205,8 +237,7 @@ def _run_or_error(logger: Any, what: str, code: str, run):
     except HTTPException:
         raise  # a real HTTP status (auth, upstream) must not become a 400
     except Exception as exc:
-        logger.warning(f"cl2k: {what} failed: {exc}")
-        return None, error(f"Could not {what}: {exc}", code)
+        return None, _failed(logger, what, exc, code)
 
 
 def _save_response(logger: Any, *, done: str, what: str, run) -> JSONResponse:
@@ -390,10 +421,10 @@ def test_drive(
     try:
         detail = test_drive_access(folder_id, cfg.sync_gdrive, logger)
     except ValueError as exc:
-        return error(f"Invalid folder ID: {exc}", "GDRIVE_FOLDER_INVALID")
+        return _failed(logger, "accept that folder ID", exc, "GDRIVE_FOLDER_INVALID")
     except Exception as exc:
-        return error(
-            f"Upload test failed: {exc}", "GDRIVE_TEST_FAILED", status_code=502
+        return _failed(
+            logger, "test that Drive folder", exc, "GDRIVE_TEST_FAILED", status_code=502
         )
     return ok(detail, {"folder_id": folder_id})
 
@@ -429,10 +460,12 @@ def gdrive_type_subfolders(
     try:
         subfolders = ensure_type_subfolders(folder_id, cfg.sync_gdrive, logger)
     except ValueError as exc:
-        return error(f"Invalid folder ID: {exc}", "GDRIVE_FOLDER_INVALID")
+        return _failed(logger, "accept that folder ID", exc, "GDRIVE_FOLDER_INVALID")
     except Exception as exc:
-        return error(
-            f"Could not create the type subfolders: {exc}",
+        return _failed(
+            logger,
+            "create the type subfolders",
+            exc,
             "GDRIVE_SUBFOLDERS_FAILED",
             status_code=502,
         )
@@ -516,8 +549,7 @@ def logo_processed(
     try:
         raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
     except LogoFetchError as exc:
-        logger.warning(f"cl2k: logo fetch failed: {exc}")
-        return error(f"Could not fetch that logo from its source: {exc}", "LOGO_FETCH")
+        return _failed(logger, "fetch that logo from its source", exc, "LOGO_FETCH")
     if not raw:
         return error("No logo provided", "NO_LOGO")
     cfg = load_config().cl2k_maker
@@ -927,8 +959,7 @@ def logo_asset_preview(
     try:
         raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
     except LogoFetchError as exc:
-        logger.warning(f"cl2k: logo fetch failed: {exc}")
-        return error(f"Could not fetch that logo from its source: {exc}", "LOGO_FETCH")
+        return _failed(logger, "fetch that logo from its source", exc, "LOGO_FETCH")
     if not raw:
         return error("No logo selected", "NO_LOGO")
     png, bad = _run_or_error(
@@ -1009,8 +1040,7 @@ def extract_logo(
         try:
             raw = download_image(req.image_path)
         except Exception as exc:  # disallowed host / fetch failure
-            logger.warning(f"cl2k: extract-logo fetch failed: {exc}")
-            return error(f"Could not fetch that poster: {exc}", "IMAGE_FETCH")
+            return _failed(logger, "fetch that poster", exc, "IMAGE_FETCH")
     else:
         raw = None
     if not raw:
@@ -1034,8 +1064,7 @@ def extract_logo(
                 raw, config=cfg.cl2k_maker, mask_bytes=mask, logger=logger
             )
         except Exception as exc:
-            logger.error(f"cl2k: extract-logo erase failed: {exc}", exc_info=True)
-            return error(f"AI erase failed: {exc}", "CL2K_AI")
+            return _failed(logger, "run the AI erase", exc, "CL2K_AI", trace=True)
         if cleaned == raw:
             # By value, not identity: remove_text hands the original object back
             # when the provider bails, but a provider can also echo an equal
@@ -1243,7 +1272,7 @@ def _spawn_season_job(
             job = _season_jobs.get(jid)
             if job is not None:
                 job["status"] = "error"
-                job["error"] = str(exc)
+                job["error"] = f"the season job could not be started — {_JOB_FAILED}"
         return error(
             "could not start the season job", "CL2K_JOB_START", status_code=503
         )
@@ -1314,7 +1343,7 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
             job = _season_jobs.get(jid)
             if job is not None:
                 job["status"] = "error"
-                job["error"] = str(exc)
+                job["error"] = f"the season batch {_JOB_FAILED}"
 
 
 @router.post("/generate-seasons", summary="Start a background CL2K season batch")
@@ -1448,7 +1477,7 @@ def _run_retext_seasons_job(
                 )
             except Exception as exc:  # one bad season must not sink the rest
                 logger.error(f"cl2k: as-is season {n} failed: {exc}", exc_info=True)
-                res = {"status": "error", "reason": str(exc)}
+                res = {"status": "error", "reason": f"season {n} {_JOB_FAILED}"}
             if not isinstance(res, dict):
                 res = {"status": "generated"}
             with _season_jobs_lock:
@@ -1466,7 +1495,7 @@ def _run_retext_seasons_job(
             job = _season_jobs.get(jid)
             if job is not None:
                 job["status"] = "error"
-                job["error"] = str(exc)
+                job["error"] = f"the season batch {_JOB_FAILED}"
 
 
 @router.post("/retext-seasons", summary="Start a background File-as-is season batch")
@@ -1495,8 +1524,7 @@ def retext_seasons_endpoint(
         try:
             image_bytes = download_image(req.image_path)
         except Exception as exc:
-            logger.warning(f"CL2K retext-seasons: source fetch failed — {exc}")
-            return error(f"could not fetch the source image: {exc}", "CL2K_RETEXT")
+            return _failed(logger, "fetch the source image", exc, "CL2K_RETEXT")
     else:
         return error("no image provided", "CL2K_RETEXT")
     jid = _new_season_job(len(seasons), req.title)
@@ -1673,8 +1701,7 @@ def retext(
         try:
             image_bytes = download_image(req.image_path)
         except Exception as exc:  # disallowed host / fetch failure
-            logger.warning(f"CL2K retext: source image fetch failed — {exc}")
-            return error(f"could not fetch the source image: {exc}", "CL2K_RETEXT")
+            return _failed(logger, "fetch the source image", exc, "CL2K_RETEXT")
     else:
         return error("no image provided", "CL2K_RETEXT")
     try:
@@ -1724,8 +1751,7 @@ def retext(
     except Exception as exc:
         # Without this, an AI/timeout failure produced a bare 500 with nothing in
         # the logs — log it and return a readable error to the client instead.
-        logger.error(f"CL2K retext failed: {exc}", exc_info=True)
-        return error(f"retext failed: {exc}", "CL2K_RETEXT")
+        return _failed(logger, "re-text that poster", exc, "CL2K_RETEXT", trace=True)
     if req.preview:
         return ok("ok", {"preview_b64": base64.b64encode(out).decode()})
     if isinstance(out, dict) and out.get("status") == "generated":
@@ -1768,8 +1794,7 @@ def detect_text(
         try:
             image_bytes = download_image(req.image_path)
         except Exception as exc:  # disallowed host / fetch failure
-            logger.warning(f"CL2K detect-text: source image fetch failed — {exc}")
-            return error(f"could not fetch the source image: {exc}", "CL2K_DETECT")
+            return _failed(logger, "fetch the source image", exc, "CL2K_DETECT")
     else:
         return error("no image provided", "CL2K_DETECT")
     full_config, unavailable = _ai_config_or_error(logger, "detect-text")
@@ -1803,8 +1828,7 @@ def detect_text(
     except Exception as exc:
         # Mirror /retext: a timeout/5xx/older-sidecar 404 comes back readable,
         # not as a bare 500 with nothing in the logs.
-        logger.error(f"CL2K detect-text failed: {exc}", exc_info=True)
-        return error(f"text detection failed: {exc}", "CL2K_DETECT")
+        return _failed(logger, "detect the text", exc, "CL2K_DETECT", trace=True)
     return ok("ok", body)
 
 
@@ -1840,8 +1864,7 @@ def tighten_mask(
         try:
             raw = download_image(req.image_path)
         except Exception as exc:  # disallowed host / fetch failure
-            logger.warning(f"CL2K tighten-mask: source image fetch failed — {exc}")
-            return error(f"could not fetch the source image: {exc}", "CL2K_TIGHTEN")
+            return _failed(logger, "fetch the source image", exc, "CL2K_TIGHTEN")
     else:
         raw = None
     if not raw:
@@ -1855,8 +1878,7 @@ def tighten_mask(
     try:
         tightened = tighten_text_mask(raw, mask, color_tol=req.color_tol)
     except Exception as exc:
-        logger.error(f"CL2K tighten-mask failed: {exc}", exc_info=True)
-        return error(f"tighten failed: {exc}", "CL2K_TIGHTEN")
+        return _failed(logger, "tighten that mask", exc, "CL2K_TIGHTEN", trace=True)
     if tightened is None:
         return ok(
             "kept",
@@ -1889,9 +1911,10 @@ def _test_lama_sidecar(cfg, logger) -> JSONResponse:
             url, json=body, headers=text_removal._lama_headers(cfg), timeout=timeout
         )
     except Exception as exc:
-        logger.warning(f"CL2K test-ai: sidecar unreachable — {exc}")
+        logger.warning(f"cl2k: test-ai sidecar unreachable — {exc}")
         return error(
-            f"Couldn't reach the sidecar at {cfg.ai_endpoint} — {exc}",
+            f"Couldn't reach the sidecar at {cfg.ai_endpoint} — see the CL2K "
+            "Maker log for the reason.",
             "CL2K_AI_TEST",
             status_code=503,
         )
@@ -1922,10 +1945,10 @@ def _test_lama_sidecar(cfg, logger) -> JSONResponse:
     except Exception as exc:
         # An exception proves nothing about enforcement. Say what was actually
         # verified — the key works — and never claim the part that wasn't.
-        logger.warning(f"CL2K test-ai: unauthenticated re-probe failed — {exc}")
+        logger.warning(f"cl2k: test-ai unauthenticated re-probe failed — {exc}")
         return ok(
             "Sidecar reachable and your key works. The follow-up check — whether "
-            f"a keyless call gets blocked — could not run ({exc})."
+            "a keyless call gets blocked — could not run; see the CL2K Maker log."
         )
     if bare.status_code not in (401, 403):
         return ok(
@@ -1945,8 +1968,7 @@ def _test_openai(cfg, logger) -> JSONResponse:
             timeout=20,
         )
     except Exception as exc:
-        logger.warning(f"CL2K test-ai: OpenAI unreachable — {exc}")
-        return error(f"Couldn't reach OpenAI — {exc}", "CL2K_AI_TEST", status_code=503)
+        return _failed(logger, "reach OpenAI", exc, "CL2K_AI_TEST", status_code=503)
     if resp.status_code in (401, 403):
         return error("OpenAI rejected the API key.", "CL2K_AI_TEST")
     if not resp.ok:

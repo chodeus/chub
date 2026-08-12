@@ -20,11 +20,15 @@ from backend.util.config import ConfigParseError  # noqa: E402
 
 @pytest.fixture
 def logger():
+    """Records warnings/errors — the job now keeps the cause OUT of its payload
+    (/seasons-status serialises it), so the log is where the detail must land."""
+    logged = []
     return types.SimpleNamespace(
         debug=lambda *a, **k: None,
         info=lambda *a, **k: None,
-        warning=lambda *a, **k: None,
-        error=lambda *a, **k: None,
+        warning=lambda m, *a, **k: logged.append(str(m)),
+        error=lambda m, *a, **k: logged.append(str(m)),
+        logged=logged,
     )
 
 
@@ -67,7 +71,10 @@ def test_config_failure_fails_the_job_rather_than_the_thread(worker, logger, mon
 
     job = _job_state(jid)
     assert job["status"] == "error"
-    assert "bad YAML" in job["error"]
+    # The cause reaches the operator through the log, never through the payload
+    # /seasons-status hands the browser.
+    assert "bad YAML" not in job["error"]
+    assert any("bad YAML" in m for m in logger.logged)
 
 
 @pytest.mark.parametrize("worker", ["retext", "seasons"])
@@ -99,7 +106,10 @@ def test_a_mid_batch_config_failure_keeps_the_seasons_already_done(worker, logge
 
     job = _job_state(jid)
     assert job["status"] == "error"
-    assert "bad YAML" in job["error"]
+    # The cause reaches the operator through the log, never through the payload
+    # /seasons-status hands the browser.
+    assert "bad YAML" not in job["error"]
+    assert any("bad YAML" in m for m in logger.logged)
     assert job["done"] == 1, "season 1 completed before the fault and must still count"
     assert len(calls) == 2, "the batch must stop at the fault, not carry on to season 3"
 

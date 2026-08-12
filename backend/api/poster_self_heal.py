@@ -166,7 +166,12 @@ def apply_review(
     try:
         note = apply_proposal(row, load_config().sync_gdrive, logger)
     except Exception as exc:
-        return error(f"Google Drive rename failed: {exc}", "DRIVE_RENAME")
+        # rclone errors quote paths and Drive ids — keep them out of the response.
+        logger.error(f"poster-self-heal: Drive rename failed: {exc}", exc_info=True)
+        return error(
+            "Google Drive rename failed — see the Poster Self-Heal log for the reason.",
+            "DRIVE_RENAME",
+        )
 
     reviews.set_status(review_id, "applied")
     # Drop the row the rename invalidated — same as the scheduled run.
