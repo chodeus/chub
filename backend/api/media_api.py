@@ -17,6 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from backend.api.utils import (
+    BODY_TOO_LARGE,
     build_cache_refresh_payload,
     error,
     get_database,
@@ -548,6 +549,13 @@ async def refresh_media(
     """Enqueue a cache_refresh job; a {path, deep} body has no targeting, so refresh all."""
     try:
         payload = await read_request_json(request)
+        if payload is BODY_TOO_LARGE:
+            return error(
+                "Request body too large",
+                code="BODY_TOO_LARGE",
+                status_code=413,
+            )
+
         logger.debug(f"Serving POST /api/media/refresh with payload: {payload}")
 
         job_payload = build_cache_refresh_payload(payload)

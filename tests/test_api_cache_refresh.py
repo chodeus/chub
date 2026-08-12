@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from backend.api import cache as cache_router  # noqa: E402
 from backend.api import media_api as media_router  # noqa: E402
+from backend.api.utils import MAX_REQUEST_BODY_BYTES  # noqa: E402
 
 
 class _StubLogger:
@@ -203,6 +204,63 @@ def test_charset_content_type_is_still_parsed(refresh):
     )
     assert resp.status_code == 200
     assert db.worker.jobs[0][1]["arr_instances"] == ["Radarr"]
+
+
+def test_oversized_content_length_is_rejected(refresh):
+    """A declared body past the cap is refused up front, before any buffering."""
+    client, path, db = refresh
+    resp = client.post(
+        path,
+        content=b"x" * (MAX_REQUEST_BODY_BYTES + 1),
+        headers={"content-type": "application/json"},
+    )
+    assert resp.status_code == 413
+    assert resp.json()["error_code"] == "BODY_TOO_LARGE"
+    assert db.worker.jobs == []
+
+
+def test_oversized_chunked_body_is_rejected(refresh):
+    """Chunked sends no Content-Length, so the cap must also hold while streaming."""
+    client, path, db = refresh
+    chunk = b"x" * 64 * 1024
+    body = (chunk for _ in range((MAX_REQUEST_BODY_BYTES // len(chunk)) + 2))
+    resp = client.post(path, content=body, headers={"content-type": "application/json"})
+    assert resp.status_code == 413
+    assert resp.json()["error_code"] == "BODY_TOO_LARGE"
+    assert db.worker.jobs == []
+
+
+@pytest.mark.parametrize("element", [1, 1.5, True, None, {"name": "Radarr"}, ["Radarr"]])
+def test_non_string_list_element_is_rejected(refresh, element):
+    """List elements must be strings — anything else would fail deep in the worker."""
+    client, path, db = refresh
+    resp = client.post(path, json={"arr_instances": [element]})
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "INVALID_BODY"
+    assert db.worker.jobs == []
+
+
+@pytest.mark.parametrize("element", ["", "   ", "\t\n"])
+def test_blank_string_list_element_is_rejected(refresh, element):
+    """A blank name would normalize to an empty instance/library name."""
+    client, path, db = refresh
+    resp = client.post(path, json={"libraries": [element]})
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "INVALID_BODY"
+    assert db.worker.jobs == []
+
+
+def test_list_elements_are_stripped(refresh):
+    """Surrounding whitespace is trimmed off every accepted name."""
+    client, path, db = refresh
+    resp = client.post(
+        path,
+        json={"arr_instances": ["  Radarr  "], "libraries": ["\tMovies\n", "Shows"]},
+    )
+    assert resp.status_code == 200
+    payload = db.worker.jobs[0][1]
+    assert payload["arr_instances"] == ["Radarr"]
+    assert payload["libraries"] == ["Movies", "Shows"]
 
 
 @pytest.mark.parametrize("value", [True, False])

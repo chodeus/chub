@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from backend.api.utils import (
+    BODY_TOO_LARGE,
     build_cache_refresh_payload,
     error,
     get_database,
@@ -227,6 +228,13 @@ async def refresh_cache(
     """Enqueue a cache_refresh job; empty instance lists mean auto-discover all."""
     try:
         payload = await read_request_json(request)
+        if payload is BODY_TOO_LARGE:
+            return error(
+                "Request body too large",
+                code="BODY_TOO_LARGE",
+                status_code=413,
+            )
+
         logger.debug(f"Serving POST /api/cache/refresh with payload: {payload}")
 
         job_payload = build_cache_refresh_payload(payload)
