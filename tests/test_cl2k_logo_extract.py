@@ -822,12 +822,14 @@ def _despeckle_pairwise(alpha, min_area=12):
     parent = {}
 
     def find(a):
+        """DSU find with path compression (oracle helper)."""
         while parent[a] != a:
             parent[a] = parent[parent[a]]
             a = parent[a]
         return a
 
     def union(a, b):
+        """DSU union by root (oracle helper)."""
         ra, rb = find(a), find(b)
         if ra != rb:
             parent[rb] = ra
@@ -868,6 +870,7 @@ def _despeckle_pairwise(alpha, min_area=12):
 
 
 def test_despeckle_matches_the_pairwise_oracle_on_random_runs():
+    """Property test: new merge == verbatim old implementation."""
     import numpy as np
 
     from backend.util.cl2k import logo_extract
@@ -885,6 +888,7 @@ def test_despeckle_matches_the_pairwise_oracle_on_random_runs():
 
 
 def test_despeckle_matches_the_oracle_on_adversarial_run_patterns():
+    """Structured worst-case patterns match the oracle exactly."""
     import numpy as np
 
     from backend.util.cl2k import logo_extract
