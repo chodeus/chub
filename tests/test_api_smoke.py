@@ -371,7 +371,10 @@ def test_error_body_omits_exception_text(app_with_router):
     """A raising dependency yields the stable message — never the exception text."""
 
     class _Boom:
-        def __getattr__(self, _name):
+        """Stub db whose stats accessor raises like a real internal failure."""
+
+        def get_poster_stats(self, *a, **kw):
+            """Simulate an arbitrary internal error carrying sensitive text."""
             raise RuntimeError("LEAK_MARKER /srv/secret/chub.db")
 
     app = app_with_router(posters_router.router)
