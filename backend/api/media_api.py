@@ -150,7 +150,7 @@ async def search_media(
     except Exception as e:
         logger.error(f"Error searching media: {e}")
         return error(
-            f"Error searching media: {str(e)}",
+            "Error searching media",
             code="MEDIA_SEARCH_ERROR",
             status_code=500,
         )
@@ -233,7 +233,7 @@ async def get_media_stats(
     except Exception as e:
         logger.error(f"Error retrieving media stats: {e}")
         return error(
-            f"Error retrieving media stats: {str(e)}",
+            "Error retrieving media stats",
             code="MEDIA_STATS_ERROR",
             status_code=500,
         )
@@ -285,7 +285,7 @@ async def get_media_stats_detailed(
     except Exception as e:
         logger.error(f"Error retrieving detailed media stats: {e}")
         return error(
-            f"Error retrieving detailed media stats: {str(e)}",
+            "Error retrieving detailed media stats",
             code="MEDIA_STATS_DETAILED_ERROR",
             status_code=500,
         )
@@ -338,7 +338,7 @@ async def get_genres(
     except Exception as e:
         logger.error(f"Error retrieving genres: {e}")
         return error(
-            f"Error retrieving genres: {str(e)}",
+            "Error retrieving genres",
             code="GENRES_ERROR",
             status_code=500,
         )
@@ -396,7 +396,7 @@ async def get_collections(
     except Exception as e:
         logger.error(f"Error retrieving collections: {e}")
         return error(
-            f"Error retrieving collections: {str(e)}",
+            "Error retrieving collections",
             code="COLLECTIONS_ERROR",
             status_code=500,
         )
@@ -514,7 +514,7 @@ async def get_duplicates(
     except Exception as e:
         logger.error(f"Error finding duplicates: {e}")
         return error(
-            f"Error finding duplicates: {str(e)}",
+            "Error finding duplicates",
             code="DUPLICATES_ERROR",
             status_code=500,
         )
@@ -582,7 +582,7 @@ async def refresh_media(
     except Exception as e:
         logger.error(f"Error serving POST /api/media/refresh: {e}")
         return error(
-            f"Error refreshing media: {str(e)}",
+            "Error refreshing media",
             code="MEDIA_REFRESH_ERROR",
             status_code=500,
         )
@@ -674,7 +674,7 @@ async def export_media(
     except Exception as e:
         logger.error(f"Error exporting media: {e}")
         return error(
-            f"Error exporting media: {str(e)}",
+            "Error exporting media",
             code="MEDIA_EXPORT_ERROR",
             status_code=500,
         )
@@ -734,7 +734,7 @@ async def delete_collection(
     except Exception as e:
         logger.error(f"Error deleting collection: {e}")
         return error(
-            f"Error deleting collection: {str(e)}",
+            "Error deleting collection",
             code="COLLECTION_DELETE_ERROR",
             status_code=500,
         )
@@ -820,7 +820,7 @@ async def create_collection(
     except Exception as e:
         logger.error(f"Error creating collection: {e}")
         return error(
-            f"Error creating collection: {str(e)}",
+            "Error creating collection",
             code="COLLECTION_CREATE_ERROR",
             status_code=500,
         )
@@ -912,7 +912,7 @@ async def update_collection(
     except Exception as e:
         logger.error(f"Error updating collection: {e}")
         return error(
-            f"Error updating collection: {str(e)}",
+            "Error updating collection",
             code="COLLECTION_UPDATE_ERROR",
             status_code=500,
         )
@@ -1058,6 +1058,8 @@ def _remove_media_item(db, logger, rid, delete_files, add_exclusion):
                 logger.warning(
                     f"Instance {instance_name} not found in config, skipping ARR delete"
                 )
+        except ConfigError:
+            raise
         except Exception as e:
             logger.error(f"ARR delete failed for id={rid}: {e}")
             # Continue with cache deletion even if ARR delete fails
@@ -1180,7 +1182,7 @@ async def get_low_rated(
     except Exception as e:
         logger.error(f"Error querying low-rated media: {e}")
         return error(
-            f"Error querying low-rated media: {str(e)}",
+            "Error querying low-rated media",
             code="LOW_RATED_ERROR",
             status_code=500,
         )
@@ -1318,7 +1320,7 @@ async def get_incomplete_metadata(
     except Exception as e:
         logger.error(f"Error querying incomplete metadata: {e}")
         return error(
-            f"Error querying incomplete metadata: {str(e)}",
+            "Error querying incomplete metadata",
             code="INCOMPLETE_META_ERROR",
             status_code=500,
         )
@@ -1361,6 +1363,7 @@ def get_orphaned_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """List cache rows whose ARR source no longer has the item."""
     try:
         config = load_config()
         live = _live_arr_ids_by_instance(config, logger)
@@ -1386,10 +1389,12 @@ def get_orphaned_cache(
                 "instances_checked": sorted(live.keys()),
             },
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error finding orphaned cache: {e}", exc_info=True)
         return error(
-            f"Error finding orphaned cache: {str(e)}",
+            "Error finding orphaned cache",
             code="ORPHANED_ERROR",
             status_code=500,
         )
@@ -1580,10 +1585,12 @@ def get_duplicate_members(
         with ThreadPoolExecutor(max_workers=min(8, len(body.ids))) as pool:
             members = list(pool.map(_resolve, body.ids))
         return ok("Duplicate members resolved", {"members": members})
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error fetching duplicate members: {e}", exc_info=True)
         return error(
-            f"Error fetching duplicate members: {str(e)}",
+            "Error fetching duplicate members",
             code="DUPLICATE_MEMBERS_ERROR",
             status_code=500,
         )
@@ -1615,7 +1622,7 @@ async def purge_orphaned_cache(
     except Exception as e:
         logger.error(f"Error purging orphaned cache: {e}", exc_info=True)
         return error(
-            f"Error purging orphaned cache: {str(e)}",
+            "Error purging orphaned cache",
             code="PURGE_ERROR",
             status_code=500,
         )
@@ -1683,7 +1690,7 @@ async def get_media_item(
     except Exception as e:
         logger.error(f"Error retrieving media item {media_id}: {e}")
         return error(
-            f"Error retrieving media item: {str(e)}",
+            "Error retrieving media item",
             code="MEDIA_GET_ERROR",
             status_code=500,
         )
@@ -1808,7 +1815,7 @@ async def update_media_metadata(
     except Exception as e:
         logger.error(f"Error updating media item {media_id}: {e}")
         return error(
-            f"Error updating media item: {str(e)}",
+            "Error updating media item",
             code="MEDIA_UPDATE_ERROR",
             status_code=500,
         )
@@ -1961,6 +1968,7 @@ async def delete_media_item(
         # If deleteFiles requested, remove from ARR first. The connect probe +
         # delete request are blocking, so run them off the event loop.
         def _delete_from_arr() -> None:
+            """Best-effort removal of the item from its source ARR instance."""
             if not (delete_files and item.get("arr_id") and item.get("instance_name")):
                 return
             try:
@@ -1996,6 +2004,8 @@ async def delete_media_item(
                     logger.warning(
                         f"Instance {instance_name} not found in config, skipping ARR delete"
                     )
+            except ConfigError:
+                raise
             except Exception as arr_err:
                 logger.error(f"ARR delete failed for {media_id}: {arr_err}")
                 # Continue with cache deletion even if ARR delete fails
@@ -2009,10 +2019,12 @@ async def delete_media_item(
             {"deleted_id": media_id, "files_deleted": delete_files},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error deleting media item {media_id}: {e}")
         return error(
-            f"Error deleting media item: {str(e)}",
+            "Error deleting media item",
             code="MEDIA_DELETE_ERROR",
             status_code=500,
         )
@@ -2117,7 +2129,7 @@ async def generate_collection_from_tag(
     except Exception as e:
         logger.error(f"Error generating collection from tag: {e}")
         return error(
-            f"Error generating collection: {str(e)}",
+            "Error generating collection",
             code="COLLECTION_FROM_TAG_ERROR",
             status_code=500,
         )
@@ -2151,7 +2163,7 @@ async def get_media_history(
     except Exception as e:
         logger.error(f"Error reading media history: {e}")
         return error(
-            f"Error reading media history: {str(e)}",
+            "Error reading media history",
             code="MEDIA_HISTORY_ERROR",
             status_code=500,
         )
@@ -2168,6 +2180,7 @@ def get_import_exclusion(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Report whether a media item is excluded from ARR import lists."""
     try:
         item = db.media.get_by_id(media_id)
         if not item:
@@ -2228,10 +2241,12 @@ def get_import_exclusion(
                 "exclusion_count": len(entries or []),
             },
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error resolving import exclusion: {e}")
         return error(
-            f"Error resolving import exclusion: {str(e)}",
+            "Error resolving import exclusion",
             code="EXCLUSION_ERROR",
             status_code=500,
         )

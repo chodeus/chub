@@ -40,6 +40,7 @@ from backend.util.config import (
     ConfigError,
     ConfigValidationError,
     format_validation_errors,
+    format_validation_errors_public,
     load_config,
 )
 from backend.util.database import ChubDB
@@ -444,16 +445,19 @@ async def handle_config_error(request: Request, exc: ConfigError) -> JSONRespons
     from the logs rather than appearing as an opaque internal error.
     """
     logger = get_logger(request, "ERROR")
-    logger.error(f"Configuration error: {exc}")
-    detail_lines = []
+    # exc_info carries the __cause__ the curated message deliberately omits
+    logger.error(f"Configuration error: {exc}", exc_info=True)
+    public_lines = []
     if isinstance(exc, ConfigValidationError) and exc.validation_error:
-        detail_lines = format_validation_errors(exc.validation_error)
-        for line in detail_lines:
+        # The logged lines carry the offending values; the returned ones must not.
+        for line in format_validation_errors(exc.validation_error):
             logger.error(f"  • {line}")
+        public_lines = format_validation_errors_public(exc.validation_error)
     return error(
-        f"Configuration invalid: {exc}",
+        # Read the curated attribute, never the exception object itself
+        "Configuration invalid: " + exc.message,
         code="CONFIG_INVALID",
-        data={"errors": detail_lines} if detail_lines else None,
+        data={"errors": public_lines} if public_lines else None,
         status_code=500,
     )
 
@@ -464,7 +468,7 @@ async def handle_exception(request: Request, exc: Exception) -> JSONResponse:
     logger = get_logger(request, "ERROR")
     logger.error(f"Unhandled Exception: {exc}", exc_info=True)
     return error(
-        f"Internal server error: {str(exc)}", code="INTERNAL_ERROR", status_code=500
+        "Internal server error", code="INTERNAL_ERROR", status_code=500
     )
 
 
@@ -528,14 +532,15 @@ app.include_router(router)
 
 
 @app.get("/", response_class=HTMLResponse)
-async def root() -> HTMLResponse:
+async def root(request: Request) -> HTMLResponse:
     """Serves the main index.html page."""
     html_path = STATIC_DIR / "index.html"
     try:
         return HTMLResponse(content=html_path.read_text(), status_code=200)
     except Exception as e:
+        get_logger(request, "ERROR").error(f"Error serving index page: {e}")
         return error(
-            f"Error serving index page: {str(e)}",
+            "Error serving index page",
             code="INDEX_PAGE_ERROR",
             status_code=500,
         )

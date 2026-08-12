@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import re
 from datetime import datetime
@@ -6,11 +7,25 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
-from backend.util.helper import create_bar
 from backend.util.version import get_version
 
 # Size cap per log file. Set LOG_MAX_BYTES=0 to disable the cap.
 DEFAULT_MAX_LOG_BYTES = 10 * 1024 * 1024
+
+
+def create_bar(middle_text: str) -> str:
+    """Build an 80-char separator bar with `middle_text` centered."""
+    total_length = 80
+    if len(middle_text) == 1:
+        remaining_length = total_length - len(middle_text) - 2
+        left_side_length = 0
+        right_side_length = remaining_length
+        return f"\n{middle_text * left_side_length}{middle_text}{middle_text * right_side_length}\n"
+
+    remaining_length = total_length - len(middle_text) - 4
+    left_side_length = math.floor(remaining_length / 2)
+    right_side_length = remaining_length - left_side_length
+    return f"\n{'*' * left_side_length} {middle_text} {'*' * right_side_length}\n"
 
 
 def _max_log_bytes() -> int:
@@ -392,8 +407,6 @@ class ChubLoggerAdapter(logging.LoggerAdapter):
         minutes, seconds = divmod(remainder, 60)
         formatted_duration = f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
         module_name = underlying.name.replace("_", " ").upper()
-
-        from backend.util.helper import create_bar  # noqa: E402 — lazy import to break circular dependency
 
         underlying.info(create_bar(f"{module_name} | Run Time: {formatted_duration}"))
 

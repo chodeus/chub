@@ -17,7 +17,7 @@ from backend.modules.nestarr import (
     save_scan_results,
 )
 from backend.util.arr import create_arr_client
-from backend.util.config import load_config
+from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
 
 router = APIRouter(
@@ -103,10 +103,12 @@ def _scan_nested_media_sync(logger, db: ChubDB):
                 "unmatched_enabled": bool(config.nestarr.library_mappings),
             },
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Scan failed: {e}", exc_info=True)
         return error(
-            message=f"Scan failed: {str(e)}",
+            message="Scan failed",
             code="SCAN_FAILED",
             status_code=500,
         )
@@ -268,10 +270,12 @@ def preview_fix(request: Request, body: FixRequest):
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Preview failed: {e}", exc_info=True)
         return error(
-            message=f"Preview failed: {str(e)}",
+            message="Preview failed",
             code="PREVIEW_FAILED",
             status_code=500,
         )
@@ -363,10 +367,12 @@ def fix_nested_media(
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Fix failed: {e}", exc_info=True)
         return error(
-            message=f"Fix failed: {str(e)}",
+            message="Fix failed",
             code="FIX_FAILED",
             status_code=500,
         )

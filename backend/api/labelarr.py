@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import error, get_database, get_logger, ok, worker_error
 from backend.util.config import ChubConfig, load_config
 
 router = APIRouter(
@@ -189,16 +189,17 @@ async def sync_tags_to_plex(
                 },
             )
         else:
-            return error(
-                f"Failed to create labelarr sync job: {result['message']}",
-                code="JOB_CREATION_FAILED",
-                status_code=500,
+            return worker_error(
+                result,
+                logger,
+                "Failed to create labelarr sync job",
+                "JOB_CREATION_FAILED",
             )
 
     except Exception as e:
         logger.error(f"Error creating labelarr sync job: {e}", exc_info=True)
         return error(
-            f"Failed to create sync job: {str(e)}",
+            "Failed to create sync job",
             code="SYNC_JOB_ERROR",
             status_code=500,
         )
@@ -228,6 +229,7 @@ async def bulk_sync_tags(
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Enqueue one labelarr sync job covering many media_cache ids (max 1000)."""
     try:
         if not request_data.media_cache_ids:
             return error(
@@ -289,12 +291,11 @@ async def bulk_sync_tags(
             table_name="jobs", payload=payload, job_type="labelarr_bulk_sync"
         )
 
-        if not result.get("success"):
-            return error(
-                result.get("message", "Failed to enqueue bulk labelarr job"),
-                code="JOB_ENQUEUE_FAILED",
-                status_code=500,
-            )
+        failed = worker_error(
+            result, logger, "Failed to enqueue bulk labelarr job", "JOB_ENQUEUE_FAILED"
+        )
+        if failed:
+            return failed
 
         job_id = result["data"]["job_id"]
         logger.info(
@@ -313,7 +314,7 @@ async def bulk_sync_tags(
     except Exception as e:
         logger.error(f"Error in bulk labelarr sync: {e}", exc_info=True)
         return error(
-            f"Bulk sync failed: {str(e)}",
+            "Bulk sync failed",
             code="BULK_SYNC_ERROR",
             status_code=500,
         )

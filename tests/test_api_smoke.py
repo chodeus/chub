@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from backend.api import auth as auth_router  # noqa: E402
 from backend.api import border_replacerr as border_router  # noqa: E402
+from backend.api import posters as posters_router  # noqa: E402
 from backend.api import system as system_router  # noqa: E402
 from backend.util.config import ChubConfig  # noqa: E402
 
@@ -348,16 +349,241 @@ def test_allowed_roots_returns_configured_paths(monkeypatch, app_with_router, tm
     assert str(posters.resolve()) in roots
 
 
-def test_allowed_roots_returns_empty_when_no_config(monkeypatch, app_with_router):
-    """Pre-onboarding (no config yet) the endpoint returns [] without crashing."""
-    from backend.util.config import ConfigError
-
-    def _raise(*_a, **_kw):
-        raise ConfigError("no config")
-
-    monkeypatch.setattr(system_router, "load_config", _raise)
+def test_allowed_roots_ok_when_config_file_absent(monkeypatch, app_with_router, tmp_path):
+    """Real pre-onboarding: a missing file loads defaults, so the picker still answers."""
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     app = app_with_router(system_router.router)
     client = TestClient(app)
     resp = client.get("/api/allowed-roots")
     assert resp.status_code == 200
-    assert resp.json()["data"]["roots"] == []
+    assert isinstance(resp.json()["data"]["roots"], list)
+
+
+def test_allowed_roots_propagates_config_error(monkeypatch, app_with_router):
+    """A malformed config must not masquerade as an empty allow-list."""
+    from backend.util.config import ConfigError
+
+    def _raise(*_a, **_kw):
+        """Stand in for load_config on a malformed config file."""
+        raise ConfigError("corrupt config")
+
+    from backend.api.main import handle_config_error
+
+    monkeypatch.setattr(system_router, "load_config", _raise)
+    app = app_with_router(system_router.router)
+    app.add_exception_handler(ConfigError, handle_config_error)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.get("/api/allowed-roots")
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_delete_poster_aborts_before_row_delete_on_bad_config(
+    monkeypatch, app_with_router, tmp_path
+):
+    """deleteFile + malformed config must abort BEFORE the irreversible row delete."""
+    from backend.api.main import handle_config_error
+    from backend.util.config import ConfigError, clear_config_cache
+
+    (tmp_path / "config.yml").mkdir()  # OSError on open -> ConfigParseError
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    clear_config_cache()
+
+    deleted = []
+
+    class _Poster:
+        """Tripwire recording any row deletion the handler attempts."""
+
+        def delete_by_integer_id(self, poster_id):
+            """Record the destructive call so the test can assert it never ran."""
+            deleted.append(poster_id)
+            return {"file": "x.jpg", "folder": "/tmp", "normalized_title": None}
+
+    class _DB:
+        """Minimal db stub exposing only the poster repository."""
+
+        poster = _Poster()
+
+    app = app_with_router(posters_router.router)
+    app.state.db = _DB()
+    app.add_exception_handler(ConfigError, handle_config_error)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.request("DELETE", "/api/posters/1", json={"deleteFile": True})
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+    assert deleted == []  # the row survives a broken config
+    clear_config_cache()
+
+
+def test_delete_poster_refuses_file_outside_allowed_roots(
+    monkeypatch, app_with_router, tmp_path
+):
+    """A poisoned folder/file row must not delete outside the configured roots."""
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "cfg"))
+    victim_dir = tmp_path / "elsewhere"
+    victim_dir.mkdir()
+    victim = victim_dir / "victim.txt"
+    victim.write_text("do not delete")
+
+    class _Poster:
+        """Stub returning a row that points outside every configured root."""
+
+        def delete_by_integer_id(self, _pid):
+            """Return the poisoned row and report it as deleted."""
+            return {
+                "file": victim.name,
+                "folder": str(victim_dir),
+                "normalized_title": None,
+            }
+
+    class _DB:
+        """Minimal db stub exposing only the poster repository."""
+
+        poster = _Poster()
+
+    app = app_with_router(posters_router.router)
+    app.state.db = _DB()
+    client = TestClient(app)
+    resp = client.request("DELETE", "/api/posters/1", json={"deleteFile": True})
+
+    assert resp.status_code == 200
+    # The row is still cleaned up, but the out-of-root file survives.
+    assert resp.json()["data"]["file_deleted"] is False
+    assert victim.exists()
+
+
+# --- Inbound webhook verification under a broken config ---
+
+
+def test_webhook_rejected_when_config_malformed(monkeypatch, app_with_router):
+    """A malformed config must reject the webhook, never wave it through."""
+    from backend.api import webhooks as webhooks_router
+    from backend.util.config import ConfigError
+
+    def _raise(*_a, **_kw):
+        """Stand in for load_config on a malformed config file."""
+        raise ConfigError("corrupt config")
+
+    class _TripwireDB:
+        """Records any attribute touch — a touch means the body got processed."""
+
+        def __init__(self):
+            """Start with no touches recorded."""
+            self.touched = []
+
+        def __getattr__(self, name):
+            """Record the access and honor the special-method contract."""
+            self.touched.append(name)
+            raise AttributeError(name)
+
+    monkeypatch.setattr(webhooks_router, "load_config", _raise)
+    app = app_with_router(webhooks_router.router)
+    db = _TripwireDB()
+    app.state.db = db
+    from backend.api.main import handle_config_error
+    from backend.util.config import ConfigError as _CfgErr
+
+    app.add_exception_handler(_CfgErr, handle_config_error)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
+
+    # The shared contract: ConfigError propagates from the secret dependency.
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+    assert db.touched == [], f"webhook body was processed: db.{db.touched}"
+
+
+def test_webhook_config_read_failure_rejects_without_enqueue(
+    monkeypatch, app_with_router, tmp_path
+):
+    """An unreadable config (OSError) rejects the webhook and enqueues nothing."""
+    from backend.api import webhooks as webhooks_router
+    from backend.api.main import handle_config_error
+    from backend.util.config import ConfigError, clear_config_cache
+
+    # A directory where config.yml belongs -> open() raises IsADirectoryError,
+    # which load_config wraps into ConfigParseError (a ConfigError).
+    (tmp_path / "config.yml").mkdir()
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    clear_config_cache()
+
+    enqueued = []
+
+    class _Worker:
+        """Tripwire: records any enqueue attempt instead of doing one."""
+
+        def enqueue_job(self, *a, **k):
+            """Record the call so the test can assert it never happened."""
+            enqueued.append(a)
+            return {"success": True, "data": {"job_id": 1}}
+
+    class _DB:
+        """Minimal db stub exposing only the job worker."""
+
+        worker = _Worker()
+
+    app = app_with_router(webhooks_router.router)
+    app.state.db = _DB()
+    app.add_exception_handler(ConfigError, handle_config_error)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
+
+    # The secret dependency propagates ConfigError to the shared handler
+    # before the body runs — CONFIG_INVALID, and nothing was enqueued.
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+    assert enqueued == []
+    clear_config_cache()
+
+
+def test_webhook_signed_path_still_accepted(monkeypatch):
+    """A valid config still accepts the right secret and rejects a wrong one."""
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from backend.api import webhooks as webhooks_router
+
+    cfg = ChubConfig()
+    cfg.general.webhook_secret = "s3cret"
+    monkeypatch.setattr(webhooks_router, "load_config", lambda *a, **k: cfg)
+
+    good = SimpleNamespace(headers={"X-Webhook-Secret": "s3cret"}, query_params={})
+    assert webhooks_router.verify_webhook_secret(good) is None
+
+    bad = SimpleNamespace(headers={"X-Webhook-Secret": "nope"}, query_params={})
+    with pytest.raises(HTTPException) as excinfo:
+        webhooks_router.verify_webhook_secret(bad)
+    assert excinfo.value.status_code == 401
+
+
+# --- Error-response hygiene ---
+
+
+def test_error_body_omits_exception_text(app_with_router):
+    """A raising dependency yields the stable message — never the exception text."""
+
+    class _BoomStats:
+        """Stats interface that raises like a real internal failure."""
+
+        def get_matched_posters_stats(self, *a, **kw):
+            """Simulate an arbitrary internal error carrying sensitive text."""
+            raise RuntimeError("LEAK_MARKER /srv/secret/chub.db")
+
+    class _Boom:
+        """Stub db exposing the raising stats interface the route reads."""
+
+        stats = _BoomStats()
+
+    app = app_with_router(posters_router.router)
+    app.state.db = _Boom()
+    client = TestClient(app)
+    resp = client.get("/api/posters/stats")
+
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body["error_code"] == "POSTER_STATS_ERROR"
+    assert body["message"] == "Error retrieving poster statistics"
+    # The whole body, not just message — detail must not reach data/ either.
+    assert "LEAK_MARKER" not in resp.text

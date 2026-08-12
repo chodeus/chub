@@ -81,6 +81,17 @@ def error(
     return JSONResponse(status_code=status_code, content=payload)
 
 
+def worker_error(
+    result: Any, logger: Any, message: str, code: str, status_code: int = 500
+) -> Optional[JSONResponse]:
+    """Stable response for a failed worker envelope (detail to the log), else None."""
+    # Worker messages embed raw exception text, so they never reach the client.
+    if not isinstance(result, dict) or result.get("success"):
+        return None
+    logger.error(f"{message}: {result.get('message')}")
+    return error(message, code=code, status_code=status_code)
+
+
 MAX_REQUEST_BODY_BYTES = 1024 * 1024
 
 # Sentinel outcome, distinct from None (unparseable) and {} (no body).
