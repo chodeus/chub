@@ -356,8 +356,9 @@ def generate_preview(
     except (ValueError, KeyError, AttributeError) as e:
         # A malformed holiday/border config must yield a clean 4xx, not an
         # unhandled 500 on the preview endpoint.
+        logger.error(f"Invalid border/holiday configuration: {e}")
         return error(
-            f"Invalid border/holiday configuration: {e}",
+            "Invalid border/holiday configuration",
             code="BORDER_CONFIG_INVALID",
             status_code=400,
         )

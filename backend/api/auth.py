@@ -174,7 +174,7 @@ async def setup_auth(
     except ConfigError as e:
         logger.error(f"Auth setup failed: {e}")
         return error(
-            f"Failed to save auth configuration: {e}",
+            "Failed to save auth configuration",
             code="AUTH_SETUP_ERROR",
             status_code=500,
         )

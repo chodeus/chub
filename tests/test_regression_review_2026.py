@@ -367,10 +367,8 @@ def test_auth_middleware_fails_closed_on_config_error(monkeypatch):
 
 
 # 13. verify_webhook_secret must fail CLOSED on config error — the exempt webhook
-#     endpoints rely solely on it.
+#     endpoints rely solely on it; ConfigError propagates to the shared handler.
 def test_verify_webhook_secret_fails_closed_on_config_error(monkeypatch):
-    from fastapi import HTTPException
-
     from backend.api.webhooks import verify_webhook_secret
     from backend.util.config import ConfigError
 
@@ -383,9 +381,8 @@ def test_verify_webhook_secret_fails_closed_on_config_error(monkeypatch):
         headers = {}
         query_params = {}
 
-    with pytest.raises(HTTPException) as ei:
+    with pytest.raises(ConfigError):
         verify_webhook_secret(_Req())
-    assert ei.value.status_code == 503
 
 
 # 14. GET /api/modules/{name} must redact secrets in the returned config section.

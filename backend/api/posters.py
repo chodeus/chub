@@ -15,9 +15,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
-from backend.api.utils import error, get_database, get_logger, get_module_logger, ok
+from backend.api.utils import (
+    error,
+    get_database,
+    get_logger,
+    get_module_logger,
+    ok,
+    worker_error,
+)
 from backend.modules.sync_gdrive import SyncGDrive
 from backend.modules.unmatched_assets import UnmatchedAssets
+from backend.util.config import ConfigError
 from backend.util.database import ChubDB, escape_like
 from backend.util.helper import get_static_dir
 
@@ -106,7 +114,7 @@ async def search_posters(
     except Exception as e:
         logger.error(f"Error searching posters: {e}")
         return error(
-            f"Error searching posters: {str(e)}",
+            "Error searching posters",
             code="POSTER_SEARCH_ERROR",
             status_code=500,
         )
@@ -192,7 +200,7 @@ async def get_poster_stats(
     except Exception as e:
         logger.error(f"Error retrieving poster stats: {e}")
         return error(
-            f"Error retrieving poster statistics: {str(e)}",
+            "Error retrieving poster statistics",
             code="POSTER_STATS_ERROR",
             status_code=500,
         )
@@ -274,7 +282,7 @@ async def get_poster_collections(
     except Exception as e:
         logger.error(f"Error retrieving poster collections: {e}")
         return error(
-            f"Error retrieving collections: {str(e)}",
+            "Error retrieving collections",
             code="POSTER_COLLECTIONS_ERROR",
             status_code=500,
         )
@@ -374,10 +382,12 @@ async def search_gdrive_sources(
             item["last_updated"] = loc_stats.get("last_updated")
 
         return ok(f"Found {len(gdrive_list)} GDrive sources", {"sources": gdrive_list})
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error searching GDrive sources: {e}")
         return error(
-            f"Error searching GDrive sources: {str(e)}",
+            "Error searching GDrive sources",
             code="GDRIVE_SEARCH_ERROR",
             status_code=500,
         )
@@ -430,7 +440,7 @@ async def auto_match_posters(
     except Exception as e:
         logger.error(f"Error initiating auto-match: {e}")
         return error(
-            f"Error initiating auto-match: {str(e)}",
+            "Error initiating auto-match",
             code="AUTO_MATCH_ERROR",
             status_code=500,
         )
@@ -536,16 +546,20 @@ async def browse_posters(
                     head = name.split(None, 1)[0]
                     if head:
                         configured_styles.add(head)
+        except ConfigError:
+            raise
         except Exception as e:
             logger.debug(f"Could not derive configured styles from config: {e}")
         result["styles"] = sorted(db_styles | configured_styles)
         return ok(
             f"Retrieved {len(result['items'])} of {result['total']} posters", result
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error browsing posters: {e}")
         return error(
-            f"Error browsing posters: {str(e)}",
+            "Error browsing posters",
             code="POSTER_BROWSE_ERROR",
             status_code=500,
         )
@@ -661,10 +675,12 @@ async def upload_poster(
             {"filename": safe_name, "path": dest_path, "size_bytes": len(contents)},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error uploading poster: {e}")
         return error(
-            f"Error uploading poster: {str(e)}",
+            "Error uploading poster",
             code="POSTER_UPLOAD_ERROR",
             status_code=500,
         )
@@ -733,7 +749,7 @@ async def create_poster_collection(
     except Exception as e:
         logger.error(f"Error creating poster collection: {e}")
         return error(
-            f"Error creating poster collection: {str(e)}",
+            "Error creating poster collection",
             code="POSTER_COLLECTION_CREATE_ERROR",
             status_code=500,
         )
@@ -816,7 +832,7 @@ async def add_to_collection(
     except Exception as e:
         logger.error(f"Error adding poster to collection: {e}")
         return error(
-            f"Error adding poster to collection: {str(e)}",
+            "Error adding poster to collection",
             code="POSTER_COLLECTION_ADD_ERROR",
             status_code=500,
         )
@@ -885,7 +901,7 @@ async def remove_from_collection(
     except Exception as e:
         logger.error(f"Error removing poster from collection: {e}")
         return error(
-            f"Error removing poster from collection: {str(e)}",
+            "Error removing poster from collection",
             code="POSTER_COLLECTION_REMOVE_ERROR",
             status_code=500,
         )
@@ -933,7 +949,7 @@ async def delete_poster_collection(
     except Exception as e:
         logger.error(f"Error deleting poster collection: {e}")
         return error(
-            f"Error deleting poster collection: {str(e)}",
+            "Error deleting poster collection",
             code="POSTER_COLLECTION_DELETE_ERROR",
             status_code=500,
         )
@@ -1167,7 +1183,7 @@ def _optimize_posters_sync(
     except Exception as e:
         logger.error(f"Error optimizing posters: {e}", exc_info=True)
         return error(
-            f"Error optimizing posters: {str(e)}",
+            "Error optimizing posters",
             code="OPTIMIZE_ERROR",
             status_code=500,
         )
@@ -1230,7 +1246,7 @@ async def list_poster_files(logger: Any = Depends(get_logger)) -> JSONResponse:
     except Exception as e:
         logger.error(f"Error listing poster files: {e}")
         return error(
-            f"Error listing poster files: {str(e)}",
+            "Error listing poster files",
             code="POSTER_LIST_ERROR",
             status_code=500,
         )
@@ -1289,7 +1305,7 @@ async def get_matched_poster_stats(
     except Exception as e:
         logger.error(f"Error retrieving matched posters stats: {e}")
         return error(
-            f"Error retrieving matched posters statistics: {str(e)}",
+            "Error retrieving matched posters statistics",
             code="MATCHED_POSTERS_STATS_ERROR",
             status_code=500,
         )
@@ -1346,7 +1362,7 @@ async def get_unmatched_assets_stats(logger: Any = Depends(get_logger)) -> JSONR
     except Exception as e:
         logger.error(f"Error retrieving unmatched stats: {e}")
         return error(
-            f"Error retrieving unmatched assets statistics: {str(e)}",
+            "Error retrieving unmatched assets statistics",
             code="UNMATCHED_STATS_ERROR",
             status_code=500,
         )
@@ -1382,7 +1398,7 @@ async def get_unmatched_assets_details(
     except Exception as e:
         logger.error(f"Error retrieving unmatched details: {e}")
         return error(
-            f"Error retrieving unmatched assets details: {str(e)}",
+            "Error retrieving unmatched assets details",
             code="UNMATCHED_DETAILS_ERROR",
             status_code=500,
         )
@@ -1414,7 +1430,7 @@ async def get_unmatched_artwork(
     except Exception as e:
         logger.error(f"Error retrieving unmatched artwork: {e}")
         return error(
-            f"Error retrieving unmatched artwork: {str(e)}",
+            "Error retrieving unmatched artwork",
             code="UNMATCHED_ARTWORK_ERROR",
             status_code=500,
         )
@@ -1456,7 +1472,7 @@ async def ignore_artwork(
     except Exception as e:
         logger.error(f"Error updating artwork ignore for {media_id}/{image_type}: {e}")
         return error(
-            f"Error updating artwork ignore flag: {str(e)}",
+            "Error updating artwork ignore flag",
             code="ARTWORK_IGNORE_ERROR",
             status_code=500,
         )
@@ -1581,7 +1597,7 @@ async def get_artwork_candidates(
             f"Error fetching artwork candidates for {media_id}/{image_type}: {e}"
         )
         return error(
-            f"Error fetching artwork candidates: {str(e)}",
+            "Error fetching artwork candidates",
             code="ARTWORK_CANDIDATES_ERROR",
             status_code=500,
         )
@@ -1656,7 +1672,7 @@ def apply_artwork(
     except Exception as e:
         logger.error(f"Error applying artwork for {media_id}/{image_type}: {e}")
         return error(
-            f"Error applying artwork: {str(e)}",
+            "Error applying artwork",
             code="ARTWORK_APPLY_ERROR",
             status_code=500,
         )
@@ -1698,7 +1714,7 @@ async def unlock_artwork(
     except Exception as e:
         logger.error(f"Error unlocking artwork for {media_id}/{image_type}: {e}")
         return error(
-            f"Error unlocking artwork: {str(e)}",
+            "Error unlocking artwork",
             code="ARTWORK_UNLOCK_ERROR",
             status_code=500,
         )
@@ -1734,7 +1750,7 @@ async def ignore_match(
     except Exception as e:
         logger.error(f"Error updating ignore flag for {media_id}: {e}")
         return error(
-            f"Error updating ignore flag: {str(e)}",
+            "Error updating ignore flag",
             code="MATCH_IGNORE_ERROR",
             status_code=500,
         )
@@ -1770,7 +1786,7 @@ async def approve_match(
     except Exception as e:
         logger.error(f"Error approving match for {media_id}: {e}")
         return error(
-            f"Error approving match: {str(e)}",
+            "Error approving match",
             code="MATCH_APPROVE_ERROR",
             status_code=500,
         )
@@ -1807,7 +1823,7 @@ async def unlock_match(
     except Exception as e:
         logger.error(f"Error unlocking match for {media_id}: {e}")
         return error(
-            f"Error unlocking match: {str(e)}",
+            "Error unlocking match",
             code="MATCH_UNLOCK_ERROR",
             status_code=500,
         )
@@ -1924,7 +1940,7 @@ async def get_match_candidates(
     except Exception as e:
         logger.error(f"Error fetching match candidates for {media_id}: {e}")
         return error(
-            f"Error fetching candidates: {str(e)}",
+            "Error fetching candidates",
             code="MATCH_CANDIDATES_ERROR",
             status_code=500,
         )
@@ -2075,7 +2091,7 @@ def apply_match(
     except Exception as e:
         logger.error(f"Error applying poster {poster_id} to {media_id}: {e}")
         return error(
-            f"Error applying poster: {str(e)}",
+            "Error applying poster",
             code="MATCH_APPLY_ERROR",
             status_code=500,
         )
@@ -2136,7 +2152,7 @@ async def get_gdrive_stats(
     except Exception as e:
         logger.error(f"Error retrieving GDrive stats: {e}")
         return error(
-            f"Error retrieving GDrive statistics: {str(e)}",
+            "Error retrieving GDrive statistics",
             code="GDRIVE_STATS_ERROR",
             status_code=500,
         )
@@ -2262,7 +2278,7 @@ async def sync_gdrive_folders(
     except Exception as e:
         logger.error(f"Error starting GDrive sync: {e}")
         return error(
-            f"Error starting GDrive synchronization: {str(e)}",
+            "Error starting GDrive synchronization",
             code="GDRIVE_SYNC_START_ERROR",
             status_code=500,
         )
@@ -2334,6 +2350,8 @@ async def delete_gdrive_local(
         # Fail closed: without config we can't verify the path is a real drive.
         try:
             config = load_config()
+        except ConfigError:
+            raise
         except Exception:  # noqa: S110 — treated as unavailable below
             config = None
         if config is None:
@@ -2382,6 +2400,16 @@ async def delete_gdrive_local(
         # match above — never the raw request path, so a validated request string
         # can't reach rmtree. target == req_real by that match.
         target = os.path.realpath(matched.location)
+        # Re-confine the RE-RESOLVED path right before deleting: a symlink
+        # component can change between the membership check above and here.
+        if target != req_real or target == os.path.realpath(os.sep):
+            logger.error(f"Refusing to delete '{target}': resolved path changed")
+            return error(
+                "Location is not a configured Google Drive folder",
+                code="GDRIVE_LOCATION_NOT_CONFIGURED",
+                status_code=400,
+            )
+
         folder_removed = False
         if os.path.isdir(target):
             shutil.rmtree(target)
@@ -2404,10 +2432,12 @@ async def delete_gdrive_local(
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error deleting local GDrive folder: {e}")
         return error(
-            f"Error deleting local GDrive folder: {str(e)}",
+            "Error deleting local GDrive folder",
             code="GDRIVE_DELETE_LOCAL_ERROR",
             status_code=500,
         )
@@ -2462,6 +2492,8 @@ async def analyze_poster_directory(
 
         try:
             config = load_config()
+        except ConfigError:
+            raise
         except Exception:  # noqa: S110 — config may not be loaded at boot
             config = None
 
@@ -2529,10 +2561,12 @@ async def analyze_poster_directory(
             },
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error analyzing poster location: {e}")
         return error(
-            f"Error analyzing poster location: {str(e)}",
+            "Error analyzing poster location",
             code="POSTER_ANALYSIS_ERROR",
             status_code=500,
         )
@@ -2597,6 +2631,8 @@ async def preview_poster_file(
 
         try:
             config = load_config()
+        except ConfigError:
+            raise
         except Exception:  # noqa: S110 — fail closed below
             config = None
 
@@ -2660,10 +2696,12 @@ async def preview_poster_file(
 
         return FileResponse(str(file_path))
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error serving poster preview: {e}")
         return error(
-            f"Error serving poster preview: {str(e)}",
+            "Error serving poster preview",
             code="POSTER_PREVIEW_ERROR",
             status_code=500,
         )
@@ -2721,16 +2759,17 @@ def upload_media_posters(
                 result.get("data", {}),
             )
         else:
-            return error(
-                f"Upload failed for media cache item {media_id}: {result.get('message', 'Unknown error')}",
-                code="MEDIA_UPLOAD_FAILED",
-                status_code=500,
+            return worker_error(
+                result,
+                logger,
+                f"Upload failed for media cache item {media_id}",
+                "MEDIA_UPLOAD_FAILED",
             )
 
     except Exception as e:
         logger.error(f"Error uploading media cache item {media_id}: {e}")
         return error(
-            f"Error triggering upload: {str(e)}",
+            "Error triggering upload",
             code="MEDIA_UPLOAD_ERROR",
             status_code=500,
         )
@@ -2790,16 +2829,17 @@ def upload_collection_posters(
                 result.get("data", {}),
             )
         else:
-            return error(
-                f"Upload failed for collection cache item {collection_id}: {result.get('message', 'Unknown error')}",
-                code="COLLECTION_UPLOAD_FAILED",
-                status_code=500,
+            return worker_error(
+                result,
+                logger,
+                f"Upload failed for collection cache item {collection_id}",
+                "COLLECTION_UPLOAD_FAILED",
             )
 
     except Exception as e:
         logger.error(f"Error uploading collection cache item {collection_id}: {e}")
         return error(
-            f"Error triggering upload: {str(e)}",
+            "Error triggering upload",
             code="COLLECTION_UPLOAD_ERROR",
             status_code=500,
         )
@@ -2860,7 +2900,7 @@ def backfill_poster_dimensions(
     except Exception as e:
         logger.error(f"Error backfilling poster dimensions: {e}")
         return error(
-            f"Error backfilling poster dimensions: {str(e)}",
+            "Error backfilling poster dimensions",
             code="BACKFILL_DIMENSIONS_ERROR",
             status_code=500,
         )
@@ -2889,7 +2929,7 @@ async def list_low_resolution_posters(
     except Exception as e:
         logger.error(f"Error listing low-resolution posters: {e}")
         return error(
-            f"Error listing low-resolution posters: {str(e)}",
+            "Error listing low-resolution posters",
             code="LOW_RES_ERROR",
             status_code=500,
         )
@@ -2916,7 +2956,7 @@ async def list_posters_added_since(
     except Exception as e:
         logger.error(f"Error listing posters added_since: {e}")
         return error(
-            f"Error listing posters added_since: {str(e)}",
+            "Error listing posters added_since",
             code="ADDED_SINCE_ERROR",
             status_code=500,
         )
@@ -2940,7 +2980,7 @@ async def list_recently_matched(
     except Exception as e:
         logger.error(f"Error listing recently matched posters: {e}")
         return error(
-            f"Error listing recently matched posters: {str(e)}",
+            "Error listing recently matched posters",
             code="RECENTLY_MATCHED_ERROR",
             status_code=500,
         )
@@ -2974,7 +3014,7 @@ async def list_applied_media_by_style(
     except Exception as e:
         logger.error(f"Error listing applied media by style: {e}")
         return error(
-            f"Error listing applied media: {str(e)}",
+            "Error listing applied media",
             code="APPLIED_MEDIA_ERROR",
             status_code=500,
         )
@@ -2994,6 +3034,8 @@ def _get_plex_path(request: Request) -> Optional[str]:
         from backend.util.config import load_config
 
         cfg = load_config()
+    except ConfigError:
+        raise
     except Exception:
         return None
     section = getattr(cfg, "poster_cleanarr", None)
@@ -3008,14 +3050,17 @@ def _get_cleanarr_excluded_libraries(request: Request) -> List[str]:
     """Plex library names the user opted out of in poster_cleanarr config.
 
     Display-side mirror of the module's deletion-side deny-list — hides excluded
-    libraries from the by-media view and its libraries[] catalog. Best-effort: a
-    config failure returns [] (show everything). This is a UI filter, not a
-    safety guard — the in-use set is global regardless of any opt-out.
+    libraries from the by-media view and its libraries[] catalog. A malformed
+    config propagates (CONFIG_INVALID); other failures return [] (show
+    everything). This is a UI filter, not a safety guard — the in-use set is
+    global regardless of any opt-out.
     """
     try:
         from backend.util.config import load_config
 
         cfg = load_config()
+    except ConfigError:
+        raise
     except Exception:
         return []
     section = getattr(cfg, "poster_cleanarr", None)
@@ -3154,7 +3199,7 @@ async def list_plex_metadata_by_media(
     except Exception as e:
         logger.error(f"Error listing plex metadata bundles: {e}")
         return error(
-            f"Error listing plex metadata: {str(e)}",
+            "Error listing plex metadata",
             code="PLEX_METADATA_LIST_ERROR",
             status_code=500,
         )
@@ -3207,7 +3252,7 @@ async def list_plex_metadata_bloat(
     except Exception as e:
         logger.error(f"Error listing plex metadata bloat: {e}")
         return error(
-            f"Error listing plex metadata bloat: {str(e)}",
+            "Error listing plex metadata bloat",
             code="PLEX_METADATA_BLOAT_ERROR",
             status_code=500,
         )
@@ -3286,7 +3331,8 @@ async def run_plex_metadata_cleanup(
         try:
             overrides = _build_cleanup_overrides(body)
         except ValueError as ve:
-            return error(str(ve), code="INVALID_MODE", status_code=400)
+            logger.error(f"Invalid cleanup request: {ve}")
+            return error("Invalid cleanup mode", code="INVALID_MODE", status_code=400)
         mode = overrides["mode"]
 
         payload = {
@@ -3307,7 +3353,7 @@ async def run_plex_metadata_cleanup(
     except Exception as e:
         logger.error(f"Error enqueuing cleanup: {e}")
         return error(
-            f"Error enqueuing cleanup: {str(e)}",
+            "Error enqueuing cleanup",
             code="CLEANUP_ENQUEUE_ERROR",
             status_code=500,
         )
@@ -3346,7 +3392,7 @@ async def delete_plex_metadata_variant(
     except Exception as e:
         logger.error(f"Error deleting variant: {e}")
         return error(
-            f"Error deleting variant: {str(e)}",
+            "Error deleting variant",
             code="VARIANT_DELETE_ERROR",
             status_code=500,
         )
@@ -3436,10 +3482,12 @@ async def set_plex_metadata_active(
         return ok(
             "Active poster updated", {"rating_key": rating_key, "path": safe_path}
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error setting active poster: {e}")
         return error(
-            f"Error setting active poster: {str(e)}",
+            "Error setting active poster",
             code="SET_ACTIVE_ERROR",
             status_code=500,
         )
@@ -3493,7 +3541,7 @@ async def scan_kometa_assets(
     except Exception as e:
         logger.error(f"Kometa asset scan read failed: {e}")
         return error(
-            f"Kometa asset scan read failed: {str(e)}",
+            "Kometa asset scan read failed",
             code="KOMETA_SCAN_ERROR",
             status_code=500,
         )
@@ -3526,7 +3574,7 @@ async def enqueue_plex_metadata_scan(
     except Exception as e:
         logger.error(f"Error enqueuing plex metadata scan: {e}")
         return error(
-            f"Error enqueuing scan: {str(e)}",
+            "Error enqueuing scan",
             code="SCAN_ENQUEUE_ERROR",
             status_code=500,
         )
@@ -3552,7 +3600,7 @@ async def enqueue_kometa_assets_scan(
     except Exception as e:
         logger.error(f"Error enqueuing kometa assets scan: {e}")
         return error(
-            f"Error enqueuing Kometa scan: {str(e)}",
+            "Error enqueuing Kometa scan",
             code="KOMETA_ENQUEUE_ERROR",
             status_code=500,
         )
@@ -3612,7 +3660,7 @@ async def get_poster(
     except Exception as e:
         logger.error(f"Error retrieving poster {poster_id}: {e}")
         return error(
-            f"Error retrieving poster: {str(e)}",
+            "Error retrieving poster",
             code="POSTER_GET_ERROR",
             status_code=500,
         )
@@ -3701,7 +3749,7 @@ def get_poster_thumbnail(
     except Exception as e:
         logger.error(f"Error generating thumbnail for poster {poster_id}: {e}")
         return error(
-            f"Error generating thumbnail: {str(e)}",
+            "Error generating thumbnail",
             code="THUMBNAIL_ERROR",
             status_code=500,
         )
@@ -3814,7 +3862,7 @@ def download_poster(
     except Exception as e:
         logger.error(f"Error downloading poster {poster_id}: {e}")
         return error(
-            f"Error downloading poster: {str(e)}",
+            "Error downloading poster",
             code="POSTER_DOWNLOAD_ERROR",
             status_code=500,
         )
@@ -3879,6 +3927,14 @@ async def delete_poster(
         except Exception:
             pass
 
+        # Authorize BEFORE the irreversible row delete: a malformed config must
+        # abort the whole request, not leave the row gone and the file orphaned.
+        config = None
+        if delete_file:
+            from backend.util.config import load_config
+
+            config = load_config()
+
         record = db.poster.delete_by_integer_id(poster_id)
         if not record:
             return error("Poster not found", code="POSTER_NOT_FOUND", status_code=404)
@@ -3889,9 +3945,19 @@ async def delete_poster(
         full_path = (
             os.path.join(folder, file_path) if folder and file_path else file_path
         )
-        if delete_file and full_path and os.path.exists(full_path):
-            os.remove(full_path)
-            logger.info(f"Deleted poster file: {full_path}")
+        # A poisoned row must never reach os.remove: resolve first, then require
+        # membership in a configured root.
+        file_deleted = False
+        if delete_file and full_path:
+            from backend.util.path_safety import is_path_allowed
+
+            real = os.path.realpath(full_path)
+            if real == os.path.realpath(os.sep) or not is_path_allowed(real, config):
+                logger.error(f"Refusing to delete poster file outside roots: {real}")
+            elif os.path.exists(real):
+                os.remove(real)
+                file_deleted = True
+                logger.info(f"Deleted poster file: {real}")
 
         # Mark associated media items as unmatched
         unmatched_count = 0
@@ -3930,14 +3996,16 @@ async def delete_poster(
             f"Poster {poster_id} deleted",
             {
                 "deleted_id": poster_id,
-                "file_deleted": delete_file,
+                "file_deleted": file_deleted,
                 "media_unmatched": unmatched_count,
             },
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error deleting poster {poster_id}: {e}")
         return error(
-            f"Error deleting poster: {str(e)}",
+            "Error deleting poster",
             code="POSTER_DELETE_ERROR",
             status_code=500,
         )

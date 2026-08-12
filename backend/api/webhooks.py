@@ -35,14 +35,9 @@ def verify_webhook_secret(request: Request) -> None:
     is unset, webhooks are accepted unauthenticated. If it is set, callers
     must send it via `X-Webhook-Secret` header or `?secret=` query param.
     """
-    try:
-        cfg = load_config()
-    except ConfigError as exc:
-        # These endpoints are AuthMiddleware-exempt and gated ONLY by this
-        # secret; if config can't load we can't verify it — fail CLOSED.
-        raise HTTPException(
-            status_code=503, detail="Configuration unavailable"
-        ) from exc
+    # ConfigError propagates to the shared CONFIG_INVALID handler — these
+    # endpoints are secret-gated only, and an unverifiable secret fails closed.
+    cfg = load_config()
 
     expected = (cfg.general.webhook_secret or "").strip()
     if not expected:
@@ -156,10 +151,9 @@ async def process_poster_webhook(
         # proxy (general.trusted_proxies) — this recovers the arr's real IP for
         # instance matching. A forged XFF from an untrusted caller is ignored.
         peer_host = request.client.host if request.client else None
-        try:
-            trusted_proxies = load_config().general.trusted_proxies
-        except Exception:
-            trusted_proxies = []
+        # Unguarded on purpose: this decides whether XFF is honoured, so an
+        # indeterminate trust model must reject the webhook, not guess at it.
+        trusted_proxies = load_config().general.trusted_proxies
         client_info = {
             "client_host": resolve_client_host(
                 peer_host,
@@ -259,10 +253,12 @@ async def process_poster_webhook(
             {"job_id": job_id, "status": "enqueued"},
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Exception in webhook processing: {e}", exc_info=True)
         return error(
-            f"Webhook processing error: {str(e)}",
+            "Webhook processing error",
             code="WEBHOOK_PROCESSING_ERROR",
             status_code=500,
         )
@@ -395,12 +391,12 @@ def _is_test_event(data: Dict[str, Any]) -> bool:
 async def get_webhook_wiring(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Return the inbound webhook path and secret for the UI's paste-ready URLs."""
     try:
         logger.debug("Serving GET /api/webhooks/wiring")
-        try:
-            secret = (load_config().general.webhook_secret or "").strip()
-        except ConfigError:
-            secret = ""
+        # A malformed config must not render as "no secret configured" — that
+        # reads to the admin as a working unauthenticated setup.
+        secret = (load_config().general.webhook_secret or "").strip()
 
         resp = ok(
             "Webhook wiring retrieved",
@@ -415,10 +411,12 @@ async def get_webhook_wiring(
         # Forbid caching so it never lands in browser/proxy caches.
         resp.headers["Cache-Control"] = "no-store"
         return resp
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error retrieving webhook wiring: {e}")
         return error(
-            f"Error retrieving webhook wiring: {str(e)}",
+            "Error retrieving webhook wiring",
             code="WEBHOOK_WIRING_ERROR",
             status_code=500,
         )
@@ -458,6 +456,7 @@ async def get_provision_status(
     request: Request,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Report per-instance CHUB webhook wiring state (never the secret URL)."""
     try:
         cfg = load_config()
         secret = (cfg.general.webhook_secret or "").strip() or None
@@ -483,16 +482,12 @@ async def get_provision_status(
         resp = ok("Webhook provisioning status", payload)
         resp.headers["Cache-Control"] = "no-store"
         return resp
-    except ConfigError as e:
-        return error(
-            f"Configuration unavailable: {e}",
-            code="CONFIG_UNAVAILABLE",
-            status_code=503,
-        )
+    except ConfigError:
+        raise  # shared CONFIG_INVALID contract in main.py
     except Exception as e:
         logger.error(f"Error retrieving provisioning status: {e}", exc_info=True)
         return error(
-            f"Error retrieving provisioning status: {str(e)}",
+            "Error retrieving provisioning status",
             code="WEBHOOK_PROVISION_STATUS_ERROR",
             status_code=500,
         )
@@ -517,6 +512,7 @@ async def provision_webhooks(
     request: Request,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Create or repair the CHUB notification on each selected ARR instance."""
     try:
         cfg = load_config()
         body = await request.json()
@@ -547,16 +543,12 @@ async def provision_webhooks(
         )
         resp.headers["Cache-Control"] = "no-store"
         return resp
-    except ConfigError as e:
-        return error(
-            f"Configuration unavailable: {e}",
-            code="CONFIG_UNAVAILABLE",
-            status_code=503,
-        )
+    except ConfigError:
+        raise  # shared CONFIG_INVALID contract in main.py
     except Exception as e:
         logger.error(f"Error provisioning webhooks: {e}", exc_info=True)
         return error(
-            f"Error provisioning webhooks: {str(e)}",
+            "Error provisioning webhooks",
             code="WEBHOOK_PROVISION_ERROR",
             status_code=500,
         )
@@ -576,6 +568,7 @@ async def remove_webhooks(
     request: Request,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
+    """Delete the CHUB notification from each selected ARR instance."""
     try:
         cfg = load_config()
         body = await request.json()
@@ -592,16 +585,12 @@ async def remove_webhooks(
         resp = ok("Webhook removal complete", {"instances": results})
         resp.headers["Cache-Control"] = "no-store"
         return resp
-    except ConfigError as e:
-        return error(
-            f"Configuration unavailable: {e}",
-            code="CONFIG_UNAVAILABLE",
-            status_code=503,
-        )
+    except ConfigError:
+        raise  # shared CONFIG_INVALID contract in main.py
     except Exception as e:
         logger.error(f"Error removing webhooks: {e}", exc_info=True)
         return error(
-            f"Error removing webhooks: {str(e)}",
+            "Error removing webhooks",
             code="WEBHOOK_REMOVE_ERROR",
             status_code=500,
         )
@@ -653,7 +642,7 @@ async def get_unmatched_webhook_status(
     except Exception as e:
         logger.error(f"Error retrieving unmatched status: {e}")
         return error(
-            f"Error retrieving unmatched status: {str(e)}",
+            "Error retrieving unmatched status",
             code="UNMATCHED_STATUS_ERROR",
             status_code=500,
         )
@@ -710,7 +699,7 @@ async def process_unmatched_webhook(
     except Exception as e:
         logger.error(f"Error processing unmatched webhook: {e}")
         return error(
-            f"Error processing unmatched webhook: {str(e)}",
+            "Error processing unmatched webhook",
             code="UNMATCHED_PROCESS_ERROR",
             status_code=500,
         )
