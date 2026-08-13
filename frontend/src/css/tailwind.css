@@ -9,9 +9,9 @@
  * also live in @layer utilities, so during the migration both coexist; only NEW
  * class names (text-fg*, bg-error/10, z-*, …) resolve solely from Tailwind.
  *
- * Layer order MUST match base.css's `@layer vendor, reset, base, components, utilities,
- * pages` and be declared here (this file loads first) — otherwise `reset` gets appended
- * AFTER `utilities` and the img/element resets out-prioritize every utility class.
+ * Layer order MUST match base.css's `@layer vendor, reset, theme, base, components,
+ * utilities, pages` and be declared here (this file loads first) — otherwise `reset` gets
+ * appended AFTER `utilities` and the img/element resets out-prioritize every utility.
  */
 @layer vendor, reset, theme, base, components, utilities, pages;
 @import 'tailwindcss/theme.css' layer(theme);

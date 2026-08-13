@@ -276,7 +276,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                         <button
                             type="button"
                             onClick={() => setOpenMoreModes(s => ({ ...s, [meta.id]: true }))}
-                            className="touch-expand mt-2 inline-flex items-center gap-1 text-[12.5px] text-fg-subtle hover:text-fg"
+                            className="mt-2 inline-flex items-center gap-1 text-[12.5px] text-fg-subtle hover:text-fg"
                         >
                             <span className="material-symbols-outlined text-[16px]">
                                 expand_more

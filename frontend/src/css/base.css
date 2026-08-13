@@ -1,4 +1,4 @@
-@layer vendor, reset, base, components, utilities, pages;
+@layer vendor, reset, theme, base, components, utilities, pages;
 
 @layer reset {
     *,

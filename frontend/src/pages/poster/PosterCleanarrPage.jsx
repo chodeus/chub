@@ -1326,7 +1326,7 @@ const PosterCleanarrPage = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => selectNode(null)}
-                                                        className="touch-expand mb-2 text-sm text-fg cursor-pointer inline-flex items-center gap-1 hover:underline"
+                                                        className="mb-2 text-sm text-fg cursor-pointer inline-flex items-center gap-1 hover:underline"
                                                     >
                                                         ← Back to list
                                                     </button>

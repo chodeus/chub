@@ -540,7 +540,7 @@ const DestinationCard = ({
                         type="button"
                         onClick={onTest}
                         disabled={testing}
-                        className="touch-expand h-[30px] px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#221c45] disabled:opacity-60"
+                        className="h-[30px] px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#221c45] disabled:opacity-60"
                     >
                         {testing ? 'Testing…' : 'Test'}
                     </button>

@@ -263,7 +263,7 @@ const BreakdownTabs = ({ stats }) => {
                             role="tab"
                             aria-selected={isActive}
                             onClick={() => setActiveKey(tab.key)}
-                            className="touch-expand px-3 py-1.5 rounded-full text-sm transition-colors"
+                            className="px-3 py-1.5 rounded-full text-sm transition-colors"
                             style={{
                                 background: isActive
                                     ? 'color-mix(in srgb, var(--accent) 18%, transparent)'

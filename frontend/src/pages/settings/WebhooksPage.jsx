@@ -338,7 +338,7 @@ const AutoSetupBoard = () => {
                             type="button"
                             disabled={disabled}
                             onClick={() => runProvision(driftNames)}
-                            className="touch-expand h-8 px-3 rounded-[7px] bg-warning/15 text-warning text-xs font-semibold hover:bg-warning/25 transition-colors disabled:opacity-50"
+                            className="h-8 px-3 rounded-[7px] bg-warning/15 text-warning text-xs font-semibold hover:bg-warning/25 transition-colors disabled:opacity-50"
                         >
                             Fix all ({driftNames.length})
                         </button>
@@ -347,7 +347,7 @@ const AutoSetupBoard = () => {
                         type="button"
                         disabled={disabled || setupNames.length === 0}
                         onClick={() => runProvision(['all'])}
-                        className="touch-expand h-8 px-3 rounded-[7px] bg-primary text-on-color text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                        className="h-8 px-3 rounded-[7px] bg-primary text-on-color text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
                     >
                         {busy ? 'Working…' : 'Set up webhooks'}
                     </button>

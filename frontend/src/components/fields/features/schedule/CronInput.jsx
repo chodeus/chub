@@ -110,7 +110,7 @@ export const CronInput = React.memo(
                         href="https://crontab.guru"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="touch-expand ml-2 text-fg hover:text-primary-hover underline"
+                        className="ml-2 text-fg hover:text-primary-hover underline"
                     >
                         crontab.guru helper
                     </a>

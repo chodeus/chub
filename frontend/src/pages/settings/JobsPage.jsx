@@ -429,7 +429,7 @@ export const JobsPage = () => {
                         key={filter.key}
                         type="button"
                         onClick={() => setActiveFilter(filter.key)}
-                        className={`touch-expand px-3 py-1 rounded-full font-mono text-[12.5px] font-medium cursor-pointer border transition-colors ${
+                        className={`px-3 py-1 rounded-full font-mono text-[12.5px] font-medium cursor-pointer border transition-colors ${
                             activeFilter === filter.key
                                 ? 'bg-primary/15 text-fg border-primary/40'
                                 : 'bg-surface text-fg-muted border-border hover:text-fg'

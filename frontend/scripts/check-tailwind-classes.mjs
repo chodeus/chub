@@ -9,7 +9,7 @@ const DIST = 'dist/assets';
 
 /** Classes deliberately absent from the Tailwind build (each needs a reason). */
 const ALLOWLIST = new Set([
-    // Google's Material Symbols webfont ships this one (tailwind.css imports it
+    // Google's Material Symbols webfont ships this one (index.css imports it
     // into layer(vendor)); nothing in src/ defines it.
     'material-symbols-outlined',
 ]);
