@@ -122,7 +122,8 @@ export const ButtonBase = React.memo(
 
         // Size styles: dimensions and spacing (overridden by sizeClass)
         const variantSizeClasses = {
-            small: ['min-h-9', 'px-3', 'py-1.5', 'text-sm'],
+            // 36px is a design spec, so touch-expand grows only the coarse-pointer hit area.
+            small: ['min-h-9', 'touch-expand', 'px-3', 'py-1.5', 'text-sm'],
             medium: ['min-h-11', 'px-4', 'py-2', 'text-base'],
             large: ['min-h-12', 'px-5', 'py-3', 'text-lg'],
         };

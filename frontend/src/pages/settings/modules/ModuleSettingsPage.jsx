@@ -585,7 +585,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                     style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
                                 >
                                     {(group.name || enableF || headerF) && (
-                                        <div className="flex items-center justify-between gap-3 mb-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                                             <div className="flex items-center gap-2.5 min-w-0">
                                                 {group.name && (
                                                     <h2 className="font-display text-[15px] font-semibold text-fg">

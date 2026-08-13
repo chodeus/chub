@@ -121,7 +121,7 @@ const SearchInterface = React.memo(
                             <input
                                 ref={inputRef}
                                 type="text"
-                                className="flex-1 py-2 pr-4 pl-10 border-none bg-transparent text-fg outline-none w-full h-full"
+                                className="flex-1 min-w-0 py-2 pr-11 pl-10 border-none bg-transparent text-fg outline-none w-full h-full"
                                 placeholder={getContextualPlaceholder()}
                                 value={term}
                                 onChange={handleSearchChange}
@@ -132,7 +132,7 @@ const SearchInterface = React.memo(
                             {term && (
                                 <button
                                     type="button"
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center border-none text-fg-muted cursor-pointer transition-colors bg-transparent hover:text-fg"
+                                    className="absolute right-0 top-1/2 -translate-y-1/2 touch-target flex items-center justify-center border-none text-fg-muted cursor-pointer transition-colors bg-transparent hover:text-fg"
                                     onClick={handleClear}
                                     aria-label="Clear search"
                                     tabIndex={0}

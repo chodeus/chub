@@ -10,6 +10,7 @@ import { Button, LoadingButton, IconButton } from '../../components/ui/index.js'
 import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
+import { downloadBlob } from '../../utils/download.js';
 
 const fmtBytes = n => {
     if (!n) return '0 B';
@@ -65,7 +66,7 @@ const DuplicateGroup = ({
     const keepId =
         members && members.length
             ? members.reduce((a, b) =>
-                  (b.live?.size_bytes || 0) > (a.live?.size_bytes || 0) ? b : a
+                  (b.live?.size_bytes ?? 0) > (a.live?.size_bytes ?? 0) ? b : a
               ).id
             : null;
 
@@ -104,66 +105,76 @@ const DuplicateGroup = ({
                     </div>
                 ) : members && members.length ? (
                     <div className="border-t border-border-light">
-                        {members.map(m => {
-                            const id = m.id;
-                            const live = m.live || {};
-                            const isKeep = id === keepId;
-                            const isSel = selected.has(id);
-                            return (
-                                <div
-                                    key={id}
-                                    className="grid items-center gap-3 px-4 py-3 border-b border-border-light last:border-0"
-                                    style={{
-                                        gridTemplateColumns: '26px 1.2fr 0.7fr 1.7fr 96px',
-                                    }}
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() => onToggleSelect(id, live.size_bytes || 0)}
-                                        aria-label={isSel ? 'Deselect copy' : 'Select copy'}
-                                        className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center transition-colors"
-                                        style={{
-                                            background: isSel ? 'var(--primary)' : 'transparent',
-                                            border: `1px solid ${isSel ? 'var(--primary)' : '#3b3d72'}`,
-                                        }}
-                                    >
-                                        {isSel && (
-                                            <span className="material-symbols-outlined text-white text-[13px]">
-                                                check
-                                            </span>
-                                        )}
-                                    </button>
-                                    <span
-                                        className={`font-mono text-[12.5px] font-semibold truncate ${
-                                            isKeep ? 'text-success' : 'text-fg-muted'
-                                        }`}
-                                        title={live.quality || ''}
-                                    >
-                                        {live.quality || '—'}
-                                    </span>
-                                    <span className="font-mono text-[12px] text-fg-muted">
-                                        {live.size_human || '—'}
-                                    </span>
-                                    <span
-                                        className="font-mono text-[11px] text-fg-subtle truncate"
-                                        title={live.path || m.folder || ''}
-                                    >
-                                        {live.path || m.folder || '—'}
-                                    </span>
-                                    <span className="text-right">
-                                        <span
-                                            className={`font-mono text-[10px] font-semibold px-[9px] py-[3px] rounded-full ${
-                                                isKeep
-                                                    ? 'bg-success/15 text-success'
-                                                    : 'bg-error/15 text-error'
-                                            }`}
+                        {/* Fixed 26px/96px tracks plus three fr columns collapse to
+                            ellipsis below ~560px — scroll the rows instead. */}
+                        <div className="overflow-x-auto">
+                            <div className="min-w-[560px]">
+                                {members.map(m => {
+                                    const id = m.id;
+                                    const live = m.live || {};
+                                    const isKeep = id === keepId;
+                                    const isSel = selected.has(id);
+                                    return (
+                                        <div
+                                            key={id}
+                                            className="grid items-center gap-3 px-4 py-3 border-b border-border-light last:border-0"
+                                            style={{
+                                                gridTemplateColumns: '26px 1.2fr 0.7fr 1.7fr 96px',
+                                            }}
                                         >
-                                            {isKeep ? 'KEEP' : 'DUPLICATE'}
-                                        </span>
-                                    </span>
-                                </div>
-                            );
-                        })}
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    onToggleSelect(id, live.size_bytes ?? 0)
+                                                }
+                                                aria-label={isSel ? 'Deselect copy' : 'Select copy'}
+                                                className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center transition-colors"
+                                                style={{
+                                                    background: isSel
+                                                        ? 'var(--primary)'
+                                                        : 'transparent',
+                                                    border: `1px solid ${isSel ? 'var(--primary)' : '#3b3d72'}`,
+                                                }}
+                                            >
+                                                {isSel && (
+                                                    <span className="material-symbols-outlined text-white text-[13px]">
+                                                        check
+                                                    </span>
+                                                )}
+                                            </button>
+                                            <span
+                                                className={`font-mono text-[12.5px] font-semibold truncate ${
+                                                    isKeep ? 'text-success' : 'text-fg-muted'
+                                                }`}
+                                                title={live.quality || ''}
+                                            >
+                                                {live.quality || '—'}
+                                            </span>
+                                            <span className="font-mono text-[12px] text-fg-muted">
+                                                {live.size_human || '—'}
+                                            </span>
+                                            <span
+                                                className="font-mono text-[11px] text-fg-subtle truncate"
+                                                title={live.path || m.folder || ''}
+                                            >
+                                                {live.path || m.folder || '—'}
+                                            </span>
+                                            <span className="text-right">
+                                                <span
+                                                    className={`font-mono text-[10px] font-semibold px-[9px] py-[3px] rounded-full ${
+                                                        isKeep
+                                                            ? 'bg-success/15 text-success'
+                                                            : 'bg-error/15 text-error'
+                                                    }`}
+                                                >
+                                                    {isKeep ? 'KEEP' : 'DUPLICATE'}
+                                                </span>
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <div className="flex justify-end px-4 py-2.5">
                             <Button
                                 variant="ghost"
@@ -572,14 +583,7 @@ const MediaManagePage = () => {
             const blob = new Blob([JSON.stringify(items, null, 2)], {
                 type: 'application/json',
             });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `chub-media-${new Date().toISOString().slice(0, 10)}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            downloadBlob(blob, `chub-media-${new Date().toISOString().slice(0, 10)}.json`);
             toast.success(`Exported ${items.length} media items`);
         } catch {
             toast.error('Export failed');

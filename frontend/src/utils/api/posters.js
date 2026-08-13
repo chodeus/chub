@@ -10,6 +10,7 @@
 
 import { apiCore } from './core.js';
 import { streamTokenParam, streamAuthDisabled } from './streamAuth.js';
+import { downloadBlob } from '../download.js';
 
 // 1x1 transparent GIF — returned by the token-gated image builders below when
 // the stream token isn't ready yet, so no token-less request fires (which would
@@ -75,18 +76,7 @@ export const postersAPI = {
             fileName = `${fileName}.${ext}`;
         }
 
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        try {
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } finally {
-            URL.revokeObjectURL(objectUrl);
-        }
+        downloadBlob(await res.blob(), fileName);
     },
 
     /**
@@ -310,8 +300,13 @@ export const postersAPI = {
      * @param {string} options.location - Local folder of the drive to remove
      * @returns {Promise<Object>} { folder_removed, deleted_rows, location }
      */
-    deleteGdriveLocal: (options = {}) => {
-        return apiCore.post('/posters/gdrive/delete-local', options);
+    deleteGdriveLocal: async (options = {}) => {
+        const resp = await apiCore.post('/posters/gdrive/delete-local', options);
+        // Rows were deleted — every cached poster listing is stale (substring match).
+        apiCore.clearCache('/posters/list');
+        apiCore.clearCache('/posters/sources/gdrive/search');
+        apiCore.clearCache('/posters/browse');
+        return resp;
     },
 
     /**
@@ -372,9 +367,10 @@ export const postersAPI = {
      * @param {string} [options.style] - Filter by poster style (CL2K, MM2K, or 'other')
      * @param {number} [options.limit=60] - Results per page
      * @param {number} [options.offset=0] - Pagination offset
+     * @param {Object} [opts] - apiCore request options (e.g. { signal, useCache })
      * @returns {Promise<Object>} Paginated poster results with owners and styles
      */
-    browsePosters: (options = {}) => {
+    browsePosters: (options = {}, opts) => {
         const params = new URLSearchParams();
         if (options.owner) params.set('owner', options.owner);
         if (options.type) params.set('type', options.type);
@@ -384,7 +380,7 @@ export const postersAPI = {
         if (options.limit) params.set('limit', options.limit);
         if (options.offset) params.set('offset', options.offset);
         const url = params.toString() ? `/posters/browse?${params}` : '/posters/browse';
-        return apiCore.get(url);
+        return apiCore.get(url, opts);
     },
 
     /**

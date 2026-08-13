@@ -9,6 +9,7 @@
  */
 
 import { apiCore } from './core.js';
+import { downloadBlob } from '../download.js';
 
 /**
  * System API client matching actual CHUB backend endpoints
@@ -61,18 +62,7 @@ export const systemAPI = {
         const disposition = res.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename=([^;]+)/);
         const filename = match ? match[1].trim() : 'chub-backup.zip';
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        try {
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } finally {
-            URL.revokeObjectURL(objectUrl);
-        }
+        downloadBlob(await res.blob(), filename);
     },
 
     /**

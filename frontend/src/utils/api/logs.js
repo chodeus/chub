@@ -9,6 +9,7 @@
  */
 
 import { apiCore } from './core.js';
+import { downloadBlob } from '../download.js';
 
 /**
  * Logs API client for file-based log viewing
@@ -125,17 +126,6 @@ export const logsAPI = {
             throw new Error(`Download failed with status ${res.status}`);
         }
 
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        try {
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } finally {
-            URL.revokeObjectURL(objectUrl);
-        }
+        downloadBlob(await res.blob(), fileName);
     },
 };

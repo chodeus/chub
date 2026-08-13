@@ -33,7 +33,7 @@ afterEach(() => {
 
 // jsdom implements neither, and both are used during render — matchMedia by the
 // mobile/pointer hooks, IntersectionObserver by lazy-loading grids.
-// Plain functions, NOT vi.fn(): `restoreMocks` strips a mock's implementation
+// Plain functions, NOT vi.fn(): `mockReset` strips a mock's implementation
 // between tests, which would make matchMedia() return undefined on test 2+.
 if (!window.matchMedia) {
     window.matchMedia = query => ({

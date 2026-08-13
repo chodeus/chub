@@ -1155,7 +1155,7 @@ const PosterCleanarrPage = () => {
                 <span className="text-[12.5px] text-fg-subtle" style={{ maxWidth: '420px' }}>
                     {MODE_META[mode]?.description}
                 </span>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                     <ModeCheck label="Bloat" checked={cleanBloat} onChange={setCleanBloat} />
                     <ModeCheck label="Stale" checked={cleanStale} onChange={setCleanStale} />
                     <ModeCheck label="Orphan" checked={cleanOrphan} onChange={setCleanOrphan} />
@@ -1167,7 +1167,7 @@ const PosterCleanarrPage = () => {
                         title="Limit the bloat pass to Kometa overlay images (EXIF-tagged), sparing user-uploaded customs"
                     />
                 </div>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex flex-wrap items-center gap-2">
                     {MODE_META[mode]?.scopeable && (
                         <span className="text-xs text-fg-muted">
                             {selectedPaths.size > 0
