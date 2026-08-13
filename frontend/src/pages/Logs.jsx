@@ -97,7 +97,7 @@ export default function Logs() {
     }, []);
 
     const pillBase =
-        'px-3 py-1.5 rounded-full touch-expand font-mono text-[11px] font-semibold capitalize cursor-pointer border transition-colors select-none';
+        'px-3 py-1.5 rounded-full font-mono text-[11px] font-semibold capitalize cursor-pointer border transition-colors select-none';
     const pillOff = 'bg-transparent text-fg-subtle border-border hover:text-fg';
     const levelOnClass = level => {
         if (level === 'critical') return 'bg-error/20 text-error border-error/40';

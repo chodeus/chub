@@ -411,7 +411,7 @@ export const TagInput = React.memo(
                                         role="option"
                                         aria-selected={index === focusedSuggestionIndex}
                                         className={[
-                                            'px-3 py-2 cursor-pointer text-sm',
+                                            'touch-target flex items-center px-3 py-2 cursor-pointer text-sm',
                                             index === focusedSuggestionIndex
                                                 ? 'bg-primary text-on-color'
                                                 : 'hover:bg-surface-hover text-fg',

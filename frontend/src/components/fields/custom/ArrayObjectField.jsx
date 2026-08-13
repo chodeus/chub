@@ -779,7 +779,7 @@ export const ArrayObjectField = ({
                                     is removed from the list when you click{' '}
                                     <span className="font-medium text-fg">Save</span>.
                                 </p>
-                                <label className="flex items-start gap-2.5 text-sm text-fg-muted cursor-pointer">
+                                <label className="touch-expand flex items-start gap-2.5 text-sm text-fg-muted cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={gdriveDeleteLocal}

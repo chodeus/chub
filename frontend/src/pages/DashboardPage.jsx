@@ -487,7 +487,7 @@ const DashboardPage = () => {
                     <button
                         type="button"
                         onClick={handleRefreshAll}
-                        className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-surface-elevated transition-colors"
+                        className="touch-expand inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-surface-elevated transition-colors"
                     >
                         <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                             refresh
@@ -498,7 +498,7 @@ const DashboardPage = () => {
                         ref={newRunRef}
                         type="button"
                         onClick={() => setNewRunOpen(o => !o)}
-                        className="inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 transition"
+                        className="touch-expand inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 transition"
                         style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
                     >
                         <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
@@ -521,7 +521,7 @@ const DashboardPage = () => {
                                         setNewRunOpen(false);
                                         setRunNowTarget(m.name);
                                     }}
-                                    className="w-full text-left px-3 py-2 rounded-md text-sm text-fg hover:bg-row-hover transition-colors"
+                                    className="touch-target w-full text-left px-3 py-2 rounded-md text-sm text-fg hover:bg-row-hover transition-colors"
                                 >
                                     {humanize(m.name)}
                                 </button>
@@ -648,7 +648,7 @@ const DashboardPage = () => {
                         </div>
                         <Link
                             to="/logs"
-                            className="text-[12.5px] text-accent no-underline font-medium hover:underline whitespace-nowrap"
+                            className="touch-expand text-[12.5px] text-accent no-underline font-medium hover:underline whitespace-nowrap"
                         >
                             All logs →
                         </Link>
@@ -762,7 +762,7 @@ const DashboardPage = () => {
                                                         onClick={() =>
                                                             handleCancel(mod.name, jobId)
                                                         }
-                                                        className="h-[30px] px-3 rounded-[7px] bg-surface-inset border border-border text-accent text-xs font-semibold hover:bg-row-hover transition-colors"
+                                                        className="touch-expand h-[30px] px-3 rounded-[7px] bg-surface-inset border border-border text-accent text-xs font-semibold hover:bg-row-hover transition-colors"
                                                         title="Cancel run"
                                                     >
                                                         Running
@@ -771,7 +771,7 @@ const DashboardPage = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setRunNowTarget(mod.name)}
-                                                        className="h-[30px] px-3 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold hover:bg-row-hover transition-colors"
+                                                        className="touch-expand h-[30px] px-3 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold hover:bg-row-hover transition-colors"
                                                     >
                                                         Run
                                                     </button>
@@ -868,7 +868,7 @@ const DashboardPage = () => {
                             </h2>
                             <Link
                                 to="/settings/schedule"
-                                className="text-xs text-accent no-underline hover:underline"
+                                className="touch-expand text-xs text-accent no-underline hover:underline"
                             >
                                 Manage
                             </Link>

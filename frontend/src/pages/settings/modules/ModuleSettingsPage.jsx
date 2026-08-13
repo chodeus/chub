@@ -343,7 +343,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                 onClick={() =>
                                     setOpenAdvanced(s => ({ ...s, [meta.id]: !s[meta.id] }))
                                 }
-                                className="flex items-center justify-between w-full h-[42px] px-3 rounded-[10px] bg-surface-inset border border-border text-fg-muted text-[13px] font-medium hover:text-fg transition-colors"
+                                className="touch-expand flex items-center justify-between w-full h-[42px] px-3 rounded-[10px] bg-surface-inset border border-border text-fg-muted text-[13px] font-medium hover:text-fg transition-colors"
                             >
                                 <span className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-[17px] text-fg-subtle">
@@ -415,7 +415,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                     type="button"
                                     onClick={runNow}
                                     disabled={running}
-                                    className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-row-hover disabled:opacity-50 transition-colors"
+                                    className="touch-expand inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-row-hover disabled:opacity-50 transition-colors"
                                 >
                                     <span className="material-symbols-outlined text-[18px]">
                                         play_arrow
@@ -427,7 +427,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                 <button
                                     type="button"
                                     onClick={handleReset}
-                                    className="h-[38px] px-3 rounded-lg text-[13px] text-fg-subtle hover:text-fg"
+                                    className="touch-expand h-[38px] px-3 rounded-lg text-[13px] text-fg-subtle hover:text-fg"
                                 >
                                     Discard
                                 </button>
@@ -436,7 +436,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                 type="button"
                                 onClick={handleSave}
                                 disabled={!isDirty || isSaving}
-                                className="inline-flex items-center h-[38px] px-[18px] rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 disabled:opacity-50 transition"
+                                className="touch-expand inline-flex items-center h-[38px] px-[18px] rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 disabled:opacity-50 transition"
                                 style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
                             >
                                 {isSaving ? 'Saving…' : 'Save'}

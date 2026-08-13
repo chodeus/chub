@@ -311,7 +311,7 @@ export const GeneralSettingsPage = () => {
                                         onClick={() =>
                                             handleFieldChange('user_interface', 'theme', val)
                                         }
-                                        className={`px-3.5 py-1.5 rounded-md text-[13px] transition-colors ${
+                                        className={`touch-expand px-3.5 py-1.5 rounded-md text-[13px] transition-colors ${
                                             active
                                                 ? 'bg-primary text-on-color font-semibold'
                                                 : 'text-fg-muted hover:text-fg'
@@ -341,7 +341,7 @@ export const GeneralSettingsPage = () => {
                                         aria-label={a.label}
                                         aria-pressed={active}
                                         title={a.label}
-                                        className="w-8 h-8 touch-expand rounded-lg transition-transform hover:scale-105"
+                                        className="w-8 h-8 rounded-lg transition-transform hover:scale-105"
                                         style={{
                                             background: a.brand,
                                             boxShadow: active
@@ -476,7 +476,7 @@ export const GeneralSettingsPage = () => {
                 <button
                     type="button"
                     onClick={() => navigate('/setup')}
-                    className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-surface-inset border border-border text-fg-muted text-[13px] font-semibold transition-colors hover:border-border-light hover:text-fg"
+                    className="touch-expand inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-surface-inset border border-border text-fg-muted text-[13px] font-semibold transition-colors hover:border-border-light hover:text-fg"
                 >
                     <span className="material-symbols-outlined text-base">auto_fix_high</span>
                     Launch wizard

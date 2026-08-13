@@ -128,7 +128,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                             <button
                                 type="button"
                                 onClick={() => setHistoryOpen(o => !o)}
-                                className="w-full flex items-center justify-between px-3 py-2 text-sm text-fg-muted hover:text-fg"
+                                className="touch-expand w-full flex items-center justify-between px-3 py-2 text-sm text-fg-muted hover:text-fg"
                             >
                                 <span className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-base">

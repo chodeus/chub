@@ -314,7 +314,7 @@ export const SystemSettingsPage = () => {
                             type="button"
                             onClick={checkUpdate}
                             disabled={checkingUpdate}
-                            className="ml-auto text-[12.5px] text-accent hover:underline disabled:opacity-50"
+                            className="touch-expand ml-auto text-[12.5px] text-accent hover:underline disabled:opacity-50"
                         >
                             {checkingUpdate ? 'Checking…' : 'Check for updates'}
                         </button>
@@ -453,7 +453,7 @@ export const SystemSettingsPage = () => {
                     <button
                         type="button"
                         onClick={() => setShowDbDetails(s => !s)}
-                        className="flex items-center gap-1.5 pt-2 text-[12.5px] text-fg-subtle hover:text-fg"
+                        className="touch-expand flex items-center gap-1.5 pt-2 text-[12.5px] text-fg-subtle hover:text-fg"
                     >
                         <span
                             className="material-symbols-outlined text-[18px] transition-transform"
@@ -532,7 +532,7 @@ export const SystemSettingsPage = () => {
                     <button
                         type="button"
                         onClick={() => setConfirmClearPoster(true)}
-                        className="h-9 px-3.5 rounded-lg bg-transparent border border-error/35 text-error text-[12.5px] font-semibold hover:bg-error/10 transition-colors"
+                        className="touch-expand h-9 px-3.5 rounded-lg bg-transparent border border-error/35 text-error text-[12.5px] font-semibold hover:bg-error/10 transition-colors"
                     >
                         Clear poster cache
                     </button>

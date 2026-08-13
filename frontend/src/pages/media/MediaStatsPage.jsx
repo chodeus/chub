@@ -214,7 +214,7 @@ const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null })
             </div>
             {hasMore && (
                 <button
-                    className="mt-3 text-sm text-accent hover:underline"
+                    className="touch-expand mt-3 text-sm text-accent hover:underline"
                     onClick={() => setExpanded(!expanded)}
                 >
                     {expanded ? 'Show less' : `Show all ${items.length}`}
