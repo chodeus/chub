@@ -304,7 +304,7 @@ export const postersAPI = {
         const resp = await apiCore.post('/posters/gdrive/delete-local', options);
         // Rows were deleted — every cached poster listing is stale (substring match).
         apiCore.clearCache('/posters/list');
-        apiCore.clearCache('/posters/search');
+        apiCore.clearCache('/posters/sources/gdrive/search');
         apiCore.clearCache('/posters/browse');
         return resp;
     },
