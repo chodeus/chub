@@ -332,7 +332,7 @@ def test_orphaned_route_reports_rows_missing_from_their_arr(db, monkeypatch):
 
     _seed(db, "Gone", arr_id=9)
     _seed(db, "Present", arr_id=5)
-    monkeypatch.setattr(media_api, "load_config", lambda: ChubConfig())
+    monkeypatch.setattr(media_api, "load_config", ChubConfig)
     monkeypatch.setattr(
         media_api, "_live_arr_ids_by_instance", lambda *_a: {"radarr": {5}}
     )

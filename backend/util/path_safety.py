@@ -241,23 +241,11 @@ def is_path_allowed(path: str, config: ChubConfig) -> bool:
 
 
 def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
-    """
-    Resolve *path* and return it only if the RESOLVED path is inside an allowed root.
-
-    Returns None when the path is unusable or escapes the roots — so callers
-    fail closed with a single `is None` check instead of hand-rolling
-    resolve-then-authorize (a symlink inside a root must not serve its target
-    outside the roots).
-
-    This is the one canonical confinement call for anything that serves a
-    user-supplied path. Keeping the pattern here gives CodeQL's py/path-injection
-    alerts a single stable anchor to dismiss against, instead of re-minting on
-    every edit to each individual path-serving handler.
-    """
+    """Resolve *path* and return it only when the resolved target is inside an allowed root, else None."""
     if not path or not isinstance(path, str):
         return None
     try:
-        resolved = Path(path).expanduser().resolve()
+        resolved = os.path.realpath(os.path.expanduser(path))
     except (ValueError, OSError):
         return None
-    return resolved if is_path_allowed(str(resolved), config) else None
+    return Path(resolved) if is_path_allowed(resolved, config) else None
