@@ -231,6 +231,17 @@
         height: 100dvh;
     }
 }
+
+/* Same iOS trap as h-app, for the standalone auth pages that centre on the
+   viewport instead of mounting inside the app shell. */
+@utility min-h-app {
+    min-height: 100vh;
+}
+@supports (min-height: 100dvh) {
+    .min-h-app {
+        min-height: 100dvh;
+    }
+}
 @utility h-input {
     height: 44px;
 }
@@ -380,8 +391,13 @@
 /* For controls whose rendered size is a design spec and so cannot take
    touch-target's 44px minimum (the 38x22 Toggle pill). Grows only the hit
    area, and only on a coarse pointer, so the visual is untouched. */
-@utility touch-expand {
-    position: relative;
+
+/* :where() + in-layer so it never outranks an explicit .absolute/.fixed/.sticky
+   — those already position the ::after box themselves. */
+@layer utilities {
+    :where(.touch-expand) {
+        position: relative;
+    }
 }
 @utility scrollbar-hidden {
     scrollbar-width: none;

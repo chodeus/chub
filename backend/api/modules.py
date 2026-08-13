@@ -15,7 +15,15 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import (
+    BODY_TOO_LARGE,
+    body_too_large_error,
+    error,
+    get_database,
+    get_logger,
+    ok,
+    read_request_json,
+)
 from backend.util.config import ConfigError
 from backend.util.database import ChubDB
 
@@ -906,7 +914,17 @@ async def update_module_config(
         Confirmation of the configuration update
     """
     try:
-        payload = await request.json()
+        payload = await read_request_json(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
+        # An unusable body must not reach the merge: it would blank the
+        # section back to its defaults instead of failing the request.
+        if not isinstance(payload, dict) or not payload:
+            return error(
+                "Config validation failed",
+                code="CONFIG_VALIDATION_ERROR",
+                status_code=400,
+            )
         logger.debug(f"Serving PUT /api/modules/{name}/config")
         from backend.util.config import (
             ChubConfig,
@@ -1010,7 +1028,17 @@ async def toggle_module(
         Confirmation with the new enabled state
     """
     try:
-        payload = await request.json()
+        payload = await read_request_json(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
+        # An unusable body used to raise into the 500 handler; keep that
+        # response — falling through would read as `enabled: false`.
+        if not isinstance(payload, dict) or not payload:
+            return error(
+                "Error toggling module",
+                code="MODULE_TOGGLE_ERROR",
+                status_code=500,
+            )
         enabled = payload.get("enabled")
         logger.debug(f"Serving PATCH /api/modules/{name} enabled={enabled}")
         from backend.util.config import load_config, save_config

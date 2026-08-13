@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from backend.api.utils import (
     BODY_TOO_LARGE,
+    body_too_large_error,
     build_cache_refresh_payload,
     error,
     get_database,
@@ -217,7 +218,9 @@ async def get_plex_cache(
                     }
                 }
             },
-        }
+        },
+        400: {"description": "Malformed JSON, or not an object of string lists"},
+        413: {"description": "Request body too large"},
     },
 )
 async def refresh_cache(
@@ -229,11 +232,7 @@ async def refresh_cache(
     try:
         payload = await read_request_json(request)
         if payload is BODY_TOO_LARGE:
-            return error(
-                "Request body too large",
-                code="BODY_TOO_LARGE",
-                status_code=413,
-            )
+            return body_too_large_error()
 
         logger.debug(f"Serving POST /api/cache/refresh with payload: {payload}")
 

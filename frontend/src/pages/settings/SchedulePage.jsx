@@ -307,11 +307,11 @@ export const SchedulePage = () => {
                     )}
                 </Modal.Body>
                 <Modal.Footer>
-                    <div className="flex justify-between items-center w-full">
+                    <div className="flex flex-wrap justify-between items-center gap-3 w-full">
                         <Button onClick={handleRemove} variant="danger" disabled={isSaving}>
                             Remove Schedule
                         </Button>
-                        <div className="flex gap-3">
+                        <div className="flex flex-wrap gap-3">
                             <Button
                                 onClick={handleModalClose}
                                 variant="secondary"

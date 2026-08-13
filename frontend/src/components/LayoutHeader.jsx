@@ -187,7 +187,7 @@ const LayoutHeader = React.memo(() => {
                 {/* Context-Aware Content Area */}
                 {isSearchPage ? (
                     /* Search Page Interface */
-                    <div className="flex-1 max-w-500 mx-auto flex items-center justify-center">
+                    <div className="flex-1 min-w-0 max-w-[500px] mx-auto flex items-center justify-center">
                         <SearchInterface
                             searchPageType={searchPageType}
                             searchSubtype={searchSubtype}
