@@ -2145,7 +2145,7 @@ const UnmatchedAssetsPage = () => {
             {/* Primary segregation: Posters (default) vs Additional artwork.
                 Posters is what most users care about; artwork is one click away. */}
             <div className="flex items-center gap-3 flex-wrap">
-                <div className="inline-flex p-1 gap-1 bg-surface-alt border border-border rounded-xl">
+                <div className="inline-flex flex-wrap p-1 gap-1 bg-surface-alt border border-border rounded-xl">
                     {[
                         {
                             key: 'poster',

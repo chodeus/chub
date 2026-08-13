@@ -323,7 +323,7 @@ export const SystemSettingsPage = () => {
 
                 {/* LOGGING */}
                 <Section title="Logging">
-                    <div className="flex items-center justify-between gap-4 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-4 py-2">
                         <RowLabel label="Log level" hint="Verbosity written to module logs" />
                         <InsetSelect
                             ariaLabel="Log level"
@@ -338,7 +338,7 @@ export const SystemSettingsPage = () => {
                         </InsetSelect>
                     </div>
                     <Divider />
-                    <div className="flex items-center justify-between gap-4 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-4 py-2">
                         <RowLabel label="Retention" hint="Delete rotated logs older than" />
                         <InsetSelect
                             ariaLabel="Log retention"
@@ -358,7 +358,7 @@ export const SystemSettingsPage = () => {
 
                 {/* BACKUPS & DATABASE */}
                 <Section title="Backups & database">
-                    <div className="flex items-center justify-between gap-4 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-4 py-2">
                         <RowLabel
                             label="Automatic config backups"
                             hint={
@@ -374,7 +374,7 @@ export const SystemSettingsPage = () => {
                         />
                     </div>
                     <Divider />
-                    <div className="flex items-center justify-between gap-4 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-4 py-2">
                         <RowLabel
                             label="Backup location"
                             hint="Blank uses the config directory — which is the same volume as the data it protects"
@@ -393,7 +393,7 @@ export const SystemSettingsPage = () => {
                         />
                     </div>
                     <Divider />
-                    <div className="flex items-center justify-between gap-4 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-4 py-2">
                         <RowLabel
                             label="Manual backup"
                             hint="Download or restore a config + database archive"
@@ -428,7 +428,7 @@ export const SystemSettingsPage = () => {
                         </div>
                     </div>
                     <Divider />
-                    <div className="flex items-center justify-between gap-4 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-4 py-2">
                         <RowLabel
                             label="Database"
                             hint={`chub.db · ${formatBytes(dbFileBytes)}${
