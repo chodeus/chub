@@ -154,7 +154,7 @@ def test_every_sensitive_config_name_is_covered():
     """The key list tracks config's SENSITIVE_FIELD_NAMES — no second list to sync."""
     from backend.util.config import SENSITIVE_FIELD_NAMES
 
-    assert SENSITIVE_FIELD_NAMES <= secret_key_names()
+    assert {n.lower() for n in SENSITIVE_FIELD_NAMES} <= secret_key_names()
     for name in SENSITIVE_FIELD_NAMES:
         if name in URL_VALUED_SECRET_KEY_NAMES:
             continue  # value is a URL, covered by its own test below
@@ -295,6 +295,7 @@ def test_real_logger_redacts_through_a_plain_handler(tmp_path, monkeypatch):
     """A token-bearing URL logged through the real Logger lands masked in a handler
     with NO chub formatter — proof the record-level filter did the work."""
     monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    monkeypatch.delenv("LOG_FILE", raising=False)
     name = "ut_log_redaction_e2e"
     log_file = tmp_path / name / f"{name}.log"
     module_logger = logging.getLogger(name)

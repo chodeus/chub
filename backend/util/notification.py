@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 from ratelimit import limits, sleep_and_retry
 
+from backend.util.log_redaction import redact
+
 # Mirror of config.ALL_MODULES_SENTINEL — a destination whose `modules` list
 # contains this reports on every module.
 ALL_MODULES_SENTINEL = "__ALL__"
@@ -594,8 +596,6 @@ class ErrorNotifyHandler(logging.Handler):
 
             # This handler re-formats record.exc_info itself, so the filter's
             # redacted exc_text never reaches it — scrub before it leaves the process.
-            from backend.util.log_redaction import redact
-
             error_msg = redact(error_msg)
             if tb:
                 tb = redact(tb)
