@@ -547,6 +547,21 @@ class MediaCache(DatabaseBase):
             (int(bool(confirmed)), id),
         )
 
+    def approve_match(self, id: int) -> None:
+        """Promote one reviewed media row to a full-confidence match."""
+        self.execute_query(
+            "UPDATE media_cache SET match_status='matched', match_confidence=1.0, "
+            "conflict_ids='[]' WHERE id=?",
+            (id,),
+        )
+
+    def reopen_for_review(self, id: int) -> None:
+        """Send one media row back to the needs-review queue."""
+        self.execute_query(
+            "UPDATE media_cache SET match_status='needs_review' WHERE id=?",
+            (id,),
+        )
+
     def set_match_provenance(
         self, id: int, matched_at: Optional[str], matched_poster_file: Optional[str]
     ) -> None:
@@ -1667,6 +1682,20 @@ class MediaCache(DatabaseBase):
                 "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
                 "FROM media_cache WHERE tags LIKE ? ESCAPE '\\'",
                 (f'%"{escape_like(tag)}"%',),
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def find_by_original_file_basename(self, basename: str) -> list:
+        """Return the identity fields of rows whose original_file holds `basename`."""
+        # Escape LIKE metacharacters so a filename carrying %/_ can't reach
+        # rows belonging to a different poster.
+        return (
+            self.execute_query(
+                "SELECT id, title, instance_name, asset_type, year, season_number "
+                "FROM media_cache WHERE original_file LIKE ? ESCAPE '\\'",
+                (f"%{escape_like(basename)}%",),
                 fetch_all=True,
             )
             or []

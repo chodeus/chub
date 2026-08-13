@@ -271,6 +271,20 @@ class PosterCache(DatabaseBase):
             (int(width), int(height), int(poster_id)),
         )
 
+    def find_missing_dimensions(self, limit: int = 200) -> list:
+        """Return up to `limit` rows whose width/height are still unrecorded."""
+        # id-ordered so an incremental backfill walks the table in a stable
+        # order instead of re-drawing an arbitrary batch each call.
+        return (
+            self.execute_query(
+                "SELECT id, file FROM poster_cache "
+                "WHERE width IS NULL OR height IS NULL ORDER BY id ASC LIMIT ?",
+                (int(limit),),
+                fetch_all=True,
+            )
+            or []
+        )
+
     def find_low_resolution(
         self,
         min_width: int = 1000,
@@ -719,4 +733,66 @@ class PosterCache(DatabaseBase):
             "INSERT OR IGNORE INTO poster_collection_items "
             "(collection_id, poster_id) VALUES (?, ?)",
             (collection_id, poster_id),
+        )
+
+    def get_collections(self) -> list:
+        """Return every poster collection, name-ascending."""
+        # `name` isn't unique — id breaks the tie so the list order is stable.
+        return (
+            self.execute_query(
+                "SELECT * FROM poster_collections ORDER BY name ASC, id ASC",
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def get_collection(self, collection_id: int) -> Optional[dict]:
+        """Return one poster collection by id, or None."""
+        return self.execute_query(
+            "SELECT * FROM poster_collections WHERE id=?",
+            (collection_id,),
+            fetch_one=True,
+        )
+
+    def get_collection_posters(self, collection_id: int) -> list:
+        """Return the display fields of every poster in one collection."""
+        return (
+            self.execute_query(
+                "SELECT p.id, p.asset_type, p.title, p.year, p.season_number, "
+                "p.folder, p.file, p.style "
+                "FROM poster_collection_items pci "
+                "JOIN poster_cache p ON p.id = pci.poster_id "
+                "WHERE pci.collection_id = ? "
+                "ORDER BY p.title ASC, p.id ASC",
+                (collection_id,),
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def remove_collection_item(self, collection_id: int, poster_id: int) -> int:
+        """Drop one poster from one collection; returns rows deleted."""
+        # Both columns: (collection_id, poster_id) is the pair's unique key, so
+        # the same poster stays in every other collection.
+        return (
+            self.execute_query(
+                "DELETE FROM poster_collection_items "
+                "WHERE collection_id=? AND poster_id=?",
+                (collection_id, poster_id),
+            )
+            or 0
+        )
+
+    def delete_collection(self, collection_id: int) -> None:
+        """Delete a collection and its membership rows in one transaction."""
+        # One transaction: a half-applied delete would leave orphaned items
+        # pointing at a collection that no longer exists.
+        self.execute_transaction(
+            [
+                (
+                    "DELETE FROM poster_collection_items WHERE collection_id=?",
+                    (collection_id,),
+                ),
+                ("DELETE FROM poster_collections WHERE id=?", (collection_id,)),
+            ]
         )
