@@ -85,7 +85,7 @@ const payload = bundles => ({
 beforeEach(() => {
     scanPayload = null;
     localStorage.clear();
-    // Must be set here, not at the mock literal: `restoreMocks` wipes a
+    // Must be set here, not at the mock literal: `mockReset` wipes a
     // module-scope mockResolvedValue before every test. A bare vi.fn() returns
     // undefined, which leaves staleItems empty and the stale-attribution memo
     // permanently short-circuited at its `if (!staleItems.length)` early exit.
