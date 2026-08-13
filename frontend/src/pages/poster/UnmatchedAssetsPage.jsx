@@ -497,7 +497,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                 setTypeKey(t.key);
                                 setPage(0);
                             }}
-                            className={`touch-expand h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                            className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                 typeKey === t.key
                                     ? 'bg-primary text-on-color'
                                     : 'text-fg-muted hover:text-fg'
@@ -1332,7 +1332,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                 setMediaTypeKey(t.key);
                                 setPage(0);
                             }}
-                            className={`touch-expand h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                            className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                 mediaTypeKey === t.key
                                     ? 'bg-primary text-on-color'
                                     : 'text-fg-muted hover:text-fg'

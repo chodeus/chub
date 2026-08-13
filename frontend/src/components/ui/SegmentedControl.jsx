@@ -48,7 +48,7 @@ const SegmentedControl = ({
                         role="tab"
                         aria-selected={active}
                         onClick={() => onChange(opt.value)}
-                        className={`touch-expand inline-flex items-center justify-center ${segFlex} ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${stateCls}`}
+                        className={`inline-flex items-center justify-center ${segFlex} ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${stateCls}`}
                     >
                         {opt.label}
                     </button>
