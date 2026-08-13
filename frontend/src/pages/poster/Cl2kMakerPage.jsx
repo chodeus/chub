@@ -2331,158 +2331,25 @@ const RenderPanel = ({
         }
     };
 
-    // GDrive grab: pull a synced poster at FULL resolution (the raw cached file,
-    // never the thumbnail) and seed it as the custom backdrop — same shape the
-    // Upload source produces, so the render path downstream is identical.
-    const [importing, setImporting] = useState(false);
-    const importFromSync = useCallback(
-        async poster => {
-            setImporting(true);
-            try {
-                const resp = await fetch(postersAPI.getPreviewUrl(poster.folder, poster.file));
-                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
-                const url = await readFileAsDataURL(await resp.blob());
-                setCustomBackdrop({ b64: url.split(',').pop(), url, name: poster.file });
-            } catch (err) {
-                toast.error(err.message || 'Import failed');
-            } finally {
-                setImporting(false);
-            }
-        },
-        [setCustomBackdrop, toast]
-    );
-
-    // Synced posters that match the current title — auto-populated like the
-    // TMDB/fanart/Plex grids (no manual search). Fetched lazily the first time the
-    // GDrive source is shown, and again whenever the title changes.
-    const [gdrivePosters, setGdrivePosters] = useState(null);
-    const [gdriveLoading, setGdriveLoading] = useState(false);
-    const [gdriveFor, setGdriveFor] = useState(null);
-    // Same idea for the logo picker, but browsing `- logo` assets from the sync
-    // cache (image_type=logo) rather than finished posters.
-    const [gdriveLogos, setGdriveLogos] = useState(null);
-    const [gdriveLogosLoading, setGdriveLogosLoading] = useState(false);
-    const [gdriveLogosFor, setGdriveLogosFor] = useState(null);
-    // A browse failure is held here rather than toasted away: `gdriveLogos` stays
-    // null until a fetch lands, so without it the picker sits on "Searching…".
-    const [gdriveLogosError, setGdriveLogosError] = useState(null);
-    const [importingLogo, setImportingLogo] = useState(false);
-    // Keyed on the TRIMMED title; an empty title (an ID-only entry) skips the
-    // fetch — the render side shows a "needs a title" hint instead of issuing an
-    // unfiltered browse of the whole cache (no setState here: lint forbids
-    // synchronous setState inside an effect).
+    // Synced assets that match the current title — auto-populated like the
+    // TMDB/fanart/Plex grids (no manual search), fetched lazily the first time a
+    // GDrive source is shown and again whenever the title changes. Picking imports
+    // the bytes, so the render path downstream is identical to an upload.
     const gdriveQuery = (item.title ?? '').trim();
-    useEffect(() => {
-        if (backdropSource !== 'gdrive' || !gdriveQuery || gdriveFor === gdriveQuery)
-            return undefined;
-        let cancelled = false;
-        (async () => {
-            setGdriveLoading(true);
-            try {
-                const resp = await postersAPI.browsePosters({
-                    query: gdriveQuery,
-                    image_type: 'poster',
-                    limit: 60,
-                });
-                if (!cancelled) {
-                    setGdrivePosters(resp?.data?.items || []);
-                    setGdriveFor(gdriveQuery);
-                }
-            } catch (err) {
-                if (!cancelled) {
-                    setGdrivePosters([]);
-                    setGdriveFor(gdriveQuery);
-                    toast.error(err.message || 'GDrive browse failed');
-                }
-            } finally {
-                if (!cancelled) setGdriveLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [backdropSource, gdriveFor, gdriveQuery, toast]);
-
-    // Logo assets from the same sync cache. image_type='logo' is one of the
-    // browse endpoint's allowed values, so this needs no new backend route.
-    useEffect(() => {
-        if (logoSource !== 'gdrive' || !gdriveQuery || gdriveLogosFor === gdriveQuery)
-            return undefined;
-        let cancelled = false;
-        (async () => {
-            setGdriveLogosLoading(true);
-            try {
-                const resp = await postersAPI.browsePosters({
-                    query: gdriveQuery,
-                    image_type: 'logo',
-                    limit: 60,
-                });
-                if (!cancelled) {
-                    setGdriveLogos(resp?.data?.items || []);
-                    setGdriveLogosFor(gdriveQuery);
-                    setGdriveLogosError(null);
-                }
-            } catch (err) {
-                if (!cancelled) {
-                    setGdriveLogos([]);
-                    setGdriveLogosFor(gdriveQuery);
-                    setGdriveLogosError(err.message || 'GDrive logo browse failed');
-                }
-            } finally {
-                if (!cancelled) setGdriveLogosLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [logoSource, gdriveLogosFor, gdriveQuery]);
-
-    // Pull the picked asset's bytes off disk and hand them to the render path as
-    // a custom logo — identical to Upload from here on.
-    const importLogoFromSync = useCallback(
-        async asset => {
-            setImportingLogo(true);
-            try {
-                const resp = await fetch(postersAPI.getPreviewUrl(asset.folder, asset.file));
-                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
-                const url = await readFileAsDataURL(await resp.blob());
-                setCustomLogo({ b64: url.split(',').pop(), url, name: asset.file });
-            } catch (err) {
-                toast.error(err.message || 'Import failed');
-            } finally {
-                setImportingLogo(false);
-            }
-        },
-        [setCustomLogo, toast]
-    );
-
-    // Everything the logo picker needs to render its own GDrive states. Re-arming
-    // `for` is what lets Retry re-run the effect above (its guard is for === query).
-    const logoGdrive = useMemo(
-        () => ({
-            items: gdriveLogos,
-            loading: gdriveLogosLoading || gdriveLogosFor !== gdriveQuery,
-            // Scoped to the query it came from — the grid checks error before
-            // loading, so an unscoped one shadows the new title's load.
-            error: gdriveLogosFor === gdriveQuery ? gdriveLogosError : null,
-            needsTitle: !gdriveQuery,
-            importing: importingLogo,
-            onPick: importLogoFromSync,
-            onRetry: () => {
-                setGdriveLogosError(null);
-                setGdriveLogosFor(null);
-            },
-        }),
-        [
-            gdriveLogos,
-            gdriveLogosLoading,
-            gdriveLogosFor,
-            gdriveLogosError,
-            gdriveQuery,
-            importingLogo,
-            importLogoFromSync,
-        ]
-    );
+    const backdropGdrive = useGdriveBrowse({
+        kind: 'poster',
+        active: backdropSource === 'gdrive',
+        query: gdriveQuery,
+        onImport: setCustomBackdrop,
+    });
+    // image_type='logo' is one of the browse endpoint's allowed values, so the
+    // logo picker needs no new backend route.
+    const logoGdrive = useGdriveBrowse({
+        kind: 'logo',
+        active: logoSource === 'gdrive',
+        query: gdriveQuery,
+        onImport: setCustomLogo,
+    });
 
     const bdSel = (
         <SourceSelector value={backdropSource} onChange={onBdSource} sources={BACKDROP_SOURCES} />
@@ -3143,90 +3010,14 @@ const RenderPanel = ({
                                 onClear={() => setCustomBackdrop(null)}
                             />
                         ) : backdropSource === 'gdrive' ? (
-                            <div className="bg-surface border border-border rounded-lg p-3">
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                    <h3 className="text-sm font-medium text-fg">{bdLabel}</h3>
-                                    {bdSel}
-                                </div>
-                                {customBackdrop ? (
-                                    <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
-                                        <img
-                                            src={customBackdrop.url}
-                                            alt="Grabbed"
-                                            className="h-16 w-auto max-w-[60%] object-contain rounded"
-                                        />
-                                        <span className="flex-1 truncate text-xs text-fg-muted">
-                                            {customBackdrop.name}
-                                        </span>
-                                        <Button
-                                            onClick={() => setCustomBackdrop(null)}
-                                            variant="secondary"
-                                            icon="close"
-                                            size="small"
-                                        >
-                                            Remove
-                                        </Button>
-                                    </div>
-                                ) : !gdriveQuery ? (
-                                    <div className="text-xs text-fg-subtle py-2">
-                                        Pick a title first — GDrive posters are matched by title.
-                                    </div>
-                                ) : gdriveLoading ||
-                                  gdrivePosters === null ||
-                                  gdriveFor !== gdriveQuery ? (
-                                    <div className="text-xs text-fg-subtle py-4">Searching…</div>
-                                ) : gdrivePosters.length === 0 ? (
-                                    <div className="text-xs text-fg-subtle py-2">
-                                        No synced posters match this title. Only images already
-                                        pulled by Sync GDrive appear here.
-                                    </div>
-                                ) : (
-                                    <div
-                                        className="grid gap-2 max-h-72 overflow-auto"
-                                        style={{
-                                            gridTemplateColumns:
-                                                'repeat(auto-fill, minmax(96px, 1fr))',
-                                        }}
-                                    >
-                                        {gdrivePosters.map(p => (
-                                            <button
-                                                key={p.id || `${p.folder}/${p.file}`}
-                                                type="button"
-                                                disabled={importing}
-                                                onClick={() => importFromSync(p)}
-                                                title={p.file}
-                                                className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
-                                                style={{ aspectRatio: '2 / 3' }}
-                                            >
-                                                <img
-                                                    src={
-                                                        p.id
-                                                            ? postersAPI.getThumbnailUrl(p.id, 200)
-                                                            : postersAPI.getPreviewUrl(
-                                                                  p.folder,
-                                                                  p.file
-                                                              )
-                                                    }
-                                                    alt={p.file}
-                                                    loading="lazy"
-                                                    className="w-full h-full object-cover"
-                                                />
-                                                {p.style && (
-                                                    <StyleStamp
-                                                        style={p.style}
-                                                        className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
-                                                    />
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                                {importing && (
-                                    <div className="text-xs text-fg-subtle mt-2">
-                                        Importing full-resolution poster…
-                                    </div>
-                                )}
-                            </div>
+                            <GDrivePicker
+                                kind="poster"
+                                gdrive={backdropGdrive}
+                                label={bdLabel}
+                                headerRight={bdSel}
+                                custom={customBackdrop}
+                                onClear={() => setCustomBackdrop(null)}
+                            />
                         ) : (
                             <>
                                 <Picker
@@ -4970,18 +4761,201 @@ const GuidesToggle = ({ show, onChange }) => (
     <Toggle checked={show} onChange={onChange} label="Toggle CL2K guides" />
 );
 
-// ─── Logo selector (TMDB / fanart grid + custom upload) ─────────────────────
+// ─── GDrive sync-cache picker (backdrop / extract poster / logo) ────────────
 
-/** GDrive `- logo` grid, with the no-title / failed / empty states the picker needs. */
+/** One synced-poster tile — the indexed thumbnail when there is one, else the file. */
+const GDrivePosterTile = ({ asset, disabled, onPick }) => (
+    <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onPick?.(asset)}
+        title={asset.file}
+        className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
+        style={{ aspectRatio: '2 / 3' }}
+    >
+        <img
+            src={
+                asset.id
+                    ? postersAPI.getThumbnailUrl(asset.id, 200)
+                    : postersAPI.getPreviewUrl(asset.folder, asset.file)
+            }
+            alt={asset.file}
+            loading="lazy"
+            className="w-full h-full object-cover"
+        />
+        {asset.style && (
+            <StyleStamp
+                style={asset.style}
+                className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
+            />
+        )}
+    </button>
+);
+
+/** One synced `- logo` tile — 16:9, contained on black. */
+const GDriveLogoTile = ({ asset, disabled, onPick }) => (
+    <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onPick?.(asset)}
+        title={asset.file}
+        className="relative rounded-md overflow-hidden border-2 border-border hover:border-primary disabled:opacity-50 bg-black"
+    >
+        <AspectSpacer aspect="aspect-video" />
+        <img
+            src={postersAPI.getPreviewUrl(asset.folder, asset.file)}
+            alt={asset.file}
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-contain"
+        />
+    </button>
+);
+
+// The three GDrive pickers differ only in which asset kind they browse, so the
+// browse type, copy and tile all hang off this one key — split them into props
+// and the two poster sites drift apart.
+const GDRIVE_KINDS = {
+    poster: {
+        imageType: 'poster',
+        browseError: 'GDrive browse failed',
+        noTitle: 'Pick a title first — GDrive posters are matched by title.',
+        searching: 'Searching…',
+        empty: 'No synced posters match this title. Only images already pulled by Sync GDrive appear here.',
+        importing: 'Importing full-resolution poster…',
+        gridClass: 'grid gap-2 max-h-72 overflow-auto',
+        gridStyle: { gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' },
+        Tile: GDrivePosterTile,
+    },
+    logo: {
+        imageType: 'logo',
+        browseError: 'GDrive logo browse failed',
+        noTitle: 'Pick a title first — GDrive logos are matched by title.',
+        searching: 'Searching your synced assets…',
+        empty: (
+            <>
+                No <span className="font-mono">- logo</span> assets match this title. They appear
+                here once sync_gdrive has pulled the folder down.
+            </>
+        ),
+        importing: null,
+        gridClass: 'grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto',
+        gridStyle: undefined,
+        Tile: GDriveLogoTile,
+    },
+};
+
+/** Browse the sync cache for one asset kind and import the pick — the picker's whole state. */
+// Keyed on the TRIMMED title; an empty title (an ID-only entry) skips the fetch —
+// the picker shows a "needs a title" hint instead of issuing an unfiltered browse
+// of the whole cache (no setState here: lint forbids synchronous setState inside
+// an effect). `onImport` must be stable — it feeds a useCallback.
+const useGdriveBrowse = ({ kind, active, query, onImport }) => {
+    const cfg = GDRIVE_KINDS[kind];
+    const toast = useToast();
+    const [items, setItems] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [fetchedFor, setFetchedFor] = useState(null);
+    // A browse failure is held here rather than toasted away: `items` stays null
+    // until a fetch lands, so without it the picker sits on "Searching…".
+    const [error, setError] = useState(null);
+    const [importing, setImporting] = useState(false);
+    // browsePosters takes no abort signal, so a superseded browse is dropped on
+    // arrival rather than cancelled.
+    useEffect(() => {
+        if (!active || !query || fetchedFor === query) return undefined;
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            try {
+                const resp = await postersAPI.browsePosters({
+                    query,
+                    image_type: cfg.imageType,
+                    limit: 60,
+                });
+                if (!cancelled) {
+                    setItems(resp?.data?.items || []);
+                    setFetchedFor(query);
+                    setError(null);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setItems([]);
+                    setFetchedFor(query);
+                    setError(err.message || cfg.browseError);
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [active, query, fetchedFor, cfg]);
+    // An import belongs to the browse it was picked from, so a source/title change
+    // or an unmount has to kill it: it would otherwise land on top of whatever the
+    // user moved to, re-applying an asset the source-change handler just cleared.
+    // Its own effect — the browse one above skips its cleanup when it early-returns.
+    const importAbortRef = useRef(null);
+    const importRevisionRef = useRef(0);
+    useEffect(() => {
+        return () => {
+            importRevisionRef.current += 1;
+            importAbortRef.current?.abort();
+        };
+    }, [active, query]);
+    // Pull the picked asset at FULL resolution (the raw cached file, never the
+    // thumbnail) and hand it over in the shape an upload produces.
+    const onPick = useCallback(
+        async asset => {
+            importAbortRef.current?.abort(); // a newer pick supersedes the last
+            const aborter = new AbortController();
+            importAbortRef.current = aborter;
+            const revision = importRevisionRef.current;
+            setImporting(true);
+            try {
+                const resp = await fetch(postersAPI.getPreviewUrl(asset.folder, asset.file), {
+                    signal: aborter.signal,
+                });
+                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
+                const url = await readFileAsDataURL(await resp.blob());
+                // FileReader takes no signal, so re-check before applying.
+                if (aborter.signal.aborted || revision !== importRevisionRef.current) return;
+                onImport({ b64: url.split(',').pop(), url, name: asset.file });
+            } catch (err) {
+                if (!aborter.signal.aborted) toast.error(err.message || 'Import failed');
+            } finally {
+                // Only the newest import owns the spinner — never clear it for a newer one.
+                if (importAbortRef.current === aborter) setImporting(false);
+            }
+        },
+        [onImport, toast]
+    );
+    // Re-arming `for` is what lets Retry re-run the effect (its guard is for === query).
+    const onRetry = useCallback(() => {
+        setError(null);
+        setFetchedFor(null);
+    }, []);
+    return useMemo(
+        () => ({
+            items,
+            loading: loading || fetchedFor !== query,
+            // Scoped to the query it came from — the picker checks error before
+            // loading, so an unscoped one shadows the new title's load.
+            error: fetchedFor === query ? error : null,
+            needsTitle: !query,
+            importing,
+            onPick,
+            onRetry,
+        }),
+        [items, loading, fetchedFor, query, error, importing, onPick, onRetry]
+    );
+};
+
+/** The picker's states: no title / failed / searching / empty / grid. */
 // Every branch is terminal: an unhandled one leaves the picker on "Searching…"
 // forever, which is what an ID-only title (no query) used to do.
-const GdriveLogoGrid = ({ gdrive }) => {
-    if (gdrive.needsTitle)
-        return (
-            <div className="text-xs text-fg-subtle py-2">
-                Pick a title first — GDrive logos are matched by title.
-            </div>
-        );
+const GDrivePickerBody = ({ cfg, gdrive }) => {
+    if (gdrive.needsTitle) return <div className="text-xs text-fg-subtle py-2">{cfg.noTitle}</div>;
     if (gdrive.error)
         return (
             <div className="text-xs text-fg-subtle py-2">
@@ -4996,37 +4970,59 @@ const GdriveLogoGrid = ({ gdrive }) => {
             </div>
         );
     if (gdrive.loading || !gdrive.items)
-        return <div className="text-xs text-fg-subtle py-4">Searching your synced assets…</div>;
+        return <div className="text-xs text-fg-subtle py-4">{cfg.searching}</div>;
     if (gdrive.items.length === 0)
-        return (
-            <div className="text-xs text-fg-subtle py-2">
-                No <span className="font-mono">- logo</span> assets match this title. They appear
-                here once sync_gdrive has pulled the folder down.
-            </div>
-        );
+        return <div className="text-xs text-fg-subtle py-2">{cfg.empty}</div>;
+    const { Tile } = cfg;
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
-            {gdrive.items.map(g => (
-                <button
-                    key={g.id || `${g.folder}/${g.file}`}
-                    type="button"
+        <div className={cfg.gridClass} style={cfg.gridStyle}>
+            {gdrive.items.map(asset => (
+                <Tile
+                    key={asset.id || `${asset.folder}/${asset.file}`}
+                    asset={asset}
                     disabled={gdrive.importing}
-                    onClick={() => gdrive.onPick?.(g)}
-                    title={g.file}
-                    className="relative rounded-md overflow-hidden border-2 border-border hover:border-primary disabled:opacity-50 bg-black"
-                >
-                    <AspectSpacer aspect="aspect-video" />
-                    <img
-                        src={postersAPI.getPreviewUrl(g.folder, g.file)}
-                        alt={g.file}
-                        loading="lazy"
-                        className="absolute inset-0 w-full h-full object-contain"
-                    />
-                </button>
+                    onPick={gdrive.onPick}
+                />
             ))}
         </div>
     );
 };
+
+/** Sync-cache picker for a `useGdriveBrowse` bag, in the standard art card or bare. */
+// `label` (with `headerRight`/`custom`) draws the card the two poster sites need;
+// omit it for the bare body LogoSelector slots into its own card.
+const GDrivePicker = ({ kind, gdrive, label, headerRight, custom, onClear }) => {
+    const cfg = GDRIVE_KINDS[kind];
+    if (!label) return <GDrivePickerBody cfg={cfg} gdrive={gdrive} />;
+    return (
+        <div className="bg-surface border border-border rounded-lg p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="text-sm font-medium text-fg">{label}</h3>
+                {headerRight}
+            </div>
+            {custom ? (
+                <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
+                    <img
+                        src={custom.url}
+                        alt="Grabbed"
+                        className="h-16 w-auto max-w-[60%] object-contain rounded"
+                    />
+                    <span className="flex-1 truncate text-xs text-fg-muted">{custom.name}</span>
+                    <Button onClick={onClear} variant="secondary" icon="close" size="small">
+                        Remove
+                    </Button>
+                </div>
+            ) : (
+                <GDrivePickerBody cfg={cfg} gdrive={gdrive} />
+            )}
+            {cfg.importing && gdrive.importing && (
+                <div className="text-xs text-fg-subtle mt-2">{cfg.importing}</div>
+            )}
+        </div>
+    );
+};
+
+// ─── Logo selector (TMDB / fanart grid + custom upload) ─────────────────────
 
 // A logo source picker shared by the render + uploaded-canvas flows. Pick a
 // TMDB/fanart logo, or upload a custom PNG. A custom logo takes priority and
@@ -5213,7 +5209,7 @@ const LogoSelector = ({
                             />
                         </label>
                     ) : onSource && source === 'gdrive' && gdrive && !customLogo ? (
-                        <GdriveLogoGrid gdrive={gdrive} />
+                        <GDrivePicker kind="logo" gdrive={gdrive} />
                     ) : customLogo ? (
                         <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-black p-2">
                             <img
@@ -6365,70 +6361,22 @@ const LogoAssetPanel = ({
             toast.error(err.message || 'Could not read that image');
         }
     };
-    // Synced GDrive posters matching the title — fetched lazily the first time the
-    // GDrive source is shown, and again whenever the title changes (mirrors the
-    // Poster tab's backdrop grab; grabbing a finished community poster here is the
-    // point: extract ITS logo).
-    const [gdrivePosters, setGdrivePosters] = useState(null);
-    const [gdriveLoading, setGdriveLoading] = useState(false);
-    const [gdriveFor, setGdriveFor] = useState(null);
-    // Keyed on the TRIMMED title; an empty title (an ID-only entry) skips the
-    // fetch — the render side shows a "needs a title" hint instead of issuing an
-    // unfiltered browse of the whole cache (no setState here: lint forbids
-    // synchronous setState inside an effect).
+    // Synced GDrive posters matching the title (mirrors the Poster tab's backdrop
+    // grab; grabbing a finished community poster here is the point: extract ITS
+    // logo). A grab lands as the custom poster, so the brush/extract flow
+    // downstream is identical to an upload.
     const gdriveQuery = (item.title ?? '').trim();
-    useEffect(() => {
-        if (posterSource !== 'gdrive' || !gdriveQuery || gdriveFor === gdriveQuery)
-            return undefined;
-        let cancelled = false;
-        (async () => {
-            setGdriveLoading(true);
-            try {
-                const resp = await postersAPI.browsePosters({
-                    query: gdriveQuery,
-                    image_type: 'poster',
-                    limit: 60,
-                });
-                if (!cancelled) {
-                    setGdrivePosters(resp?.data?.items || []);
-                    setGdriveFor(gdriveQuery);
-                }
-            } catch (err) {
-                if (!cancelled) {
-                    setGdrivePosters([]);
-                    setGdriveFor(gdriveQuery);
-                    toast.error(err.message || 'GDrive browse failed');
-                }
-            } finally {
-                if (!cancelled) setGdriveLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [posterSource, gdriveFor, gdriveQuery, toast]);
-    // GDrive grab: pull a synced poster at FULL resolution (the raw cached file,
-    // never the thumbnail) and seed it as the custom poster — same shape the
-    // Upload source produces, so the brush/extract flow downstream is identical.
-    const [importing, setImporting] = useState(false);
-    const importFromSync = useCallback(
-        async poster => {
-            setImporting(true);
-            try {
-                const resp = await fetch(postersAPI.getPreviewUrl(poster.folder, poster.file));
-                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
-                const url = await readFileAsDataURL(await resp.blob());
-                setCustomPoster({ b64: url.split(',').pop(), url, name: poster.file });
-                setPosterPath(null);
-                setExtractMask(null);
-            } catch (err) {
-                toast.error(err.message || 'Import failed');
-            } finally {
-                setImporting(false);
-            }
-        },
-        [toast]
-    );
+    const onGdriveGrab = useCallback(grabbed => {
+        setCustomPoster(grabbed);
+        setPosterPath(null);
+        setExtractMask(null);
+    }, []);
+    const posterGdrive = useGdriveBrowse({
+        kind: 'poster',
+        active: posterSource === 'gdrive',
+        query: gdriveQuery,
+        onImport: onGdriveGrab,
+    });
     // Detect/Tighten for the extract brush — the same endpoints as the AI
     // text-removal panel, sourced from the picked/uploaded poster. Detect
     // prefills EVERY text region (brush off credits/taglines before
@@ -6820,94 +6768,20 @@ const LogoAssetPanel = ({
                                 onClear={() => setCustomPoster(null)}
                             />
                         ) : posterSource === 'gdrive' ? (
-                            <div className="bg-surface border border-border rounded-lg p-3">
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                    <h3 className="text-sm font-medium text-fg">Poster</h3>
+                            <GDrivePicker
+                                kind="poster"
+                                gdrive={posterGdrive}
+                                label="Poster"
+                                headerRight={
                                     <SourceSelector
                                         value={posterSource}
                                         onChange={onPosterSource}
                                         sources={BACKDROP_SOURCES}
                                     />
-                                </div>
-                                {customPoster ? (
-                                    <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
-                                        <img
-                                            src={customPoster.url}
-                                            alt="Grabbed"
-                                            className="h-16 w-auto max-w-[60%] object-contain rounded"
-                                        />
-                                        <span className="flex-1 truncate text-xs text-fg-muted">
-                                            {customPoster.name}
-                                        </span>
-                                        <Button
-                                            onClick={() => setCustomPoster(null)}
-                                            variant="secondary"
-                                            icon="close"
-                                            size="small"
-                                        >
-                                            Remove
-                                        </Button>
-                                    </div>
-                                ) : !gdriveQuery ? (
-                                    <div className="text-xs text-fg-subtle py-2">
-                                        Pick a title first — GDrive posters are matched by title.
-                                    </div>
-                                ) : gdriveLoading ||
-                                  gdrivePosters === null ||
-                                  gdriveFor !== gdriveQuery ? (
-                                    <div className="text-xs text-fg-subtle py-4">Searching…</div>
-                                ) : gdrivePosters.length === 0 ? (
-                                    <div className="text-xs text-fg-subtle py-2">
-                                        No synced posters match this title. Only images already
-                                        pulled by Sync GDrive appear here.
-                                    </div>
-                                ) : (
-                                    <div
-                                        className="grid gap-2 max-h-72 overflow-auto"
-                                        style={{
-                                            gridTemplateColumns:
-                                                'repeat(auto-fill, minmax(96px, 1fr))',
-                                        }}
-                                    >
-                                        {gdrivePosters.map(p => (
-                                            <button
-                                                key={p.id || `${p.folder}/${p.file}`}
-                                                type="button"
-                                                disabled={importing}
-                                                onClick={() => importFromSync(p)}
-                                                title={p.file}
-                                                className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
-                                                style={{ aspectRatio: '2 / 3' }}
-                                            >
-                                                <img
-                                                    src={
-                                                        p.id
-                                                            ? postersAPI.getThumbnailUrl(p.id, 200)
-                                                            : postersAPI.getPreviewUrl(
-                                                                  p.folder,
-                                                                  p.file
-                                                              )
-                                                    }
-                                                    alt={p.file}
-                                                    loading="lazy"
-                                                    className="w-full h-full object-cover"
-                                                />
-                                                {p.style && (
-                                                    <StyleStamp
-                                                        style={p.style}
-                                                        className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
-                                                    />
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                                {importing && (
-                                    <div className="text-xs text-fg-subtle mt-2">
-                                        Importing full-resolution poster…
-                                    </div>
-                                )}
-                            </div>
+                                }
+                                custom={customPoster}
+                                onClear={() => setCustomPoster(null)}
+                            />
                         ) : (
                             <Picker
                                 label="Poster"
