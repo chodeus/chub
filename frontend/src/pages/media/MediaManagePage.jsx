@@ -65,7 +65,7 @@ const DuplicateGroup = ({
     const keepId =
         members && members.length
             ? members.reduce((a, b) =>
-                  (b.live?.size_bytes || 0) > (a.live?.size_bytes || 0) ? b : a
+                  (b.live?.size_bytes ?? 0) > (a.live?.size_bytes ?? 0) ? b : a
               ).id
             : null;
 
@@ -124,7 +124,7 @@ const DuplicateGroup = ({
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    onToggleSelect(id, live.size_bytes || 0)
+                                                    onToggleSelect(id, live.size_bytes ?? 0)
                                                 }
                                                 aria-label={isSel ? 'Deselect copy' : 'Select copy'}
                                                 className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center transition-colors"

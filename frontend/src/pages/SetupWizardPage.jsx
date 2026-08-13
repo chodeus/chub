@@ -724,7 +724,9 @@ const WizardStyles = () => (
             .sw-row, .sw-row3 { grid-template-columns:1fr; }
             .sw-page { padding:1rem; }
             .sw-content { padding:1.25rem 1rem 1.5rem; }
-            .sw-grow { flex-basis:100%; order:1; }
+            /* Review gate leads the wrapped row; empty spacers add no line. */
+            .sw-grow { flex-basis:100%; order:-1; }
+            .sw-grow:empty { display:none; }
         }
     `}</style>
 );
