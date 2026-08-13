@@ -388,8 +388,10 @@ def test_delete_collection_route_404s_then_deletes_everything(db):
     db.poster.add_collection_item(coll, poster)
     client = _client(db)
 
-    assert client.delete("/api/posters/collections/999999").status_code == 404
-    assert client.delete(f"/api/posters/collections/{coll}").status_code == 200
+    missing = client.delete("/api/posters/collections/999999")
+    assert missing.status_code == 404
+    deleted = client.delete(f"/api/posters/collections/{coll}")
+    assert deleted.status_code == 200
     assert db.poster.get_collection(coll) is None
     assert db.poster.get_collection_posters(coll) == []
 
@@ -399,11 +401,13 @@ def test_approve_then_unlock_route_round_trips_a_media_row(db):
     mid = _seed_media(db, "Dune")
     client = _client(db)
 
-    assert client.post(f"/api/posters/match/{mid}/approve").status_code == 200
+    approved = client.post(f"/api/posters/match/{mid}/approve")
+    assert approved.status_code == 200
     row = db.media.get_by_id(mid)
     assert row["match_status"] == "matched" and row["user_confirmed"] == 1
 
-    assert client.post(f"/api/posters/match/{mid}/unlock").status_code == 200
+    unlocked = client.post(f"/api/posters/match/{mid}/unlock")
+    assert unlocked.status_code == 200
     row = db.media.get_by_id(mid)
     assert row["match_status"] == "needs_review" and row["user_confirmed"] == 0
 
