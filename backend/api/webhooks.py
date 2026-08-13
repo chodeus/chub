@@ -14,7 +14,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import (
+    BODY_TOO_LARGE,
+    body_too_large_error,
+    error,
+    get_database,
+    get_logger,
+    ok,
+    read_request_json,
+)
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
 from backend.util.rate_limiter import webhook_limiter
@@ -175,7 +183,18 @@ async def process_poster_webhook(
         }
 
         # Parse webhook payload
-        data = await request.json()
+        data = await read_request_json(request)
+        if data is BODY_TOO_LARGE:
+            return body_too_large_error()
+        # An unusable body used to raise into the 500 handler; keep that
+        # response — falling through would enqueue an empty webhook job.
+        if not isinstance(data, dict) or not data:
+            logger.error("Webhook rejected: missing or unparseable JSON body")
+            return error(
+                "Webhook processing error",
+                code="WEBHOOK_PROCESSING_ERROR",
+                status_code=500,
+            )
 
         # Check for test events and handle them specially
         if _is_test_event(data):
@@ -515,7 +534,17 @@ async def provision_webhooks(
     """Create or repair the CHUB notification on each selected ARR instance."""
     try:
         cfg = load_config()
-        body = await request.json()
+        body = await read_request_json(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
+        # A non-object body used to raise into the 500 handler; keep that
+        # response so a truncated body can't read as "provision every instance".
+        if not isinstance(body, dict):
+            return error(
+                "Error provisioning webhooks",
+                code="WEBHOOK_PROVISION_ERROR",
+                status_code=500,
+            )
         base_url, base_err = _resolve_provision_base_url(cfg, body.get("base_url"))
         if base_err:
             return error(base_err, code="WEBHOOK_PROVISION_BASE_URL", status_code=400)
@@ -571,7 +600,17 @@ async def remove_webhooks(
     """Delete the CHUB notification from each selected ARR instance."""
     try:
         cfg = load_config()
-        body = await request.json()
+        body = await read_request_json(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
+        # A non-object body used to raise into the 500 handler; keep that
+        # response so a truncated body can't read as "remove from every instance".
+        if not isinstance(body, dict):
+            return error(
+                "Error removing webhooks",
+                code="WEBHOOK_REMOVE_ERROR",
+                status_code=500,
+            )
         results = await run_in_threadpool(
             deprovision_all,
             cfg,

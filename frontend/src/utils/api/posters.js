@@ -300,8 +300,13 @@ export const postersAPI = {
      * @param {string} options.location - Local folder of the drive to remove
      * @returns {Promise<Object>} { folder_removed, deleted_rows, location }
      */
-    deleteGdriveLocal: (options = {}) => {
-        return apiCore.post('/posters/gdrive/delete-local', options);
+    deleteGdriveLocal: async (options = {}) => {
+        const resp = await apiCore.post('/posters/gdrive/delete-local', options);
+        // Rows were deleted — every cached poster listing is stale (substring match).
+        apiCore.clearCache('/posters/list');
+        apiCore.clearCache('/posters/sources/gdrive/search');
+        apiCore.clearCache('/posters/browse');
+        return resp;
     },
 
     /**

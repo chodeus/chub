@@ -16,11 +16,14 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 from backend.api.utils import (
+    BODY_TOO_LARGE,
+    body_too_large_error,
     error,
     get_database,
     get_logger,
     get_module_logger,
     ok,
+    read_json_object,
     worker_error,
 )
 from backend.modules.sync_gdrive import SyncGDrive
@@ -720,7 +723,9 @@ async def create_poster_collection(
         Created collection details
     """
     try:
-        payload = await request.json()
+        payload = await read_json_object(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
         logger.debug(f"Serving POST /api/posters/collections with payload: {payload}")
 
         name = payload.get("name")
@@ -793,7 +798,9 @@ async def add_to_collection(
         Confirmation of the association
     """
     try:
-        payload = await request.json()
+        payload = await read_json_object(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
         logger.debug(
             f"Serving POST /api/posters/collections/{collection_id}/add with payload: {payload}"
         )
@@ -1001,10 +1008,9 @@ async def optimize_posters(
     Returns:
         Optimization results with space savings details
     """
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
+    body = await read_json_object(request)
+    if body is BODY_TOO_LARGE:
+        return body_too_large_error()
 
     max_width = body.get("max_width", 1000)
     max_height = body.get("max_height", 1500)
@@ -2327,11 +2333,10 @@ async def delete_gdrive_local(
     try:
         logger.debug("Serving POST /api/posters/gdrive/delete-local")
 
-        try:
-            body = await request.json()
-        except Exception:  # noqa: S110 — malformed body handled as missing
-            body = {}
-        location = body.get("location") if isinstance(body, dict) else None
+        body = await read_json_object(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
+        location = body.get("location")
 
         if (
             not location
@@ -3323,11 +3328,9 @@ async def run_plex_metadata_cleanup(
     Each cleaner (bloat / orphan / stale) runs independently in its own mode.
     """
     try:
-        body: dict = {}
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
+        body = await read_json_object(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
         try:
             overrides = _build_cleanup_overrides(body)
         except ValueError as ve:
@@ -3368,8 +3371,10 @@ async def delete_plex_metadata_variant(
     try:
         from backend.util.plex_metadata import delete_variant
 
-        body = await request.json()
-        path = (body or {}).get("path")
+        body = await read_json_object(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
+        path = body.get("path")
         if not isinstance(path, str) or not path:
             return error("Missing 'path'", code="MISSING_PATH", status_code=400)
         plex_path = _get_plex_path(request)
@@ -3414,9 +3419,11 @@ async def set_plex_metadata_active(
     try:
         from backend.util.plex_metadata import invalidate_cache
 
-        body = await request.json()
-        rating_key = (body or {}).get("rating_key")
-        path = (body or {}).get("path")
+        body = await read_json_object(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
+        rating_key = body.get("rating_key")
+        path = body.get("path")
         if not rating_key or not isinstance(path, str) or not path:
             return error(
                 "Missing rating_key or path",
@@ -3921,11 +3928,10 @@ async def delete_poster(
         logger.debug(f"Serving DELETE /api/posters/{poster_id}")
 
         # Read deleteFile from JSON body if provided, fall back to query param
-        try:
-            body = await request.json()
-            delete_file = body.get("deleteFile", delete_file)
-        except Exception:
-            pass
+        body = await read_json_object(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
+        delete_file = body.get("deleteFile", delete_file)
 
         # Authorize BEFORE the irreversible row delete: a malformed config must
         # abort the whole request, not leave the row gone and the file orphaned.

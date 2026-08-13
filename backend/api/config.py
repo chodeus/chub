@@ -10,7 +10,14 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
-from backend.api.utils import error, get_logger, ok
+from backend.api.utils import (
+    BODY_TOO_LARGE,
+    body_too_large_error,
+    error,
+    get_logger,
+    ok,
+    read_request_json,
+)
 from backend.util.config import (
     ConfigError,
     ChubConfig,
@@ -171,7 +178,17 @@ async def update_config(
         Confirmation of update with count of changes applied
     """
     try:
-        incoming = await request.json()
+        incoming = await read_request_json(request)
+        if incoming is BODY_TOO_LARGE:
+            return body_too_large_error()
+        # An unusable body must not reach the merge: it would re-save the
+        # current config unchanged rather than fail the request.
+        if not isinstance(incoming, dict) or not incoming:
+            return error(
+                "Configuration validation failed",
+                "CONFIG_VALIDATION_ERROR",
+                status_code=400,
+            )
         logger.debug("Serving POST /api/config")
 
         current_config = load_config()
