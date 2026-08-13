@@ -29,7 +29,7 @@ from backend.api.utils import (
 from backend.modules.sync_gdrive import SyncGDrive
 from backend.modules.unmatched_assets import UnmatchedAssets
 from backend.util.config import ConfigError
-from backend.util.database import ChubDB, escape_like
+from backend.util.database import ChubDB
 from backend.util.helper import get_static_dir
 
 router = APIRouter(
@@ -233,7 +233,8 @@ async def get_poster_stats(
                     }
                 }
             },
-        }
+        },
+        500: {"description": "Failed to read the poster collections"},
     },
 )
 async def get_poster_collections(
@@ -251,31 +252,12 @@ async def get_poster_collections(
     """
     try:
         logger.debug("Serving GET /api/posters/collections")
-        collections = (
-            db.poster.execute_query(
-                "SELECT * FROM poster_collections ORDER BY name", fetch_all=True
-            )
-            or []
-        )
+        collections = db.poster.get_collections()
 
         # Hydrate each collection with its poster contents + count. One join
         # per collection is fine — the table is small and rarely fetched.
         for col in collections:
-            posters = (
-                db.poster.execute_query(
-                    """
-                SELECT p.id, p.asset_type, p.title, p.year, p.season_number,
-                       p.folder, p.file, p.style
-                FROM poster_collection_items pci
-                JOIN poster_cache p ON p.id = pci.poster_id
-                WHERE pci.collection_id = ?
-                ORDER BY p.title
-                """,
-                    (col["id"],),
-                    fetch_all=True,
-                )
-                or []
-            )
+            posters = db.poster.get_collection_posters(col["id"])
             col["posters"] = posters
             col["poster_count"] = len(posters)
 
@@ -705,7 +687,10 @@ async def upload_poster(
                     }
                 }
             },
-        }
+        },
+        400: {"description": "Field 'name' is required"},
+        413: {"description": "Request body too large"},
+        500: {"description": "Failed to create the collection"},
     },
 )
 async def create_poster_collection(
@@ -737,17 +722,8 @@ async def create_poster_collection(
         description = payload.get("description", "")
         created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-        row_id = db.poster.execute_query(
-            "INSERT INTO poster_collections (name, description, created_at) VALUES (?, ?, ?)",
-            (name, description, created_at),
-            last_row_id=True,
-        )
-
-        created = db.poster.execute_query(
-            "SELECT * FROM poster_collections WHERE id=?",
-            (row_id,),
-            fetch_one=True,
-        )
+        row_id = db.poster.create_collection(name, description, created_at)
+        created = db.poster.get_collection(row_id)
 
         return ok("Poster collection created", {"collection": created})
 
@@ -776,7 +752,11 @@ async def create_poster_collection(
                     }
                 }
             },
-        }
+        },
+        400: {"description": "Field 'poster_id' is required"},
+        404: {"description": "Poster collection not found"},
+        413: {"description": "Request body too large"},
+        500: {"description": "Failed to add the poster to the collection"},
     },
 )
 async def add_to_collection(
@@ -814,11 +794,7 @@ async def add_to_collection(
             )
 
         # Verify collection exists
-        collection = db.poster.execute_query(
-            "SELECT * FROM poster_collections WHERE id=?",
-            (collection_id,),
-            fetch_one=True,
-        )
+        collection = db.poster.get_collection(collection_id)
         if not collection:
             return error(
                 f"Poster collection {collection_id} not found",
@@ -826,10 +802,7 @@ async def add_to_collection(
                 status_code=404,
             )
 
-        db.poster.execute_query(
-            "INSERT OR IGNORE INTO poster_collection_items (collection_id, poster_id) VALUES (?, ?)",
-            (collection_id, poster_id),
-        )
+        db.poster.add_collection_item(collection_id, poster_id)
 
         return ok(
             "Poster added to collection",
@@ -861,7 +834,9 @@ async def add_to_collection(
                     }
                 }
             },
-        }
+        },
+        404: {"description": "Poster not in this collection"},
+        500: {"description": "Failed to remove the poster from the collection"},
     },
 )
 async def remove_from_collection(
@@ -888,10 +863,7 @@ async def remove_from_collection(
             f"Serving DELETE /api/posters/collections/{collection_id}/remove/{poster_id}"
         )
 
-        rows_deleted = db.poster.execute_query(
-            "DELETE FROM poster_collection_items WHERE collection_id=? AND poster_id=?",
-            (collection_id, poster_id),
-        )
+        rows_deleted = db.poster.remove_collection_item(collection_id, poster_id)
 
         if rows_deleted == 0:
             return error(
@@ -919,20 +891,21 @@ async def remove_from_collection(
     summary="Delete poster collection",
     description="Delete a poster collection and all of its membership rows. "
     "The underlying poster files are not touched.",
+    responses={
+        404: {"description": "Poster collection not found"},
+        500: {"description": "Failed to delete the collection"},
+    },
 )
 async def delete_poster_collection(
     collection_id: int,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Delete one collection and its membership rows, leaving the posters alone."""
     try:
         logger.debug(f"Serving DELETE /api/posters/collections/{collection_id}")
 
-        existing = db.poster.execute_query(
-            "SELECT id FROM poster_collections WHERE id=?",
-            (collection_id,),
-            fetch_one=True,
-        )
+        existing = db.poster.get_collection(collection_id)
         if not existing:
             return error(
                 f"Poster collection {collection_id} not found",
@@ -940,13 +913,7 @@ async def delete_poster_collection(
                 status_code=404,
             )
 
-        db.poster.execute_query(
-            "DELETE FROM poster_collection_items WHERE collection_id=?",
-            (collection_id,),
-        )
-        db.poster.execute_query(
-            "DELETE FROM poster_collections WHERE id=?", (collection_id,)
-        )
+        db.poster.delete_collection(collection_id)
 
         return ok(
             "Poster collection deleted",
@@ -1615,6 +1582,11 @@ async def get_artwork_candidates(
     description="Link a specific logo/background/squareart file to one (media, "
     "image_type), apply it (copy to Kometa / upload to Plex), and lock it so a "
     "re-run reuses it. The artwork counterpart of the poster apply endpoint.",
+    responses={
+        400: {"description": "Unknown image_type, or the file is a different type"},
+        404: {"description": "Media row or artwork file not found"},
+        500: {"description": "Failed to apply the artwork"},
+    },
 )
 def apply_artwork(
     media_id: int,
@@ -1624,6 +1596,7 @@ def apply_artwork(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Link one artwork file to a media/collection row, apply it, and lock it."""
     if image_type not in _ARTWORK_IMAGE_TYPES:
         return error(
             f"image_type must be one of {sorted(_ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
@@ -1642,9 +1615,7 @@ def apply_artwork(
         )
         if not row:
             return error("Media row not found", code="NOT_FOUND", status_code=404)
-        poster = db.poster.execute_query(
-            "SELECT * FROM poster_cache WHERE id=?", (poster_id,), fetch_one=True
-        )
+        poster = db.poster.get_by_integer_id(poster_id)
         if not poster:
             return error("Artwork file not found", code="NOT_FOUND", status_code=404)
         poster = dict(poster)
@@ -1767,6 +1738,7 @@ async def ignore_match(
     summary="Approve a needs-review match",
     description="Confirm a needs-review media/collection row, promoting it to "
     "the 'matched' state and clearing any conflict flags.",
+    responses={500: {"description": "Failed to approve the match"}},
 )
 async def approve_match(
     media_id: int,
@@ -1779,13 +1751,8 @@ async def approve_match(
         logger.debug(
             f"Serving POST /api/posters/match/{media_id}/approve (kind={kind})"
         )
-        table = "collections_cache" if kind == "collection" else "media_cache"
         iface = db.collection if kind == "collection" else db.media
-        iface.execute_query(
-            f"UPDATE {table} SET match_status='matched', match_confidence=1.0, "
-            "conflict_ids='[]' WHERE id=?",
-            (media_id,),
-        )
+        iface.approve_match(media_id)
         # Lock the confirmed match so a future re-scan can't revert it (Fix B).
         iface.set_user_confirmed(media_id, True)
         return ok("Match approved", {"id": media_id, "match_status": "matched"})
@@ -1804,6 +1771,7 @@ async def approve_match(
     description="Clear the user_confirmed lock on a media/collection row and put "
     "it back into the 'needs_review' queue so the matcher can recompute it (or the "
     "user can re-pick) on the next run.",
+    responses={500: {"description": "Failed to unlock the match"}},
 )
 async def unlock_match(
     media_id: int,
@@ -1814,12 +1782,8 @@ async def unlock_match(
     """Release a manual lock and send the row back to Needs Review."""
     try:
         logger.debug(f"Serving POST /api/posters/match/{media_id}/unlock (kind={kind})")
-        table = "collections_cache" if kind == "collection" else "media_cache"
         iface = db.collection if kind == "collection" else db.media
-        iface.execute_query(
-            f"UPDATE {table} SET match_status='needs_review' WHERE id=?",
-            (media_id,),
-        )
+        iface.reopen_for_review(media_id)
         # Drop the lock so the next scheduled run is free to recompute the match.
         iface.set_user_confirmed(media_id, False)
         return ok(
@@ -1957,6 +1921,10 @@ async def get_match_candidates(
     summary="Manually apply a chosen poster to a media row",
     description="Link a specific poster to a media/collection row and copy it "
     "to the destination. Used by the manual poster picker.",
+    responses={
+        404: {"description": "Media row or poster not found"},
+        500: {"description": "Failed to apply the poster"},
+    },
 )
 def apply_match(
     media_id: int,
@@ -1965,6 +1933,7 @@ def apply_match(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Link one poster to a media/collection row and apply it to the destination."""
     try:
         logger.debug(
             f"Serving POST /api/posters/match/{media_id}/apply (poster={poster_id})"
@@ -1976,9 +1945,7 @@ def apply_match(
         )
         if not row:
             return error("Media row not found", code="NOT_FOUND", status_code=404)
-        poster = db.poster.execute_query(
-            "SELECT * FROM poster_cache WHERE id=?", (poster_id,), fetch_one=True
-        )
+        poster = db.poster.get_by_integer_id(poster_id)
         if not poster:
             return error("Poster not found", code="NOT_FOUND", status_code=404)
 
@@ -2867,6 +2834,7 @@ def upload_collection_posters(
     description="Walk poster_cache rows missing width/height and populate "
     "them by opening the file with PIL. Processes up to `limit` rows per call "
     "so it can be run incrementally.",
+    responses={500: {"description": "Failed to backfill poster dimensions"}},
 )
 def backfill_poster_dimensions(
     limit: int = 200,
@@ -2878,15 +2846,7 @@ def backfill_poster_dimensions(
     # endpoint in a threadpool instead of stalling the event loop.
     try:
         limit = max(1, min(limit, 2000))
-        rows = (
-            db.worker.execute_query(
-                "SELECT id, file FROM poster_cache WHERE width IS NULL OR height IS NULL "
-                "LIMIT ?",
-                (limit,),
-                fetch_all=True,
-            )
-            or []
-        )
+        rows = db.poster.find_missing_dimensions(limit)
 
         from PIL import Image
 
@@ -3905,6 +3865,8 @@ def download_poster(
             },
         },
         404: {"description": "Poster not found"},
+        413: {"description": "Request body too large"},
+        500: {"description": "Malformed config, or the delete failed"},
     },
 )
 async def delete_poster(
@@ -3963,12 +3925,14 @@ async def delete_poster(
         # membership in a configured root.
         file_deleted = False
         if delete_file and full_path:
-            from backend.util.path_safety import is_path_allowed
+            from backend.util.path_safety import resolve_confined
 
-            real = os.path.realpath(full_path)
-            if real == os.path.realpath(os.sep) or not is_path_allowed(real, config):
-                logger.error(f"Refusing to delete poster file outside roots: {real}")
-            elif os.path.exists(real):
+            real = resolve_confined(full_path, config)
+            if real is None or str(real) == os.path.realpath(os.sep):
+                logger.error(
+                    f"Refusing to delete poster file outside roots: {full_path}"
+                )
+            elif real.exists():
                 os.remove(real)
                 file_deleted = True
                 logger.info(f"Deleted poster file: {real}")
@@ -3980,16 +3944,8 @@ async def delete_poster(
             try:
                 # Find media items that were matched to this poster by original_file
                 if full_path:
-                    # Escape LIKE metacharacters so a basename with %/_ can't
-                    # unmatch the wrong media rows.
-                    basename_like = escape_like(os.path.basename(full_path))
-                    media_items = (
-                        db.media.execute_query(
-                            "SELECT id, title, instance_name, asset_type, year, season_number FROM media_cache WHERE original_file LIKE ? ESCAPE '\\'",
-                            (f"%{basename_like}%",),
-                            fetch_all=True,
-                        )
-                        or []
+                    media_items = db.media.find_by_original_file_basename(
+                        os.path.basename(full_path)
                     )
                     for item in media_items:
                         db.media.update(
