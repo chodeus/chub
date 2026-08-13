@@ -5,6 +5,7 @@ real temp database, then the handlers whose contract nothing else pinned.
 """
 
 import os
+import sqlite3
 import sys
 
 import pytest
@@ -173,6 +174,14 @@ def test_find_by_tag_escapes_like_metacharacters(db):
     }
 
 
+def test_find_by_tag_ignores_tags_the_request_is_a_prefix_of(db):
+    """A tag that prefixes another one matches only its own row."""
+    _seed(db, "Dune", tags=["4K_UHD"])
+    _seed(db, "Sicario", tags=["4K"])
+
+    assert [r["title"] for r in db.media.find_by_tag("4K")] == ["Sicario"]
+
+
 # --- MediaCache.delete_by_ids ----------------------------------------------
 
 
@@ -192,6 +201,16 @@ def test_delete_by_ids_no_ops_on_an_empty_list(db):
 
     assert db.media.delete_by_ids([]) == 0
     assert db.media.get_by_id(keeper) is not None
+
+
+def test_delete_by_ids_chunks_past_the_sqlite_variable_limit(db):
+    """Exceed this build's variable limit, so an unchunked single statement would raise."""
+    with db.media.get_connection() as conn:
+        limit = conn.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER)
+    real = [_seed(db, t) for t in ("One", "Two", "Three")]
+    absent = list(range(100_000, 100_000 + limit))
+
+    assert db.media.delete_by_ids(real + absent) == 3
 
 
 # --- MediaCache.record_edit / get_edit_history ------------------------------
@@ -238,20 +257,34 @@ def test_get_collection_by_title_and_instance_is_instance_scoped(db):
     for instance in ("plex1", "plex2"):
         db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, instance)
 
-    row = db.collection.get_by_title_and_instance("Marvel", "plex2")
+    row = db.collection.get_by_title_and_instance("Marvel", "plex2", "Movies")
     assert row["instance_name"] == "plex2"
-    assert db.collection.get_by_title_and_instance("Marvel", "plex3") is None
+    assert db.collection.get_by_title_and_instance("Marvel", "plex3", "Movies") is None
+
+
+def test_collection_lookup_distinguishes_libraries(db):
+    """library_name completes the unique key, so the lookup must carry it."""
+    for library in ("Movies", "4K Movies", None):
+        db.collection.upsert({"title": "Marvel", "library_name": library}, "plex1")
+
+    lookup = db.collection.get_by_title_and_instance
+    assert lookup("Marvel", "plex1", "4K Movies")["library_name"] == "4K Movies"
+    assert lookup("Marvel", "plex1", "Movies")["library_name"] == "Movies"
+    # No library requested still resolves the NULL-library row.
+    assert lookup("Marvel", "plex1")["library_name"] is None
 
 
 # --- PosterCache poster_collections ----------------------------------------
 
 
 def test_poster_collection_create_and_resolve_id(db):
-    """A created collection resolves by name; an unknown name is None."""
-    db.poster.create_collection("Halloween", "spooky", "2026-01-01T00:00:00")
+    """create_collection returns each new row's id; an unknown name resolves to None."""
+    first = db.poster.create_collection("Halloween", "spooky", "2026-01-01T00:00:00")
+    second = db.poster.create_collection("Xmas", "merry", "2026-01-02T00:00:00")
 
-    coll_id = db.poster.get_collection_id_by_name("Halloween")
-    assert coll_id is not None
+    assert first == db.poster.get_collection_id_by_name("Halloween")
+    assert second == db.poster.get_collection_id_by_name("Xmas")
+    assert second != first
     assert db.poster.get_collection_id_by_name("Nope") is None
 
 
@@ -348,8 +381,10 @@ def test_orphaned_purge_route_deletes_and_guards_empty_ids(db):
     keeper = _seed(db, "Keeper")
 
     assert client.post("/api/media/orphaned/purge", json={"ids": []}).status_code == 400
-    resp = client.post("/api/media/orphaned/purge", json={"ids": [doomed]})
+    resp = client.post("/api/media/orphaned/purge", json={"ids": [doomed, 999999]})
     assert resp.status_code == 200
+    # The absent id must not inflate the count — `purged` is what was deleted.
+    assert resp.json()["data"]["purged"] == 1
     assert db.media.get_by_id(doomed) is None
     assert db.media.get_by_id(keeper) is not None
 

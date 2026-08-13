@@ -17,6 +17,7 @@ from .media_cache import (
     INCOMPLETE_METADATA_INT_FIELDS,
     NEVER_POPULATED_FIELDS,
     MediaCache,
+    is_missing_value,
 )
 from .plex_cache import PlexCache
 from .poster_cache import PosterCache
@@ -422,6 +423,7 @@ __all__ = [
     "INCOMPLETE_METADATA_FIELDS",
     "INCOMPLETE_METADATA_INT_FIELDS",
     "NEVER_POPULATED_FIELDS",
+    "is_missing_value",
     "escape_like",
     "with_database",
 ]

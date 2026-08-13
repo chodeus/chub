@@ -87,6 +87,14 @@ INCOMPLETE_METADATA_FIELDS = frozenset(
 )
 INCOMPLETE_METADATA_INT_FIELDS = frozenset({"tmdb_id", "tvdb_id", "runtime"})
 
+
+def is_missing_value(field: str, value) -> bool:
+    """True when `value` is missing for `field` (INT fields: None/0; else None/'')."""
+    if field in INCOMPLETE_METADATA_INT_FIELDS:
+        return value is None or value == 0
+    return value is None or value == ""
+
+
 # Fields the ARR normalize layer never populates for a given asset_type, so
 # flagging them as "missing" is a false positive. Radarr has no tvdbId,
 # Sonarr has no tmdbId, Lidarr (artist) uses MusicBrainz IDs and leaves
@@ -653,19 +661,24 @@ class MediaCache(DatabaseBase):
         self.execute_query("DELETE FROM media_cache WHERE id=?", (id,))
 
     def delete_by_ids(self, ids: List[int]) -> int:
-        """Delete records by integer ID in one statement; returns rows deleted."""
+        """Delete records by integer ID; returns rows deleted."""
         # No round trip for an empty list (SQLite accepts `IN ()` and deletes
         # nothing) — and the empty case must never fall through to a bare DELETE.
         if not ids:
             return 0
-        placeholders = ",".join("?" for _ in ids)
-        return (
-            self.execute_query(
-                f"DELETE FROM media_cache WHERE id IN ({placeholders})",
-                tuple(ids),
+        # Chunked: one placeholder per id would blow SQLITE_MAX_VARIABLE_NUMBER.
+        deleted = 0
+        for start in range(0, len(ids), 500):
+            chunk = ids[start : start + 500]
+            placeholders = ",".join("?" for _ in chunk)
+            deleted += (
+                self.execute_query(
+                    f"DELETE FROM media_cache WHERE id IN ({placeholders})",
+                    tuple(chunk),
+                )
+                or 0
             )
-            or 0
-        )
+        return deleted
 
     def get_by_keys(
         self,
@@ -1573,7 +1586,7 @@ class MediaCache(DatabaseBase):
         return (
             self.execute_query(
                 f"SELECT * FROM media_cache {where} "
-                "ORDER BY CAST(rating AS REAL) ASC LIMIT ? OFFSET ?",
+                "ORDER BY CAST(rating AS REAL) ASC, id ASC LIMIT ? OFFSET ?",
                 tuple(params) + (limit, offset),
                 fetch_all=True,
             )
@@ -1583,6 +1596,7 @@ class MediaCache(DatabaseBase):
     @staticmethod
     def _empty_field_clauses(fields: List[str]) -> str:
         """OR-joined "is null or blank" test for each field, INTEGER-aware."""
+        # SQL mirror of is_missing_value — keep in sync.
         return " OR ".join(
             f"({f} IS NULL OR {f} = 0)"
             if f in INCOMPLETE_METADATA_INT_FIELDS
@@ -1625,7 +1639,7 @@ class MediaCache(DatabaseBase):
         return (
             self.execute_query(
                 f"SELECT * FROM media_cache WHERE {where} "
-                "ORDER BY title ASC LIMIT ? OFFSET ?",
+                "ORDER BY title ASC, id ASC LIMIT ? OFFSET ?",
                 (*params, limit, offset),
                 fetch_all=True,
             )
@@ -1646,13 +1660,13 @@ class MediaCache(DatabaseBase):
 
     def find_by_tag(self, tag: str) -> list:
         """Return the identifier fields of every row whose tags contain `tag`."""
-        # tags is stored as serialized JSON, so match the raw string with LIKE —
-        # good enough for a low-cardinality tag list, and needs no JSON1 support.
+        # tags is written with json.dumps, so match the quoted element — a bare
+        # substring would also hit tags that merely start with `tag`.
         return (
             self.execute_query(
                 "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
                 "FROM media_cache WHERE tags LIKE ? ESCAPE '\\'",
-                (f"%{escape_like(tag)}%",),
+                (f'%"{escape_like(tag)}"%',),
                 fetch_all=True,
             )
             or []
@@ -1687,7 +1701,7 @@ class MediaCache(DatabaseBase):
         return (
             self.execute_query(
                 "SELECT * FROM media_edit_history WHERE media_id=? "
-                "ORDER BY edited_at DESC LIMIT ?",
+                "ORDER BY edited_at DESC, id DESC LIMIT ?",
                 (media_id, limit),
                 fetch_all=True,
             )

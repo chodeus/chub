@@ -31,9 +31,9 @@ from backend.util.arr import create_arr_client
 from backend.util.config import ConfigError, load_config
 from backend.util.database import (
     INCOMPLETE_METADATA_FIELDS,
-    INCOMPLETE_METADATA_INT_FIELDS,
     NEVER_POPULATED_FIELDS,
     ChubDB,
+    is_missing_value,
 )
 from backend.util.ssrf_guard import is_safe_url, safe_external_get
 
@@ -816,7 +816,9 @@ async def create_collection(
         db.collection.upsert(record, instance_name)
 
         # Fetch the created/updated record
-        created = db.collection.get_by_title_and_instance(title, instance_name)
+        created = db.collection.get_by_title_and_instance(
+            title, instance_name, record["library_name"]
+        )
 
         return ok("Collection created successfully", {"collection": created})
 
@@ -1231,13 +1233,8 @@ async def get_incomplete_metadata(
             for f in requested:
                 if f in never:
                     continue
-                val = row.get(f)
-                if f in INCOMPLETE_METADATA_INT_FIELDS:
-                    if val is None or val == 0:
-                        missing.append(f)
-                else:
-                    if val is None or val == "":
-                        missing.append(f)
+                if is_missing_value(f, row.get(f)):
+                    missing.append(f)
             row["missing"] = missing
             items.append(row)
 
@@ -1540,11 +1537,11 @@ async def purge_orphaned_cache(
                 code="NO_IDS",
                 status_code=400,
             )
-        db.media.delete_by_ids(body.ids)
-        logger.info(f"Purged {len(body.ids)} orphaned cache row(s)")
+        purged = db.media.delete_by_ids(body.ids)
+        logger.info(f"Purged {purged} orphaned cache row(s)")
         return ok(
-            f"Purged {len(body.ids)} row(s) from cache",
-            {"purged": len(body.ids)},
+            f"Purged {purged} row(s) from cache",
+            {"purged": purged},
         )
     except Exception as e:
         logger.error(f"Error purging orphaned cache: {e}", exc_info=True)
@@ -2006,17 +2003,9 @@ async def generate_collection_from_tag(
         from datetime import datetime as _dt
 
         created_at = _dt.utcnow().isoformat()
-        db.poster.create_collection(
+        coll_id = db.poster.create_collection(
             name, f"Auto-generated from tag '{tag}'", created_at
         )
-        # Fetch new collection id
-        coll_id = db.poster.get_collection_id_by_name(name)
-        if coll_id is None:
-            return error(
-                "Could not determine new collection id",
-                code="COLLECTION_CREATE_ERROR",
-                status_code=500,
-            )
 
         for pid in poster_ids:
             try:

@@ -695,12 +695,13 @@ class PosterCache(DatabaseBase):
 
     def create_collection(
         self, name: str, description: Optional[str], created_at: str
-    ) -> None:
-        """Insert a poster collection."""
-        self.execute_query(
+    ) -> int:
+        """Insert a poster collection and return its new id."""
+        return self.execute_query(
             "INSERT INTO poster_collections (name, description, created_at) "
             "VALUES (?, ?, ?)",
             (name, description, created_at),
+            last_row_id=True,
         )
 
     def get_collection_id_by_name(self, name: str) -> Optional[int]:
