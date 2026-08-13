@@ -126,6 +126,21 @@ async def read_request_json(
         return None
 
 
+async def read_json_object(
+    request: Request, max_bytes: int = MAX_REQUEST_BODY_BYTES
+) -> Any:
+    """read_request_json for routes that want an object: any non-object body reads as {}."""
+    payload = await read_request_json(request, max_bytes)
+    if payload is BODY_TOO_LARGE:
+        return payload
+    return payload if isinstance(payload, dict) else {}
+
+
+def body_too_large_error() -> JSONResponse:
+    """The single 413 response for a body past the cap."""
+    return error("Request body too large", code="BODY_TOO_LARGE", status_code=413)
+
+
 CACHE_REFRESH_LIST_FIELDS = ("arr_instances", "plex_instances", "libraries")
 
 

@@ -27,7 +27,7 @@
         "python"
       ],
       "allowedVersions": "<3.14",
-      "description": "Python 3.14 breaks ruamel.yaml.clib + other backend deps (ImportError ast.Str). Keep on 3.11-3.13 for now."
+      "description": "The ruamel.yaml.clib pin that first blocked 3.14 is gone and no runtime dependency declares a 3.14 incompatibility, but the image is only ever exercised on 3.13 (CI python-version, pyproject target-version). Move those to 3.14 first, then drop this rule."
     }
   ]
 }

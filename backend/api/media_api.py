@@ -18,11 +18,13 @@ from pydantic import BaseModel
 
 from backend.api.utils import (
     BODY_TOO_LARGE,
+    body_too_large_error,
     build_cache_refresh_payload,
     error,
     get_database,
     get_logger,
     ok,
+    read_json_object,
     read_request_json,
 )
 from backend.util.arr import create_arr_client
@@ -550,11 +552,7 @@ async def refresh_media(
     try:
         payload = await read_request_json(request)
         if payload is BODY_TOO_LARGE:
-            return error(
-                "Request body too large",
-                code="BODY_TOO_LARGE",
-                status_code=413,
-            )
+            return body_too_large_error()
 
         logger.debug(f"Serving POST /api/media/refresh with payload: {payload}")
 
@@ -627,11 +625,9 @@ async def export_media(
         Exported data with format identifier and item count
     """
     try:
-        payload = (
-            await request.json()
-            if request.headers.get("content-type") == "application/json"
-            else {}
-        )
+        payload = await read_json_object(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
         export_format = payload.get("format", "json")
         fields = payload.get("fields")
         logger.debug(f"Serving POST /api/media/export format={export_format}")
@@ -774,7 +770,9 @@ async def create_collection(
         Created or updated collection record
     """
     try:
-        payload = await request.json()
+        payload = await read_json_object(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
         logger.debug(f"Serving POST /api/media/collections with payload: {payload}")
 
         title = payload.get("title")
@@ -866,7 +864,17 @@ async def update_collection(
         Updated collection record
     """
     try:
-        payload = await request.json()
+        payload = await read_request_json(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
+        # An unusable body used to raise into the 500 handler; keep that
+        # response — falling through would upsert the record unchanged.
+        if not isinstance(payload, dict) or not payload:
+            return error(
+                "Error updating collection",
+                code="COLLECTION_UPDATE_ERROR",
+                status_code=500,
+            )
         logger.debug(
             f"Serving PUT /api/media/collections/{collection_id} with payload: {payload}"
         )
@@ -967,9 +975,10 @@ async def resolve_duplicates(
     """
     logger.debug(f"Serving POST /api/media/duplicates/{group_id}/resolve")
 
-    try:
-        body = await request.json()
-    except Exception:
+    body = await read_request_json(request)
+    if body is BODY_TOO_LARGE:
+        return body_too_large_error()
+    if not isinstance(body, dict):
         return error("Invalid request body", code="INVALID_BODY", status_code=400)
 
     keep_id = body.get("keepId")
@@ -1115,9 +1124,10 @@ async def bulk_delete_media(
     """Delete every id in `ids` from its ARR instance (optional file delete)
     and the local cache. Body: { ids: [int], deleteFiles?: bool,
     addImportExclusion?: bool }."""
-    try:
-        body = await request.json()
-    except Exception:
+    body = await read_request_json(request)
+    if body is BODY_TOO_LARGE:
+        return body_too_large_error()
+    if not isinstance(body, dict):
         return error("Invalid request body", code="INVALID_BODY", status_code=400)
 
     ids = body.get("ids", [])
@@ -1736,7 +1746,9 @@ async def update_media_metadata(
         List of field names that were updated
     """
     try:
-        payload = await request.json()
+        payload = await read_json_object(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
         logger.debug(f"Serving PUT /api/media/{media_id}/metadata")
 
         item = db.media.get_by_id(media_id)
@@ -1956,14 +1968,11 @@ async def delete_media_item(
                 status_code=404,
             )
 
-        # Parse optional JSON body for deleteFiles flag
-        delete_files = False
-        try:
-            if request.headers.get("content-type") == "application/json":
-                body = await request.json()
-                delete_files = body.get("deleteFiles", False)
-        except Exception:
-            pass  # optional body; malformed JSON just leaves delete_files=False
+        # Optional body; a missing or malformed one leaves delete_files=False
+        body = await read_json_object(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
+        delete_files = body.get("deleteFiles", False)
 
         # If deleteFiles requested, remove from ARR first. The connect probe +
         # delete request are blocking, so run them off the event loop.
@@ -2047,7 +2056,9 @@ async def generate_collection_from_tag(
 ) -> JSONResponse:
     """Build a poster_collection from every media row carrying `tag`."""
     try:
-        payload = await request.json()
+        payload = await read_json_object(request)
+        if payload is BODY_TOO_LARGE:
+            return body_too_large_error()
         tag = (payload.get("tag") or "").strip()
         if not tag:
             return error("tag required", code="TAG_REQUIRED", status_code=400)
