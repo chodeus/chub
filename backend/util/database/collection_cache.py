@@ -123,6 +123,19 @@ class CollectionCache(DatabaseBase):
             "SELECT * FROM collections_cache WHERE id=?", (id,), fetch_one=True
         )
 
+    def get_by_title_and_instance(
+        self, title: str, instance_name: str, library_name: Optional[str] = None
+    ) -> Optional[dict]:
+        """Return one collection row for a title within an instance, or None."""
+        # library_name is part of the unique key (see upsert's ON CONFLICT) —
+        # `IS ?` so a None argument matches the NULL-library row.
+        return self.execute_query(
+            "SELECT * FROM collections_cache "
+            "WHERE title=? AND instance_name=? AND library_name IS ?",
+            (title, instance_name, library_name),
+            fetch_one=True,
+        )
+
     def get_all(self) -> list:
         """Return all records from collections_cache as a list of dicts."""
         return (

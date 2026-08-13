@@ -2632,7 +2632,7 @@ async def preview_poster_file(
         # Restrict the served file to configured allowed roots — otherwise
         # an authenticated caller could point at arbitrary dirs (/etc, /root).
         from backend.util.config import load_config
-        from backend.util.path_safety import is_path_allowed
+        from backend.util.path_safety import is_path_allowed, resolve_confined
 
         try:
             config = load_config()
@@ -2654,11 +2654,10 @@ async def preview_poster_file(
             # Assets Search grid passes item.file straight through, with
             # item.folder in location as an owner label, not a root).
             # Validate the file path itself against allowed roots instead
-            # of demanding that `location` is a root.
-            # Authorize the RESOLVED path: a symlink inside an allowed root
-            # must not serve whatever it points at outside the roots.
-            file_path = path_obj.resolve()
-            if not is_path_allowed(str(file_path), config):
+            # of demanding that `location` is a root. resolve_confined
+            # authorizes the RESOLVED path (symlink escapes included).
+            file_path = resolve_confined(path, config)
+            if file_path is None:
                 return error(
                     "Access denied - path outside allowed directory",
                     code="PATH_TRAVERSAL_DENIED",
