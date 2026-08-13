@@ -690,3 +690,33 @@ class PosterCache(DatabaseBase):
 
         sql += " ORDER BY priority DESC, id DESC"
         return self.execute_query(sql, params, fetch_all=True, conn=conn) or []
+
+    # --- poster_collections: user-curated sets of poster_cache rows ---
+
+    def create_collection(
+        self, name: str, description: Optional[str], created_at: str
+    ) -> int:
+        """Insert a poster collection and return its new id."""
+        return self.execute_query(
+            "INSERT INTO poster_collections (name, description, created_at) "
+            "VALUES (?, ?, ?)",
+            (name, description, created_at),
+            last_row_id=True,
+        )
+
+    def get_collection_id_by_name(self, name: str) -> Optional[int]:
+        """Id of the most recently created collection with this name, or None."""
+        row = self.execute_query(
+            "SELECT id FROM poster_collections WHERE name=? ORDER BY id DESC LIMIT 1",
+            (name,),
+            fetch_one=True,
+        )
+        return row["id"] if row else None
+
+    def add_collection_item(self, collection_id: int, poster_id: int) -> None:
+        """Add a poster to a collection; an already-present pair is ignored."""
+        self.execute_query(
+            "INSERT OR IGNORE INTO poster_collection_items "
+            "(collection_id, poster_id) VALUES (?, ?)",
+            (collection_id, poster_id),
+        )

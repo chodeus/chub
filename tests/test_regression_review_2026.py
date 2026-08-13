@@ -597,7 +597,8 @@ def test_duplicates_skips_malformed_exclude_group_members(db, monkeypatch):
 # 21. preview_poster_file must authorize the RESOLVED path — a symlink inside an
 #     allowed root must not serve whatever it points at outside the roots.
 def test_poster_preview_denies_a_symlink_escaping_the_roots(tmp_path, monkeypatch):
-    from backend.api.posters import preview_poster_file
+    """A link inside an allowed root must not serve its target outside them."""
+    import backend.api.posters as posters
 
     root = tmp_path / "posters"
     root.mkdir()
@@ -623,6 +624,6 @@ def test_poster_preview_denies_a_symlink_escaping_the_roots(tmp_path, monkeypatc
             return lambda *a, **k: None
 
     resp = asyncio.run(
-        preview_poster_file(location=str(root), path=str(link), logger=_Log())
+        posters.preview_poster_file(location=str(root), path=str(link), logger=_Log())
     )
     assert getattr(resp, "status_code", 200) == 403, "symlink escape was served"

@@ -7,7 +7,7 @@ roots derived from application configuration.
 
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from backend.util.config import ChubConfig
 
@@ -238,3 +238,14 @@ def is_path_allowed(path: str, config: ChubConfig) -> bool:
             continue
 
     return False
+
+
+def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
+    """Resolve *path* and return it only when the resolved target is inside an allowed root, else None."""
+    if not path or not isinstance(path, str):
+        return None
+    try:
+        resolved = os.path.realpath(os.path.expanduser(path))
+    except (ValueError, OSError):
+        return None
+    return Path(resolved) if is_path_allowed(resolved, config) else None

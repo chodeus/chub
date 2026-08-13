@@ -6,6 +6,7 @@ from backend.util.path_safety import (
     get_allowed_roots,
     get_browse_roots,
     is_path_allowed,
+    resolve_confined,
 )
 
 
@@ -235,3 +236,37 @@ def test_get_allowed_roots_includes_gdrive_list(empty_config, tmp_path):
     ]
     roots = get_allowed_roots(empty_config)
     assert any(str(r) == str(location.resolve()) for r in roots)
+
+
+# --- resolve_confined ---
+
+
+def test_resolve_confined_returns_the_resolved_path_inside_a_root(config_with_roots):
+    """An in-root path comes back resolved, ready to serve."""
+    config, tmp_path = config_with_roots
+    inside = tmp_path / "posters_src" / "movie.jpg"
+    inside.write_text("x")
+
+    assert resolve_confined(str(inside), config) == inside.resolve()
+
+
+def test_resolve_confined_denies_a_symlink_escaping_the_roots(config_with_roots):
+    """The RESOLVED target is what's authorized, not the link's own location."""
+    config, tmp_path = config_with_roots
+    secret = tmp_path / "secret.jpg"
+    secret.write_text("top-secret")
+    link = tmp_path / "posters_src" / "innocent.jpg"
+    link.symlink_to(secret)
+
+    # The link itself sits inside an allowed root; its target does not.
+    assert resolve_confined(str(link), config) is None
+
+
+def test_resolve_confined_denies_traversal_and_unusable_input(config_with_roots):
+    """`..` escapes, empty strings and non-strings all fail closed."""
+    config, tmp_path = config_with_roots
+
+    escape = str(tmp_path / "posters_src" / ".." / "x.jpg")
+    assert resolve_confined(escape, config) is None
+    assert resolve_confined("", config) is None
+    assert resolve_confined(None, config) is None  # type: ignore[arg-type]
