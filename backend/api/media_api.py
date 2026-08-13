@@ -29,7 +29,12 @@ from backend.api.utils import (
 )
 from backend.util.arr import create_arr_client
 from backend.util.config import ConfigError, load_config
-from backend.util.database import ChubDB, escape_like
+from backend.util.database import (
+    INCOMPLETE_METADATA_FIELDS,
+    NEVER_POPULATED_FIELDS,
+    ChubDB,
+    is_missing_value,
+)
 from backend.util.ssrf_guard import is_safe_url, safe_external_get
 
 router = APIRouter(
@@ -754,7 +759,9 @@ async def delete_collection(
                     }
                 }
             },
-        }
+        },
+        400: {"description": "Missing 'title' or 'instance_name'"},
+        413: {"description": "Request body too large"},
     },
 )
 async def create_collection(
@@ -809,10 +816,8 @@ async def create_collection(
         db.collection.upsert(record, instance_name)
 
         # Fetch the created/updated record
-        created = db.collection.execute_query(
-            "SELECT * FROM collections_cache WHERE title=? AND instance_name=?",
-            (title, instance_name),
-            fetch_one=True,
+        created = db.collection.get_by_title_and_instance(
+            title, instance_name, record["library_name"]
         )
 
         return ok("Collection created successfully", {"collection": created})
@@ -1169,23 +1174,12 @@ async def get_low_rated(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Return media rated below `max_rating`, lowest first."""
     try:
         limit = max(1, min(limit, 500))
         offset = max(0, offset)
-        clauses = ["rating IS NOT NULL", "rating != ''", "CAST(rating AS REAL) < ?"]
-        params: list = [float(max_rating)]
-        if asset_type:
-            clauses.append("asset_type=?")
-            params.append(asset_type)
-        where = "WHERE " + " AND ".join(clauses)
-        rows = (
-            db.worker.execute_query(
-                f"SELECT * FROM media_cache {where} "
-                "ORDER BY CAST(rating AS REAL) ASC LIMIT ? OFFSET ?",
-                tuple(params) + (limit, offset),
-                fetch_all=True,
-            )
-            or []
+        rows = db.media.find_low_rated(
+            max_rating, limit=limit, offset=offset, asset_type=asset_type
         )
         return ok(
             f"Found {len(rows)} low-rated items",
@@ -1200,26 +1194,11 @@ async def get_low_rated(
         )
 
 
-# Fields the ARR normalize layer never populates for a given asset_type, so
-# flagging them as "missing" is a false positive. Radarr has no tvdbId,
-# Sonarr has no tmdbId, Lidarr (artist) uses MusicBrainz IDs and leaves
-# tmdb/tvdb/imdb + rating/runtime/language/edition as None by design.
-_NEVER_POPULATED_FIELDS = {
-    "movie": {"tvdb_id"},
-    "show": {"tmdb_id"},
-    "artist": {
-        "tmdb_id",
-        "tvdb_id",
-        "imdb_id",
-        "rating",
-        "runtime",
-        "language",
-        "edition",
-    },
-}
-
-
-@router.get("/incomplete-metadata", summary="List media with missing key metadata")
+@router.get(
+    "/incomplete-metadata",
+    summary="List media with missing key metadata",
+    responses={400: {"description": "No valid fields requested"}},
+)
 async def get_incomplete_metadata(
     fields: str = "rating,studio,language,genre",
     limit: int = 200,
@@ -1227,20 +1206,13 @@ async def get_incomplete_metadata(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Return rows missing expected metadata, each annotated with what it lacks."""
     try:
-        allowed = {
-            "rating",
-            "studio",
-            "language",
-            "genre",
-            "runtime",
-            "edition",
-            "tmdb_id",
-            "tvdb_id",
-            "imdb_id",
-            "year",
-        }
-        requested = [f.strip() for f in fields.split(",") if f.strip() in allowed]
+        requested = [
+            f.strip()
+            for f in fields.split(",")
+            if f.strip() in INCOMPLETE_METADATA_FIELDS
+        ]
         if not requested:
             return error(
                 "No valid fields requested",
@@ -1249,74 +1221,20 @@ async def get_incomplete_metadata(
             )
         limit = max(1, min(limit, 1000))
         offset = max(0, offset)
-        # INTEGER columns can't be empty-string; compare to NULL/0 instead.
-        int_cols = {"tmdb_id", "tvdb_id", "runtime"}
-
-        # Build a per-asset-type WHERE: for each known asset_type, only
-        # include requested fields that type can actually populate. A row
-        # matches if its asset_type has at least one null/empty expected
-        # field. Rows with unrecognised asset_types fall through a catch-all
-        # that uses the raw requested list.
-        subclauses = []
-        params: list = []
-        known_types = ("movie", "show", "artist")
-        for atype in known_types:
-            never = _NEVER_POPULATED_FIELDS.get(atype, set())
-            effective = [f for f in requested if f not in never]
-            if not effective:
-                continue
-            field_clauses = []
-            for f in effective:
-                if f in int_cols:
-                    field_clauses.append(f"({f} IS NULL OR {f} = 0)")
-                else:
-                    field_clauses.append(f"({f} IS NULL OR {f} = '')")
-            subclauses.append(f"(asset_type = ? AND ({' OR '.join(field_clauses)}))")
-            params.append(atype)
-
-        # Fallback for any asset_type outside the known set — apply the full
-        # requested list as before. Keeps forward-compat if we add types.
-        unknown_field_clauses = []
-        for f in requested:
-            if f in int_cols:
-                unknown_field_clauses.append(f"({f} IS NULL OR {f} = 0)")
-            else:
-                unknown_field_clauses.append(f"({f} IS NULL OR {f} = '')")
-        unknown_placeholders = ",".join(["?"] * len(known_types))
-        subclauses.append(
-            f"(asset_type NOT IN ({unknown_placeholders}) "
-            f"AND ({' OR '.join(unknown_field_clauses)}))"
-        )
-        params.extend(known_types)
-
-        where = " OR ".join(subclauses)
-        rows = (
-            db.worker.execute_query(
-                f"SELECT * FROM media_cache WHERE {where} "
-                "ORDER BY title ASC LIMIT ? OFFSET ?",
-                (*params, limit, offset),
-                fetch_all=True,
-            )
-            or []
-        )
+        rows = db.media.find_incomplete_metadata(requested, limit=limit, offset=offset)
 
         # Compute per-row `missing` server-side using the same expected-field
         # map, so the UI doesn't have to replicate the logic.
         items = []
         for r in rows:
             row = dict(r)
-            never = _NEVER_POPULATED_FIELDS.get(row.get("asset_type") or "", set())
+            never = NEVER_POPULATED_FIELDS.get(row.get("asset_type") or "", set())
             missing = []
             for f in requested:
                 if f in never:
                     continue
-                val = row.get(f)
-                if f in int_cols:
-                    if val is None or val == 0:
-                        missing.append(f)
-                else:
-                    if val is None or val == "":
-                        missing.append(f)
+                if is_missing_value(f, row.get(f)):
+                    missing.append(f)
             row["missing"] = missing
             items.append(row)
 
@@ -1379,14 +1297,7 @@ def get_orphaned_cache(
     try:
         config = load_config()
         live = _live_arr_ids_by_instance(config, logger)
-        rows = (
-            db.worker.execute_query(
-                "SELECT id, title, asset_type, instance_name, arr_id, folder, root_folder "
-                "FROM media_cache WHERE arr_id IS NOT NULL AND instance_name IS NOT NULL",
-                fetch_all=True,
-            )
-            or []
-        )
+        rows = db.media.get_arr_linked()
         orphaned = [
             dict(r)
             for r in rows
@@ -1608,12 +1519,17 @@ def get_duplicate_members(
         )
 
 
-@router.post("/orphaned/purge", summary="Delete orphaned cache rows by id")
+@router.post(
+    "/orphaned/purge",
+    summary="Delete orphaned cache rows by id",
+    responses={400: {"description": "No ids provided"}},
+)
 async def purge_orphaned_cache(
     body: OrphanedPurgeRequest,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Delete the given media cache rows (the orphaned-cache view's purge action)."""
     try:
         if not body.ids:
             return error(
@@ -1621,15 +1537,11 @@ async def purge_orphaned_cache(
                 code="NO_IDS",
                 status_code=400,
             )
-        placeholders = ",".join("?" for _ in body.ids)
-        db.worker.execute_query(
-            f"DELETE FROM media_cache WHERE id IN ({placeholders})",
-            tuple(body.ids),
-        )
-        logger.info(f"Purged {len(body.ids)} orphaned cache row(s)")
+        purged = db.media.delete_by_ids(body.ids)
+        logger.info(f"Purged {purged} orphaned cache row(s)")
         return ok(
-            f"Purged {len(body.ids)} row(s) from cache",
-            {"purged": len(body.ids)},
+            f"Purged {purged} row(s) from cache",
+            {"purged": purged},
         )
     except Exception as e:
         logger.error(f"Error purging orphaned cache: {e}", exc_info=True)
@@ -1727,6 +1639,7 @@ async def get_media_item(
         },
         400: {"description": "No valid fields provided"},
         404: {"description": "Media item not found"},
+        413: {"description": "Request body too large"},
     },
 )
 async def update_media_metadata(
@@ -1805,18 +1718,8 @@ async def update_media_metadata(
             if old_value == new_value:
                 continue
             try:
-                db.worker.execute_query(
-                    "INSERT INTO media_edit_history "
-                    "(media_id, edited_at, edited_by, field, old_value, new_value) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        media_id,
-                        now_iso,
-                        edited_by,
-                        field,
-                        None if old_value is None else str(old_value),
-                        None if new_value is None else str(new_value),
-                    ),
+                db.media.record_edit(
+                    media_id, now_iso, edited_by, field, old_value, new_value
                 )
             except Exception as audit_err:
                 logger.debug(f"Audit insert failed ({field}): {audit_err}")
@@ -2050,6 +1953,10 @@ async def delete_media_item(
     description="Create a new poster_collection containing every poster_cache "
     "row whose matching media_cache entry has the given tag in its tags field. "
     "Name defaults to the tag name.",
+    responses={
+        400: {"description": "Missing 'tag'"},
+        413: {"description": "Request body too large"},
+    },
 )
 async def generate_collection_from_tag(
     request: Request,
@@ -2066,18 +1973,7 @@ async def generate_collection_from_tag(
             return error("tag required", code="TAG_REQUIRED", status_code=400)
         name = (payload.get("name") or tag).strip()
 
-        # media_cache.tags is stored as serialized JSON in most paths, so we
-        # match with LIKE on the raw string — good enough for a low-cardinality
-        # tag list, and avoids requiring JSON1 extension support.
-        media_rows = (
-            db.worker.execute_query(
-                "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
-                "FROM media_cache WHERE tags LIKE ? ESCAPE '\\'",
-                (f"%{escape_like(tag)}%",),
-                fetch_all=True,
-            )
-            or []
-        )
+        media_rows = db.media.find_by_tag(tag)
         if not media_rows:
             return ok(
                 f"No media tagged '{tag}'",
@@ -2107,31 +2003,13 @@ async def generate_collection_from_tag(
         from datetime import datetime as _dt
 
         created_at = _dt.utcnow().isoformat()
-        db.worker.execute_query(
-            "INSERT INTO poster_collections (name, description, created_at) VALUES (?, ?, ?)",
-            (name, f"Auto-generated from tag '{tag}'", created_at),
+        coll_id = db.poster.create_collection(
+            name, f"Auto-generated from tag '{tag}'", created_at
         )
-        # Fetch new collection id
-        row = db.worker.execute_query(
-            "SELECT id FROM poster_collections WHERE name=? ORDER BY id DESC LIMIT 1",
-            (name,),
-            fetch_one=True,
-        )
-        coll_id = row["id"] if row else None
-        if coll_id is None:
-            return error(
-                "Could not determine new collection id",
-                code="COLLECTION_CREATE_ERROR",
-                status_code=500,
-            )
 
         for pid in poster_ids:
             try:
-                db.worker.execute_query(
-                    "INSERT OR IGNORE INTO poster_collection_items "
-                    "(collection_id, poster_id) VALUES (?, ?)",
-                    (coll_id, pid),
-                )
+                db.poster.add_collection_item(coll_id, pid)
             except Exception as ins_err:
                 logger.debug(f"Skipping poster_id={pid}: {ins_err}")
 
@@ -2159,16 +2037,9 @@ async def get_media_history(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Return a media item's metadata-edit audit trail, newest first."""
     try:
-        rows = (
-            db.worker.execute_query(
-                "SELECT * FROM media_edit_history WHERE media_id=? "
-                "ORDER BY edited_at DESC LIMIT ?",
-                (media_id, max(1, min(limit, 500))),
-                fetch_all=True,
-            )
-            or []
-        )
+        rows = db.media.get_edit_history(media_id, max(1, min(limit, 500)))
         return ok(
             f"Retrieved {len(rows)} history entries for media {media_id}",
             {"history": [dict(r) for r in rows]},

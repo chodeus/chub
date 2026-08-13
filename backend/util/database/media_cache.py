@@ -69,6 +69,53 @@ _MONITORED_ARTISTS_SQL = (
     "SUM(CASE WHEN asset_type='artist' AND monitored=1 THEN 1 ELSE 0 END)"
 )
 
+# Columns find_incomplete_metadata may test, and the subset stored as INTEGER
+# (they can't hold '', so they compare against NULL/0 instead).
+INCOMPLETE_METADATA_FIELDS = frozenset(
+    {
+        "rating",
+        "studio",
+        "language",
+        "genre",
+        "runtime",
+        "edition",
+        "tmdb_id",
+        "tvdb_id",
+        "imdb_id",
+        "year",
+    }
+)
+INCOMPLETE_METADATA_INT_FIELDS = frozenset({"tmdb_id", "tvdb_id", "runtime"})
+
+
+def is_missing_value(field: str, value) -> bool:
+    """True when `value` is missing for `field` (INT fields: None/0; else None/'')."""
+    if field in INCOMPLETE_METADATA_INT_FIELDS:
+        return value is None or value == 0
+    return value is None or value == ""
+
+
+# Fields the ARR normalize layer never populates for a given asset_type, so
+# flagging them as "missing" is a false positive. Radarr has no tvdbId,
+# Sonarr has no tmdbId, Lidarr (artist) uses MusicBrainz IDs and leaves
+# tmdb/tvdb/imdb + rating/runtime/language/edition as None by design.
+NEVER_POPULATED_FIELDS = {
+    "movie": {"tvdb_id"},
+    "show": {"tmdb_id"},
+    "artist": {
+        "tmdb_id",
+        "tvdb_id",
+        "imdb_id",
+        "rating",
+        "runtime",
+        "language",
+        "edition",
+    },
+}
+# asset_types with their own expected-field rules; anything else matches
+# find_incomplete_metadata's catch-all clause.
+_KNOWN_ASSET_TYPES = ("movie", "show", "artist")
+
 
 class MediaCache(DatabaseBase):
     """
@@ -500,6 +547,21 @@ class MediaCache(DatabaseBase):
             (int(bool(confirmed)), id),
         )
 
+    def approve_match(self, id: int) -> None:
+        """Promote one reviewed media row to a full-confidence match."""
+        self.execute_query(
+            "UPDATE media_cache SET match_status='matched', match_confidence=1.0, "
+            "conflict_ids='[]' WHERE id=?",
+            (id,),
+        )
+
+    def reopen_for_review(self, id: int) -> None:
+        """Send one media row back to the needs-review queue."""
+        self.execute_query(
+            "UPDATE media_cache SET match_status='needs_review' WHERE id=?",
+            (id,),
+        )
+
     def set_match_provenance(
         self, id: int, matched_at: Optional[str], matched_poster_file: Optional[str]
     ) -> None:
@@ -612,6 +674,26 @@ class MediaCache(DatabaseBase):
     def delete_by_id(self, id: int) -> None:
         """Delete a single record by its unique integer ID."""
         self.execute_query("DELETE FROM media_cache WHERE id=?", (id,))
+
+    def delete_by_ids(self, ids: List[int]) -> int:
+        """Delete records by integer ID; returns rows deleted."""
+        # No round trip for an empty list (SQLite accepts `IN ()` and deletes
+        # nothing) — and the empty case must never fall through to a bare DELETE.
+        if not ids:
+            return 0
+        # Chunked: one placeholder per id would blow SQLITE_MAX_VARIABLE_NUMBER.
+        deleted = 0
+        for start in range(0, len(ids), 500):
+            chunk = ids[start : start + 500]
+            placeholders = ",".join("?" for _ in chunk)
+            deleted += (
+                self.execute_query(
+                    f"DELETE FROM media_cache WHERE id IN ({placeholders})",
+                    tuple(chunk),
+                )
+                or 0
+            )
+        return deleted
 
     def get_by_keys(
         self,
@@ -1501,6 +1583,159 @@ class MediaCache(DatabaseBase):
 
         collisions.sort(key=lambda c: c["count"], reverse=True)
         return collisions
+
+    def find_low_rated(
+        self,
+        max_rating: float,
+        limit: int = 100,
+        offset: int = 0,
+        asset_type: Optional[str] = None,
+    ) -> list:
+        """Return rows whose rating casts numerically below `max_rating`, lowest first."""
+        clauses = ["rating IS NOT NULL", "rating != ''", "CAST(rating AS REAL) < ?"]
+        params: list = [float(max_rating)]
+        if asset_type:
+            clauses.append("asset_type=?")
+            params.append(asset_type)
+        where = "WHERE " + " AND ".join(clauses)
+        return (
+            self.execute_query(
+                f"SELECT * FROM media_cache {where} "
+                "ORDER BY CAST(rating AS REAL) ASC, id ASC LIMIT ? OFFSET ?",
+                tuple(params) + (limit, offset),
+                fetch_all=True,
+            )
+            or []
+        )
+
+    @staticmethod
+    def _empty_field_clauses(fields: List[str]) -> str:
+        """OR-joined "is null or blank" test for each field, INTEGER-aware."""
+        # SQL mirror of is_missing_value — keep in sync.
+        return " OR ".join(
+            f"({f} IS NULL OR {f} = 0)"
+            if f in INCOMPLETE_METADATA_INT_FIELDS
+            else f"({f} IS NULL OR {f} = '')"
+            for f in fields
+        )
+
+    def find_incomplete_metadata(
+        self, fields: List[str], limit: int = 200, offset: int = 0
+    ) -> list:
+        """Return rows missing any of `fields` that their asset_type can populate."""
+        # Field names are interpolated into SQL — drop anything off the
+        # column allow-list before building the clause.
+        requested = [f for f in fields if f in INCOMPLETE_METADATA_FIELDS]
+        if not requested:
+            return []
+
+        # One clause per known asset_type, using only the fields that type can
+        # populate; a catch-all keeps unrecognised types matching on the lot.
+        subclauses = []
+        params: list = []
+        for atype in _KNOWN_ASSET_TYPES:
+            never = NEVER_POPULATED_FIELDS.get(atype, set())
+            effective = [f for f in requested if f not in never]
+            if not effective:
+                continue
+            subclauses.append(
+                f"(asset_type = ? AND ({self._empty_field_clauses(effective)}))"
+            )
+            params.append(atype)
+
+        unknown_placeholders = ",".join(["?"] * len(_KNOWN_ASSET_TYPES))
+        subclauses.append(
+            f"(asset_type NOT IN ({unknown_placeholders}) "
+            f"AND ({self._empty_field_clauses(requested)}))"
+        )
+        params.extend(_KNOWN_ASSET_TYPES)
+
+        where = " OR ".join(subclauses)
+        return (
+            self.execute_query(
+                f"SELECT * FROM media_cache WHERE {where} "
+                "ORDER BY title ASC, id ASC LIMIT ? OFFSET ?",
+                (*params, limit, offset),
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def get_arr_linked(self) -> list:
+        """Return the identity/location fields of every row sourced from an *arr."""
+        return (
+            self.execute_query(
+                "SELECT id, title, asset_type, instance_name, arr_id, folder, "
+                "root_folder FROM media_cache "
+                "WHERE arr_id IS NOT NULL AND instance_name IS NOT NULL",
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def find_by_tag(self, tag: str) -> list:
+        """Return the identifier fields of every row whose tags contain `tag`."""
+        # tags is written with json.dumps, so match the quoted element — a bare
+        # substring would also hit tags that merely start with `tag`.
+        return (
+            self.execute_query(
+                "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
+                "FROM media_cache WHERE tags LIKE ? ESCAPE '\\'",
+                (f'%"{escape_like(tag)}"%',),
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def find_by_original_file_basename(self, basename: str) -> list:
+        """Return the identity fields of rows whose original_file holds `basename`."""
+        # Escape LIKE metacharacters so a filename carrying %/_ can't reach
+        # rows belonging to a different poster.
+        return (
+            self.execute_query(
+                "SELECT id, title, instance_name, asset_type, year, season_number "
+                "FROM media_cache WHERE original_file LIKE ? ESCAPE '\\'",
+                (f"%{escape_like(basename)}%",),
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def record_edit(
+        self,
+        media_id: int,
+        edited_at: str,
+        edited_by: str,
+        field: str,
+        old_value: Any,
+        new_value: Any,
+    ) -> None:
+        """Append one field's old→new change to the media edit audit trail."""
+        self.execute_query(
+            "INSERT INTO media_edit_history "
+            "(media_id, edited_at, edited_by, field, old_value, new_value) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                media_id,
+                edited_at,
+                edited_by,
+                field,
+                None if old_value is None else str(old_value),
+                None if new_value is None else str(new_value),
+            ),
+        )
+
+    def get_edit_history(self, media_id: int, limit: int = 100) -> list:
+        """Return one media item's edit audit trail, newest first."""
+        return (
+            self.execute_query(
+                "SELECT * FROM media_edit_history WHERE media_id=? "
+                "ORDER BY edited_at DESC, id DESC LIMIT ?",
+                (media_id, limit),
+                fetch_all=True,
+            )
+            or []
+        )
 
     def sync_for_instance(
         self,

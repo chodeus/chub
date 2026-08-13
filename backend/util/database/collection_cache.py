@@ -123,6 +123,19 @@ class CollectionCache(DatabaseBase):
             "SELECT * FROM collections_cache WHERE id=?", (id,), fetch_one=True
         )
 
+    def get_by_title_and_instance(
+        self, title: str, instance_name: str, library_name: Optional[str] = None
+    ) -> Optional[dict]:
+        """Return one collection row for a title within an instance, or None."""
+        # library_name is part of the unique key (see upsert's ON CONFLICT) —
+        # `IS ?` so a None argument matches the NULL-library row.
+        return self.execute_query(
+            "SELECT * FROM collections_cache "
+            "WHERE title=? AND instance_name=? AND library_name IS ?",
+            (title, instance_name, library_name),
+            fetch_one=True,
+        )
+
     def get_all(self) -> list:
         """Return all records from collections_cache as a list of dicts."""
         return (
@@ -221,6 +234,21 @@ class CollectionCache(DatabaseBase):
         self.execute_query(
             "UPDATE collections_cache SET user_confirmed=? WHERE id=?",
             (int(bool(confirmed)), id),
+        )
+
+    def approve_match(self, id: int) -> None:
+        """Promote one reviewed collection row to a full-confidence match."""
+        self.execute_query(
+            "UPDATE collections_cache SET match_status='matched', "
+            "match_confidence=1.0, conflict_ids='[]' WHERE id=?",
+            (id,),
+        )
+
+    def reopen_for_review(self, id: int) -> None:
+        """Send one collection row back to the needs-review queue."""
+        self.execute_query(
+            "UPDATE collections_cache SET match_status='needs_review' WHERE id=?",
+            (id,),
         )
 
     def set_match_provenance(
