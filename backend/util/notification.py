@@ -567,6 +567,7 @@ class ErrorNotifyHandler(logging.Handler):
         )
 
     def emit(self, record):
+        """Send an ERROR record to the configured failure destinations."""
         if getattr(ErrorNotifyHandler._reentry, "active", False):
             return
         # The notification dispatch path itself logs at ERROR on failure; ignore
@@ -591,13 +592,13 @@ class ErrorNotifyHandler(logging.Handler):
 
             error_msg = f"{msg}\n{error_type_msg}" if error_type_msg else msg
 
-            # The redaction filter never sees the exception text/traceback, so
-            # scrub secrets (e.g. tokens in a request URL) before they leave.
-            from backend.util.logger import SmartRedactionFilter
+            # This handler re-formats record.exc_info itself, so the filter's
+            # redacted exc_text never reaches it — scrub before it leaves the process.
+            from backend.util.log_redaction import redact
 
-            error_msg = SmartRedactionFilter.redact(error_msg)
+            error_msg = redact(error_msg)
             if tb:
-                tb = SmartRedactionFilter.redact(tb)
+                tb = redact(tb)
 
             source_module = getattr(record, "module", None) or self.manager.module_name
             output = {
