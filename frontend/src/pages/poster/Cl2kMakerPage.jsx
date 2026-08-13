@@ -4891,20 +4891,41 @@ const useGdriveBrowse = ({ kind, active, query, onImport }) => {
             cancelled = true;
         };
     }, [active, query, fetchedFor, cfg]);
+    // An import belongs to the browse it was picked from, so a source/title change
+    // or an unmount has to kill it: it would otherwise land on top of whatever the
+    // user moved to, re-applying an asset the source-change handler just cleared.
+    // Its own effect — the browse one above skips its cleanup when it early-returns.
+    const importAbortRef = useRef(null);
+    const importRevisionRef = useRef(0);
+    useEffect(() => {
+        return () => {
+            importRevisionRef.current += 1;
+            importAbortRef.current?.abort();
+        };
+    }, [active, query]);
     // Pull the picked asset at FULL resolution (the raw cached file, never the
     // thumbnail) and hand it over in the shape an upload produces.
     const onPick = useCallback(
         async asset => {
+            importAbortRef.current?.abort(); // a newer pick supersedes the last
+            const aborter = new AbortController();
+            importAbortRef.current = aborter;
+            const revision = importRevisionRef.current;
             setImporting(true);
             try {
-                const resp = await fetch(postersAPI.getPreviewUrl(asset.folder, asset.file));
+                const resp = await fetch(postersAPI.getPreviewUrl(asset.folder, asset.file), {
+                    signal: aborter.signal,
+                });
                 if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
                 const url = await readFileAsDataURL(await resp.blob());
+                // FileReader takes no signal, so re-check before applying.
+                if (aborter.signal.aborted || revision !== importRevisionRef.current) return;
                 onImport({ b64: url.split(',').pop(), url, name: asset.file });
             } catch (err) {
-                toast.error(err.message || 'Import failed');
+                if (!aborter.signal.aborted) toast.error(err.message || 'Import failed');
             } finally {
-                setImporting(false);
+                // Only the newest import owns the spinner — never clear it for a newer one.
+                if (importAbortRef.current === aborter) setImporting(false);
             }
         },
         [onImport, toast]
