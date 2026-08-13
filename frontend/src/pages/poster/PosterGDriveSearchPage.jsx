@@ -154,7 +154,7 @@ const PosterGDriveSearchPage = () => {
                     )}
                     <Link
                         to="/settings/modules"
-                        className="inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold no-underline hover:brightness-110 transition"
+                        className="touch-expand inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold no-underline hover:brightness-110 transition"
                         style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
                     >
                         <span className="material-symbols-outlined text-[18px]" aria-hidden="true">

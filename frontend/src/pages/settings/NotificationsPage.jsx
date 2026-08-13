@@ -365,7 +365,7 @@ export const NotificationsPage = () => {
                                 <button
                                     type="button"
                                     onClick={() => openAdd(method)}
-                                    className="flex items-center gap-1.5 h-8 px-[13px] rounded-lg font-display text-[12.5px] font-semibold transition hover:brightness-110"
+                                    className="touch-expand flex items-center gap-1.5 h-8 px-[13px] rounded-lg font-display text-[12.5px] font-semibold transition hover:brightness-110"
                                     style={{
                                         background: m.tintBg,
                                         border: `1px solid ${m.tintBorder}`,
@@ -540,7 +540,7 @@ const DestinationCard = ({
                         type="button"
                         onClick={onTest}
                         disabled={testing}
-                        className="h-[30px] px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#221c45] disabled:opacity-60"
+                        className="touch-expand h-[30px] px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#221c45] disabled:opacity-60"
                     >
                         {testing ? 'Testing…' : 'Test'}
                     </button>
@@ -672,7 +672,7 @@ const TriggerPill = ({ active, label, tone, onClick }) => {
         <button
             type="button"
             onClick={onClick}
-            className="flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-[12px] font-semibold transition-colors"
+            className="touch-expand flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-[12px] font-semibold transition-colors"
             style={{
                 color: active ? colors.c : '#6582ca',
                 background: active ? colors.bg : 'transparent',
@@ -709,14 +709,14 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
                 <button
                     type="button"
                     onClick={onSelectAll}
-                    className="flex-1 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-[11.5px] font-semibold"
+                    className="touch-expand flex-1 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-[11.5px] font-semibold"
                 >
                     Select all
                 </button>
                 <button
                     type="button"
                     onClick={onClearAll}
-                    className="flex-1 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-data text-[11.5px] font-semibold"
+                    className="touch-expand flex-1 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-data text-[11.5px] font-semibold"
                 >
                     Clear
                 </button>
@@ -729,7 +729,7 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
                             type="button"
                             key={key}
                             onClick={() => onToggle(key)}
-                            className="w-full flex items-center gap-2.5 p-[8px_9px] rounded-lg transition-colors hover:bg-row-hover text-left"
+                            className="touch-target w-full flex items-center gap-2.5 p-[8px_9px] rounded-lg transition-colors hover:bg-row-hover text-left"
                         >
                             <span
                                 className="shrink-0 w-[17px] h-[17px] rounded-[5px] flex items-center justify-center"
@@ -757,7 +757,7 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
                 <button
                     type="button"
                     onClick={onDone}
-                    className="h-[30px] px-4 rounded-lg bg-primary text-on-color font-display text-[12.5px] font-semibold"
+                    className="touch-expand h-[30px] px-4 rounded-lg bg-primary text-on-color font-display text-[12.5px] font-semibold"
                 >
                     Done
                 </button>

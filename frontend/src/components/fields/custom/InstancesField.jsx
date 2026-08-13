@@ -88,7 +88,7 @@ const ArrInstancePills = React.memo(
                             onClick={() => onToggle(instance.type, instance.name, !isSelected)}
                             aria-pressed={isSelected}
                             title={instance.url || instance.name}
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12.5px] font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
+                            className={`touch-expand inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12.5px] font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
                                 isSelected
                                     ? 'bg-primary/15 border-primary text-fg'
                                     : 'bg-surface-inset border-border text-fg-muted hover:border-primary'

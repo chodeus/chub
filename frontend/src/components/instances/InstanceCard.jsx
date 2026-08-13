@@ -376,7 +376,7 @@ export const InstanceCard = ({
                                     onClick={() =>
                                         onFetchLibraries && onFetchLibraries(instance.name)
                                     }
-                                    className="text-xs text-fg-subtle hover:text-fg underline underline-offset-2"
+                                    className="touch-expand text-xs text-fg-subtle hover:text-fg underline underline-offset-2"
                                 >
                                     Load libraries
                                 </button>

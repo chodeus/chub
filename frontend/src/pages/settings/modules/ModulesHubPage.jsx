@@ -184,7 +184,7 @@ export const ModulesHubPage = () => {
 
                             <Link
                                 to={`/settings/modules/${key}`}
-                                className="shrink-0 font-mono text-[11px] text-accent hover:underline"
+                                className="touch-expand shrink-0 font-mono text-[11px] text-accent hover:underline"
                             >
                                 Configure
                             </Link>

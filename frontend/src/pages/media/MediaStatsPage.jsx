@@ -214,7 +214,7 @@ const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null })
             </div>
             {hasMore && (
                 <button
-                    className="mt-3 text-sm text-accent hover:underline"
+                    className="touch-expand mt-3 text-sm text-accent hover:underline"
                     onClick={() => setExpanded(!expanded)}
                 >
                     {expanded ? 'Show less' : `Show all ${items.length}`}
@@ -263,7 +263,7 @@ const BreakdownTabs = ({ stats }) => {
                             role="tab"
                             aria-selected={isActive}
                             onClick={() => setActiveKey(tab.key)}
-                            className="px-3 py-1.5 rounded-full text-sm transition-colors"
+                            className="touch-expand px-3 py-1.5 rounded-full text-sm transition-colors"
                             style={{
                                 background: isActive
                                     ? 'color-mix(in srgb, var(--accent) 18%, transparent)'

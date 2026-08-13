@@ -1262,7 +1262,7 @@ const PosterCleanarrPage = () => {
                                                 key={v}
                                                 type="button"
                                                 onClick={() => setTab(v)}
-                                                className={`flex-1 px-2 py-[7px] text-xs rounded-[7px] cursor-pointer border transition-colors ${
+                                                className={`touch-expand flex-1 px-2 py-[7px] text-xs rounded-[7px] cursor-pointer border transition-colors ${
                                                     tab === v
                                                         ? 'bg-primary text-on-color border-transparent font-semibold'
                                                         : 'bg-transparent text-fg-muted border-transparent hover:bg-row-hover'
@@ -1326,7 +1326,7 @@ const PosterCleanarrPage = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => selectNode(null)}
-                                                        className="mb-2 text-sm text-fg cursor-pointer inline-flex items-center gap-1 hover:underline"
+                                                        className="touch-expand mb-2 text-sm text-fg cursor-pointer inline-flex items-center gap-1 hover:underline"
                                                     >
                                                         ← Back to list
                                                     </button>
@@ -1859,7 +1859,7 @@ const BundleTreeRow = ({
                             return (
                                 <React.Fragment key={season.n}>
                                     <div
-                                        className="flex items-center gap-2 pr-2 py-1.5"
+                                        className="touch-target flex items-center gap-2 pr-2 py-1.5"
                                         style={rowStyle(seasonSelected, 24)}
                                         onClick={() =>
                                             onSelect({
@@ -1917,7 +1917,7 @@ const BundleTreeRow = ({
                                                 return (
                                                     <div
                                                         key={episode.n}
-                                                        className="flex items-center gap-2 pr-2 py-1.5"
+                                                        className="touch-target flex items-center gap-2 pr-2 py-1.5"
                                                         style={rowStyle(epSelected, 48)}
                                                         onClick={() =>
                                                             onSelect({

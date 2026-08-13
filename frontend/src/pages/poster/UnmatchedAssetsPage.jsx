@@ -497,7 +497,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                 setTypeKey(t.key);
                                 setPage(0);
                             }}
-                            className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                            className={`touch-expand h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                 typeKey === t.key
                                     ? 'bg-primary text-on-color'
                                     : 'text-fg-muted hover:text-fg'
@@ -1332,7 +1332,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                 setMediaTypeKey(t.key);
                                 setPage(0);
                             }}
-                            className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                            className={`touch-expand h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                 mediaTypeKey === t.key
                                     ? 'bg-primary text-on-color'
                                     : 'text-fg-muted hover:text-fg'
@@ -1349,7 +1349,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                     <button
                         type="button"
                         onClick={() => setTypeFilter(null)}
-                        className="text-xs text-fg-muted hover:text-fg underline"
+                        className="touch-expand text-xs text-fg-muted hover:text-fg underline"
                     >
                         Clear {ARTWORK_TYPES.find(a => a.key === typeFilter)?.label} filter
                     </button>
@@ -1763,7 +1763,7 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                                     setTargetIdx(i);
                                     setResult({ targetId: undefined, list: null });
                                 }}
-                                className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                                className={`touch-expand h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                     i === targetIdx
                                         ? 'bg-primary text-on-color'
                                         : 'bg-surface-inset text-fg-muted hover:text-fg'
@@ -2168,7 +2168,7 @@ const UnmatchedAssetsPage = () => {
                                 setViewMode('unmatched');
                                 setAssetClass(c.key);
                             }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                            className={`touch-expand flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                                 assetClass === c.key
                                     ? 'bg-primary text-on-color shadow-sm'
                                     : 'text-fg-muted hover:text-fg'

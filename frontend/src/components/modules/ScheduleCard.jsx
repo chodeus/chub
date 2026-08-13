@@ -44,7 +44,7 @@ export const ScheduleCard = React.memo(
             [moduleKey, onCancel]
         );
         const iconBtn =
-            'w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors';
+            'w-8 h-8 touch-expand rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors';
 
         return (
             <div
