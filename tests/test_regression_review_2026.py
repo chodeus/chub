@@ -592,3 +592,37 @@ def test_duplicates_skips_malformed_exclude_group_members(db, monkeypatch):
     resp = _app(media_api.router, db).get("/api/media/duplicates")
     assert resp.status_code == 200
     assert resp.json()["success"] is True
+
+
+# 21. preview_poster_file must authorize the RESOLVED path — a symlink inside an
+#     allowed root must not serve whatever it points at outside the roots.
+def test_poster_preview_denies_a_symlink_escaping_the_roots(tmp_path, monkeypatch):
+    from backend.api.posters import preview_poster_file
+
+    root = tmp_path / "posters"
+    root.mkdir()
+    secret = tmp_path / "outside" / "secret.jpg"
+    secret.parent.mkdir()
+    secret.write_bytes(b"top-secret-bytes")
+    link = root / "innocent.jpg"
+    link.symlink_to(secret)
+
+    monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: object())
+    monkeypatch.setattr(
+        "backend.util.path_safety.is_path_allowed",
+        lambda p, cfg: str(p).startswith(str(root)),
+    )
+
+    import asyncio
+
+    class _Log:
+        """Quiet logger stub."""
+
+        def __getattr__(self, _n):
+            """Return a no-op for any log method."""
+            return lambda *a, **k: None
+
+    resp = asyncio.run(
+        preview_poster_file(location=str(root), path=str(link), logger=_Log())
+    )
+    assert getattr(resp, "status_code", 200) == 403, "symlink escape was served"

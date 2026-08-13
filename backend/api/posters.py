@@ -2655,13 +2655,15 @@ async def preview_poster_file(
             # item.folder in location as an owner label, not a root).
             # Validate the file path itself against allowed roots instead
             # of demanding that `location` is a root.
-            if not is_path_allowed(path, config):
+            # Authorize the RESOLVED path: a symlink inside an allowed root
+            # must not serve whatever it points at outside the roots.
+            file_path = path_obj.resolve()
+            if not is_path_allowed(str(file_path), config):
                 return error(
                     "Access denied - path outside allowed directory",
                     code="PATH_TRAVERSAL_DENIED",
                     status_code=403,
                 )
-            file_path = path_obj.resolve()
         else:
             # Relative path — `location` must be an allowed root and the
             # resolved result must stay inside it (is_relative_to avoids
@@ -2674,6 +2676,13 @@ async def preview_poster_file(
                     status_code=403,
                 )
             base_dir = Path(location).resolve()
+            # Re-confine the resolved root too — location may itself be a link.
+            if not is_path_allowed(str(base_dir), config):
+                return error(
+                    "Access denied - path outside allowed directory",
+                    code="PATH_TRAVERSAL_DENIED",
+                    status_code=403,
+                )
             file_path = (base_dir / path).resolve()
             try:
                 file_path.relative_to(base_dir)
