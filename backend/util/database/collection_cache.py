@@ -236,6 +236,21 @@ class CollectionCache(DatabaseBase):
             (int(bool(confirmed)), id),
         )
 
+    def approve_match(self, id: int) -> None:
+        """Promote one reviewed collection row to a full-confidence match."""
+        self.execute_query(
+            "UPDATE collections_cache SET match_status='matched', "
+            "match_confidence=1.0, conflict_ids='[]' WHERE id=?",
+            (id,),
+        )
+
+    def reopen_for_review(self, id: int) -> None:
+        """Send one collection row back to the needs-review queue."""
+        self.execute_query(
+            "UPDATE collections_cache SET match_status='needs_review' WHERE id=?",
+            (id,),
+        )
+
     def set_match_provenance(
         self, id: int, matched_at: Optional[str], matched_poster_file: Optional[str]
     ) -> None:
