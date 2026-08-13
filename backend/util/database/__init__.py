@@ -12,11 +12,11 @@ from .collection_cache import CollectionCache
 from .db_base import DatabaseBase, escape_like
 from .holiday import HolidayStatus
 from .media_asset_matches import MediaAssetMatches
-from .media_cache import (
+from .media_cache import MediaCache
+from .media_metadata import (
     INCOMPLETE_METADATA_FIELDS,
     INCOMPLETE_METADATA_INT_FIELDS,
     NEVER_POPULATED_FIELDS,
-    MediaCache,
     is_missing_value,
 )
 from .plex_cache import PlexCache
