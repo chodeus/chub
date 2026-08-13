@@ -2,6 +2,36 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.46.0](https://github.com/chodeus/chub/compare/v2.45.0...v2.46.0) (2026-08-13)
+
+
+### Features
+
+* **cl2k:** add a connection test for the AI provider ([#487](https://github.com/chodeus/chub/issues/487)) ([c07501e](https://github.com/chodeus/chub/commit/c07501e4f8d9ebdf6e78e03f757e101d3f916939))
+* **cl2k:** key logos out of busy art with the AI erase route ([#481](https://github.com/chodeus/chub/issues/481)) ([982bec0](https://github.com/chodeus/chub/commit/982bec08415c77af9d6779f2616665bbc13bd451))
+* **gdrive-presets:** add new preset 'Chodeus' to gdrive_presets.json ([ec01576](https://github.com/chodeus/chub/commit/ec015761bc1d05432acfdfc4c58b690ab2116c50))
+* **logging:** one designed redaction layer for all log output ([#521](https://github.com/chodeus/chub/issues/521)) ([25c2153](https://github.com/chodeus/chub/commit/25c2153e1df4454e834953721e15155452ab5794))
+
+
+### Bug Fixes
+
+* **api:** cap every JSON body read app-wide; renovate python gate tells the truth ([#518](https://github.com/chodeus/chub/issues/518)) ([a36fb2a](https://github.com/chodeus/chub/commit/a36fb2ada3bbe94aecf9ca3b3e9f21548ac22de6))
+* **api:** keep exception text out of response bodies; break the logger import cycle ([#511](https://github.com/chodeus/chub/issues/511)) ([0244bfa](https://github.com/chodeus/chub/commit/0244bfab12680fe19376095e167eaa4feff9a82e))
+* **api:** poster preview authorizes the resolved path (closes code-scanning 297) ([#520](https://github.com/chodeus/chub/issues/520)) ([bf965e9](https://github.com/chodeus/chub/commit/bf965e91947372f9c80a481431aaab7908452bf4))
+* **api:** poster preview authorizes the resolved path (CodeQL 297) ([bf965e9](https://github.com/chodeus/chub/commit/bf965e91947372f9c80a481431aaab7908452bf4))
+* **backend:** correctness + perf batch (STATIC_DIR, LIKE escaping, fail-open guards, hot-path caching) ([#506](https://github.com/chodeus/chub/issues/506)) ([7881bff](https://github.com/chodeus/chub/commit/7881bffc1ca7c160524addb62771ae6220578e1e))
+* **ci:** correct branch-image workflow across the board ([#504](https://github.com/chodeus/chub/issues/504)) ([4155bc5](https://github.com/chodeus/chub/commit/4155bc52b2759b75ebdaf84f85c12d16263d0c6f))
+* **ci:** develop-invariant guard — pure-insertion Dockerfile check, not byte-prefix ([#505](https://github.com/chodeus/chub/issues/505)) ([b3a2b59](https://github.com/chodeus/chub/commit/b3a2b5908627c826d92b74b44e4088b9a5c91523))
+* **cl2k:** defer artwork uploads like posters, and report deferred failures ([#491](https://github.com/chodeus/chub/issues/491)) ([abb2fc3](https://github.com/chodeus/chub/commit/abb2fc39d9c1f015d5e5c8844ef324e375ce11cf))
+* **cl2k:** extract mixed white+coloured titles in subject mode ([#477](https://github.com/chodeus/chub/issues/477)) ([bc8b809](https://github.com/chodeus/chub/commit/bc8b80934227580b790189a14b02b9b0feae990b))
+* **cl2k:** stop concurrent Drive uploads creating duplicate files ([#490](https://github.com/chodeus/chub/issues/490)) ([cc2b236](https://github.com/chodeus/chub/commit/cc2b23680a9fc8b7cf384fd470bb847c33033087))
+* **cl2k:** withhold Detect text unless the sidecar can serve it ([#484](https://github.com/chodeus/chub/issues/484)) ([26edbf8](https://github.com/chodeus/chub/commit/26edbf87981bdb0819a5bb22cefcfeacff13be6c))
+* **frontend:** dead Tailwind classes + used-vs-emitted CI guard, dev-route gating, dead code sweep ([#507](https://github.com/chodeus/chub/issues/507)) ([0a15020](https://github.com/chodeus/chub/commit/0a150200776051fe581d896b5ae647fc3bcd8028))
+* **frontend:** follow-up micro-batch — abortable browsePosters, deferred revokes, response docs ([#515](https://github.com/chodeus/chub/issues/515)) ([ed351d9](https://github.com/chodeus/chub/commit/ed351d9c7fc36a9d7fb46aa6f7aa1126f0c26e2a))
+* **frontend:** follow-up micro-batch — abortable browsePosters, safe downloads, honest response docs ([ed351d9](https://github.com/chodeus/chub/commit/ed351d9c7fc36a9d7fb46aa6f7aa1126f0c26e2a))
+* **gdrive-presets:** add the missing comma before the Chodeus artwork drive ([d0ff8d4](https://github.com/chodeus/chub/commit/d0ff8d47c818b40a837c810cc443992e5e8dce64))
+* **ui:** login password-toggle overlap (root cause) + mobile compatibility pass ([#517](https://github.com/chodeus/chub/issues/517)) ([6d7783f](https://github.com/chodeus/chub/commit/6d7783fe5b3997b6cd06b1bac5d58e9ac875e3de))
+
 ## [2.45.0](https://github.com/chodeus/chub/compare/v2.44.0...v2.45.0) (2026-08-07)
 
 
