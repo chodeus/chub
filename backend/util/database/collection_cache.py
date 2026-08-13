@@ -123,6 +123,16 @@ class CollectionCache(DatabaseBase):
             "SELECT * FROM collections_cache WHERE id=?", (id,), fetch_one=True
         )
 
+    def get_by_title_and_instance(
+        self, title: str, instance_name: str
+    ) -> Optional[dict]:
+        """Return one collection row for a title within an instance, or None."""
+        return self.execute_query(
+            "SELECT * FROM collections_cache WHERE title=? AND instance_name=?",
+            (title, instance_name),
+            fetch_one=True,
+        )
+
     def get_all(self) -> list:
         """Return all records from collections_cache as a list of dicts."""
         return (

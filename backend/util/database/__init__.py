@@ -12,7 +12,12 @@ from .collection_cache import CollectionCache
 from .db_base import DatabaseBase, escape_like
 from .holiday import HolidayStatus
 from .media_asset_matches import MediaAssetMatches
-from .media_cache import MediaCache
+from .media_cache import (
+    INCOMPLETE_METADATA_FIELDS,
+    INCOMPLETE_METADATA_INT_FIELDS,
+    NEVER_POPULATED_FIELDS,
+    MediaCache,
+)
 from .plex_cache import PlexCache
 from .poster_cache import PosterCache
 from .run_state import RunState
@@ -414,6 +419,9 @@ __all__ = [
     "MediaCache",
     "MediaAssetMatches",
     "WebhookCache",
+    "INCOMPLETE_METADATA_FIELDS",
+    "INCOMPLETE_METADATA_INT_FIELDS",
+    "NEVER_POPULATED_FIELDS",
     "escape_like",
     "with_database",
 ]
