@@ -1,12 +1,12 @@
 import logging
 import math
 import os
-import re
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
+from backend.util.log_redaction import attach_redaction_filter, redact
 from backend.util.version import get_version
 
 # Size cap per log file. Set LOG_MAX_BYTES=0 to disable the cap.
@@ -59,12 +59,13 @@ def rotation_namer(default_name: str) -> str:
 
 
 class SafeFormatter(logging.Formatter):
-    """Formatter that sets the source tag and redacts secrets from the FULL
-    rendered line — including the exc_info traceback, which the record-level
-    filter (msg/args only) never sees, so a secret embedded in an exception
-    (e.g. a Plex/Notifiarr URL) would otherwise leak to the log verbatim."""
+    """Formatter that sets the source tag and re-redacts the fully rendered line."""
+
+    # SecretRedactionFilter is the primary layer; this catches records that never
+    # passed a chub logger (a raw LogRecord formatted directly). Redaction is idempotent.
 
     def format(self, record):
+        """Render the record, then re-redact the whole line."""
         source = getattr(record, "source", None)
         record.source_tag = f"[{source}]" if source else ""
         # Restore a buffered record's event time (see _BufferingLogger) so
@@ -72,119 +73,7 @@ class SafeFormatter(logging.Formatter):
         orig_created = getattr(record, "orig_created", None)
         if orig_created is not None:
             record.created = orig_created
-        return SmartRedactionFilter.redact(super().format(record))
-
-
-class SmartRedactionFilter(logging.Filter):
-    """
-    Improved redaction filter that's less aggressive and more targeted.
-    Focuses on actual sensitive data rather than everything that looks like it might be.
-    """
-
-    @staticmethod
-    def redact(text: str) -> str:
-        """Apply smart redaction to text, preserving legitimate data."""
-        if not isinstance(text, str):
-            return text
-
-        # More targeted redaction patterns.
-        # Each pattern balances precision (avoid redacting legitimate data like
-        # filenames or IDs) with coverage. Minimum lengths are chosen so we catch
-        # real API keys while leaving short IDs, UUID fragments, and file hashes alone.
-        patterns = [
-            # Discord webhooks - very specific pattern
-            (
-                r"https://discord\.com/api/webhooks/\d+/[A-Za-z0-9_-]{60,}",
-                "https://discord.com/api/webhooks/[redacted]",
-            ),
-            # Google OAuth client IDs
-            (
-                r"\b\d{10,}-[a-zA-Z0-9]{20,}\.apps\.googleusercontent\.com\b",
-                "[redacted].apps.googleusercontent.com",
-            ),
-            # Google OAuth client secrets
-            (r"GOCSPX-[A-Za-z0-9_-]{20,}", "GOCSPX-[redacted]"),
-            # JWT tokens (three base64url segments separated by dots)
-            (
-                r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
-                "[redacted-jwt]",
-            ),
-            # AWS-style access keys
-            (r"\bAKIA[0-9A-Z]{16}\b", "[redacted-aws-key]"),
-            # GitHub tokens
-            (r"\bghp_[A-Za-z0-9]{30,}\b", "[redacted-gh-token]"),
-            (r"\bgho_[A-Za-z0-9]{30,}\b", "[redacted-gh-token]"),
-            # bcrypt hashes ($2a$/$2b$/$2y$)
-            (r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}", "[redacted-bcrypt]"),
-            # JSON field redaction
-            (r'("refresh_token":\s*")[^"]{20,}(")', r"\1[redacted]\2"),
-            (r'("access_token":\s*")[^"]{20,}(")', r"\1[redacted]\2"),
-            (r'("client_secret":\s*")[^"]{20,}(")', r"\1[redacted]\2"),
-            (r'("jwt_secret":\s*")[^"]{20,}(")', r"\1[redacted]\2"),
-            (r'("password_hash":\s*")[^"]{20,}(")', r"\1[redacted]\2"),
-            (r'("webhook_secret":\s*")[^"]+(")', r"\1[redacted]\2"),
-            (r'("X-Api-Key":\s*")[^"]{8,}(")', r"\1[redacted]\2"),
-            (r'("X-Plex-Token":\s*")[^"]{8,}(")', r"\1[redacted]\2"),
-            # Configuration field redaction (yaml/kv forms)
-            (
-                r"client_secret\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{16,}['\"]?",
-                "client_secret: [redacted]",
-            ),
-            (
-                r"jwt_secret\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{16,}['\"]?",
-                "jwt_secret: [redacted]",
-            ),
-            (
-                r"webhook_secret\s*[:=]\s*['\"]?[A-Za-z0-9_\-]+['\"]?",
-                "webhook_secret: [redacted]",
-            ),
-            # OAuth tokens in yaml/unquoted key:value form (e.g. a dumped
-            # SyncGDriveToken: `access_token: ya29...`). The JSON-quoted rules
-            # above only match the `"access_token": "..."` form.
-            (
-                r"(access_token|refresh_token|token)\s*[:=]\s*['\"]?[A-Za-z0-9._\-/~+]{20,}['\"]?",
-                r"\1: [redacted]",
-            ),
-            (r"webhook\s*[:=]\s*['\"]?https://[^'\"\s]+['\"]?", "webhook: [redacted]"),
-            # API keys - short form keys (min 16) plus legacy long form (32+)
-            (
-                r"\bapi(?:_?key)?\s*[:=]\s*['\"]?[A-Za-z0-9]{16,}['\"]?",
-                "api: [redacted]",
-            ),
-            # Bearer tokens in Authorization headers
-            (
-                r"(Authorization\s*:\s*Bearer\s+)[A-Za-z0-9._\-]{16,}",
-                r"\1[redacted]",
-            ),
-            # Passwords
-            (r"password\s*[:=]\s*['\"]?[^\s'\"]{8,}['\"]?", "password: [redacted]"),
-            # Secrets in URL query parameters — requests exceptions embed the
-            # full URL, and the JSON/config patterns above only match quoted
-            # or key: value forms, not ?key=value.
-            (
-                r"([?&](?:x-plex-token|client_key|access_token|refresh_token|token|secret)=)[^&\s'\"]+",
-                r"\1[redacted]",
-            ),
-            # Notifiarr passthrough API key lives in the URL PATH, not a query
-            # param, so the rule above misses it (exceptions embed the full URL).
-            (
-                r"(notifiarr\.com/api/v\d+/notification/passthrough/)[A-Za-z0-9_\-]{8,}",
-                r"\1[redacted]",
-            ),
-        ]
-
-        for pattern, replacement in patterns:
-            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-
-        return text
-
-    def filter(self, record):
-        """Apply redaction to log record."""
-        if hasattr(record, "msg") and isinstance(record.msg, str):
-            record.msg = self.redact(record.msg)
-        if hasattr(record, "args") and record.args:
-            record.args = tuple(self.redact(str(arg)) for arg in record.args)
-        return True
+        return redact(super().format(record))
 
 
 class Logger:
@@ -196,7 +85,8 @@ class Logger:
 
     @staticmethod
     def redact_sensitive_info(text: str) -> str:
-        return SmartRedactionFilter.redact(text)
+        """Mask secret-shaped substrings in `text` (see backend.util.log_redaction)."""
+        return redact(text)
 
     def __init__(
         self,
@@ -231,6 +121,9 @@ class Logger:
         already_initialized = key in Logger._initialized
 
         self._logger = logging.getLogger(module_name)
+        # Filter goes on the LOGGER, not each handler: it then runs once per
+        # record and covers handlers attached later (root's ErrorNotifyHandler).
+        attach_redaction_filter(self._logger)
         # Stamp start_time on every instantiation — log_outro() uses
         # `datetime.now() - start_time` to print "Run Time:", and the
         # _initialized cache below short-circuits the handler/rotation
@@ -294,25 +187,26 @@ class Logger:
             os.rename(log_file_path, rotated_log_path(log_file_path, 1))
 
     def _setup_handlers(self, log_file_path: str, max_logs: int) -> None:
-        """Setup logging handlers with improved redaction."""
+        """Setup logging handlers (redaction lives on the logger, not here)."""
         formatter = SafeFormatter(
             fmt="%(asctime)s %(levelname)s %(source_tag)s[%(filename)s]: %(message)s",
             datefmt="%d/%m/%Y %H:%M:%S",
         )
-        redaction_filter = SmartRedactionFilter()
 
         # maxBytes must be non-zero or doRollover() never fires, and backupCount
         # must be >= 1 or rollover reopens the base file in append mode — the
         # size cap then bounds nothing and thrashes a rollover per record.
+        # encoding is explicit: the redaction mask is non-ASCII, so the file must
+        # not depend on the container locale to be writable.
         file_handler = RotatingFileHandler(
             log_file_path,
             mode="a",
             maxBytes=_max_log_bytes(),
             backupCount=max(1, max_logs),
+            encoding="utf-8",
         )
         file_handler.namer = rotation_namer
         file_handler.setFormatter(formatter)
-        file_handler.addFilter(redaction_filter)
         self._logger.addHandler(file_handler)
 
         # Console handler for general module or when LOG_TO_CONSOLE is set
@@ -334,7 +228,6 @@ class Logger:
             )
             console.addFilter(lambda record: record.levelno < logging.ERROR)
             console.setFormatter(SafeFormatter("%(message)s"))
-            console.addFilter(redaction_filter)
             self._logger.addHandler(console)
 
         # Error console handler (always present for errors)
@@ -343,7 +236,6 @@ class Logger:
         error_console.setFormatter(
             SafeFormatter(f"%(levelname)s [{self.module_name.upper()}]: %(message)s")
         )
-        error_console.addFilter(redaction_filter)
         self._logger.addHandler(error_console)
 
     def get_adapter(self, extra=None):

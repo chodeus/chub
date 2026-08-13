@@ -423,19 +423,19 @@ def test_formatter_redacts_secret_in_traceback():
         )
     out = fmt.format(rec)
     assert "SECRETTOKEN1234567890" not in out
-    assert "[redacted]" in out
+    assert "X-Plex-Token=SECR…" in out  # key stays visible, value masked
 
 
 # 16. The redaction filter must mask a Notifiarr passthrough API key (URL path,
 #     not a query param).
 def test_redact_notifiarr_passthrough_key():
-    from backend.util.logger import SmartRedactionFilter
+    from backend.util.log_redaction import redact
 
     s = (
         "ConnectionError: HTTPSConnectionPool ... url: "
         "https://notifiarr.com/api/v1/notification/passthrough/abcd1234efgh5678ijkl"
     )
-    out = SmartRedactionFilter.redact(s)
+    out = redact(s)
     assert "abcd1234efgh5678ijkl" not in out
     assert "passthrough/[redacted]" in out
 
@@ -443,18 +443,18 @@ def test_redact_notifiarr_passthrough_key():
 # 17. OAuth tokens in yaml/unquoted key:value form must redact too — a dumped
 #     gdrive config leaked access_token / refresh_token to sync_gdrive.log.
 def test_redact_oauth_tokens_in_yaml_form():
-    from backend.util.logger import SmartRedactionFilter
+    from backend.util.log_redaction import redact
 
     s = (
         "token:\n"
         "  access_token: ya29.a0AfB_verylongsecretvalue1234567890\n"
         "  refresh_token: 1//0gLongRefreshTokenValue1234567890abcd\n"
     )
-    out = SmartRedactionFilter.redact(s)
+    out = redact(s)
     assert "ya29.a0AfB_verylongsecretvalue1234567890" not in out
     assert "1//0gLongRefreshTokenValue1234567890abcd" not in out
-    assert "access_token: [redacted]" in out
-    assert "refresh_token: [redacted]" in out
+    assert "access_token: ya29…" in out
+    assert "refresh_token: 1//0…" in out
 
 
 # --- Round 3: backend correctness + perf audit ---
