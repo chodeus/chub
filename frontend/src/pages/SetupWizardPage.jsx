@@ -661,7 +661,7 @@ const ReviewStep = ({ account, username, plex, arr, tmdb, gdrive, notify }) => {
 // ── Scoped styles (CHUB tokens, no utility-class dependency) ──────────────
 const WizardStyles = () => (
     <style>{`
-        .sw-page { display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--bg); padding:1.5rem; }
+        .sw-page { display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:100dvh; background:var(--bg); padding:1.5rem; }
         .sw-card { width:100%; max-width:1000px; display:grid; grid-template-columns:270px 1fr; background:var(--surface); border:1px solid var(--border-light); border-radius:var(--radius-xl,24px); overflow:hidden; min-height:600px; }
         .sw-rail { background:var(--sidebar-bg); padding:1.5rem 1.25rem; display:flex; flex-direction:column; gap:.2rem; border-right:1px solid var(--border-light); }
         .sw-brand { display:flex; align-items:center; gap:.65rem; margin-bottom:1.3rem; }
@@ -707,13 +707,13 @@ const WizardStyles = () => (
         .sw-meta { flex:1; min-width:0; }
         .sw-meta b { font-size:.9rem; color:var(--text-primary); }
         .sw-meta small { display:block; color:var(--text-tertiary); font-size:.74rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .sw-rm { background:transparent; border:none; color:var(--text-tertiary); cursor:pointer; font-size:1.1rem; }
+        .sw-rm { background:transparent; border:none; color:var(--text-tertiary); cursor:pointer; font-size:1.1rem; min-width:44px; min-height:44px; touch-action:manipulation; }
         .sw-rm:hover { color:var(--error); }
         .sw-review { display:flex; flex-direction:column; gap:.55rem; }
         .sw-rev { display:flex; align-items:center; gap:.7rem; padding:.7rem .9rem; border-radius:var(--radius-md,12px); background:var(--input-bg); border:1px solid var(--border-light); }
         .sw-ic { width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:.8rem; flex:none; background:var(--surface-alt); color:var(--text-tertiary); }
         .sw-rev.ok .sw-ic { background:color-mix(in srgb, var(--success) 25%, transparent); color:var(--success); }
-        .sw-nav { display:flex; align-items:center; gap:.6rem; margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border); }
+        .sw-nav { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border); }
         .sw-grow { flex:1; }
         .sw-gate { font-size:.76rem; color:var(--text-tertiary); }
         .sw-gate.met { color:var(--success); }
@@ -722,6 +722,11 @@ const WizardStyles = () => (
             .sw-rail { flex-direction:row; overflow-x:auto; border-right:none; border-bottom:1px solid var(--border-light); }
             .sw-labels, .sw-sub { display:none; }
             .sw-row, .sw-row3 { grid-template-columns:1fr; }
+            .sw-page { padding:1rem; }
+            .sw-content { padding:1.25rem 1rem 1.5rem; }
+            /* Review gate leads the wrapped row; empty spacers add no line. */
+            .sw-grow { flex-basis:100%; order:-1; }
+            .sw-grow:empty { display:none; }
         }
     `}</style>
 );

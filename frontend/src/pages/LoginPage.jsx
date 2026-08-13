@@ -68,10 +68,10 @@ const LoginPage = () => {
     const fieldError = (cond, val) => (cond && !val ? 'border-error' : 'border-border');
     const labelCls = 'font-mono text-[10px] tracking-wider text-fg-subtle';
     const inputCls =
-        'h-[42px] px-3 rounded-lg bg-surface-inset border text-fg text-sm outline-none focus:border-primary transition-colors';
+        'h-input px-3 rounded-lg bg-surface-inset border text-fg text-sm outline-none focus:border-primary transition-colors';
 
     return (
-        <div className="relative min-h-screen flex items-center justify-center p-4 bg-canvas overflow-hidden">
+        <div className="relative min-h-app flex items-center justify-center p-4 bg-canvas overflow-hidden">
             <div className="absolute inset-0" style={DOT_GRID} aria-hidden="true" />
 
             <div className="relative w-full max-w-[408px] flex flex-col gap-[22px]">
@@ -138,6 +138,8 @@ const LoginPage = () => {
 
                     <label className="flex flex-col gap-1.5">
                         <span className={labelCls}>PASSWORD</span>
+                        {/* pr-11 on the input reserves exactly the toggle's touch-target
+                            44px, so the value never runs under the eye. */}
                         <div className="relative flex items-center">
                             <input
                                 type={showPw ? 'text' : 'password'}
@@ -149,15 +151,18 @@ const LoginPage = () => {
                                 }}
                                 disabled={submitting}
                                 placeholder="••••••••"
-                                className={`${inputCls} flex-1 pr-10 ${fieldError(!!errorMsg, password)} placeholder:text-fg-dim`}
+                                className={`${inputCls} flex-1 pr-11 ${fieldError(!!errorMsg, password)} placeholder:text-fg-dim`}
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPw(s => !s)}
-                                className="absolute right-2.5 text-fg-subtle hover:text-fg flex touch-expand"
+                                className="absolute right-0 top-1/2 -translate-y-1/2 touch-target flex items-center justify-center text-fg-subtle hover:text-fg"
                                 aria-label={showPw ? 'Hide password' : 'Show password'}
                             >
-                                <span className="material-symbols-outlined text-[18px]">
+                                <span
+                                    className="material-symbols-outlined text-[18px]"
+                                    aria-hidden="true"
+                                >
                                     {showPw ? 'visibility_off' : 'visibility'}
                                 </span>
                             </button>
