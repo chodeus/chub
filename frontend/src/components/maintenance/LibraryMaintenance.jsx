@@ -133,10 +133,10 @@ const OrphanedCacheCard = () => {
             </div>
             {items.length > 0 && (
                 <div className="rounded bg-surface-alt">
-                    <div className="flex items-center gap-2 p-2 border-b border-border text-xs text-fg-subtle">
+                    <label className="touch-target flex items-center gap-2 px-2 border-b border-border text-xs text-fg-subtle cursor-pointer">
                         <input type="checkbox" checked={allSelected} onChange={toggleAll} />
                         <span>Select all</span>
-                    </div>
+                    </label>
                     <div
                         className="flex flex-col divide-y divide-border overflow-y-auto"
                         style={{ maxHeight: '24rem' }}
@@ -144,7 +144,7 @@ const OrphanedCacheCard = () => {
                         {items.map(row => (
                             <label
                                 key={row.id}
-                                className="flex items-center gap-2 p-2 cursor-pointer hover:bg-surface"
+                                className="touch-target flex items-center gap-2 p-2 cursor-pointer hover:bg-surface"
                             >
                                 <input
                                     type="checkbox"

@@ -102,7 +102,7 @@ export const ScheduleBlocksEditor = ({ blocks, onChange, disabled }) => {
                             placeholder={`Block ${i + 1} label`}
                             className="flex-1 px-2 py-1 rounded bg-surface border border-border text-sm"
                         />
-                        <label className="flex items-center gap-1 text-xs cursor-pointer">
+                        <label className="touch-expand flex items-center gap-1 text-xs cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={b.enabled}

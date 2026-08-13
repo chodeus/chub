@@ -242,7 +242,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     <button
                         type="button"
                         onClick={handleGoUp}
-                        className="w-full text-left px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-alt cursor-pointer border-b border-border flex items-center gap-2"
+                        className="touch-target w-full text-left px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-alt cursor-pointer border-b border-border flex items-center gap-2"
                     >
                         <span className="material-symbols-outlined text-base">arrow_upward</span>
                         ..
@@ -262,7 +262,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                                 key={name}
                                 type="button"
                                 onClick={() => handleNavigate(name)}
-                                className="w-full text-left px-3 py-1.5 text-sm text-fg hover:bg-surface-alt cursor-pointer border-b border-border last:border-b-0 flex items-center gap-2"
+                                className="touch-target w-full text-left px-3 py-1.5 text-sm text-fg hover:bg-surface-alt cursor-pointer border-b border-border last:border-b-0 flex items-center gap-2"
                             >
                                 <span className="material-symbols-outlined text-base text-fg-muted">
                                     folder

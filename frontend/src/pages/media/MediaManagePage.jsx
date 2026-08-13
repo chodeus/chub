@@ -128,7 +128,7 @@ const DuplicateGroup = ({
                                                     onToggleSelect(id, live.size_bytes ?? 0)
                                                 }
                                                 aria-label={isSel ? 'Deselect copy' : 'Select copy'}
-                                                className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center transition-colors"
+                                                className="touch-expand w-[18px] h-[18px] rounded-[5px] flex items-center justify-center transition-colors"
                                                 style={{
                                                     background: isSel
                                                         ? 'var(--primary)'
@@ -360,7 +360,7 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
                         </span>
                         ? This action cannot be undone.
                     </p>
-                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                    <label className="touch-expand flex items-center gap-2 mt-3 cursor-pointer">
                         <input
                             type="checkbox"
                             checked={deleteFiles}
@@ -1111,7 +1111,7 @@ const MediaManagePage = () => {
                         <span className="font-semibold text-fg">{deleteTarget?.title}</span>? This
                         action cannot be undone.
                     </p>
-                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                    <label className="touch-expand flex items-center gap-2 mt-3 cursor-pointer">
                         <input
                             type="checkbox"
                             checked={deleteFiles}
@@ -1263,7 +1263,7 @@ const MediaManagePage = () => {
                             })}
                         </div>
                     )}
-                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                    <label className="touch-expand flex items-center gap-2 mt-3 cursor-pointer">
                         <input
                             type="checkbox"
                             checked={resolveDeleteFiles}

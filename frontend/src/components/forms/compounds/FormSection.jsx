@@ -36,7 +36,7 @@ export const FormSection = React.memo(
                             (collapsible ? (
                                 <button
                                     type="button"
-                                    className="flex items-center w-full bg-transparent border-none p-0 text-left cursor-pointer hover:text-fg transition-colors"
+                                    className="touch-expand flex items-center w-full bg-transparent border-none p-0 text-left cursor-pointer hover:text-fg transition-colors"
                                     onClick={toggleCollapsed}
                                     aria-expanded={!isCollapsed}
                                 >

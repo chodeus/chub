@@ -609,7 +609,7 @@ export const JobsPage = () => {
                                                         e.stopPropagation();
                                                         handleRetry(job.id);
                                                     }}
-                                                    className="font-mono text-[11px] text-accent hover:underline disabled:opacity-50 cursor-pointer"
+                                                    className="touch-expand font-mono text-[11px] text-accent hover:underline disabled:opacity-50 cursor-pointer"
                                                 >
                                                     {isRetrying ? '…' : 'Retry'}
                                                 </button>

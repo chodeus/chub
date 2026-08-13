@@ -74,7 +74,7 @@ export const SplitButton = React.memo(
                         {options.map((option, index) => (
                             <button
                                 key={index}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg text-left hover:bg-surface-hover"
+                                className="touch-target flex w-full items-center gap-2 px-3 py-2 text-sm text-fg text-left hover:bg-surface-hover"
                                 onClick={() => handleOptionClick(option.onClick)}
                                 role="menuitem"
                             >
