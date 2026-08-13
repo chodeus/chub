@@ -28,7 +28,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.13-slim@sha256:6771159cd4fa5d9bba1258caf0b82e6b73458c694d178ad97c5e925c2d0e1a91 AS builder
+FROM python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a AS builder
 ARG NODE_MAJOR=24
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -85,7 +85,7 @@ COPY --from=frontend /app/frontend/dist ./frontend/dist
 # -------------------------
 # Stage 2: Final runtime image
 # -------------------------
-FROM python:3.13-slim@sha256:6771159cd4fa5d9bba1258caf0b82e6b73458c694d178ad97c5e925c2d0e1a91
+FROM python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a
 
 WORKDIR /app
 
