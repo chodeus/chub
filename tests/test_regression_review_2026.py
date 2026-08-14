@@ -489,7 +489,7 @@ def _app(router, db=None):
 #     templates/ path that doesn't exist in the Docker image (empty list).
 def test_poster_list_uses_static_dir(monkeypatch, tmp_path):
     """The list endpoint reads STATIC_DIR/posters, not templates/posters."""
-    import backend.api.posters as posters
+    from backend.api.posters import router as posters_router
 
     posters_dir = tmp_path / "posters"
     posters_dir.mkdir()
@@ -497,7 +497,7 @@ def test_poster_list_uses_static_dir(monkeypatch, tmp_path):
     (posters_dir / "notes.txt").write_text("ignored")
     monkeypatch.setenv("STATIC_DIR", str(tmp_path))
 
-    resp = _app(posters.router).get("/api/posters/list")
+    resp = _app(posters_router).get("/api/posters/list")
     assert resp.status_code == 200
     assert resp.json()["data"]["files"] == ["default-movie.jpg"]
 
