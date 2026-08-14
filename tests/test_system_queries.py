@@ -342,6 +342,22 @@ def test_count_added_since_honours_the_created_at_cutoff(db):
     assert db.media.count_added_since("2019-01-01 00:00:00") == 2
 
 
+def test_count_added_since_counts_a_current_timestamp_row_against_an_iso_cutoff(db):
+    """created_at is CURRENT_TIMESTAMP-shaped; the digest's ISO cutoff must still match it."""
+    _seed_media(db, "Dune")
+    db.media.execute_query(
+        "UPDATE media_cache SET created_at='2026-01-05 18:30:00' WHERE title='Dune'"
+    )
+    _seed_media(db, "Sicario")
+    db.media.execute_query(
+        "UPDATE media_cache SET created_at='2026-01-05 03:00:00' WHERE title='Sicario'"
+    )
+
+    # ' ' sorts below 'T' at index 10, so a TEXT compare drops Dune despite it
+    # being the later row. This is the exact cutoff shape system.py builds.
+    assert db.media.count_added_since("2026-01-05T09:00:00.123456+00:00") == 1
+
+
 def test_count_unmatched_counts_only_unmatched_media(db):
     """matched=0 is the filter; a matched row must not inflate the figure."""
     _seed_media(db, "Dune", matched=0)
