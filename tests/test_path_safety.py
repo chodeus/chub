@@ -285,6 +285,17 @@ def test_resolve_under_root_confines_relative_paths_to_the_base(config_with_root
     assert resolve_under_root(str(tmp_path), "a.jpg", config) is None
 
 
+def test_resolve_confined_denies_a_prefix_sibling_of_a_root(config_with_roots):
+    """`/posters_src_evil` must not pass as inside `/posters_src` on a bare prefix."""
+    config, tmp_path = config_with_roots
+    sibling = tmp_path / "posters_src_evil"
+    sibling.mkdir()
+    victim = sibling / "x.jpg"
+    victim.write_text("x")
+
+    assert resolve_confined(str(victim), config) is None
+
+
 def test_resolve_under_root_denies_a_prefix_sibling_of_the_base(config_with_roots):
     """`/posters_evil/x` must not slip past a `/posters` base via a bare prefix check."""
     config, tmp_path = config_with_roots

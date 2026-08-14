@@ -214,11 +214,9 @@ def get_browse_roots(config: ChubConfig) -> List[Path]:
 def is_path_allowed(path: str, config: ChubConfig) -> bool:
     """
     Check whether *path* falls under one of the allowed roots.
-    Returns True if the resolved path is inside any allowed root.
 
-    The path is resolved to an absolute path and then checked against
-    each allowed root using Path.relative_to(), which is safe against
-    traversal attacks (symlinks, .., etc.) because resolve() normalizes.
+    realpath resolves symlinks and `..` before the comparison, so traversal
+    can't win; the os.sep suffix keeps `/root_evil` out of `/root`.
     """
     if not path or not isinstance(path, str):
         return False
@@ -226,16 +224,16 @@ def is_path_allowed(path: str, config: ChubConfig) -> bool:
     if "\x00" in path:
         return False
     try:
-        target = Path(path).expanduser().resolve()  # noqa: S108 — validated below
+        target = os.path.realpath(os.path.expanduser(path))
     except (ValueError, OSError):
         return False
 
+    # realpath + os.sep prefix: same verdict relative_to gave, in the shape
+    # CodeQL accepts as a traversal barrier. os.sep stops /root_evil.
     for root in get_allowed_roots(config):
-        try:
-            target.relative_to(root)
+        base = str(root)
+        if target == base or target.startswith(base + os.sep):
             return True
-        except ValueError:
-            continue
 
     return False
 

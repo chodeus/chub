@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backend.util.config import ConfigError  # noqa: E402
+from backend.util.config import ChubConfig, ConfigError  # noqa: E402
 from backend.util.database import ChubDB  # noqa: E402
 
 
@@ -510,9 +510,7 @@ def test_thumbnail_and_download_refuse_rows_outside_allowed_roots(
     victim.write_bytes(b"x")
     pid = _seed_poster(db, "Evil", file=str(victim), folder=str(victim.parent))
 
-    import backend.util.config as cfg
-
-    monkeypatch.setattr(cfg, "load_config", cfg.ChubConfig)
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
     client = _client(db)
 
     thumb = client.get(f"/api/posters/{pid}/thumbnail")
