@@ -13,6 +13,7 @@ from backend.util.plex_metadata import (
     get_in_use_hashes,
     get_plex_metadata_dir,
     invalidate_cache,
+    resolve_in_metadata_dir,
     scan_bundles,
 )
 
@@ -48,6 +49,20 @@ def test_classify_variant_kind_case_insensitive():
 
 def test_get_plex_metadata_dir_joins():
     assert get_plex_metadata_dir("/plex") == "/plex/Metadata"
+
+
+def test_resolve_in_metadata_dir_confines_to_the_metadata_tree(tmp_path):
+    """The one confinement check behind delete_variant, set-active and thumbnails."""
+    inside = tmp_path / "Metadata" / "Movies" / "x"
+    inside.parent.mkdir(parents=True)
+    inside.write_bytes(b"x")
+
+    assert resolve_in_metadata_dir(str(inside), str(tmp_path)) == str(inside)
+    assert resolve_in_metadata_dir(str(tmp_path / "Metadata"), str(tmp_path)) is None
+    assert (
+        resolve_in_metadata_dir(str(tmp_path / "Metadata" / ".." / "etc"), str(tmp_path))
+        is None
+    )
 
 
 # --- copy_plex_db ---

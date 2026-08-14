@@ -28,9 +28,22 @@ from backend.api.utils import (
 )
 from backend.modules.sync_gdrive import SyncGDrive
 from backend.modules.unmatched_assets import UnmatchedAssets
+from backend.util.asset_candidates import rank_candidates
 from backend.util.config import ConfigError
 from backend.util.database import ChubDB
+from backend.util.database.poster_cache import ARTWORK_IMAGE_TYPES
 from backend.util.helper import get_static_dir
+from backend.util.poster_cleanarr_settings import (
+    build_cleanup_overrides,
+    get_excluded_libraries,
+    get_plex_path,
+)
+from backend.util.poster_images import (
+    build_thumbnail,
+    optimize_poster_files,
+    resolve_format,
+    transcode_poster,
+)
 
 router = APIRouter(
     prefix="/api/posters",
@@ -985,174 +998,29 @@ async def optimize_posters(
     quality = max(1, min(100, body.get("quality", 85)))
     mode = body.get("mode", "report")
 
-    format_map = {"jpeg": "JPEG", "jpg": "JPEG", "webp": "WEBP", "png": "PNG"}
-    pil_format = format_map.get(target_format, "JPEG")
-    ext_map = {"JPEG": ".jpg", "WEBP": ".webp", "PNG": ".png"}
-    target_ext = ext_map.get(pil_format, ".jpg")
+    pil_format, target_ext = resolve_format(target_format)
 
     # The full-cache read + per-poster PIL resize/convert loop is heavy and
     # CPU-bound; run it off the event loop so it doesn't freeze the server.
-    return await run_in_threadpool(
-        _optimize_posters_sync,
-        db,
-        logger,
-        max_width,
-        max_height,
-        pil_format,
-        target_ext,
-        quality,
-        mode,
-    )
-
-
-def _optimize_posters_sync(
-    db,
-    logger,
-    max_width,
-    max_height,
-    pil_format,
-    target_ext,
-    quality,
-    mode,
-) -> JSONResponse:
-    """Blocking body of optimize_posters — runs in a worker thread."""
-    from PIL import Image
-
     try:
-        # Get all posters from cache
-        posters = db.poster.get_all()
-        if not posters:
-            return ok(
-                "No posters found to optimize",
-                {
-                    "processed": 0,
-                    "skipped": 0,
-                    "failed": 0,
-                    "bytes_saved": 0,
-                    "mode": mode,
-                },
-            )
+        from backend.util.config import load_config
 
-        processed = 0
-        skipped = 0
-        failed = 0
-        bytes_saved = 0
-        details = []
-
-        for poster in posters:
-            file_path = poster.get("file", "")
-            folder = poster.get("folder", "")
-            full_path = os.path.join(folder, file_path) if folder else file_path
-
-            if not full_path or not os.path.isfile(full_path):
-                skipped += 1
-                continue
-
-            try:
-                original_size = os.path.getsize(full_path)
-
-                with Image.open(full_path) as img:
-                    w, h = img.size
-                    needs_resize = w > max_width or h > max_height
-                    needs_convert = not full_path.lower().endswith(target_ext)
-
-                    if not needs_resize and not needs_convert:
-                        skipped += 1
-                        continue
-
-                    if mode == "report":
-                        details.append(
-                            {
-                                "file": full_path,
-                                "size": original_size,
-                                "dimensions": f"{w}x{h}",
-                                "needs_resize": needs_resize,
-                                "needs_convert": needs_convert,
-                            }
-                        )
-                        processed += 1
-                        continue
-
-                    # Actually optimize
-                    if needs_resize:
-                        img.thumbnail((max_width, max_height), Image.LANCZOS)
-
-                    img = img.convert("RGB") if pil_format in ("JPEG",) else img
-
-                    # Save to temp file, then replace
-                    import tempfile
-
-                    with tempfile.NamedTemporaryFile(
-                        suffix=target_ext, delete=False, dir=os.path.dirname(full_path)
-                    ) as tmp:
-                        save_kwargs = {"format": pil_format}
-                        if pil_format in ("JPEG", "WEBP"):
-                            save_kwargs["quality"] = quality
-                            save_kwargs["optimize"] = True
-                        img.save(tmp.name, **save_kwargs)
-                        new_size = os.path.getsize(tmp.name)
-
-                        if new_size < original_size:
-                            import shutil
-
-                            # Convert changes the container, so write the new
-                            # extension and drop the original — else a .png would
-                            # hold JPEG bytes.
-                            base, _ = os.path.splitext(full_path)
-                            dest_path = (
-                                base + target_ext if needs_convert else full_path
-                            )
-                            # Don't clobber a different pre-existing file at the
-                            # converted extension (e.g. a Kometa .jpg beside a
-                            # Plex .png) — leave both, mirror poster_self_heal.
-                            if dest_path != full_path and os.path.exists(dest_path):
-                                os.unlink(tmp.name)
-                                logger.warning(
-                                    f"optimize target exists, skipped to avoid "
-                                    f"clobber: {dest_path}"
-                                )
-                                skipped += 1
-                                continue
-                            shutil.move(tmp.name, dest_path)
-                            if dest_path != full_path:
-                                if os.path.exists(full_path):
-                                    os.remove(full_path)
-                                poster["file"] = os.path.basename(dest_path)
-                                try:
-                                    db.poster.upsert(poster)
-                                except Exception as ce:
-                                    logger.warning(
-                                        f"optimized {dest_path}; cache update "
-                                        f"failed: {ce}"
-                                    )
-                            bytes_saved += original_size - new_size
-                            processed += 1
-                        else:
-                            os.unlink(tmp.name)
-                            skipped += 1
-
-            except Exception as e:
-                logger.warning(f"Failed to optimize {full_path}: {e}")
-                failed += 1
-
-        saved_mb = round(bytes_saved / (1024 * 1024), 1)
-        result_data = {
-            "processed": processed,
-            "skipped": skipped,
-            "failed": failed,
-            "bytes_saved": bytes_saved,
-            "mode": mode,
-        }
-        if mode == "report" and details:
-            result_data["candidates"] = details[:100]
-
-        msg = (
-            f"Found {processed} posters to optimize"
-            if mode == "report"
-            else f"Optimized {processed} posters, saved {saved_mb} MB"
+        # Loaded once here so the loop confines every cache row it rewrites.
+        config = load_config()
+        message, data = await run_in_threadpool(
+            optimize_poster_files,
+            db,
+            logger,
+            config,
+            max_width,
+            max_height,
+            pil_format,
+            target_ext,
+            quality,
+            mode,
         )
-        return ok(msg, result_data)
-
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error optimizing posters: {e}", exc_info=True)
         return error(
@@ -1160,6 +1028,7 @@ def _optimize_posters_sync(
             code="OPTIMIZE_ERROR",
             status_code=500,
         )
+    return ok(message, data)
 
 
 @router.get(
@@ -1424,10 +1293,9 @@ async def ignore_artwork(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """Toggle the per-(media, image_type) ignore flag in media_asset_matches."""
-    allowed = {"logo", "background", "squareart"}
-    if image_type not in allowed:
+    if image_type not in ARTWORK_IMAGE_TYPES:
         return error(
-            f"image_type must be one of {sorted(allowed)}, got '{image_type}'",
+            f"image_type must be one of {sorted(ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
             code="INVALID_IMAGE_TYPE",
             status_code=400,
         )
@@ -1451,9 +1319,6 @@ async def ignore_artwork(
         )
 
 
-_ARTWORK_IMAGE_TYPES = {"logo", "background", "squareart"}
-
-
 @router.get(
     "/match/{media_id}/artwork/{image_type}/candidates",
     summary="Candidate artwork files for one (media, image_type)",
@@ -1469,19 +1334,13 @@ async def get_artwork_candidates(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    if image_type not in _ARTWORK_IMAGE_TYPES:
+    if image_type not in ARTWORK_IMAGE_TYPES:
         return error(
-            f"image_type must be one of {sorted(_ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
+            f"image_type must be one of {sorted(ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
             code="INVALID_IMAGE_TYPE",
             status_code=400,
         )
     try:
-        import difflib
-        import json as _json
-
-        from backend.util.helper import is_match
-        from backend.util.normalization import normalize_titles
-
         row = (
             db.collection.get_by_id(media_id)
             if kind == "collection"
@@ -1491,66 +1350,24 @@ async def get_artwork_candidates(
             return error("Media row not found", code="NOT_FOUND", status_code=404)
 
         asset_type = "collection" if kind == "collection" else row.get("asset_type")
-        season_number = row.get("season_number")
-        try:
-            alts = _json.loads(row.get("alternate_titles") or "[]")
-        except (ValueError, TypeError):
-            alts = []
-        search_titles = [row.get("title")] + [a for a in alts if a]
-        row_norm = row.get("normalized_title") or normalize_titles(
-            row.get("title") or ""
-        )
-
-        seen = set()
-        gathered = []
-        for st in search_titles:
-            for c in db.poster.get_candidates_by_prefix(
-                st or "", asset_type=asset_type, image_type=image_type
-            ):
-                f = c.get("file")
-                if f and f not in seen:
-                    seen.add(f)
-                    gathered.append(c)
-                if len(gathered) >= 800:  # bound the pool before scoring
-                    break
-
-        # Same scoring as the poster picker: rank real matches first, then by
-        # title similarity, and drop same-prefix-but-unrelated noise.
-        scored = []
-        for c in gathered:
-            cs = c.get("season_number")
-            if season_number is not None and cs != season_number:
-                continue
-            if season_number is None and cs is not None:
-                continue
-            matched, reason = is_match(c, row)
-            sim = difflib.SequenceMatcher(
-                None, row_norm, c.get("normalized_title") or ""
-            ).ratio()
-            scored.append((bool(matched), sim, c, reason))
-
-        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
-
-        candidates = []
-        for matched, sim, c, reason in scored:
-            if not matched and sim < 0.6:
-                continue
-            candidates.append(
-                {
-                    "poster_id": c.get("id"),
-                    "title": c.get("title"),
-                    "year": c.get("year"),
-                    "season_number": c.get("season_number"),
-                    "style": c.get("style"),
-                    "image_type": c.get("image_type"),
-                    "owner": os.path.basename(os.path.dirname(c.get("file") or "")),
-                    "would_match": matched,
-                    "similarity": round(sim, 2),
-                    "reason": reason or "title/year/season did not satisfy the matcher",
-                }
+        # Same scoring as the poster picker, scoped to one artwork type.
+        candidates = [
+            {
+                "poster_id": c.get("id"),
+                "title": c.get("title"),
+                "year": c.get("year"),
+                "season_number": c.get("season_number"),
+                "style": c.get("style"),
+                "image_type": c.get("image_type"),
+                "owner": os.path.basename(os.path.dirname(c.get("file") or "")),
+                "would_match": matched,
+                "similarity": round(sim, 2),
+                "reason": reason or "title/year/season did not satisfy the matcher",
+            }
+            for c, matched, sim, reason in rank_candidates(
+                db, row, asset_type, image_type=image_type, limit=limit
             )
-            if len(candidates) >= limit:
-                break
+        ]
 
         return ok(
             f"{len(candidates)} candidate {image_type} files",
@@ -1559,7 +1376,7 @@ async def get_artwork_candidates(
                 "media": {
                     "title": row.get("title"),
                     "year": row.get("year"),
-                    "season_number": season_number,
+                    "season_number": row.get("season_number"),
                     "type": asset_type,
                     "image_type": image_type,
                 },
@@ -1597,9 +1414,9 @@ def apply_artwork(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """Link one artwork file to a media/collection row, apply it, and lock it."""
-    if image_type not in _ARTWORK_IMAGE_TYPES:
+    if image_type not in ARTWORK_IMAGE_TYPES:
         return error(
-            f"image_type must be one of {sorted(_ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
+            f"image_type must be one of {sorted(ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
             code="INVALID_IMAGE_TYPE",
             status_code=400,
         )
@@ -1669,9 +1486,9 @@ async def unlock_artwork(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    if image_type not in _ARTWORK_IMAGE_TYPES:
+    if image_type not in ARTWORK_IMAGE_TYPES:
         return error(
-            f"image_type must be one of {sorted(_ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
+            f"image_type must be one of {sorted(ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
             code="INVALID_IMAGE_TYPE",
             status_code=400,
         )
@@ -1814,13 +1631,6 @@ async def get_match_candidates(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     try:
-        import json as _json
-
-        import difflib
-
-        from backend.util.helper import is_match
-        from backend.util.normalization import normalize_titles
-
         row = (
             db.collection.get_by_id(media_id)
             if kind == "collection"
@@ -1830,70 +1640,22 @@ async def get_match_candidates(
             return error("Media row not found", code="NOT_FOUND", status_code=404)
 
         asset_type = "collection" if kind == "collection" else row.get("asset_type")
-        season_number = row.get("season_number")
-        try:
-            alts = _json.loads(row.get("alternate_titles") or "[]")
-        except (ValueError, TypeError):
-            alts = []
-        search_titles = [row.get("title")] + [a for a in alts if a]
-        row_norm = row.get("normalized_title") or normalize_titles(
-            row.get("title") or ""
-        )
-
-        seen = set()
-        gathered = []
-        for st in search_titles:
-            for c in db.poster.get_candidates_by_prefix(
-                st or "", asset_type=asset_type
-            ):
-                f = c.get("file")
-                if f and f not in seen:
-                    seen.add(f)
-                    gathered.append(c)
-                if len(gathered) >= 800:  # bound the pool before scoring
-                    break
-
-        # Score every candidate by title similarity. The prefix bucket alone is
-        # NOT relevance — without this, the picker showed every poster sharing
-        # the first 3 chars ("str" → Striptease, Strays, …) regardless of the
-        # title. Rank real matches first, then by similarity, and drop posters
-        # that neither match nor resemble the title.
-        scored = []
-        for c in gathered:
-            cs = c.get("season_number")
-            if season_number is not None and cs != season_number:
-                continue
-            if season_number is None and cs is not None:
-                continue
-            matched, reason = is_match(c, row)
-            sim = difflib.SequenceMatcher(
-                None, row_norm, c.get("normalized_title") or ""
-            ).ratio()
-            scored.append((bool(matched), sim, c, reason))
-
-        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
-
-        candidates = []
-        for matched, sim, c, reason in scored:
-            # Real matches always show; non-matching extras only if the title
-            # genuinely resembles (drops same-prefix-but-unrelated noise).
-            if not matched and sim < 0.6:
-                continue
-            candidates.append(
-                {
-                    "poster_id": c.get("id"),
-                    "title": c.get("title"),
-                    "year": c.get("year"),
-                    "season_number": c.get("season_number"),
-                    "style": c.get("style"),
-                    "owner": os.path.basename(os.path.dirname(c.get("file") or "")),
-                    "would_match": matched,
-                    "similarity": round(sim, 2),
-                    "reason": reason or "title/year/season did not satisfy the matcher",
-                }
+        candidates = [
+            {
+                "poster_id": c.get("id"),
+                "title": c.get("title"),
+                "year": c.get("year"),
+                "season_number": c.get("season_number"),
+                "style": c.get("style"),
+                "owner": os.path.basename(os.path.dirname(c.get("file") or "")),
+                "would_match": matched,
+                "similarity": round(sim, 2),
+                "reason": reason or "title/year/season did not satisfy the matcher",
+            }
+            for c, matched, sim, reason in rank_candidates(
+                db, row, asset_type, limit=limit
             )
-            if len(candidates) >= limit:
-                break
+        ]
 
         return ok(
             f"{len(candidates)} candidate posters",
@@ -1902,7 +1664,7 @@ async def get_match_candidates(
                 "media": {
                     "title": row.get("title"),
                     "year": row.get("year"),
-                    "season_number": season_number,
+                    "season_number": row.get("season_number"),
                     "type": asset_type,
                 },
             },
@@ -2599,7 +2361,7 @@ async def preview_poster_file(
         # Restrict the served file to configured allowed roots — otherwise
         # an authenticated caller could point at arbitrary dirs (/etc, /root).
         from backend.util.config import load_config
-        from backend.util.path_safety import is_path_allowed, resolve_confined
+        from backend.util.path_safety import resolve_under_root
 
         try:
             config = load_config()
@@ -2608,56 +2370,14 @@ async def preview_poster_file(
         except Exception:  # noqa: S110 — fail closed below
             config = None
 
-        if config is None:
+        # Fail closed: without config there are no allowed roots to check against.
+        file_path = resolve_under_root(location, path, config) if config else None
+        if file_path is None:
             return error(
                 "Access denied - path outside allowed directory",
                 code="PATH_TRAVERSAL_DENIED",
                 status_code=403,
             )
-
-        path_obj = Path(path)
-        if path_obj.is_absolute():
-            # Frontend already gave us a concrete absolute path (e.g. the
-            # Assets Search grid passes item.file straight through, with
-            # item.folder in location as an owner label, not a root).
-            # Validate the file path itself against allowed roots instead
-            # of demanding that `location` is a root. resolve_confined
-            # authorizes the RESOLVED path (symlink escapes included).
-            file_path = resolve_confined(path, config)
-            if file_path is None:
-                return error(
-                    "Access denied - path outside allowed directory",
-                    code="PATH_TRAVERSAL_DENIED",
-                    status_code=403,
-                )
-        else:
-            # Relative path — `location` must be an allowed root and the
-            # resolved result must stay inside it (is_relative_to avoids
-            # the str.startswith bypass where `/posters_evil/x` slipped
-            # past a `/posters` prefix).
-            if not is_path_allowed(location, config):
-                return error(
-                    "Access denied - path outside allowed directory",
-                    code="PATH_TRAVERSAL_DENIED",
-                    status_code=403,
-                )
-            base_dir = Path(location).resolve()
-            # Re-confine the resolved root too — location may itself be a link.
-            if not is_path_allowed(str(base_dir), config):
-                return error(
-                    "Access denied - path outside allowed directory",
-                    code="PATH_TRAVERSAL_DENIED",
-                    status_code=403,
-                )
-            file_path = (base_dir / path).resolve()
-            try:
-                file_path.relative_to(base_dir)
-            except ValueError:
-                return error(
-                    "Access denied - path outside allowed directory",
-                    code="PATH_TRAVERSAL_DENIED",
-                    status_code=403,
-                )
 
         if not file_path.exists() or not file_path.is_file():
             return error(
@@ -2998,50 +2718,6 @@ async def list_applied_media_by_style(
 # ---------------------------------------------------------------------------
 
 
-def _get_plex_path(request: Request) -> Optional[str]:
-    """
-    Resolve the Plex filesystem path from config. The poster_cleanarr module
-    config is the canonical place — general config doesn't store this.
-    """
-    try:
-        from backend.util.config import load_config
-
-        cfg = load_config()
-    except ConfigError:
-        raise
-    except Exception:
-        return None
-    section = getattr(cfg, "poster_cleanarr", None)
-    if section is not None:
-        pp = getattr(section, "plex_path", None)
-        if pp:
-            return str(pp)
-    return None
-
-
-def _get_cleanarr_excluded_libraries(request: Request) -> List[str]:
-    """Plex library names the user opted out of in poster_cleanarr config.
-
-    Display-side mirror of the module's deletion-side deny-list — hides excluded
-    libraries from the by-media view and its libraries[] catalog. A malformed
-    config propagates (CONFIG_INVALID); other failures return [] (show
-    everything). This is a UI filter, not a safety guard — the in-use set is
-    global regardless of any opt-out.
-    """
-    try:
-        from backend.util.config import load_config
-
-        cfg = load_config()
-    except ConfigError:
-        raise
-    except Exception:
-        return []
-    section = getattr(cfg, "poster_cleanarr", None)
-    if section is None:
-        return []
-    return list(getattr(section, "excluded_libraries", None) or [])
-
-
 @router.get("/plex-metadata/by-media")
 async def list_plex_metadata_by_media(
     request: Request,
@@ -3076,7 +2752,7 @@ async def list_plex_metadata_by_media(
             get_cached_transcoder,
         )
 
-        plex_path = _get_plex_path(request)
+        plex_path = get_plex_path()
         if not plex_path:
             # Expected state on every Poster Cleanarr page mount before the
             # user has configured plex_path — not an operational failure, so
@@ -3130,7 +2806,7 @@ async def list_plex_metadata_by_media(
         # so what the user sees matches what a run would touch. The in-use set is
         # unaffected — this is display only.
         excluded_libs = {
-            (n or "").strip().lower() for n in _get_cleanarr_excluded_libraries(request)
+            (n or "").strip().lower() for n in get_excluded_libraries()
         }
         if excluded_libs:
             bundles = [
@@ -3190,7 +2866,7 @@ async def list_plex_metadata_bloat(
     try:
         from backend.util.plex_metadata import bloat_flat_from_scan, get_cached_scan
 
-        plex_path = _get_plex_path(request)
+        plex_path = get_plex_path()
         if not plex_path:
             return error(
                 "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
@@ -3231,48 +2907,6 @@ async def list_plex_metadata_bloat(
         )
 
 
-def _build_cleanup_overrides(body: dict) -> dict:
-    """Assemble the poster_cleanarr job overrides from a cleanup request body.
-    Raises ValueError on an invalid mode (the route maps it to a 400). Bloat
-    accepts "nothing" so the UI can run stale/orphan cleanup with bloat off."""
-    mode = (body.get("mode") or "report").lower()
-    if mode not in ("report", "move", "remove", "nothing"):
-        raise ValueError(f"Invalid mode '{mode}'")
-    overrides: dict = {"mode": mode}
-
-    target_paths = body.get("target_paths")
-    if isinstance(target_paths, list) and target_paths:
-        overrides["target_paths"] = [str(p) for p in target_paths]
-
-    if "orphan_assets_enabled" in body:
-        overrides["orphan_assets_enabled"] = bool(body.get("orphan_assets_enabled"))
-    orphan_mode = body.get("orphan_assets_mode")
-    if isinstance(orphan_mode, str):
-        orphan_mode = orphan_mode.lower()
-        if orphan_mode not in ("report", "move", "remove"):
-            raise ValueError(f"Invalid orphan_assets_mode '{orphan_mode}'")
-        overrides["orphan_assets_mode"] = orphan_mode
-
-    if "stale_duplicates_enabled" in body:
-        overrides["stale_duplicates_enabled"] = bool(
-            body.get("stale_duplicates_enabled")
-        )
-    stale_mode = body.get("stale_duplicates_mode")
-    if isinstance(stale_mode, str):
-        stale_mode = stale_mode.lower()
-        if stale_mode not in ("report", "move", "remove"):
-            raise ValueError(f"Invalid stale_duplicates_mode '{stale_mode}'")
-        overrides["stale_duplicates_mode"] = stale_mode
-
-    asset_dirs = body.get("asset_dirs")
-    if isinstance(asset_dirs, list):
-        overrides["asset_dirs"] = [str(p) for p in asset_dirs]
-
-    if "overlays_only" in body:
-        overrides["overlays_only"] = bool(body.get("overlays_only"))
-    return overrides
-
-
 @router.post("/plex-metadata/cleanup")
 async def run_plex_metadata_cleanup(
     request: Request,
@@ -3299,8 +2933,11 @@ async def run_plex_metadata_cleanup(
         body = await read_json_object(request)
         if body is BODY_TOO_LARGE:
             return body_too_large_error()
+        from backend.util.config import load_config
+
+        config = load_config()
         try:
-            overrides = _build_cleanup_overrides(body)
+            overrides = build_cleanup_overrides(body, config)
         except ValueError as ve:
             logger.error(f"Invalid cleanup request: {ve}")
             return error("Invalid cleanup mode", code="INVALID_MODE", status_code=400)
@@ -3321,6 +2958,8 @@ async def run_plex_metadata_cleanup(
         return error(
             "Failed to enqueue cleanup", code="ENQUEUE_FAILED", status_code=500
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error enqueuing cleanup: {e}")
         return error(
@@ -3345,7 +2984,7 @@ async def delete_plex_metadata_variant(
         path = body.get("path")
         if not isinstance(path, str) or not path:
             return error("Missing 'path'", code="MISSING_PATH", status_code=400)
-        plex_path = _get_plex_path(request)
+        plex_path = get_plex_path()
         if not plex_path:
             return error(
                 "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
@@ -3385,7 +3024,7 @@ async def set_plex_metadata_active(
     variant stays on disk and becomes bloat (cleanable from the same UI).
     """
     try:
-        from backend.util.plex_metadata import invalidate_cache
+        from backend.util.plex_metadata import invalidate_cache, resolve_in_metadata_dir
 
         body = await read_json_object(request)
         if body is BODY_TOO_LARGE:
@@ -3402,14 +3041,13 @@ async def set_plex_metadata_active(
         # Path-injection guard: only allow files inside Plex's Metadata dir.
         # Without this, a caller could upload ANY file on the server as a
         # Plex poster by passing an arbitrary filesystem path.
-        plex_path = _get_plex_path(request)
+        plex_path = get_plex_path()
         if not plex_path:
             return error(
                 "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
             )
-        metadata_dir = os.path.realpath(os.path.join(plex_path, "Metadata"))
-        safe_path = os.path.realpath(path)
-        if not safe_path.startswith(metadata_dir + os.sep):
+        safe_path = resolve_in_metadata_dir(path, plex_path)
+        if safe_path is None:
             return error(
                 "Path outside Plex metadata dir", code="INVALID_PATH", status_code=400
             )
@@ -3478,14 +3116,15 @@ async def get_plex_variant_thumbnail(
     file extension so we send it as image/jpeg (Plex posters are JPEGs).
     Validates the path stays within Plex's Metadata/ dir.
     """
-    plex_path = _get_plex_path(request)
+    from backend.util.plex_metadata import resolve_in_metadata_dir
+
+    plex_path = get_plex_path()
     if not plex_path:
         return error(
             "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
         )
-    metadata_dir = os.path.realpath(os.path.join(plex_path, "Metadata"))
-    real = os.path.realpath(path)
-    if not real.startswith(metadata_dir + os.sep) or not os.path.isfile(real):
+    real = resolve_in_metadata_dir(path, plex_path)
+    if real is None or not os.path.isfile(real):
         return error("Invalid path", code="INVALID_PATH", status_code=400)
     return FileResponse(real, media_type="image/jpeg")
 
@@ -3533,7 +3172,7 @@ async def enqueue_plex_metadata_scan(
     (GET /jobs/{id}/log-tail) before re-fetching /by-media. Duplicate enqueues
     collapse to the in-flight scan."""
     try:
-        plex_path = _get_plex_path(request)
+        plex_path = get_plex_path()
         if not plex_path:
             return error(
                 "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
@@ -3715,30 +3354,9 @@ def get_poster_thumbnail(
                 "Poster file not found on disk", code="FILE_NOT_FOUND", status_code=404
             )
 
-        # Build thumbnail cache path using resolved directory
-        safe_dir = os.path.dirname(full_path)
-        thumb_dir = os.path.join(safe_dir, ".thumbnails")
-        thumb_name = f"{poster_id}_w{width}.jpg"
-        thumb_path = os.path.join(thumb_dir, thumb_name)
-
-        # Serve from cache if fresh
-        if os.path.isfile(thumb_path):
-            src_mtime = os.path.getmtime(full_path)
-            thumb_mtime = os.path.getmtime(thumb_path)
-            if thumb_mtime >= src_mtime:
-                return FileResponse(thumb_path, media_type="image/jpeg")
-
-        # Generate thumbnail
-        from PIL import Image
-
-        os.makedirs(thumb_dir, exist_ok=True)
-        with Image.open(full_path) as img:
-            aspect = img.height / img.width
-            target_height = int(width * aspect)
-            img.thumbnail((width, target_height), Image.LANCZOS)
-            img.convert("RGB").save(thumb_path, "JPEG", quality=60, optimize=True)
-
-        return FileResponse(thumb_path, media_type="image/jpeg")
+        return FileResponse(
+            build_thumbnail(full_path, poster_id, width), media_type="image/jpeg"
+        )
 
     except ConfigError:
         raise
@@ -3843,35 +3461,16 @@ def download_poster(
             return FileResponse(full_path)
 
         # Process the image before serving
-        from PIL import Image
-        import tempfile
-
-        format_map = {"jpeg": "JPEG", "jpg": "JPEG", "webp": "WEBP", "png": "PNG"}
-        pil_format = format_map.get((format or "").lower(), "JPEG")
-        ext_map = {"JPEG": ".jpg", "WEBP": ".webp", "PNG": ".png"}
-        target_ext = ext_map.get(pil_format, ".jpg")
-        media_types = {"JPEG": "image/jpeg", "WEBP": "image/webp", "PNG": "image/png"}
-
-        with Image.open(full_path) as img:
-            if size:
-                img.thumbnail((size, size), Image.LANCZOS)
-            if pil_format in ("JPEG",):
-                img = img.convert("RGB")
-
-            tmp = tempfile.NamedTemporaryFile(suffix=target_ext, delete=False)
-            save_kwargs = {"format": pil_format}
-            if quality and pil_format in ("JPEG", "WEBP"):
-                save_kwargs["quality"] = quality
-                save_kwargs["optimize"] = True
-            img.save(tmp.name, **save_kwargs)
-            tmp.close()
+        tmp_path, media_type, target_ext = transcode_poster(
+            full_path, size=size, image_format=format, quality=quality
+        )
 
         return FileResponse(
-            tmp.name,
-            media_type=media_types.get(pil_format, "image/jpeg"),
+            tmp_path,
+            media_type=media_type,
             filename=f"poster_{poster_id}{target_ext}",
             # FileResponse doesn't delete what it serves — clean up the temp file.
-            background=BackgroundTask(os.unlink, tmp.name),
+            background=BackgroundTask(os.unlink, tmp_path),
         )
 
     except ConfigError:
