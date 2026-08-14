@@ -320,15 +320,40 @@ def resolve(
     return ok("ok", {"tmdb_id": tmdb.find_tmdb_id(external_id, source, mt)})
 
 
+def _resolve_tmdb_id(
+    tmdb: TMDBClient,
+    tmdb_id: Optional[int],
+    tvdb_id: Optional[int],
+    imdb_id: Optional[str],
+    media_type: str,
+) -> Optional[int]:
+    """The title's TMDB id, looked up from a tvdb/imdb id when not supplied."""
+    # TMDB art is keyed by tmdb_id, but a title may only carry a tvdb/imdb one
+    # (Sonarr shows especially) — resolve rather than demand.
+    if tmdb_id:
+        return tmdb_id
+    if tvdb_id:
+        return tmdb.find_tmdb_id(str(tvdb_id), "tvdb_id", media_type)
+    if imdb_id:
+        return tmdb.find_tmdb_id(str(imdb_id), "imdb_id", media_type)
+    return None
+
+
 @router.get("/images", summary="All logos + backdrops + posters for the art picker")
 def images(
-    tmdb_id: int = Query(...),
+    tmdb_id: Optional[int] = Query(None),
+    tvdb_id: Optional[int] = Query(None),
+    imdb_id: Optional[str] = Query(None),
     media_type: str = Query("movie", alias="type"),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
-    imgs = tmdb_art.list_images(tmdb, tmdb_id, media_type) or {
+    mt = "movie" if media_type == "movie" else "tv"
+    resolved = _resolve_tmdb_id(tmdb, tmdb_id, tvdb_id, imdb_id, mt)
+    if not resolved:
+        return ok("ok", {"logos": [], "backdrops": [], "posters": []})
+    imgs = tmdb_art.list_images(tmdb, resolved, media_type) or {
         "logos": [],
         "backdrops": [],
     }
@@ -353,13 +378,18 @@ def images(
     "/season-images", summary="TMDB season posters (portrait) for the art picker"
 )
 def season_images(
-    tmdb_id: int = Query(...),
+    tmdb_id: Optional[int] = Query(None),
+    tvdb_id: Optional[int] = Query(None),
+    imdb_id: Optional[str] = Query(None),
     season_number: int = Query(...),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
-    imgs = tmdb_art.list_season_images(tmdb, tmdb_id, season_number) or {"posters": []}
+    resolved = _resolve_tmdb_id(tmdb, tmdb_id, tvdb_id, imdb_id, "tv")
+    if not resolved:
+        return ok("ok", {"posters": []})
+    imgs = tmdb_art.list_season_images(tmdb, resolved, season_number) or {"posters": []}
     return ok("ok", {"posters": _decorate(imgs.get("posters", []))})
 
 
@@ -480,13 +510,19 @@ def gdrive_type_subfolders(
     "/external-ids", summary="TMDB external ids (tvdb_id + imdb_id) for a title"
 )
 def external_ids(
-    tmdb_id: int = Query(...),
+    tmdb_id: Optional[int] = Query(None),
+    tvdb_id: Optional[int] = Query(None),
+    imdb_id: Optional[str] = Query(None),
     media_type: str = Query("movie", alias="type"),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
-    return ok("ok", tmdb_art.external_ids(tmdb, tmdb_id, media_type))
+    mt = "movie" if media_type == "movie" else "tv"
+    resolved = _resolve_tmdb_id(tmdb, tmdb_id, tvdb_id, imdb_id, mt)
+    if not resolved:
+        return ok("ok", {})
+    return ok("ok", tmdb_art.external_ids(tmdb, resolved, media_type))
 
 
 @router.get("/details", summary="Canonical TMDB title + year for an id")
@@ -504,11 +540,7 @@ def details(
     backfill), then reads the canonical title/year."""
     tmdb = TMDBClient(load_config().tmdb, db, logger)
     mt = "movie" if media_type == "movie" else "tv"
-    resolved = tmdb_id or None
-    if not resolved and tvdb_id:
-        resolved = tmdb.find_tmdb_id(str(tvdb_id), "tvdb_id", mt)
-    if not resolved and imdb_id:
-        resolved = tmdb.find_tmdb_id(str(imdb_id), "imdb_id", mt)
+    resolved = _resolve_tmdb_id(tmdb, tmdb_id, tvdb_id, imdb_id, mt)
     d = (tmdb.get_details(resolved, mt) if resolved else None) or {}
     return ok("ok", {"title": d.get("title"), "year": d.get("year")})
 

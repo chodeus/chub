@@ -231,3 +231,123 @@ def test_generate_endpoint_blank_title_resolved_via_tmdb_id(monkeypatch):
 
     assert resp.status_code == 200
     assert seen["title"] == "Resolved Name"  # backfilled from TMDB by id
+
+
+# --- Art-picker endpoints: TMDB art is keyed by tmdb_id, but the caller need
+# --- not supply one — a tvdb/imdb id is resolved first.
+
+
+class _ResolvingTMDB:
+    """TMDBClient stub: knows one tvdb->tmdb mapping, nothing else."""
+
+    def __init__(self, *a, **k):
+        pass
+
+    def find_tmdb_id(self, external_id, source, media_type):
+        """Resolve only the one id the tests use."""
+        return 1399 if (external_id, source) == ("479037", "tvdb_id") else None
+
+
+def _picker_api(monkeypatch):
+    """The cl2k_maker api module with TMDB + config stubbed for picker calls."""
+    from backend.api import cl2k_maker as api
+
+    monkeypatch.setattr(api, "TMDBClient", _ResolvingTMDB)
+    monkeypatch.setattr(api, "load_config", _render_config)
+    return api
+
+
+def _body(resp):
+    import json
+
+    return json.loads(resp.body)["data"]
+
+
+def test_images_resolves_a_tvdb_only_title(monkeypatch):
+    """A show with no tmdb_id still gets its TMDB art, via the tvdb id."""
+    api = _picker_api(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(
+        api.tmdb_art,
+        "list_images",
+        lambda tmdb, tid, mt: seen.update(tmdb_id=tid) or {"logos": [], "backdrops": []},
+    )
+
+    resp = api.images(
+        tmdb_id=None,
+        tvdb_id=479037,
+        imdb_id=None,
+        media_type="show",
+        db=object(),
+        logger=_cl2k_logger(),
+    )
+
+    assert resp.status_code == 200
+    assert seen["tmdb_id"] == 1399  # resolved, not demanded
+
+
+def test_images_with_no_ids_is_empty_not_an_error(monkeypatch):
+    """A title carrying no id at all degrades to empty art, never a 422."""
+    api = _picker_api(monkeypatch)
+    monkeypatch.setattr(
+        api.tmdb_art,
+        "list_images",
+        lambda *a, **k: pytest.fail("TMDB must not be queried without an id"),
+    )
+
+    resp = api.images(
+        tmdb_id=None,
+        tvdb_id=None,
+        imdb_id=None,
+        media_type="movie",
+        db=object(),
+        logger=_cl2k_logger(),
+    )
+
+    assert resp.status_code == 200
+    assert _body(resp) == {"logos": [], "backdrops": [], "posters": []}
+
+
+def test_season_images_resolves_a_tvdb_only_show(monkeypatch):
+    """Season posters follow the same rule — tvdb id in, TMDB season art out."""
+    api = _picker_api(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(
+        api.tmdb_art,
+        "list_season_images",
+        lambda tmdb, tid, sn: seen.update(tmdb_id=tid, season=sn) or {"posters": []},
+    )
+
+    resp = api.season_images(
+        tmdb_id=None,
+        tvdb_id=479037,
+        imdb_id=None,
+        season_number=2,
+        db=object(),
+        logger=_cl2k_logger(),
+    )
+
+    assert resp.status_code == 200
+    assert (seen["tmdb_id"], seen["season"]) == (1399, 2)
+
+
+def test_external_ids_resolves_a_tvdb_only_title(monkeypatch):
+    """The id backfill works from a tvdb id, so imdb_id can still be filled in."""
+    api = _picker_api(monkeypatch)
+    monkeypatch.setattr(
+        api.tmdb_art,
+        "external_ids",
+        lambda tmdb, tid, mt: {"tvdb_id": 479037, "imdb_id": "tt0903747"},
+    )
+
+    resp = api.external_ids(
+        tmdb_id=None,
+        tvdb_id=479037,
+        imdb_id=None,
+        media_type="show",
+        db=object(),
+        logger=_cl2k_logger(),
+    )
+
+    assert resp.status_code == 200
+    assert _body(resp)["imdb_id"] == "tt0903747"

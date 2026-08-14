@@ -316,10 +316,15 @@ const ssRemove = key => {
 // they're not already set, so filenames/matching are right without manual entry.
 // Collections have no external ids; a lookup failure leaves the item untouched.
 const withExternalIds = async base => {
-    if (!base?.tmdb_id || base.kind === 'collection') return base;
+    // Any id will do — the endpoint resolves tvdb/imdb to a tmdb id itself.
+    if (base?.kind === 'collection') return base;
+    if (!base?.tmdb_id && !base?.tvdb_id && !base?.imdb_id) return base;
     if (base.tvdb_id && base.imdb_id) return base;
     try {
-        const resp = await cl2kMakerAPI.externalIds(base.tmdb_id, base.kind);
+        const resp = await cl2kMakerAPI.externalIds(base.tmdb_id, base.kind, {
+            tvdbId: base.tvdb_id,
+            imdbId: base.imdb_id,
+        });
         const ext = resp?.data || {};
         return {
             ...base,
@@ -1576,7 +1581,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         (async () => {
             try {
                 const [tm, fa, px] = await Promise.allSettled([
-                    cl2kMakerAPI.images(item.tmdb_id, item.kind),
+                    cl2kMakerAPI.images(item.tmdb_id, item.kind, {
+                        tvdbId: item.tvdb_id,
+                        imdbId: item.imdb_id,
+                    }),
                     cl2kMakerAPI.fanartImages({
                         tmdbId: item.tmdb_id,
                         type: item.kind,
@@ -1616,7 +1624,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         let cancelled = false;
         (async () => {
             try {
-                const resp = await cl2kMakerAPI.seasonImages(item.tmdb_id, Number(seasonNumber));
+                const resp = await cl2kMakerAPI.seasonImages(item.tmdb_id, Number(seasonNumber), {
+                    tvdbId: item.tvdb_id,
+                    imdbId: item.imdb_id,
+                });
                 if (!cancelled) setSeasonArt(resp?.data || null);
             } catch {
                 if (!cancelled) setSeasonArt(null);

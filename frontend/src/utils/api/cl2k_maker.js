@@ -84,12 +84,16 @@ export const cl2kMakerAPI = {
             useCache: false,
         }),
 
-    /** All TMDB logos + backdrops for the art picker. */
-    images: (tmdbId, type = 'movie') =>
-        apiCore.get(`/cl2k-maker/images?${qs({ tmdb_id: tmdbId, type })}`, {
-            useCache: true,
-            cacheTTL: 5 * 60 * 1000,
-        }),
+    /** All TMDB logos + backdrops for the art picker. Resolves via TMDB →
+     *  TVDB → IMDB, so a TVDB/IMDB-only title still gets its TMDB art. */
+    images: (tmdbId, type = 'movie', { tvdbId, imdbId } = {}) =>
+        apiCore.get(
+            `/cl2k-maker/images?${qs({ tmdb_id: tmdbId, type, tvdb_id: tvdbId, imdb_id: imdbId })}`,
+            {
+                useCache: true,
+                cacheTTL: 5 * 60 * 1000,
+            }
+        ),
 
     /** fanart.tv logo + background for the art picker. */
     fanartImages: ({ tmdbId, type = 'movie', tvdbId, imdbId, seasonNumber } = {}) =>
@@ -119,9 +123,14 @@ export const cl2kMakerAPI = {
         ),
 
     /** TMDB season-level posters (portrait 2:3) for the art picker. */
-    seasonImages: (tmdbId, seasonNumber) =>
+    seasonImages: (tmdbId, seasonNumber, { tvdbId, imdbId } = {}) =>
         apiCore.get(
-            `/cl2k-maker/season-images?${qs({ tmdb_id: tmdbId, season_number: seasonNumber })}`,
+            `/cl2k-maker/season-images?${qs({
+                tmdb_id: tmdbId,
+                season_number: seasonNumber,
+                tvdb_id: tvdbId,
+                imdb_id: imdbId,
+            })}`,
             { useCache: true, cacheTTL: 5 * 60 * 1000 }
         ),
 
@@ -215,11 +224,14 @@ export const cl2kMakerAPI = {
     retextSeasons: req => apiCore.post('/cl2k-maker/retext-seasons', req),
 
     /** Fetch TMDB external ids (tvdb_id + imdb_id) for a picked title. */
-    externalIds: (tmdbId, type = 'movie') =>
-        apiCore.get(`/cl2k-maker/external-ids?${qs({ tmdb_id: tmdbId, type })}`, {
-            useCache: true,
-            cacheTTL: 5 * 60 * 1000,
-        }),
+    externalIds: (tmdbId, type = 'movie', { tvdbId, imdbId } = {}) =>
+        apiCore.get(
+            `/cl2k-maker/external-ids?${qs({ tmdb_id: tmdbId, type, tvdb_id: tvdbId, imdb_id: imdbId })}`,
+            {
+                useCache: true,
+                cacheTTL: 5 * 60 * 1000,
+            }
+        ),
 
     /** Whether Drive upload is enabled and has a usable Sync GDrive OAuth token. */
     uploadStatus: () => apiCore.get('/cl2k-maker/upload-status', { useCache: false }),
