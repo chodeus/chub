@@ -591,10 +591,16 @@ def _first_boot_client(app_with_router, monkeypatch, tmp_path):
     monkeypatch.setattr(
         "backend.util.path_safety._discover_container_mounts", lambda: [mount]
     )
+    config = load_config()
+    # The mount IS an allowed root here, so only the provenance guard can deny —
+    # without this the 403 could come from ordinary confinement instead.
+    from backend.util.path_safety import get_allowed_roots
+
+    assert mount.resolve() in get_allowed_roots(config)
     client = _serving_app(
         app_with_router,
         monkeypatch,
-        load_config(),
+        config,
         {"file": str(poster), "folder": mount.name},
     )
     return client, mount
