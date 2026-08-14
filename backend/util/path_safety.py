@@ -5,11 +5,14 @@ Restricts directory listing, creation, and file access to
 roots derived from application configuration.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import List, Optional
 
-from backend.util.config import ChubConfig
+from backend.util.config import ChubConfig, has_config_file
+
+_log = logging.getLogger("chub.path_safety")
 
 
 def get_allowed_roots(config: ChubConfig) -> List[Path]:
@@ -17,8 +20,10 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     Build the list of allowed filesystem roots from configuration.
 
     Includes:
-    - Poster source and destination directories
+    - Poster renamerr source, music source and destination directories
+    - Asset renamerr source, music source and destination directories
     - Border replacerr source and destination directories
+    - Poster cleanarr asset directories
     - Nohl source directories
     - Jduparr source directories and hash database location
     - GDrive source locations
@@ -29,8 +34,20 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     # Poster renamerr
     pr = config.poster_renamerr
     roots.extend(pr.source_dirs)
+    roots.extend(pr.music_source_dirs)
     if pr.destination_dir:
         roots.append(pr.destination_dir)
+
+    # Asset renamerr — its own scan set feeds the same poster_cache the
+    # poster file endpoints serve from, so it must be authorized too.
+    ar = config.asset_renamerr
+    roots.extend(ar.source_dirs)
+    roots.extend(ar.music_source_dirs)
+    if ar.destination_dir:
+        roots.append(ar.destination_dir)
+
+    # Poster cleanarr orphan / stale-duplicate asset dirs
+    roots.extend(config.poster_cleanarr.asset_dirs)
 
     # Border replacerr
     br = config.border_replacerr
@@ -241,6 +258,17 @@ def is_path_allowed(path: str, config: ChubConfig) -> bool:
 def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
     """Resolve *path* and return it only when the resolved target is inside an allowed root, else None."""
     if not path or not isinstance(path, str):
+        return None
+    # Serving/deleting a file is privileged, so it needs a config the user
+    # actually wrote — the picker (get_browse_roots) deliberately has no guard.
+    if not has_config_file(config):
+        # CR/LF stripped: `path` is request data, and a newline in it would
+        # otherwise forge a second log line (py/log-injection).
+        _log.warning(
+            "Refusing file access to %s: no config file exists yet, so the "
+            "auto-discovered container mounts are not authorized roots",
+            path.replace("\r", "").replace("\n", ""),
+        )
         return None
     try:
         resolved = os.path.realpath(os.path.expanduser(path))

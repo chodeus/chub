@@ -3289,6 +3289,7 @@ async def get_poster(
             "description": "Thumbnail image served successfully",
             "content": {"image/jpeg": {"example": "Binary image data"}},
         },
+        403: {"description": "Access denied - path outside allowed directory"},
         404: {"description": "Poster or file not found"},
     },
 )
@@ -3377,6 +3378,7 @@ def get_poster_thumbnail(
             "description": "Poster file served successfully",
             "content": {"image/*": {"example": "Binary image data"}},
         },
+        403: {"description": "Access denied - path outside allowed directory"},
         404: {"description": "Poster or file not found"},
     },
 )

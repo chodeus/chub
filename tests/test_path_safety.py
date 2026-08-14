@@ -1,5 +1,8 @@
 """Tests for backend/util/path_safety.py — filesystem access guard."""
 
+import logging
+
+import pytest
 
 from backend.util.path_safety import (
     _discover_container_mounts,
@@ -226,6 +229,20 @@ def test_browse_roots_empty_when_no_config(empty_config, monkeypatch, tmp_path):
     assert get_browse_roots(empty_config) == []
 
 
+def test_browse_roots_survive_a_missing_config_file(tmp_path, monkeypatch):
+    """First boot has no config.yml — the picker must still offer the mounts."""
+    from backend.util.config import load_config
+
+    mount = tmp_path / "kometa"
+    mount.mkdir()
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    monkeypatch.setattr(
+        "backend.util.path_safety._discover_container_mounts", lambda: [mount]
+    )
+
+    assert get_browse_roots(load_config()) == [mount.resolve()]
+
+
 def test_get_allowed_roots_includes_gdrive_list(empty_config, tmp_path):
     """Configured gdrive_list[*].location paths should appear in allowed roots."""
     from backend.util.config import GDriveListEntry
@@ -239,7 +256,88 @@ def test_get_allowed_roots_includes_gdrive_list(empty_config, tmp_path):
     assert any(str(r) == str(location.resolve()) for r in roots)
 
 
+def test_get_allowed_roots_includes_poster_renamerr_music_source_dirs(
+    empty_config, tmp_path
+):
+    """Music art dirs feed the same poster_cache the poster endpoints serve."""
+    music = tmp_path / "pr_music"
+    music.mkdir()
+    empty_config.poster_renamerr.music_source_dirs = [str(music)]
+
+    roots = {str(r) for r in get_allowed_roots(empty_config)}
+    assert str(music.resolve()) in roots
+
+
+def test_get_allowed_roots_includes_asset_renamerr_dirs(empty_config, tmp_path):
+    """Asset renamerr's whole path set — scan dirs, music dirs, kometa output."""
+    src = tmp_path / "ar_src"
+    music = tmp_path / "ar_music"
+    dest = tmp_path / "ar_dest"
+    for d in (src, music, dest):
+        d.mkdir()
+    empty_config.asset_renamerr.source_dirs = [str(src)]
+    empty_config.asset_renamerr.music_source_dirs = [str(music)]
+    empty_config.asset_renamerr.destination_dir = str(dest)
+
+    roots = {str(r) for r in get_allowed_roots(empty_config)}
+    assert {str(src.resolve()), str(music.resolve()), str(dest.resolve())} <= roots
+
+
+def test_get_allowed_roots_includes_poster_cleanarr_asset_dirs(empty_config, tmp_path):
+    """Cleanarr walks (and deletes inside) asset_dirs, so they're allowed roots."""
+    assets = tmp_path / "cleanarr_assets"
+    assets.mkdir()
+    empty_config.poster_cleanarr.asset_dirs = [str(assets)]
+
+    roots = {str(r) for r in get_allowed_roots(empty_config)}
+    assert str(assets.resolve()) in roots
+
+
+def test_unset_path_keys_add_no_roots(empty_config, monkeypatch, tmp_path):
+    """Empty/absent keys contribute nothing — a bare "" must never become CWD."""
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "nope"))  # doesn't exist
+    monkeypatch.setattr(
+        "backend.util.path_safety._discover_container_mounts", lambda: []
+    )
+    assert get_allowed_roots(empty_config) == []
+
+
 # --- resolve_confined ---
+
+
+@pytest.mark.parametrize(
+    "section,key",
+    [
+        ("poster_renamerr", "music_source_dirs"),
+        ("asset_renamerr", "source_dirs"),
+        ("asset_renamerr", "music_source_dirs"),
+        ("poster_cleanarr", "asset_dirs"),
+    ],
+)
+def test_resolve_confined_accepts_a_file_under_each_new_root(
+    empty_config, tmp_path, section, key
+):
+    """Files under the newly-covered roots resolve instead of failing closed."""
+    root = tmp_path / f"{section}_{key}"
+    root.mkdir()
+    poster = root / "Movie (2021).jpg"
+    poster.write_text("x")
+    setattr(getattr(empty_config, section), key, [str(root)])
+
+    assert resolve_confined(str(poster), empty_config) == poster.resolve()
+
+
+def test_resolve_confined_accepts_a_file_under_asset_renamerr_destination(
+    empty_config, tmp_path
+):
+    """destination_dir is a plain string key, not a list — cover it too."""
+    dest = tmp_path / "ar_dest"
+    dest.mkdir()
+    poster = dest / "Movie (2021).jpg"
+    poster.write_text("x")
+    empty_config.asset_renamerr.destination_dir = str(dest)
+
+    assert resolve_confined(str(poster), empty_config) == poster.resolve()
 
 
 def test_resolve_confined_returns_the_resolved_path_inside_a_root(config_with_roots):
@@ -261,6 +359,59 @@ def test_resolve_confined_denies_a_symlink_escaping_the_roots(config_with_roots)
 
     # The link itself sits inside an allowed root; its target does not.
     assert resolve_confined(str(link), config) is None
+
+
+def test_resolve_confined_denies_when_no_config_file_exists(
+    tmp_path, monkeypatch, caplog
+):
+    """Auto-discovered mounts must not authorize file serving before config.yml."""
+    from backend.util.config import load_config
+
+    mount = tmp_path / "kometa"
+    mount.mkdir()
+    poster = mount / "Movie (2021).jpg"
+    poster.write_text("x")
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    monkeypatch.setattr(
+        "backend.util.path_safety._discover_container_mounts", lambda: [mount]
+    )
+    config = load_config()
+
+    # The mount IS an allowed root here, so only the provenance guard can deny.
+    assert mount.resolve() in get_allowed_roots(config)
+    with caplog.at_level(logging.WARNING):
+        assert resolve_confined(str(poster), config) is None
+    assert "no config file exists yet" in caplog.text
+
+
+def test_resolve_confined_refusal_cannot_forge_a_log_line(tmp_path, monkeypatch, caplog):
+    """A newline in the refused path must not become a second log record."""
+    from backend.util.config import load_config
+
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    config = load_config()
+    forged = "/x.jpg\nWARNING chub: cleanup deleted 900 files"
+
+    with caplog.at_level(logging.WARNING):
+        assert resolve_confined(forged, config) is None
+
+    assert len(caplog.records) == 1
+    assert "\n" not in caplog.records[0].getMessage()
+    assert "cleanup deleted" in caplog.records[0].getMessage()  # kept, but inline
+
+
+def test_resolve_confined_trusts_a_hand_built_config(
+    empty_config, tmp_path, monkeypatch
+):
+    """Provenance is marked, never probed: a config built in code stays trusted."""
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    root = tmp_path / "posters_src"
+    root.mkdir()
+    poster = root / "Movie (2021).jpg"
+    poster.write_text("x")
+    empty_config.poster_renamerr.source_dirs = [str(root)]
+
+    assert resolve_confined(str(poster), empty_config) == poster.resolve()
 
 
 def test_resolve_confined_denies_traversal_and_unusable_input(config_with_roots):
