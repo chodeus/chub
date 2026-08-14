@@ -221,11 +221,15 @@ class Logger:
             # container log stays clean: set CONSOLE_LOG_LEVEL=INFO. Unset → matches
             # the logger's own level (previous behaviour).
             console_level = os.getenv("CONSOLE_LOG_LEVEL", "").strip().upper()
+            # An unset OR unrecognised value inherits, so a typo'd override
+            # can't freeze the handler at a stale level.
+            explicit = logging.getLevelNamesMapping().get(console_level)
             console.setLevel(
-                getattr(logging, console_level, self._logger.level)
-                if console_level
-                else self._logger.level
+                explicit if explicit is not None else self._logger.level
             )
+            # Marks the handler as tracking the logger's level, so a live
+            # log_level change can be pushed onto it (api/utils.py).
+            console.inherits_logger_level = explicit is None
             console.addFilter(lambda record: record.levelno < logging.ERROR)
             console.setFormatter(SafeFormatter("%(message)s"))
             self._logger.addHandler(console)
