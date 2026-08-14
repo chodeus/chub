@@ -151,6 +151,10 @@ class StatsMixin(DatabaseBase):
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params = tuple(params_list)
 
+        def and_where(predicate: str) -> str:
+            """Splice `predicate` onto `where`, opening the clause when it's empty."""
+            return f"{where} AND {predicate}" if where else f"WHERE {predicate}"
+
         # Base stats (same as get_stats)
         base = self.get_stats(asset_type=asset_type, period_days=period_days)
 
@@ -180,7 +184,7 @@ class StatsMixin(DatabaseBase):
         by_status = (
             self.execute_query(
                 f"""SELECT status, COUNT(*) as count
-                FROM media_cache {where + (" AND" if where else "WHERE")} status IS NOT NULL AND status != ''
+                FROM media_cache {and_where("status IS NOT NULL AND status != ''")}
                 GROUP BY status ORDER BY count DESC""",
                 params,
                 fetch_all=True,
@@ -192,7 +196,7 @@ class StatsMixin(DatabaseBase):
         by_language = (
             self.execute_query(
                 f"""SELECT language, COUNT(*) as count
-                FROM media_cache {where + (" AND" if where else "WHERE")} language IS NOT NULL AND language != ''
+                FROM media_cache {and_where("language IS NOT NULL AND language != ''")}
                 GROUP BY language ORDER BY count DESC""",
                 params,
                 fetch_all=True,
@@ -204,7 +208,7 @@ class StatsMixin(DatabaseBase):
         by_rating = (
             self.execute_query(
                 f"""SELECT rating, COUNT(*) as count
-                FROM media_cache {where + (" AND" if where else "WHERE")} rating IS NOT NULL AND rating != ''
+                FROM media_cache {and_where("rating IS NOT NULL AND rating != ''")}
                 GROUP BY rating ORDER BY count DESC""",
                 params,
                 fetch_all=True,
@@ -216,7 +220,7 @@ class StatsMixin(DatabaseBase):
         by_studio = (
             self.execute_query(
                 f"""SELECT studio, COUNT(*) as count
-                FROM media_cache {where + (" AND" if where else "WHERE")} studio IS NOT NULL AND studio != ''
+                FROM media_cache {and_where("studio IS NOT NULL AND studio != ''")}
                 GROUP BY studio ORDER BY count DESC LIMIT 50""",
                 params,
                 fetch_all=True,
@@ -228,7 +232,7 @@ class StatsMixin(DatabaseBase):
         by_decade = (
             self.execute_query(
                 f"""SELECT (CAST(year AS INTEGER) / 10) * 10 as decade, COUNT(*) as count
-                FROM media_cache {where + (" AND" if where else "WHERE")} year IS NOT NULL AND year != ''
+                FROM media_cache {and_where("year IS NOT NULL AND year != ''")}
                 GROUP BY decade ORDER BY decade DESC""",
                 params,
                 fetch_all=True,
@@ -254,7 +258,7 @@ class StatsMixin(DatabaseBase):
                         ELSE '150m+'
                     END as bucket,
                     COUNT(*) as count
-                FROM media_cache {where + (" AND" if where else "WHERE")} runtime IS NOT NULL AND runtime != '' AND CAST(runtime AS INTEGER) > 0
+                FROM media_cache {and_where("runtime IS NOT NULL AND runtime != '' AND CAST(runtime AS INTEGER) > 0")}
                 GROUP BY bucket ORDER BY MIN(CAST(runtime AS INTEGER))""",
                 params,
                 fetch_all=True,
@@ -279,7 +283,7 @@ class StatsMixin(DatabaseBase):
         # By genre (Python-side aggregation since genre is JSON array)
         genre_rows = (
             self.execute_query(
-                f"SELECT genre FROM media_cache {where + (' AND' if where else 'WHERE')} genre IS NOT NULL AND genre != ''",
+                f"""SELECT genre FROM media_cache {and_where("genre IS NOT NULL AND genre != ''")}""",
                 params,
                 fetch_all=True,
             )
@@ -309,7 +313,7 @@ class StatsMixin(DatabaseBase):
         by_root_folder = (
             self.execute_query(
                 f"""SELECT root_folder, COUNT(*) as count
-                FROM media_cache {where + (" AND" if where else "WHERE")} root_folder IS NOT NULL AND root_folder != ''
+                FROM media_cache {and_where("root_folder IS NOT NULL AND root_folder != ''")}
                 GROUP BY root_folder ORDER BY count DESC""",
                 params,
                 fetch_all=True,
@@ -320,7 +324,7 @@ class StatsMixin(DatabaseBase):
         # By tag (Python-side aggregation since tags is a JSON array of names)
         tag_rows = (
             self.execute_query(
-                f"SELECT tags FROM media_cache {where + (' AND' if where else 'WHERE')} tags IS NOT NULL AND tags != '' AND tags != '[]'",
+                f"""SELECT tags FROM media_cache {and_where("tags IS NOT NULL AND tags != '' AND tags != '[]'")}""",
                 params,
                 fetch_all=True,
             )
