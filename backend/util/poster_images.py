@@ -151,6 +151,8 @@ def optimize_poster_files(
                                 try:
                                     os.remove(dest_path)
                                 except OSError:
+                                    # Rollback is best-effort; the original is
+                                    # intact either way, which is what matters.
                                     pass
                                 logger.warning(
                                     f"cache update failed for {full_path}; "
