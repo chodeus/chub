@@ -383,6 +383,22 @@ def test_resolve_confined_denies_when_no_config_file_exists(
     assert "no config file exists yet" in caplog.text
 
 
+def test_resolve_confined_refusal_cannot_forge_a_log_line(tmp_path, monkeypatch, caplog):
+    """A newline in the refused path must not become a second log record."""
+    from backend.util.config import load_config
+
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    config = load_config()
+    forged = "/x.jpg\nWARNING chub: cleanup deleted 900 files"
+
+    with caplog.at_level(logging.WARNING):
+        assert resolve_confined(forged, config) is None
+
+    assert len(caplog.records) == 1
+    assert "\n" not in caplog.records[0].getMessage()
+    assert "cleanup deleted" in caplog.records[0].getMessage()  # kept, but inline
+
+
 def test_resolve_confined_trusts_a_hand_built_config(
     empty_config, tmp_path, monkeypatch
 ):

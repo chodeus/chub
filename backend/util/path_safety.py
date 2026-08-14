@@ -264,10 +264,12 @@ def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
     # Serving/deleting a file is privileged, so it needs a config the user
     # actually wrote — the picker (get_browse_roots) deliberately has no guard.
     if not has_config_file(config):
+        # CR/LF stripped: `path` is request data, and a newline in it would
+        # otherwise forge a second log line (py/log-injection).
         _log.warning(
             "Refusing file access to %s: no config file exists yet, so the "
             "auto-discovered container mounts are not authorized roots",
-            path,
+            path.replace("\r", "").replace("\n", ""),
         )
         return None
     try:
