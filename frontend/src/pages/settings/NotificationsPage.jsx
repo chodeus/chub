@@ -535,12 +535,12 @@ const DestinationCard = ({
                         {targetLine(d)}
                     </div>
                 </div>
-                <div className="shrink-0 flex items-center gap-1">
+                <div className="shrink-0 flex items-center gap-2.5">
                     <button
                         type="button"
                         onClick={onTest}
                         disabled={testing}
-                        className="h-[30px] px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#221c45] disabled:opacity-60"
+                        className="touch-expand h-9 px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#221c45] disabled:opacity-60"
                     >
                         {testing ? 'Testing…' : 'Test'}
                     </button>
@@ -657,7 +657,7 @@ const IconBtn = ({ icon, label, onClick }) => (
         type="button"
         aria-label={label}
         onClick={onClick}
-        className="w-[30px] h-[30px] rounded-[7px] bg-transparent text-fg-subtle flex items-center justify-center transition-colors hover:bg-[#221c45] hover:text-fg-muted"
+        className="touch-expand w-9 h-9 rounded-[7px] bg-transparent text-fg-subtle flex items-center justify-center transition-colors hover:bg-[#221c45] hover:text-fg-muted"
     >
         <span className="material-symbols-outlined text-[16px]">{icon}</span>
     </button>

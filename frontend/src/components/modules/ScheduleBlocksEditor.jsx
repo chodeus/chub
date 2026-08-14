@@ -129,7 +129,7 @@ export const ScheduleBlocksEditor = ({ blocks, onChange, disabled }) => {
                             value={b.mode}
                             disabled={disabled}
                             onChange={e => update(i, { mode: e.target.value })}
-                            className="bg-surface border border-border rounded px-2 py-1 text-sm"
+                            className="h-11 bg-surface border border-border rounded px-2 text-sm"
                         >
                             {MODE_OPTIONS.map(m => (
                                 <option key={m} value={m}>

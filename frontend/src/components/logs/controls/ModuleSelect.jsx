@@ -10,7 +10,7 @@ export const ModuleSelect = () => {
     const { modules, selectedModule, onModuleChange } = useLogControls();
 
     return (
-        <div className="flex items-center gap-2 w-full h-9 px-3 rounded-lg bg-surface-inset border border-border focus-within:border-primary transition-colors">
+        <div className="flex items-center gap-2 w-full h-11 px-3 rounded-lg bg-surface-inset border border-border focus-within:border-primary transition-colors">
             <span
                 className={`w-[7px] h-[7px] rounded-full shrink-0 ${
                     selectedModule ? 'bg-accent' : 'bg-fg-faint'
@@ -21,7 +21,7 @@ export const ModuleSelect = () => {
                 value={selectedModule || ''}
                 onChange={e => onModuleChange(e.target.value)}
                 aria-label="Select module"
-                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-fg cursor-pointer"
+                className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none text-[13px] text-fg cursor-pointer"
             >
                 <option value="">Select module</option>
                 {modules.map(module => (

@@ -276,7 +276,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                         <button
                             type="button"
                             onClick={() => setOpenMoreModes(s => ({ ...s, [meta.id]: true }))}
-                            className="mt-2 inline-flex items-center gap-1 text-[12.5px] text-fg-subtle hover:text-fg"
+                            className="mt-2 inline-flex items-center min-h-11 gap-1 text-[12.5px] text-fg-subtle hover:text-fg"
                         >
                             <span className="material-symbols-outlined text-[16px]">
                                 expand_more
@@ -396,8 +396,10 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                             </p>
                         )}
                     </div>
+                    {/* gap-y-3 clears the Toggle's 44px coarse hit box (11px taller than
+                        the pill itself) once this header wraps. */}
                     {activeModule && (
-                        <div className="flex flex-wrap items-center gap-2.5 shrink-0 max-w-full">
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-3 shrink-0 max-w-full">
                             {hasDryRun && isRunnable && (
                                 <label className="flex items-center gap-2 text-[13px] text-fg-muted cursor-pointer select-none">
                                     Dry run

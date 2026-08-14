@@ -37,8 +37,9 @@ export const FieldLabel = ({ htmlFor, label, required = false, helpText, classNa
         );
     }
 
+    // gap-2.5 keeps the ⓘ's 44px coarse hit box off the label's own click area.
     return (
-        <span className="mb-1 inline-flex items-center gap-1">
+        <span className="mb-1 inline-flex items-center gap-2.5">
             {labelEl}
             <InfoTooltip text={helpText} />
         </span>

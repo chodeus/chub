@@ -64,12 +64,14 @@ export const MultiSelectField = React.memo(
             <FieldWrapper invalid={highlightInvalid}>
                 <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
 
+                {/* The × is a real 36px box, not a touch-expand: an expanded hit area
+                    on a 26px chip reached across the row gap into the next chip's ×. */}
                 {selected.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                         {selected.map((v, i) => (
                             <span
                                 key={v}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/20 text-fg text-sm"
+                                className="inline-flex items-center gap-1 min-h-11 px-2 rounded-md bg-primary/20 text-fg text-sm"
                             >
                                 <span className="text-xs text-fg-subtle">{i + 1}.</span>
                                 {labelFor(v)}
@@ -78,7 +80,7 @@ export const MultiSelectField = React.memo(
                                         type="button"
                                         onClick={() => removeValue(v)}
                                         aria-label={`Remove ${labelFor(v)}`}
-                                        className="ml-1 inline-flex items-center justify-center leading-none hover:text-error"
+                                        className="ml-1 inline-flex items-center justify-center w-9 h-9 shrink-0 leading-none hover:text-error"
                                     >
                                         ×
                                     </button>

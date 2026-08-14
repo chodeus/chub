@@ -672,7 +672,7 @@ export const InstancesPage = () => {
                 </span>
                 <span>Auto-sync library from instances</span>
                 <select
-                    className="bg-surface border border-border rounded-md px-2 py-1 text-fg text-[13px] disabled:opacity-50"
+                    className="h-11 bg-surface border border-border rounded-md px-2 text-fg text-[13px] disabled:opacity-50"
                     value={(SYNC_PRESETS.find(p => p.value === syncSchedule) || {}).key ?? 'custom'}
                     disabled={!syncScheduleLoaded || syncScheduleSaving}
                     onChange={e => {

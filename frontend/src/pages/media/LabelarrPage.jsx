@@ -403,7 +403,7 @@ const LabelarrLibraryPicker = ({ instanceName, value, onChange, disabled }) => {
     };
 
     return (
-        <div className="flex flex-wrap gap-1.5 py-1">
+        <div className="flex flex-wrap gap-2 py-1">
             {libraries.map(title => {
                 const on = selected.has(libNorm(title));
                 return (
@@ -413,7 +413,7 @@ const LabelarrLibraryPicker = ({ instanceName, value, onChange, disabled }) => {
                         disabled={disabled}
                         aria-pressed={on}
                         onClick={() => toggle(title)}
-                        className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-[5px] text-xs border transition-colors disabled:opacity-50 ${
+                        className={`touch-expand inline-flex items-center justify-center gap-1 min-h-9 min-w-11 px-2 rounded-[5px] text-xs border transition-colors disabled:opacity-50 ${
                             on
                                 ? 'bg-primary/15 border-primary text-fg'
                                 : 'bg-surface-inset border-border text-fg-muted hover:border-primary'
@@ -443,7 +443,7 @@ const MappingCard = ({
 }) => {
     const [expanded, setExpanded] = useState(!mapping.app_instance);
     const inputCls =
-        'h-9 rounded-[8px] bg-surface-inset border border-border text-fg text-[13px] px-3 outline-none focus:border-primary disabled:opacity-50';
+        'h-11 rounded-[8px] bg-surface-inset border border-border text-fg text-[13px] px-3 outline-none focus:border-primary disabled:opacity-50';
 
     const setLabels = useCallback(
         v =>

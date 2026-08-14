@@ -11,7 +11,7 @@ export const LogFileSelect = () => {
 
     return (
         <div
-            className={`flex items-center w-full h-9 px-3 rounded-lg bg-surface-inset border border-border focus-within:border-primary transition-colors ${
+            className={`flex items-center w-full h-11 px-3 rounded-lg bg-surface-inset border border-border focus-within:border-primary transition-colors ${
                 disabled ? 'opacity-50' : ''
             }`}
         >
@@ -20,7 +20,7 @@ export const LogFileSelect = () => {
                 disabled={disabled}
                 onChange={e => onLogFileChange(e.target.value)}
                 aria-label="Select log file"
-                className="flex-1 min-w-0 bg-transparent border-0 outline-none font-mono text-xs text-fg-muted cursor-pointer disabled:cursor-not-allowed"
+                className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none font-mono text-xs text-fg-muted cursor-pointer disabled:cursor-not-allowed"
             >
                 <option value="">Select log file</option>
                 {logFiles &&

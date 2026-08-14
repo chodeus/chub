@@ -200,7 +200,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                     <select
                                         value={formData[field.key] || ''}
                                         onChange={e => handleChange(field.key, e.target.value)}
-                                        className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-fg text-sm focus:border-primary outline-none"
+                                        className="w-full h-11 px-3 bg-surface border border-border rounded-lg text-fg text-sm focus:border-primary outline-none"
                                     >
                                         {field.options.map(opt => (
                                             <option key={opt} value={opt}>
@@ -214,7 +214,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                         value={formData[field.key] || ''}
                                         onChange={e => handleChange(field.key, e.target.value)}
                                         placeholder={field.placeholder || ''}
-                                        className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-fg text-sm focus:border-primary outline-none"
+                                        className="w-full h-11 px-3 bg-surface border border-border rounded-lg text-fg text-sm focus:border-primary outline-none"
                                     />
                                 )}
                             </div>
