@@ -142,9 +142,11 @@ def optimize_poster_files(
                         if dest_path != full_path:
                             if os.path.exists(full_path):
                                 os.remove(full_path)
-                            poster["file"] = os.path.basename(dest_path)
+                            poster["file"] = dest_path
                             try:
-                                db.poster.upsert(poster)
+                                db.poster.record_optimized_file(
+                                    poster["id"], dest_path
+                                )
                             except Exception as ce:
                                 logger.warning(
                                     f"optimized {dest_path}; cache update failed: {ce}"

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 from logging.handlers import RotatingFileHandler
 from typing import Any, Optional
 
@@ -14,6 +15,8 @@ from backend.util.logger import Logger
 
 # Cache module loggers so we don't create duplicates
 _module_loggers: dict[str, Logger] = {}
+# Two concurrent requests could otherwise both build one and attach duplicate handlers.
+_module_loggers_lock = threading.Lock()
 
 
 def get_logger(request: Request, source: str = "WEB") -> Any:
@@ -27,19 +30,12 @@ def _apply_log_settings(module_logger: Logger, log_level: str, max_logs: int) ->
     for handler in module_logger.handlers:
         if isinstance(handler, RotatingFileHandler):
             handler.backupCount = max(1, max_logs)
+        elif getattr(handler, "inherits_logger_level", False):
+            handler.setLevel(module_logger.level)
 
 
 def get_module_logger(request: Request, module_name: str) -> Any:
-    """
-    Get or create a dedicated file-based logger for a specific module.
-
-    Unlike get_logger() which writes to the general log, this creates
-    a separate log file under logs/<module_name>/<module_name>.log so
-    each module has its own section in the Logs page.
-
-    Config is re-read per call so a log_level/max_logs change reaches the
-    next request instead of being frozen at first use.
-    """
+    """Module's own logger under logs/<module>/, with log_level/max_logs re-read per call."""
     from backend.util.config import load_config
 
     config = load_config()
@@ -47,15 +43,16 @@ def get_module_logger(request: Request, module_name: str) -> Any:
     log_level = getattr(module_config, "log_level", "info") if module_config else "info"
     max_logs = config.general.max_logs
 
-    module_logger = _module_loggers.get(module_name)
-    if module_logger is None:
-        module_logger = Logger(
-            log_level=log_level,
-            module_name=module_name,
-            max_logs=max_logs,
-        )
-        _module_loggers[module_name] = module_logger
-    _apply_log_settings(module_logger, log_level, max_logs)
+    with _module_loggers_lock:
+        module_logger = _module_loggers.get(module_name)
+        if module_logger is None:
+            module_logger = Logger(
+                log_level=log_level,
+                module_name=module_name,
+                max_logs=max_logs,
+            )
+            _module_loggers[module_name] = module_logger
+        _apply_log_settings(module_logger, log_level, max_logs)
     return module_logger.get_adapter(module_name.upper())
 
 

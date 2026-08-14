@@ -271,6 +271,15 @@ class PosterCache(DatabaseBase):
             (int(width), int(height), int(poster_id)),
         )
 
+    def record_optimized_file(self, poster_id: int, file_path: str) -> None:
+        """Point a poster row at its rewritten file; `file` is stored absolute."""
+        # UPDATE by id, not upsert: `file` is in the UNIQUE key, so a changed
+        # path would insert a duplicate row instead of moving this one.
+        self.execute_query(
+            "UPDATE poster_cache SET file=? WHERE id=?",
+            (str(file_path), int(poster_id)),
+        )
+
     def find_missing_dimensions(self, limit: int = 200) -> list:
         """Return up to `limit` rows whose width/height are still unrecorded."""
         # id-ordered so an incremental backfill walks the table in a stable

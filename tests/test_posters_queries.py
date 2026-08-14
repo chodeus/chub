@@ -813,3 +813,25 @@ def test_routes_do_not_advertise_parameters_they_ignore(db):
     assert "force" not in _params("/api/posters/plex-metadata/bloat")
     # A client that still sends the dropped param is ignored, not rejected.
     assert client.get("/api/posters/search?sort=title").status_code == 200
+
+
+def test_optimize_updates_the_row_in_place_with_an_absolute_path(
+    db, tmp_path, monkeypatch
+):
+    """A format-converting optimize must move the row, not mint a second one."""
+    poster = _seed_oversized(db, tmp_path, monkeypatch, title="Arrival")
+    before = db.poster.execute_query(
+        "SELECT COUNT(*) AS n FROM poster_cache", fetch_one=True
+    )["n"]
+
+    resp = _client(db).post(
+        "/api/posters/optimize", json={"mode": "optimize", "format": "png"}
+    )
+    assert resp.status_code == 200, resp.text
+
+    rows = db.poster.execute_query("SELECT id, file FROM poster_cache", fetch_all=True)
+    assert len(rows) == before  # no duplicate row minted
+    stored = rows[0]["file"]
+    assert os.path.isabs(stored), stored  # not a bare basename
+    assert os.path.isfile(stored), stored  # and it still resolves
+    assert not poster.exists()  # the converted source was removed

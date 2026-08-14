@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -118,3 +119,78 @@ def test_module_logger_applies_max_logs_without_reopening_the_file(
 
     assert [h.backupCount for h in handlers] == [7]
     assert _rotating_handlers() == handlers
+
+
+def _console_handlers():
+    """The probe logger's non-error StreamHandlers, in attach order."""
+    return [
+        h
+        for h in logging.getLogger(_PROBE).handlers
+        if type(h) is logging.StreamHandler and h.level != logging.ERROR
+    ]
+
+
+def test_module_logger_pushes_the_level_onto_an_inheriting_console_handler(
+    probe_logger, monkeypatch
+):
+    """A console handler built from the module level must follow a later change."""
+    monkeypatch.setenv("LOG_TO_CONSOLE", "1")
+    monkeypatch.delenv("CONSOLE_LOG_LEVEL", raising=False)
+    monkeypatch.setattr("backend.util.config.load_config", _config("info"))
+    probe_logger.get_module_logger(None, _PROBE)
+    console = _console_handlers()
+    assert [h.level for h in console] == [logging.INFO]
+
+    monkeypatch.setattr("backend.util.config.load_config", _config("debug"))
+    probe_logger.get_module_logger(None, _PROBE)
+
+    assert [h.level for h in console] == [logging.DEBUG]
+
+
+def test_module_logger_leaves_an_explicit_console_level_alone(
+    probe_logger, monkeypatch
+):
+    """CONSOLE_LOG_LEVEL is an operator override — a config edit must not undo it."""
+    monkeypatch.setenv("LOG_TO_CONSOLE", "1")
+    monkeypatch.setenv("CONSOLE_LOG_LEVEL", "WARNING")
+    monkeypatch.setattr("backend.util.config.load_config", _config("info"))
+    probe_logger.get_module_logger(None, _PROBE)
+
+    monkeypatch.setattr("backend.util.config.load_config", _config("debug"))
+    probe_logger.get_module_logger(None, _PROBE)
+
+    assert [h.level for h in _console_handlers()] == [logging.WARNING]
+
+
+def test_module_logger_builds_one_logger_under_concurrent_first_use(
+    probe_logger, monkeypatch
+):
+    """Racing first requests must build the module logger once, not one each."""
+    import threading
+
+    monkeypatch.setattr("backend.util.config.load_config", _config("info"))
+    real_logger_cls = probe_logger.Logger
+    start = threading.Barrier(4)
+    built = []
+
+    class SlowLogger(real_logger_cls):
+        def __init__(self, *args, **kwargs):
+            # Widen the construct-then-insert window the lock has to cover.
+            built.append(1)
+            time.sleep(0.05)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(probe_logger, "Logger", SlowLogger)
+
+    def _call():
+        start.wait()
+        probe_logger.get_module_logger(None, _PROBE)
+
+    threads = [threading.Thread(target=_call) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(built) == 1  # unlocked, all four sail past the cache miss
+    assert len(_rotating_handlers()) == 1

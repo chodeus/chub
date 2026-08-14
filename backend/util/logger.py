@@ -226,6 +226,9 @@ class Logger:
                 if console_level
                 else self._logger.level
             )
+            # Marks the handler as tracking the logger's level, so a live
+            # log_level change can be pushed onto it (api/utils.py).
+            console.inherits_logger_level = not console_level
             console.addFilter(lambda record: record.levelno < logging.ERROR)
             console.setFormatter(SafeFormatter("%(message)s"))
             self._logger.addHandler(console)
