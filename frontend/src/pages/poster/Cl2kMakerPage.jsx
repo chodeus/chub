@@ -4503,10 +4503,17 @@ const AspectSpacer = ({ aspect }) => (
     />
 );
 
-// Custom-upload body shown when a picker's source is 'Upload' — the chosen file
-// (with Remove) or an upload prompt. Header mirrors Picker so the SourceSelector
-// sits in the same place.
-const UploadArtCard = ({ label, headerRight, custom, onFile, onClear }) => (
+/** The art-card shell every source picker draws: header, chosen-file row, body. */
+// One owner for that markup — `children` is the body shown until a file is chosen.
+const ArtCard = ({
+    label,
+    headerRight,
+    custom,
+    customAlt = 'Uploaded',
+    onClear,
+    footer,
+    children,
+}) => (
     <div className="bg-surface border border-border rounded-lg p-3">
         <div className="flex items-center justify-between gap-2 mb-2">
             <h3 className="text-sm font-medium text-fg">{label}</h3>
@@ -4516,7 +4523,7 @@ const UploadArtCard = ({ label, headerRight, custom, onFile, onClear }) => (
             <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
                 <img
                     src={custom.url}
-                    alt="Uploaded"
+                    alt={customAlt}
                     className="h-16 w-auto max-w-[60%] object-contain rounded"
                 />
                 <span className="flex-1 truncate text-xs text-fg-muted">{custom.name}</span>
@@ -4525,13 +4532,21 @@ const UploadArtCard = ({ label, headerRight, custom, onFile, onClear }) => (
                 </Button>
             </div>
         ) : (
-            <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-primary">
-                <span className="material-symbols-outlined">upload</span>
-                Upload an image
-                <input type="file" accept="image/*" className="hidden" onChange={onFile} />
-            </label>
+            children
         )}
+        {footer}
     </div>
+);
+
+// The 'Upload' source body — an upload prompt in the shared art card.
+const UploadArtCard = ({ label, headerRight, custom, onFile, onClear }) => (
+    <ArtCard label={label} headerRight={headerRight} custom={custom} onClear={onClear}>
+        <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-primary">
+            <span className="material-symbols-outlined">upload</span>
+            Upload an image
+            <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+        </label>
+    </ArtCard>
 );
 
 const Picker = ({
@@ -4553,11 +4568,7 @@ const Picker = ({
         ? 'grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-auto'
         : 'grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto';
     return (
-        <div className="bg-surface border border-border rounded-lg p-3">
-            <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-medium text-fg">{label}</h3>
-                {headerRight}
-            </div>
+        <ArtCard label={label} headerRight={headerRight}>
             {loading ? (
                 <div className="text-xs text-fg-subtle py-4">Loading…</div>
             ) : items.length === 0 ? (
@@ -4622,7 +4633,7 @@ const Picker = ({
                     })}
                 </div>
             )}
-        </div>
+        </ArtCard>
     );
 };
 
@@ -4995,30 +5006,21 @@ const GDrivePicker = ({ kind, gdrive, label, headerRight, custom, onClear }) => 
     const cfg = GDRIVE_KINDS[kind];
     if (!label) return <GDrivePickerBody cfg={cfg} gdrive={gdrive} />;
     return (
-        <div className="bg-surface border border-border rounded-lg p-3">
-            <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-medium text-fg">{label}</h3>
-                {headerRight}
-            </div>
-            {custom ? (
-                <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
-                    <img
-                        src={custom.url}
-                        alt="Grabbed"
-                        className="h-16 w-auto max-w-[60%] object-contain rounded"
-                    />
-                    <span className="flex-1 truncate text-xs text-fg-muted">{custom.name}</span>
-                    <Button onClick={onClear} variant="secondary" icon="close" size="small">
-                        Remove
-                    </Button>
-                </div>
-            ) : (
-                <GDrivePickerBody cfg={cfg} gdrive={gdrive} />
-            )}
-            {cfg.importing && gdrive.importing && (
-                <div className="text-xs text-fg-subtle mt-2">{cfg.importing}</div>
-            )}
-        </div>
+        <ArtCard
+            label={label}
+            headerRight={headerRight}
+            custom={custom}
+            customAlt="Grabbed"
+            onClear={onClear}
+            footer={
+                cfg.importing &&
+                gdrive.importing && (
+                    <div className="text-xs text-fg-subtle mt-2">{cfg.importing}</div>
+                )
+            }
+        >
+            <GDrivePickerBody cfg={cfg} gdrive={gdrive} />
+        </ArtCard>
     );
 };
 
