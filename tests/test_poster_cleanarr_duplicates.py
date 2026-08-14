@@ -476,10 +476,11 @@ def test_execute_stale_remove_rmtrees_through_a_parent_descriptor(
     real_open = os.open
 
     def _swapping_open(path, *a, **kw):
-        """Open normally, then re-point that same path at `outside`."""
+        """Open normally, then re-point that same dir at `outside`."""
         fd = real_open(path, *a, **kw)
+        # Match on the basename: the walk opens each component by NAME.
         if (
-            str(path) == str(shows.resolve())
+            os.path.basename(str(path)) == shows.name
             and shows.is_dir()
             and not shows.is_symlink()
         ):

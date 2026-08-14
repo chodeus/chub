@@ -19,7 +19,7 @@ from backend.util.helper import create_table
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.normalization import normalize_titles, parse_asset_filename
-from backend.util.path_safety import resolve_confined
+from backend.util.path_safety import containing_root, resolve_confined
 
 # EXIF tag id Kometa writes onto its generated overlay images. Used by the
 # overlays_only mode to skip user-uploaded customs (which lack the tag).
@@ -105,6 +105,10 @@ MODE_LABELS = {
 
 
 class PosterCleanarr(ChubModule):
+    # Per-pass refusal tally behind _refuse/_report_refusals. Class level because
+    # shim callers build the module with object.__new__, skipping __init__.
+    _refused_paths = 0
+
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
         self.plex_path: str = getattr(self.config, "plex_path", "")
@@ -864,17 +868,67 @@ class PosterCleanarr(ChubModule):
             )
             return None
 
+    def _refuse(self, logger: Logger, message: str) -> None:
+        """Tally one refusal, keeping its per-path detail at debug."""
+        self._refused_paths += 1
+        logger.debug(message)
+
+    def _report_refusals(self, logger: Logger, what: str) -> None:
+        """Log one ERROR carrying the tallied refusals, then reset the tally."""
+        if self._refused_paths:
+            logger.error(
+                f"{what}: refused {self._refused_paths} path(s) resolving outside "
+                "the allowed roots or their base dir; per-path detail at debug level."
+            )
+        self._refused_paths = 0
+
     def _confined_target(
         self, path: str, config: Optional[ChubConfig], logger: Logger
     ) -> Optional[str]:
-        """Realpath of `path` if inside a live allowed root, else None (logged)."""
+        """Realpath of `path` if inside a live allowed root, else None (tallied)."""
         real = resolve_confined(path, config) if config is not None else None
         if real is None:
-            logger.error(
-                f"Target resolves outside the allowed roots, refusing to touch: {path}"
+            self._refuse(
+                logger,
+                f"Target resolves outside the allowed roots, refusing to touch: {path}",
             )
             return None
         return str(real)
+
+    def _walk_open_dir(
+        self, real_dir: str, config: ChubConfig, logger: Logger
+    ) -> Optional[int]:
+        """Descriptor on `real_dir`, opened one component at a time from its allowed root."""
+        # The root is the trust ANCHOR: its own ancestors are unverifiable from
+        # here, so confinement starts at it and every step below refuses a link.
+        root = containing_root(real_dir, config)
+        if root is None:
+            logger.error(f"Refusing to open {real_dir}: no allowed root contains it")
+            return None
+        flags = (
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        )
+        try:
+            dir_fd = os.open(str(root), flags)
+        except OSError as e:
+            logger.error(f"Refusing to open {real_dir}: root {root} not openable ({e})")
+            return None
+        rel = os.path.relpath(real_dir, str(root))
+        for name in [c for c in rel.split(os.sep) if c and c != os.curdir]:
+            try:
+                # NEVER re-open the whole string: O_NOFOLLOW only guards the last
+                # component, so an intermediate one swapped to a link would escape.
+                nxt = os.open(name, flags, dir_fd=dir_fd)
+            except OSError as e:
+                logger.error(
+                    f"Refusing to open {real_dir}: '{name}' is not a plain "
+                    f"directory reached from {root} ({e})"
+                )
+                os.close(dir_fd)
+                return None
+            os.close(dir_fd)
+            dir_fd = nxt
+        return dir_fd
 
     def _confined_parent_fd(
         self, path: str, config: Optional[ChubConfig], logger: Logger
@@ -885,19 +939,14 @@ class PosterCleanarr(ChubModule):
         # Confine the PARENT, not the leaf: the leaf is what we delete, and
         # deleting it by name through this descriptor is what closes the race.
         parent = self._confined_target(os.path.dirname(path), config, logger)
-        if parent is None:
+        if parent is None or config is None:
             return None
-        flags = (
-            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-        )
-        try:
-            dir_fd = os.open(parent, flags)
-        except OSError as e:
-            logger.error(f"Refusing to delete {path}: parent not openable ({e})")
+        dir_fd = self._walk_open_dir(parent, config, logger)
+        if dir_fd is None:
             return None
         try:
-            # Mirrors maintenance.prune_old_backups: the descriptor must BE the
-            # directory that was authorized, not one swapped in after the check.
+            # Kept as a cheap SECONDARY check — the walk above is the barrier;
+            # this still catches the parent being renamed after it was opened.
             opened, authorized = os.fstat(dir_fd), os.stat(parent)
             if (opened.st_dev, opened.st_ino) != (authorized.st_dev, authorized.st_ino):
                 logger.error(f"Refusing to delete {path}: its parent changed under us")
@@ -1239,6 +1288,7 @@ class PosterCleanarr(ChubModule):
                 count += 1
                 total_size += size
                 touched.add(d["asset_dir"])
+        self._report_refusals(logger, "Stale-duplicate cleanup")
         empty = sum(self._clean_empty_dirs(d, config) for d in touched)
         logger.info(
             f"   → stale duplicates: {count} {mode}d"
@@ -1489,6 +1539,7 @@ class PosterCleanarr(ChubModule):
                 total_size += size
                 touched_dirs.add(item["asset_dir"])
 
+        self._report_refusals(logger, "Orphan cleanup")
         # Prune empty dirs left behind by move/remove.
         empty_dirs = sum(self._clean_empty_dirs(d, config) for d in touched_dirs)
 
@@ -1505,13 +1556,24 @@ class PosterCleanarr(ChubModule):
     def _clean_empty_dirs(
         self, base_dir: str, config: Optional[ChubConfig] = None
     ) -> int:
-        """Remove empty directories bottom-up; with `config`, confine each dir first."""
+        """Remove empty dirs bottom-up, never escaping `base_dir`; `config` confines further."""
         count = 0
+        # Trailing sep so a sibling like `<base>_old` can't pass the prefix test.
+        floor = os.path.realpath(base_dir).rstrip(os.sep) + os.sep
         for root, dirs, files in os.walk(base_dir, topdown=False):
             for dir_name in dirs:
                 dir_path = os.path.join(root, dir_name)
                 try:
                     if os.listdir(dir_path):
+                        continue
+                    # base_dir is the ONLY floor the bloat pass has (it passes no
+                    # config), so it is checked before the allowed-roots check.
+                    if not os.path.realpath(dir_path).startswith(floor):
+                        self._refuse(
+                            self.logger,
+                            f"Refusing to remove {dir_path}: it resolves outside "
+                            f"the tree being pruned ({base_dir})",
+                        )
                         continue
                     # Confine at the rmdir, not at the walk: a component swapped
                     # to a symlink mid-sweep resolves outside the roots.
@@ -1525,6 +1587,7 @@ class PosterCleanarr(ChubModule):
                     # Dir vanished, became non-empty, or permissions — skip,
                     # but leave a trace so the count discrepancy is explainable.
                     self.logger.debug(f"Could not remove empty dir {dir_path}: {e}")
+        self._report_refusals(self.logger, "Empty-dir sweep")
         return count
 
     # =========================================================================

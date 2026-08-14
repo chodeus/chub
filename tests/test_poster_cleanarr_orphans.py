@@ -332,6 +332,47 @@ def test_clean_empty_dirs_refuses_a_dir_outside_the_roots(tmp_path, monkeypatch)
     assert errors
 
 
+def test_clean_empty_dirs_refuses_a_dir_outside_base_dir_without_a_config(
+    tmp_path, monkeypatch
+):
+    """The bloat pass prunes with no config at all, so base_dir is the only floor: a component swapped mid-sweep must not have rmdir reach past it."""
+    base = tmp_path / "metadata"
+    show = base / "Show"
+    (show / "empty").mkdir(parents=True)
+    outside = tmp_path / "outside"
+    (outside / "empty").mkdir(parents=True)
+    m = _make()
+    m.logger, errors = _collecting_logger()
+
+    real_listdir = os.listdir
+    swapped = []
+
+    def _swapping_listdir(path, *a, **kw):
+        """Swap `Show` for a link to `outside` between the walk and the rmdir."""
+        if not swapped and str(path) == str(show / "empty"):
+            swapped.append(True)
+            show.rename(base / "Show_real")
+            show.symlink_to(outside, target_is_directory=True)
+        return real_listdir(path, *a, **kw)
+
+    monkeypatch.setattr(os, "listdir", _swapping_listdir)
+
+    assert m._clean_empty_dirs(str(base)) == 0
+    assert swapped  # the race window was actually entered
+    assert (outside / "empty").is_dir()  # pruning stops at base_dir
+    assert errors
+
+
+def test_clean_empty_dirs_still_prunes_inside_base_dir_without_a_config(tmp_path):
+    """The floor must not disable the bloat pass, which passes no config."""
+    base = tmp_path / "metadata"
+    (base / "Show" / "empty").mkdir(parents=True)
+    m = _make()
+
+    assert m._clean_empty_dirs(str(base)) == 2
+    assert not (base / "Show").exists()  # pruned bottom-up, base kept
+
+
 # ── Descriptor-bound deletion (the race re-confinement only narrows) ─────────
 
 
@@ -394,9 +435,14 @@ def test_execute_orphan_mode_remove_refuses_a_parent_swapped_after_the_check(
     real_open = os.open
 
     def _swapping_open(path, *a, **kw):
-        """Open normally, then re-point that same path at `outside`."""
+        """Open normally, then re-point that same dir at `outside`."""
         fd = real_open(path, *a, **kw)
-        if str(path) == str(show.resolve()) and show.is_dir() and not show.is_symlink():
+        # Match on the basename: the walk opens each component by NAME.
+        if (
+            os.path.basename(str(path)) == show.name
+            and show.is_dir()
+            and not show.is_symlink()
+        ):
             show.rename(allowed / "Show_real")
             show.symlink_to(outside, target_is_directory=True)
         return fd
@@ -408,6 +454,46 @@ def test_execute_orphan_mode_remove_refuses_a_parent_swapped_after_the_check(
     assert res["count"] == 0
     assert victim.exists()  # the swapped-in dir is never deleted through
     assert (allowed / "Show_real" / "poster.png").exists()  # nor the pinned one
+    assert errors
+
+
+def test_execute_orphan_mode_remove_refuses_an_intermediate_component_swapped_after_confinement(
+    tmp_path, monkeypatch
+):
+    """An INTERMEDIATE component becomes a link once confinement has passed."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    lib = allowed / "lib"
+    show = lib / "Show"
+    show.mkdir(parents=True)
+    f = show / "poster.png"
+    f.write_bytes(b"x")
+    victim = outside / "Show" / "poster.png"
+    victim.parent.mkdir(parents=True)
+    victim.write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    real_open = os.open
+    swapped = []
+
+    def _swapping_open(path, *a, **kw):
+        """Swap `lib` for a link to `outside` in the check→open window."""
+        if not swapped and str(path).startswith(os.path.realpath(allowed)):
+            swapped.append(True)
+            lib.rename(allowed / "lib_real")
+            lib.symlink_to(outside, target_is_directory=True)
+        return real_open(path, *a, **kw)
+
+    monkeypatch.setattr(os, "open", _swapping_open)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_orphan_mode([_orphan_item(f, allowed)], "remove", logger)
+
+    assert swapped  # the race window was actually entered
+    assert res["count"] == 0
+    assert victim.exists()  # the swapped-in tree is never deleted through
+    assert (allowed / "lib_real" / "Show" / "poster.png").exists()  # nor the real one
     assert errors
 
 
@@ -457,6 +543,31 @@ def test_execute_orphan_mode_remove_sweeps_dead_links_only_inside_the_roots(
     assert not inside_link.is_symlink()  # dead link into a root: still swept
     assert outside_link.is_symlink()  # dead link out of the roots: refused
     assert errors
+
+
+def test_execute_orphan_mode_aggregates_refusals_into_one_error(tmp_path, monkeypatch):
+    """Links into unconfigured storage are retained and re-refused every pass, so the refusals collapse to one summary line; detail moves to debug."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    items = []
+    for i in range(5):
+        link = allowed / f"gone-{i}.png"
+        link.symlink_to(outside / f"missing-{i}.png")
+        items.append(_orphan_item(link, allowed))
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    logger, errors = _collecting_logger()
+    debugs = []
+    logger.debug = debugs.append
+
+    res = m._execute_orphan_mode(items, "remove", logger)
+
+    assert res["count"] == 0
+    assert len(errors) == 1  # one line per pass, not one per link
+    assert "refused 5 path(s)" in errors[0]
+    assert len(debugs) == 5  # per-link detail retained at debug
 
 
 def _write(tmp_path, name):
