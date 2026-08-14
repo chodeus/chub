@@ -7,7 +7,8 @@ turns a cleanup request body into the overrides a `module_run` job expects.
 
 from typing import List, Optional
 
-from backend.util.config import ConfigError
+from backend.util.config import ChubConfig, ConfigError
+from backend.util.path_safety import resolve_confined
 
 
 def get_plex_path() -> Optional[str]:
@@ -54,10 +55,11 @@ def get_excluded_libraries() -> List[str]:
     return list(getattr(section, "excluded_libraries", None) or [])
 
 
-def build_cleanup_overrides(body: dict) -> dict:
+def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
     """Assemble the poster_cleanarr job overrides from a cleanup request body.
-    Raises ValueError on an invalid mode (the route maps it to a 400). Bloat
-    accepts "nothing" so the UI can run stale/orphan cleanup with bloat off."""
+    Raises ValueError on an invalid mode or an asset_dir outside the allowed
+    roots (the route maps it to a 400). Bloat accepts "nothing" so the UI can
+    run stale/orphan cleanup with bloat off."""
     mode = (body.get("mode") or "report").lower()
     if mode not in ("report", "move", "remove", "nothing"):
         raise ValueError(f"Invalid mode '{mode}'")
@@ -89,7 +91,15 @@ def build_cleanup_overrides(body: dict) -> dict:
 
     asset_dirs = body.get("asset_dirs")
     if isinstance(asset_dirs, list):
-        overrides["asset_dirs"] = [str(p) for p in asset_dirs]
+        # These reach PosterCleanarr's orphan/stale passes, which DELETE —
+        # confine here so no caller can hand it an unchecked request path.
+        confined = []
+        for p in asset_dirs:
+            real = resolve_confined(str(p), config)
+            if real is None:
+                raise ValueError(f"asset_dirs path is outside the allowed roots: {p}")
+            confined.append(str(real))
+        overrides["asset_dirs"] = confined
 
     if "overlays_only" in body:
         overrides["overlays_only"] = bool(body.get("overlays_only"))

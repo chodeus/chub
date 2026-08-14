@@ -9,6 +9,9 @@ HTTP shapes (backend/util never imports backend.api).
 import os
 from typing import Any, Dict, Optional, Tuple
 
+from backend.util.config import ChubConfig
+from backend.util.path_safety import resolve_confined
+
 _PIL_FORMATS = {"jpeg": "JPEG", "jpg": "JPEG", "webp": "WEBP", "png": "PNG"}
 _FORMAT_EXTENSIONS = {"JPEG": ".jpg", "WEBP": ".webp", "PNG": ".png"}
 _FORMAT_MEDIA_TYPES = {"JPEG": "image/jpeg", "WEBP": "image/webp", "PNG": "image/png"}
@@ -23,6 +26,7 @@ def resolve_format(name: Optional[str]) -> Tuple[str, str]:
 def optimize_poster_files(
     db,
     logger,
+    config: ChubConfig,
     max_width,
     max_height,
     pil_format,
@@ -53,9 +57,21 @@ def optimize_poster_files(
     for poster in posters:
         file_path = poster.get("file", "")
         folder = poster.get("folder", "")
-        full_path = os.path.join(folder, file_path) if folder else file_path
+        raw_path = os.path.join(folder, file_path) if folder else file_path
 
-        if not full_path or not os.path.isfile(full_path):
+        if not raw_path:
+            skipped += 1
+            continue
+
+        # A poisoned cache row must never reach the shutil.move/os.remove below.
+        real = resolve_confined(raw_path, config)
+        if real is None:
+            logger.warning(f"Skipping poster outside allowed roots: {raw_path}")
+            skipped += 1
+            continue
+
+        full_path = str(real)
+        if not os.path.isfile(full_path):
             skipped += 1
             continue
 

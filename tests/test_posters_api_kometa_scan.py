@@ -1,5 +1,7 @@
+import os
 from types import SimpleNamespace
 
+from backend.util.config import ChubConfig
 from backend.util.database import ChubDB
 
 
@@ -45,7 +47,8 @@ def test_cleanup_overrides_parse_stale():
             "mode": "remove",
             "stale_duplicates_enabled": True,
             "stale_duplicates_mode": "move",
-        }
+        },
+        ChubConfig(),
     )
     assert ov["mode"] == "remove"
     assert ov["stale_duplicates_enabled"] is True
@@ -55,10 +58,15 @@ def test_cleanup_overrides_parse_stale():
 def test_cleanup_overrides_parse_overlays_only():
     from backend.util.poster_cleanarr_settings import build_cleanup_overrides
 
-    assert build_cleanup_overrides({"overlays_only": True})["overlays_only"] is True
-    assert build_cleanup_overrides({"overlays_only": False})["overlays_only"] is False
+    cfg = ChubConfig()
+    assert (
+        build_cleanup_overrides({"overlays_only": True}, cfg)["overlays_only"] is True
+    )
+    assert (
+        build_cleanup_overrides({"overlays_only": False}, cfg)["overlays_only"] is False
+    )
     # absent -> not in overrides (module keeps its saved overlays_only)
-    assert "overlays_only" not in build_cleanup_overrides({"mode": "report"})
+    assert "overlays_only" not in build_cleanup_overrides({"mode": "report"}, cfg)
 
 
 def test_cleanup_overrides_allows_nothing_and_rejects_bad_stale_mode():
@@ -66,7 +74,37 @@ def test_cleanup_overrides_allows_nothing_and_rejects_bad_stale_mode():
 
     from backend.util.poster_cleanarr_settings import build_cleanup_overrides
 
+    cfg = ChubConfig()
     # 'nothing' is allowed for the bloat mode (UI runs stale/orphan with bloat off)
-    assert build_cleanup_overrides({"mode": "nothing"})["mode"] == "nothing"
+    assert build_cleanup_overrides({"mode": "nothing"}, cfg)["mode"] == "nothing"
     with pytest.raises(ValueError):
-        build_cleanup_overrides({"mode": "report", "stale_duplicates_mode": "nuke"})
+        build_cleanup_overrides(
+            {"mode": "report", "stale_duplicates_mode": "nuke"}, cfg
+        )
+
+
+def test_cleanup_overrides_confines_asset_dirs(tmp_path):
+    """A configured asset_dir survives the guard and comes back resolved."""
+    from backend.util.poster_cleanarr_settings import build_cleanup_overrides
+
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    cfg = ChubConfig()
+    cfg.poster_renamerr.source_dirs = [str(tmp_path)]
+
+    ov = build_cleanup_overrides({"asset_dirs": [str(assets) + "/."]}, cfg)
+
+    assert ov["asset_dirs"] == [os.path.realpath(str(assets))]
+
+
+def test_cleanup_overrides_rejects_asset_dirs_outside_roots(tmp_path):
+    """An outside dir raises before it can reach the deleting cleanup passes."""
+    import pytest
+
+    from backend.util.poster_cleanarr_settings import build_cleanup_overrides
+
+    cfg = ChubConfig()
+    cfg.poster_renamerr.source_dirs = [str(tmp_path)]
+
+    with pytest.raises(ValueError):
+        build_cleanup_overrides({"asset_dirs": ["/etc"]}, cfg)

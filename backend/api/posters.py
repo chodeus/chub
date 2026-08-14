@@ -1003,10 +1003,15 @@ async def optimize_posters(
     # The full-cache read + per-poster PIL resize/convert loop is heavy and
     # CPU-bound; run it off the event loop so it doesn't freeze the server.
     try:
+        from backend.util.config import load_config
+
+        # Loaded once here so the loop confines every cache row it rewrites.
+        config = load_config()
         message, data = await run_in_threadpool(
             optimize_poster_files,
             db,
             logger,
+            config,
             max_width,
             max_height,
             pil_format,
@@ -1014,6 +1019,8 @@ async def optimize_posters(
             quality,
             mode,
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error optimizing posters: {e}", exc_info=True)
         return error(
@@ -2926,8 +2933,11 @@ async def run_plex_metadata_cleanup(
         body = await read_json_object(request)
         if body is BODY_TOO_LARGE:
             return body_too_large_error()
+        from backend.util.config import load_config
+
+        config = load_config()
         try:
-            overrides = build_cleanup_overrides(body)
+            overrides = build_cleanup_overrides(body, config)
         except ValueError as ve:
             logger.error(f"Invalid cleanup request: {ve}")
             return error("Invalid cleanup mode", code="INVALID_MODE", status_code=400)
@@ -2948,6 +2958,8 @@ async def run_plex_metadata_cleanup(
         return error(
             "Failed to enqueue cleanup", code="ENQUEUE_FAILED", status_code=500
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error enqueuing cleanup: {e}")
         return error(
@@ -3345,6 +3357,8 @@ def get_poster_thumbnail(
             build_thumbnail(full_path, poster_id, width), media_type="image/jpeg"
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error generating thumbnail for poster {poster_id}: {e}")
         return error(
@@ -3457,6 +3471,8 @@ def download_poster(
             background=BackgroundTask(os.unlink, tmp_path),
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error downloading poster {poster_id}: {e}")
         return error(
