@@ -499,3 +499,23 @@ def test_resolve_format_maps_aliases_and_falls_back_to_jpeg():
     assert resolve_format("jpg") == ("JPEG", ".jpg")
     assert resolve_format("WEBP") == ("WEBP", ".webp")
     assert resolve_format(None) == ("JPEG", ".jpg")
+
+
+def test_thumbnail_and_download_refuse_rows_outside_allowed_roots(
+    db, monkeypatch, tmp_path
+):
+    """A poisoned row pointing outside every configured root is 403, not served."""
+    victim = tmp_path / "elsewhere" / "secret.jpg"
+    victim.parent.mkdir()
+    victim.write_bytes(b"x")
+    pid = _seed_poster(db, "Evil", file=str(victim), folder=str(victim.parent))
+
+    import backend.util.config as cfg
+
+    monkeypatch.setattr(cfg, "load_config", cfg.ChubConfig)
+    client = _client(db)
+
+    thumb = client.get(f"/api/posters/{pid}/thumbnail")
+    dl = client.post(f"/api/posters/{pid}/download")
+    assert thumb.status_code == 403, thumb.text
+    assert dl.status_code == 403, dl.text
