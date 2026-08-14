@@ -285,6 +285,17 @@ def test_resolve_under_root_confines_relative_paths_to_the_base(config_with_root
     assert resolve_under_root(str(tmp_path), "a.jpg", config) is None
 
 
+def test_resolve_under_root_denies_a_prefix_sibling_of_the_base(config_with_roots):
+    """`/posters_evil/x` must not slip past a `/posters` base via a bare prefix check."""
+    config, tmp_path = config_with_roots
+    base = tmp_path / "posters_src"
+    sibling = tmp_path / "posters_src_evil"
+    sibling.mkdir()
+    (sibling / "x.jpg").write_text("x")
+
+    assert resolve_under_root(str(base), "../posters_src_evil/x.jpg", config) is None
+
+
 def test_resolve_under_root_validates_an_absolute_path_on_its_own(config_with_roots):
     """An absolute path is authorized by its own resolution, not by `location`."""
     config, tmp_path = config_with_roots
