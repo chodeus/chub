@@ -255,6 +255,20 @@ def is_path_allowed(path: str, config: ChubConfig) -> bool:
     return False
 
 
+def containing_root(path: str, config: ChubConfig) -> Optional[Path]:
+    """Longest allowed root containing the already-resolved *path*, or None."""
+    # Callers walk down from this root, so the LONGEST match is the tightest
+    # anchor. os.sep suffix stops `/root_evil` matching `/root`, as above.
+    best: Optional[Path] = None
+    for root in get_allowed_roots(config):
+        base = str(root)
+        if path != base and not path.startswith(base + os.sep):
+            continue
+        if best is None or len(base) > len(str(best)):
+            best = root
+    return best
+
+
 def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
     """Resolve *path* and return it only when the resolved target is inside an allowed root, else None."""
     if not path or not isinstance(path, str):
