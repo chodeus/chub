@@ -854,19 +854,18 @@ class PosterCleanarr(ChubModule):
         """Existing asset_dirs re-resolved inside the live config's allowed roots."""
         # Re-authorized here because the API confines at enqueue but a worker
         # acts later; an unloadable config returns [] so nothing is deleted.
-        config = getattr(self, "full_config", None)
-        if config is None:
-            # Shim entry points (run_orphan_assets_pass) build a bare instance.
-            from backend.util.config import load_config
+        # Never self.full_config: that snapshot is taken at construction, so a
+        # root removed since would still authorize. Lazy import keeps it patchable.
+        from backend.util.config import load_config
 
-            try:
-                config = load_config()
-            except Exception as e:
-                logger.error(
-                    f"Cannot authorize asset_dirs against the allowed roots ({e}); "
-                    "skipping cleanup instead of acting on unverified paths."
-                )
-                return []
+        try:
+            config = load_config()
+        except Exception as e:
+            logger.error(
+                f"Cannot authorize asset_dirs against the allowed roots ({e}); "
+                "skipping cleanup instead of acting on unverified paths."
+            )
+            return []
 
         authorized: List[str] = []
         for d in asset_dirs:
