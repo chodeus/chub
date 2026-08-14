@@ -38,9 +38,9 @@ def test_resolve_plex_match_via_plex_mapping(tmp_path):
 
 
 def test_cleanup_overrides_parse_stale():
-    from backend.api.posters import _build_cleanup_overrides
+    from backend.util.poster_cleanarr_settings import build_cleanup_overrides
 
-    ov = _build_cleanup_overrides(
+    ov = build_cleanup_overrides(
         {
             "mode": "remove",
             "stale_duplicates_enabled": True,
@@ -53,20 +53,20 @@ def test_cleanup_overrides_parse_stale():
 
 
 def test_cleanup_overrides_parse_overlays_only():
-    from backend.api.posters import _build_cleanup_overrides
+    from backend.util.poster_cleanarr_settings import build_cleanup_overrides
 
-    assert _build_cleanup_overrides({"overlays_only": True})["overlays_only"] is True
-    assert _build_cleanup_overrides({"overlays_only": False})["overlays_only"] is False
+    assert build_cleanup_overrides({"overlays_only": True})["overlays_only"] is True
+    assert build_cleanup_overrides({"overlays_only": False})["overlays_only"] is False
     # absent -> not in overrides (module keeps its saved overlays_only)
-    assert "overlays_only" not in _build_cleanup_overrides({"mode": "report"})
+    assert "overlays_only" not in build_cleanup_overrides({"mode": "report"})
 
 
 def test_cleanup_overrides_allows_nothing_and_rejects_bad_stale_mode():
     import pytest
 
-    from backend.api.posters import _build_cleanup_overrides
+    from backend.util.poster_cleanarr_settings import build_cleanup_overrides
 
     # 'nothing' is allowed for the bloat mode (UI runs stale/orphan with bloat off)
-    assert _build_cleanup_overrides({"mode": "nothing"})["mode"] == "nothing"
+    assert build_cleanup_overrides({"mode": "nothing"})["mode"] == "nothing"
     with pytest.raises(ValueError):
-        _build_cleanup_overrides({"mode": "report", "stale_duplicates_mode": "nuke"})
+        build_cleanup_overrides({"mode": "report", "stale_duplicates_mode": "nuke"})

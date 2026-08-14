@@ -249,3 +249,27 @@ def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
     except (ValueError, OSError):
         return None
     return Path(resolved) if is_path_allowed(resolved, config) else None
+
+
+def resolve_under_root(location: str, path: str, config: ChubConfig) -> Optional[Path]:
+    """Resolve an absolute *path*, or one under *location*, confined to allowed roots."""
+    if Path(path).is_absolute():
+        # Absolute paths (grid passes item.file; location is a label, not a
+        # root) validate on their own — resolve_confined covers symlink escapes.
+        return resolve_confined(path, config)
+
+    # Relative path — `location` must be an allowed root and the resolved
+    # result must stay inside it (relative_to avoids the str.startswith
+    # bypass where `/posters_evil/x` slipped past a `/posters` prefix).
+    if not is_path_allowed(location, config):
+        return None
+    base_dir = Path(location).resolve()
+    # Re-confine the resolved root too — location may itself be a link.
+    if not is_path_allowed(str(base_dir), config):
+        return None
+    file_path = (base_dir / path).resolve()
+    try:
+        file_path.relative_to(base_dir)
+    except ValueError:
+        return None
+    return file_path

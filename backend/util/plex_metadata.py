@@ -23,6 +23,7 @@ Uploads/posters/ is bloat.
 
 Public surface:
     get_plex_metadata_dir(plex_path) -> str
+    resolve_in_metadata_dir(file_path, plex_path) -> Optional[str]
     get_in_use_hashes(db_path) -> Set[str]
     copy_plex_db(plex_path, dest) -> Optional[str]
     scan_bundles(plex_path, *, force=False) -> Dict
@@ -75,6 +76,15 @@ _cache: Dict[str, Dict[str, Any]] = {}
 def get_plex_metadata_dir(plex_path: str) -> str:
     """Return absolute path to Plex's Metadata/ directory."""
     return os.path.join(plex_path, "Metadata")
+
+
+def resolve_in_metadata_dir(file_path: str, plex_path: str) -> Optional[str]:
+    """Resolve a variant path, or None when it lands outside Plex's Metadata dir."""
+    metadata_dir = os.path.realpath(get_plex_metadata_dir(plex_path))
+    real = os.path.realpath(file_path)
+    if not real.startswith(metadata_dir + os.sep):
+        return None
+    return real
 
 
 def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
@@ -796,9 +806,8 @@ def delete_variant(file_path: str, *, plex_path: str) -> bool:
       from its metadata agents, and would pollute the scan cache).
     Returns True on success.
     """
-    metadata_dir = os.path.realpath(get_plex_metadata_dir(plex_path))
-    real = os.path.realpath(file_path)
-    if not real.startswith(metadata_dir + os.sep):
+    real = resolve_in_metadata_dir(file_path, plex_path)
+    if real is None:
         return False
     # Plex-sourced variants sit under `<bundle>/Contents/…`. Refuse.
     if f"{os.sep}Contents{os.sep}" in real:

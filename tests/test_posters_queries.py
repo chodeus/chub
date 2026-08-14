@@ -460,3 +460,42 @@ def test_delete_poster_route_leaves_lookalike_filenames_matched(db):
     assert body["data"]["media_unmatched"] == 1
     assert db.media.get_by_id(literal)["matched"] == 0
     assert db.media.get_by_id(lookalike)["matched"] == 1
+
+
+# --- Stage 2: helpers that moved out of posters.py --------------------------
+
+
+def test_rank_candidates_ranks_matches_first_and_drops_prefix_noise(db):
+    """The picker's shared ranker: real match first, same-prefix strangers dropped."""
+    from backend.util.asset_candidates import rank_candidates
+
+    _seed_poster(db, "Dune", file="/src/Dune (2021).jpg")
+    _seed_poster(db, "Dungeons and Dragons Honor Among Thieves")
+    row = db.media.get_by_id(_seed_media(db, "Dune"))
+
+    ranked = rank_candidates(db, row, "movie")
+
+    assert [c["title"] for c, *_ in ranked] == ["Dune"]
+    assert ranked[0][1] is True
+
+
+def test_rank_candidates_scopes_to_the_requested_image_type(db):
+    """An artwork lookup must not surface the poster row for the same title."""
+    from backend.util.asset_candidates import rank_candidates
+
+    _seed_poster(db, "Dune", file="/src/Dune (2021).jpg")
+    _seed_poster(db, "Dune", file="/src/Dune (2021) - Logo.png", image_type="logo")
+    row = db.media.get_by_id(_seed_media(db, "Dune"))
+
+    ranked = rank_candidates(db, row, "movie", image_type="logo")
+
+    assert [c["file"] for c, *_ in ranked] == ["/src/Dune (2021) - Logo.png"]
+
+
+def test_resolve_format_maps_aliases_and_falls_back_to_jpeg():
+    """Every download/optimize call resolves its target through this one map."""
+    from backend.util.poster_images import resolve_format
+
+    assert resolve_format("jpg") == ("JPEG", ".jpg")
+    assert resolve_format("WEBP") == ("WEBP", ".webp")
+    assert resolve_format(None) == ("JPEG", ".jpg")
