@@ -635,6 +635,10 @@ def apply_match(
             return error("Poster not found", code="NOT_FOUND", status_code=404)
 
         pfile = poster.get("file")
+        # Without this the row locks as matched with no source file, and every
+        # later run skips it (mirrors apply_artwork's guard).
+        if not pfile:
+            return error("Poster file has no path", code="NOT_FOUND", status_code=404)
         now = datetime.datetime.now().isoformat(timespec="seconds")
 
         if kind == "collection":

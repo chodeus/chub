@@ -425,7 +425,9 @@ def test_approve_route_writes_to_collections_when_kind_is_collection(db):
     assert db.media.get_by_id(decoy)["match_status"] is None
 
 
-def test_backfill_dimensions_route_measures_only_the_unmeasured(db, tmp_path):
+def test_backfill_dimensions_route_measures_only_the_unmeasured(
+    db, tmp_path, monkeypatch
+):
     """Rows with a readable file get width/height; a missing file is skipped."""
     from PIL import Image
 
@@ -433,6 +435,8 @@ def test_backfill_dimensions_route_measures_only_the_unmeasured(db, tmp_path):
     Image.new("RGB", (400, 600)).save(real)
     measurable = _seed_poster(db, "Dune", file=str(real))
     _seed_poster(db, "Ghost", file=str(tmp_path / "gone.jpg"))
+    # The route confines every row, so tmp_path has to be a configured root.
+    monkeypatch.setattr("backend.util.config.load_config", _rooted_config(tmp_path))
 
     body = _client(db).post("/api/posters/backfill-dimensions").json()
     assert body["data"] == {"updated": 1, "skipped": 1, "batch_size": 200}
@@ -666,3 +670,146 @@ def test_optimize_poster_files_skips_rows_outside_allowed_roots(db, tmp_path):
     assert evil.read_bytes() == untouched
     with Image.open(good) as img:
         assert img.size == (1000, 1500)
+
+
+# --- Review round 1: guards the split moved ---------------------------------
+
+
+def _rooted_config(root):
+    """Stand-in load_config whose only allowed root is `root`."""
+
+    def _load(*_a, **_kw):
+        config = ChubConfig()
+        config.poster_renamerr.source_dirs = [str(root)]
+        return config
+
+    return _load
+
+
+def _seed_oversized(db, tmp_path, monkeypatch, title="Dune"):
+    """Point load_config at tmp_path and cache one 2000x3000 poster inside it."""
+    from PIL import Image
+
+    poster = tmp_path / f"{title}.jpg"
+    Image.new("RGB", (2000, 3000)).save(poster)
+    _seed_poster(db, title, file=str(poster), folder=str(tmp_path))
+    monkeypatch.setattr("backend.util.config.load_config", _rooted_config(tmp_path))
+    return poster
+
+
+def test_optimize_route_refuses_an_unknown_mode(db, tmp_path, monkeypatch):
+    """A typo'd mode is a 400 — anything but 'report' rewrites files on disk."""
+    poster = _seed_oversized(db, tmp_path, monkeypatch)
+    before = poster.read_bytes()
+
+    resp = _client(db).post("/api/posters/optimize", json={"mode": "repot"})
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error_code"] == "INVALID_MODE"
+    assert poster.read_bytes() == before
+
+
+def test_optimize_route_still_reports_and_still_optimizes(db, tmp_path, monkeypatch):
+    """The two honoured modes keep working: report is a dry run, optimize rewrites."""
+    from PIL import Image
+
+    poster = _seed_oversized(db, tmp_path, monkeypatch)
+    before = poster.read_bytes()
+    client = _client(db)
+
+    report = client.post("/api/posters/optimize", json={"mode": "report"})
+    assert report.status_code == 200, report.text
+    assert report.json()["data"]["mode"] == "report"
+    assert report.json()["data"]["processed"] == 1
+    assert poster.read_bytes() == before
+
+    run = client.post("/api/posters/optimize", json={"mode": "optimize"})
+    assert run.status_code == 200, run.text
+    assert run.json()["data"]["processed"] == 1
+    with Image.open(poster) as img:
+        assert img.size == (1000, 1500)
+
+
+def test_apply_route_refuses_a_poster_row_with_no_path(db):
+    """An empty file would lock the row as matched with no source; 404 instead."""
+    mid = _seed_media(db, "Dune")
+    db.poster.upsert(
+        {
+            "title": "Dune",
+            "normalized_title": "dune",
+            "year": 2021,
+            "tmdb_id": None,
+            "tvdb_id": None,
+            "imdb_id": None,
+            "season_number": None,
+            "folder": "/src",
+            "file": "",
+            "asset_type": "movie",
+        }
+    )
+    pid = db.poster.execute_query(
+        "SELECT id FROM poster_cache WHERE file=''", fetch_one=True
+    )["id"]
+
+    resp = _client(db).post(f"/api/posters/match/{mid}/apply?poster_id={pid}")
+
+    assert resp.status_code == 404, resp.text
+    row = db.media.get_by_id(mid)
+    assert row["match_status"] is None and row["user_confirmed"] == 0
+
+
+def test_backfill_dimensions_skips_rows_outside_allowed_roots(
+    db, tmp_path, monkeypatch
+):
+    """poster_cache.file is persisted data — an outside row is skipped, not opened."""
+    from PIL import Image
+
+    allowed = tmp_path / "posters"
+    allowed.mkdir()
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    good = allowed / "Dune.jpg"
+    evil = outside / "secret.jpg"
+    for path in (good, evil):
+        Image.new("RGB", (400, 600)).save(path)
+    measurable = _seed_poster(db, "Dune", file=str(good), folder=str(allowed))
+    poisoned = _seed_poster(db, "Evil", file=str(evil), folder=str(outside))
+    monkeypatch.setattr("backend.util.config.load_config", _rooted_config(allowed))
+
+    body = _client(db).post("/api/posters/backfill-dimensions").json()
+
+    assert body["data"] == {"updated": 1, "skipped": 1, "batch_size": 200}
+    assert db.poster.get_by_integer_id(measurable)["width"] == 400
+    assert db.poster.get_by_integer_id(poisoned)["width"] is None
+
+
+def test_added_since_rejects_a_cutoff_sqlite_would_compare_as_text(db):
+    """A lone quote must not sort above every row and return the whole table."""
+    _seed_poster(db, "Old", created_at="2020-01-01T00:00:00+00:00")
+    _seed_poster(db, "New", created_at="2026-01-01T00:00:00+00:00")
+    client = _client(db)
+
+    bad = client.get("/api/posters/added-since", params={"cutoff": "'"})
+    assert bad.status_code == 400, bad.text
+    assert bad.json()["error_code"] == "INVALID_CUTOFF"
+
+    good = client.get(
+        "/api/posters/added-since", params={"cutoff": "2025-01-01T00:00:00+00:00"}
+    )
+    assert good.status_code == 200, good.text
+    assert [row["title"] for row in good.json()["data"]["items"]] == ["New"]
+
+
+def test_routes_do_not_advertise_parameters_they_ignore(db):
+    """`sort` and `force` were accepted and dropped on the floor — both are gone."""
+    client = _client(db)
+    schema = client.get("/openapi.json").json()
+
+    def _params(path):
+        return {p["name"] for p in schema["paths"][path]["get"].get("parameters", [])}
+
+    assert "sort" not in _params("/api/posters/search")
+    assert "force" not in _params("/api/posters/plex-metadata/by-media")
+    assert "force" not in _params("/api/posters/plex-metadata/bloat")
+    # A client that still sends the dropped param is ignored, not rejected.
+    assert client.get("/api/posters/search?sort=title").status_code == 200

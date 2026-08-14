@@ -1,5 +1,6 @@
 """Read-only poster reports: low-resolution, added-since, matched, applied."""
 
+from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import Depends, Query
@@ -48,7 +49,8 @@ async def list_low_resolution_posters(
     "/added-since",
     summary="Posters added since ISO cutoff",
     description="Return poster_cache rows whose created_at is >= the given "
-    "ISO-8601 cutoff. Enables `period=30d`-style frontend filters.",
+    "ISO-8601 cutoff. Enables `period=30d`-style frontend filters. A cutoff "
+    "that isn't ISO-8601 is rejected with 400.",
 )
 async def list_posters_added_since(
     cutoff: str,
@@ -56,6 +58,15 @@ async def list_posters_added_since(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    # SQLite compares a bad cutoff as text: "'" matches every row, "x" none.
+    try:
+        datetime.fromisoformat(cutoff)
+    except ValueError:
+        return error(
+            "cutoff must be an ISO-8601 datetime",
+            code="INVALID_CUTOFF",
+            status_code=400,
+        )
     try:
         rows = db.poster.added_since(cutoff, limit=max(1, min(limit, 2000)))
         return ok(

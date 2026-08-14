@@ -47,7 +47,8 @@ from backend.util.poster_images import (
                     }
                 }
             },
-        }
+        },
+        400: {"description": "Unknown optimize mode"},
     },
 )
 async def optimize_posters(
@@ -79,7 +80,12 @@ async def optimize_posters(
     max_height = body.get("max_height", 1500)
     target_format = body.get("format", "jpeg").lower()
     quality = max(1, min(100, body.get("quality", 85)))
-    mode = body.get("mode", "report")
+    raw_mode = body.get("mode", "report")
+    mode = raw_mode.lower() if isinstance(raw_mode, str) else raw_mode
+    # optimize_poster_files only dry-runs on "report" — every other value takes
+    # the shutil.move/os.remove branch, so an unknown mode must stop here.
+    if mode not in ("report", "optimize"):
+        return error("Invalid optimize mode", code="INVALID_MODE", status_code=400)
 
     pil_format, target_ext = resolve_format(target_format)
 

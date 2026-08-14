@@ -20,7 +20,8 @@ from backend.util.database import ChubDB
 @router.get(
     "/search",
     summary="Search poster cache",
-    description="Search the poster cache by title with pagination and sorting.",
+    description="Search the poster cache by title with pagination. Results are "
+    "always ordered by normalized title, ascending.",
     responses={
         200: {
             "description": "Poster search results retrieved successfully",
@@ -48,9 +49,6 @@ from backend.util.database import ChubDB
 )
 async def search_posters(
     query: Optional[str] = None,
-    sort: Optional[str] = Query(
-        None, description="Sort field (e.g. title, year, date_added)"
-    ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     logger: Any = Depends(get_logger),
@@ -60,11 +58,10 @@ async def search_posters(
     Search the poster cache by title with pagination.
 
     Performs a text search against poster titles and returns
-    paginated results with optional sorting.
+    paginated results ordered by normalized title, ascending.
 
     Args:
         query: Search string to match against poster titles
-        sort: Sort field for ordering results
         limit: Maximum number of results to return
         offset: Number of results to skip for pagination
 
@@ -72,7 +69,7 @@ async def search_posters(
         Paginated list of matching posters with total count
     """
     try:
-        logger.debug(f"Serving GET /api/posters/search query={query} sort={sort}")
+        logger.debug(f"Serving GET /api/posters/search query={query}")
         result = db.poster.search(query=query, limit=limit, offset=offset)
         return ok(f"Found {result['total']} posters", result)
     except Exception as e:

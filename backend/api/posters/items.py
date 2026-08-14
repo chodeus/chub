@@ -322,9 +322,9 @@ async def delete_poster(
     """
     Delete a poster from the cache and optionally from disk.
 
-    Removes the poster record from the database, optionally
-    deletes the physical file, records it as orphaned, and
-    marks any associated media items as unmatched.
+    Removes the poster record from the database, optionally deletes
+    the physical file, and marks any media items that were applied
+    from that file as unmatched.
 
     The deleteFile flag can be provided via JSON request body
     or as a query parameter (body takes precedence).

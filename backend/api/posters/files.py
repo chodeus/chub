@@ -411,11 +411,21 @@ def backfill_poster_dimensions(
 
         from PIL import Image
 
+        from backend.util.config import load_config
+        from backend.util.path_safety import resolve_confined
+
+        # poster_cache.file is persisted data, not a trust boundary — confine
+        # every row before PIL opens it.
+        config = load_config()
         updated = 0
         skipped = 0
         for r in rows:
-            path = r["file"]
-            if not path or not os.path.isfile(path):
+            path = resolve_confined(r["file"], config)
+            if path is None:
+                logger.debug(f"Skipping poster_id={r['id']}: outside allowed roots")
+                skipped += 1
+                continue
+            if not path.is_file():
                 skipped += 1
                 continue
             try:
@@ -431,6 +441,8 @@ def backfill_poster_dimensions(
             f"Backfilled {updated} poster dimensions ({skipped} skipped)",
             {"updated": updated, "skipped": skipped, "batch_size": limit},
         )
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error backfilling poster dimensions: {e}")
         return error(

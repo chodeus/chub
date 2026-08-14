@@ -42,7 +42,6 @@ async def list_plex_metadata_by_media(
         "all",
         description="Filter to variants of a single kind (poster/art/banner/thumb/chapter/theme/other). Bundles with no matching variants are hidden.",
     ),
-    force: bool = Query(False, description="Bypass the 5-min scan cache"),
     logger: Any = Depends(get_cleanarr_logger),
 ):
     """
@@ -166,7 +165,6 @@ async def list_plex_metadata_bloat(
     request: Request,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    force: bool = Query(False),
     logger: Any = Depends(get_cleanarr_logger),
 ):
     """Flat list of bloat variants across all bundles, largest first."""

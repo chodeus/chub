@@ -1,6 +1,8 @@
 # api/utils.py
 
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 from typing import Any, Optional
 
 from fastapi import Request
@@ -18,6 +20,15 @@ def get_logger(request: Request, source: str = "WEB") -> Any:
     return request.app.state.logger.get_adapter(source)
 
 
+def _apply_log_settings(module_logger: Logger, log_level: str, max_logs: int) -> None:
+    """Push live log_level/max_logs onto a built logger, keeping its file handle."""
+    # Attribute access delegates to the underlying stdlib logger (Logger.__getattr__).
+    module_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    for handler in module_logger.handlers:
+        if isinstance(handler, RotatingFileHandler):
+            handler.backupCount = max(1, max_logs)
+
+
 def get_module_logger(request: Request, module_name: str) -> Any:
     """
     Get or create a dedicated file-based logger for a specific module.
@@ -25,21 +36,27 @@ def get_module_logger(request: Request, module_name: str) -> Any:
     Unlike get_logger() which writes to the general log, this creates
     a separate log file under logs/<module_name>/<module_name>.log so
     each module has its own section in the Logs page.
-    """
-    if module_name not in _module_loggers:
-        from backend.util.config import load_config
 
-        config = load_config()
-        module_config = getattr(config, module_name, None)
-        log_level = (
-            getattr(module_config, "log_level", "info") if module_config else "info"
-        )
-        _module_loggers[module_name] = Logger(
+    Config is re-read per call so a log_level/max_logs change reaches the
+    next request instead of being frozen at first use.
+    """
+    from backend.util.config import load_config
+
+    config = load_config()
+    module_config = getattr(config, module_name, None)
+    log_level = getattr(module_config, "log_level", "info") if module_config else "info"
+    max_logs = config.general.max_logs
+
+    module_logger = _module_loggers.get(module_name)
+    if module_logger is None:
+        module_logger = Logger(
             log_level=log_level,
             module_name=module_name,
-            max_logs=config.general.max_logs,
+            max_logs=max_logs,
         )
-    return _module_loggers[module_name].get_adapter(module_name.upper())
+        _module_loggers[module_name] = module_logger
+    _apply_log_settings(module_logger, log_level, max_logs)
+    return module_logger.get_adapter(module_name.upper())
 
 
 def get_database(request: Request) -> ChubDB:
