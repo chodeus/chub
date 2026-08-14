@@ -15,7 +15,7 @@ from backend.util.config import ChubConfig, ConfigError
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
 from backend.util.path_safety import resolve_confined
-
+import os
 
 def _logger():
     return SimpleNamespace(
@@ -247,6 +247,216 @@ def _swap_parent_for_link(allowed, outside):
     show.rmdir()
     show.symlink_to(outside, target_is_directory=True)
     return item
+
+
+def test_execute_orphan_mode_remove_refuses_a_swapped_parent(tmp_path, monkeypatch):
+    """A parent component swapped to a symlink between scan and os.remove must not delete the file it now points at."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    victim = outside / "poster.png"
+    victim.write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    item = _swap_parent_for_link(allowed, outside)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_orphan_mode([item], "remove", logger)
+
+    assert res["count"] == 0
+    assert victim.exists()  # the swapped-in target is untouched
+    assert errors
+
+
+def test_execute_orphan_mode_move_refuses_a_swapped_parent(tmp_path, monkeypatch):
+    """Same swap on the move path — shutil.move must not relocate an outside file."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    victim = outside / "poster.png"
+    victim.write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    item = _swap_parent_for_link(allowed, outside)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_orphan_mode([item], "move", logger)
+
+    assert res["count"] == 0
+    assert victim.exists()  # not dragged into the restore dir
+    assert errors
+
+
+def test_execute_orphan_mode_move_refuses_a_symlinked_restore_dir(
+    tmp_path, monkeypatch
+):
+    """The move destination is confined too: a restore dir linking outside the roots must not receive the file."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    (allowed / ORPHAN_RESTORE_DIR_NAME).symlink_to(outside, target_is_directory=True)
+    f = allowed / "orphan.png"
+    f.write_bytes(b"x")
+    item = {"path": str(f), "size": 1, "parsed": "orphan", "asset_dir": str(allowed)}
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_orphan_mode([item], "move", logger)
+
+    assert res["count"] == 0
+    assert f.exists()  # left in place
+    assert not (outside / "orphan.png").exists()  # nothing written outside
+    assert errors
+
+
+def test_clean_empty_dirs_refuses_a_dir_outside_the_roots(tmp_path, monkeypatch):
+    """The empty-dir sweep re-confines each dir: an asset dir swapped to a link must not have the outside tree pruned through it."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    stray = outside / "empty"
+    stray.mkdir()
+    cfg = _live(monkeypatch, allowed)
+    swapped = allowed / "assets"
+    swapped.symlink_to(outside, target_is_directory=True)
+    m = _make(allowed)
+    m.logger, errors = _collecting_logger()
+
+    assert m._clean_empty_dirs(str(swapped), cfg) == 0
+    assert stray.exists()  # pruning stops at the roots
+    assert errors
+
+
+# ── Descriptor-bound deletion (the race re-confinement only narrows) ─────────
+
+
+def _orphan_item(path, asset_dir):
+    """An orphan entry for `path`, as _scan_orphan_assets would emit it."""
+    return {
+        "path": str(path),
+        "size": 1,
+        "parsed": "orphan",
+        "asset_dir": str(asset_dir),
+    }
+
+
+def test_execute_orphan_mode_remove_unlinks_through_a_parent_descriptor(
+    tmp_path, monkeypatch
+):
+    """The delete goes through os.unlink(name, dir_fd=...) on the confined parent — a bare os.remove(path) would resolve the path a second time."""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    f = allowed / "orphan.png"
+    f.write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    calls = []
+    real_unlink = os.unlink
+
+    def _recording_unlink(path, *a, dir_fd=None, **kw):
+        """Record the name/descriptor pair, then delegate to the real unlink."""
+        calls.append((path, dir_fd))
+        return real_unlink(path, *a, dir_fd=dir_fd, **kw)
+
+    # `os` here is the same module object poster_cleanarr calls through.
+    monkeypatch.setattr(os, "unlink", _recording_unlink)
+    res = m._execute_orphan_mode([_orphan_item(f, allowed)], "remove", _logger())
+
+    assert res["count"] == 1
+    assert not f.exists()
+    assert [name for name, _fd in calls] == ["orphan.png"]  # the NAME, not the path
+    assert calls[0][1] is not None  # ...resolved against a descriptor
+
+
+def test_execute_orphan_mode_remove_refuses_a_parent_swapped_after_the_check(
+    tmp_path, monkeypatch
+):
+    """The parent is re-pointed at an outside dir the instant after it is opened: the descriptor pin must refuse rather than delete through the new path."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    victim = outside / "poster.png"
+    victim.write_bytes(b"x")
+    show = allowed / "Show"
+    show.mkdir()
+    f = show / "poster.png"
+    f.write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    real_open = os.open
+
+    def _swapping_open(path, *a, **kw):
+        """Open normally, then re-point that same path at `outside`."""
+        fd = real_open(path, *a, **kw)
+        if str(path) == str(show.resolve()) and show.is_dir() and not show.is_symlink():
+            show.rename(allowed / "Show_real")
+            show.symlink_to(outside, target_is_directory=True)
+        return fd
+
+    monkeypatch.setattr(os, "open", _swapping_open)
+    logger, errors = _collecting_logger()
+    res = m._execute_orphan_mode([_orphan_item(f, allowed)], "remove", logger)
+
+    assert res["count"] == 0
+    assert victim.exists()  # the swapped-in dir is never deleted through
+    assert (allowed / "Show_real" / "poster.png").exists()  # nor the pinned one
+    assert errors
+
+
+def test_execute_orphan_mode_remove_deletes_the_link_not_its_target(
+    tmp_path, monkeypatch
+):
+    """An orphaned symlink is unlinked by name; resolving it first would delete the artwork it points at."""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    target = allowed / "keep.png"
+    target.write_bytes(b"x")
+    link = allowed / "orphan.png"
+    link.symlink_to(target)
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    res = m._execute_orphan_mode([_orphan_item(link, allowed)], "remove", _logger())
+
+    assert res["count"] == 1
+    assert not link.is_symlink()  # the link entry is gone
+    assert target.exists()  # its target survives
+
+
+def test_execute_orphan_mode_remove_sweeps_dead_links_only_inside_the_roots(
+    tmp_path, monkeypatch
+):
+    """Behaviour change to keep visible: confinement resolves a link's TARGET, so the dead-link sweep still clears links into a root but now refuses links pointing at an unconfigured directory."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    inside_link = allowed / "gone-inside.png"
+    inside_link.symlink_to(allowed / "missing.png")
+    outside_link = allowed / "gone-outside.png"
+    outside_link.symlink_to(outside / "missing.png")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_orphan_mode(
+        [_orphan_item(inside_link, allowed), _orphan_item(outside_link, allowed)],
+        "remove",
+        logger,
+    )
+
+    assert res["count"] == 1
+    assert not inside_link.is_symlink()  # dead link into a root: still swept
+    assert outside_link.is_symlink()  # dead link out of the roots: refused
+    assert errors
 
 
 def _write(tmp_path, name):
