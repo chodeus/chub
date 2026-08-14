@@ -10,6 +10,7 @@ from backend.util.path_safety import (
     get_browse_roots,
     is_path_allowed,
     resolve_confined,
+    resolve_under_root,
 )
 
 
@@ -421,3 +422,50 @@ def test_resolve_confined_denies_traversal_and_unusable_input(config_with_roots)
     assert resolve_confined(escape, config) is None
     assert resolve_confined("", config) is None
     assert resolve_confined(None, config) is None  # type: ignore[arg-type]
+
+
+def test_resolve_under_root_confines_relative_paths_to_the_base(config_with_roots):
+    """The preview resolver: relative stays under its root, `..` and non-roots deny."""
+    config, tmp_path = config_with_roots
+    base = tmp_path / "posters_src"
+    inside = base / "a.jpg"
+    inside.write_text("x")
+
+    assert resolve_under_root(str(base), "a.jpg", config) == inside.resolve()
+    assert resolve_under_root(str(base), "../secret.jpg", config) is None
+    assert resolve_under_root(str(tmp_path), "a.jpg", config) is None
+
+
+def test_resolve_confined_denies_a_prefix_sibling_of_a_root(config_with_roots):
+    """`/posters_src_evil` must not pass as inside `/posters_src` on a bare prefix."""
+    config, tmp_path = config_with_roots
+    sibling = tmp_path / "posters_src_evil"
+    sibling.mkdir()
+    victim = sibling / "x.jpg"
+    victim.write_text("x")
+
+    assert resolve_confined(str(victim), config) is None
+
+
+def test_resolve_under_root_denies_a_prefix_sibling_of_the_base(config_with_roots):
+    """`/posters_evil/x` must not slip past a `/posters` base via a bare prefix check."""
+    config, tmp_path = config_with_roots
+    base = tmp_path / "posters_src"
+    sibling = tmp_path / "posters_src_evil"
+    sibling.mkdir()
+    (sibling / "x.jpg").write_text("x")
+
+    assert resolve_under_root(str(base), "../posters_src_evil/x.jpg", config) is None
+
+
+def test_resolve_under_root_validates_an_absolute_path_on_its_own(config_with_roots):
+    """An absolute path is authorized by its own resolution, not by `location`."""
+    config, tmp_path = config_with_roots
+    inside = tmp_path / "posters_src" / "a.jpg"
+    inside.write_text("x")
+    outside = tmp_path / "secret.jpg"
+    outside.write_text("x")
+
+    assert resolve_under_root("owner-label", str(inside), config) == inside.resolve()
+    base = str(tmp_path / "posters_src")
+    assert resolve_under_root(base, str(outside), config) is None

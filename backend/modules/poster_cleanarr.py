@@ -18,6 +18,7 @@ from backend.util.helper import create_table
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.normalization import normalize_titles, parse_asset_filename
+from backend.util.path_safety import resolve_confined
 
 # EXIF tag id Kometa writes onto its generated overlay images. Used by the
 # overlays_only mode to skip user-uploaded customs (which lack the tag).
@@ -847,6 +848,40 @@ class PosterCleanarr(ChubModule):
             getattr(config, "instances", []) or []
         )
 
+    def _authorized_asset_dirs(
+        self, asset_dirs: List[str], logger: Logger
+    ) -> List[str]:
+        """Existing asset_dirs re-resolved inside the live config's allowed roots."""
+        # Re-authorized here because the API confines at enqueue but a worker
+        # acts later; an unloadable config returns [] so nothing is deleted.
+        # Never self.full_config: that snapshot is taken at construction, so a
+        # root removed since would still authorize. Lazy import keeps it patchable.
+        from backend.util.config import load_config
+
+        try:
+            config = load_config()
+        except Exception as e:
+            logger.error(
+                f"Cannot authorize asset_dirs against the allowed roots ({e}); "
+                "skipping cleanup instead of acting on unverified paths."
+            )
+            return []
+
+        authorized: List[str] = []
+        for d in asset_dirs:
+            if not os.path.isdir(d):
+                logger.warning(f"asset_dir does not exist, skipping: {d}")
+                continue
+            real = resolve_confined(d, config)
+            if real is None:
+                logger.error(
+                    f"asset_dir resolves outside the allowed roots, "
+                    f"refusing to clean it: {d}"
+                )
+                continue
+            authorized.append(str(real))
+        return authorized
+
     def _run_orphan_pass(
         self,
         db: ChubDB,
@@ -883,10 +918,7 @@ class PosterCleanarr(ChubModule):
             )
             return {"count": 0, "total_size": 0, "mode": mode}
 
-        valid_dirs = [d for d in asset_dirs if os.path.isdir(d)]
-        for d in asset_dirs:
-            if not os.path.isdir(d):
-                logger.warning(f"asset_dir does not exist, skipping: {d}")
+        valid_dirs = self._authorized_asset_dirs(asset_dirs, logger)
         if not valid_dirs:
             return {"count": 0, "total_size": 0, "mode": mode}
 
@@ -1147,10 +1179,7 @@ class PosterCleanarr(ChubModule):
             )
             return {"count": 0, "total_size": 0, "mode": mode}
 
-        for d in asset_dirs:
-            if not os.path.isdir(d):
-                logger.warning(f"asset_dir does not exist, skipping: {d}")
-        valid_dirs = [d for d in asset_dirs if os.path.isdir(d)]
+        valid_dirs = self._authorized_asset_dirs(asset_dirs, logger)
         if not valid_dirs:
             return {"count": 0, "total_size": 0, "mode": mode}
 
