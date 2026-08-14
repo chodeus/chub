@@ -11,6 +11,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
     ValidationError,
     create_model,
     field_validator,
@@ -869,6 +870,10 @@ class ScheduleBlock(BaseModel):
 
 
 class ChubConfig(BaseModel):
+    # Set only by load_config() when config.yml is absent — see has_config_file.
+    # Private, so it never serializes into the file save_config writes.
+    _no_config_file: bool = PrivateAttr(default=False)
+
     schedule: Dict[str, Any] = Field(default_factory=dict)
     # Optional multi-block schedules keyed by module name. Additive to
     # `schedule` above (the single-string-per-module form, untouched); a module
@@ -1251,6 +1256,11 @@ def _backfill_setup_completed(raw: Dict[str, Any]) -> None:
     general["setup_completed"] = used
 
 
+def has_config_file(config: ChubConfig) -> bool:
+    """False only for the placeholder load_config() returns when config.yml is absent."""
+    return not getattr(config, "_no_config_file", False)
+
+
 def load_config(path: Optional[str] = None) -> ChubConfig:
     """
     Load and validate configuration from YAML.
@@ -1273,7 +1283,11 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
 
     version = _config_file_version(config_path)
     if version is None:
-        return ChubConfig()
+        # First boot: defaults, but marked so privileged file access can fail
+        # closed instead of trusting roots nobody configured (resolve_confined).
+        unwritten = ChubConfig()
+        unwritten._no_config_file = True
+        return unwritten
 
     cached = _cached_config(config_path, version)
     if cached is not None:
