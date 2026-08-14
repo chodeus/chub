@@ -835,3 +835,27 @@ def test_optimize_updates_the_row_in_place_with_an_absolute_path(
     assert os.path.isabs(stored), stored  # not a bare basename
     assert os.path.isfile(stored), stored  # and it still resolves
     assert not poster.exists()  # the converted source was removed
+
+
+def test_optimize_keeps_the_original_when_the_cache_update_fails(
+    db, tmp_path, monkeypatch
+):
+    """Persist before the destructive step, or a failed row update orphans the file."""
+    poster = _seed_oversized(db, tmp_path, monkeypatch, title="Sicario")
+
+    def _boom(*_a, **_kw):
+        raise RuntimeError("db gone")
+
+    monkeypatch.setattr(type(db.poster), "record_optimized_file", _boom)
+    resp = _client(db).post(
+        "/api/posters/optimize", json={"mode": "optimize", "format": "png"}
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert poster.exists()  # original survived
+    assert not (tmp_path / "Sicario.png").exists()  # converted copy rolled back
+    assert resp.json()["data"]["processed"] == 0  # and it did not claim success
+    stored = db.poster.execute_query(
+        "SELECT file FROM poster_cache", fetch_one=True
+    )["file"]
+    assert stored == str(poster)  # row still points at the surviving file

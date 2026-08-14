@@ -140,17 +140,27 @@ def optimize_poster_files(
                             continue
                         shutil.move(tmp.name, dest_path)
                         if dest_path != full_path:
-                            if os.path.exists(full_path):
-                                os.remove(full_path)
-                            poster["file"] = dest_path
                             try:
                                 db.poster.record_optimized_file(
                                     poster["id"], dest_path
                                 )
                             except Exception as ce:
+                                # Recovery before the destructive step: with no
+                                # row pointing here, dropping the original
+                                # would orphan the poster.
+                                try:
+                                    os.remove(dest_path)
+                                except OSError:
+                                    pass
                                 logger.warning(
-                                    f"optimized {dest_path}; cache update failed: {ce}"
+                                    f"cache update failed for {full_path}; "
+                                    f"kept the original: {ce}"
                                 )
+                                skipped += 1
+                                continue
+                            poster["file"] = dest_path
+                            if os.path.exists(full_path):
+                                os.remove(full_path)
                         bytes_saved += original_size - new_size
                         processed += 1
                     else:

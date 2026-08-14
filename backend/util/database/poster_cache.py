@@ -275,10 +275,14 @@ class PosterCache(DatabaseBase):
         """Point a poster row at its rewritten file; `file` is stored absolute."""
         # UPDATE by id, not upsert: `file` is in the UNIQUE key, so a changed
         # path would insert a duplicate row instead of moving this one.
-        self.execute_query(
+        rows = self.execute_query(
             "UPDATE poster_cache SET file=? WHERE id=?",
             (str(file_path), int(poster_id)),
         )
+        if rows != 1:
+            raise ValueError(
+                f"poster_cache id={poster_id} not updated (rowcount={rows})"
+            )
 
     def find_missing_dimensions(self, limit: int = 200) -> list:
         """Return up to `limit` rows whose width/height are still unrecorded."""

@@ -186,11 +186,28 @@ def test_module_logger_builds_one_logger_under_concurrent_first_use(
         start.wait()
         probe_logger.get_module_logger(None, _PROBE)
 
-    threads = [threading.Thread(target=_call) for _ in range(4)]
+    threads = [threading.Thread(target=_call, daemon=True) for _ in range(4)]
     for t in threads:
         t.start()
     for t in threads:
-        t.join()
+        t.join(timeout=10)
+    assert not any(t.is_alive() for t in threads)  # a lock regression must not hang
 
     assert len(built) == 1  # unlocked, all four sail past the cache miss
     assert len(_rotating_handlers()) == 1
+
+
+def test_module_logger_treats_an_invalid_console_level_as_inherited(
+    probe_logger, monkeypatch
+):
+    """A typo'd CONSOLE_LOG_LEVEL must not freeze the handler at the first level."""
+    monkeypatch.setenv("LOG_TO_CONSOLE", "1")
+    monkeypatch.setenv("CONSOLE_LOG_LEVEL", "VERBOSE")
+    monkeypatch.setattr("backend.util.config.load_config", _config("info"))
+    probe_logger.get_module_logger(None, _PROBE)
+    assert [h.level for h in _console_handlers()] == [logging.INFO]
+
+    monkeypatch.setattr("backend.util.config.load_config", _config("debug"))
+    probe_logger.get_module_logger(None, _PROBE)
+
+    assert [h.level for h in _console_handlers()] == [logging.DEBUG]
