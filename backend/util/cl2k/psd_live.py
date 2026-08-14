@@ -342,7 +342,9 @@ def inject_preview(psd: Any, preview: Any, out: io.BytesIO) -> None:
         info = psd.image_resources.get_data(Resource.VERSION_INFO)
         if info is not None:
             info.has_composite = True
-    except Exception:
+    except (AttributeError, KeyError, ImportError):
+        # VERSION_INFO is optional metadata — a reader that lacks it still
+        # opens the PSD, so never fail the save over the composite flag.
         pass
     psd._updated = False
     psd.save(out)
