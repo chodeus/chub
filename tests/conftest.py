@@ -75,6 +75,26 @@ def config_with_roots(tmp_path):
 
 
 @pytest.fixture
+def tightening_config(monkeypatch):
+    """Factory: patch load_config to authorize `allowed` for the first N calls, then nothing."""
+
+    def _install(allowed, authorized_calls=1):
+        calls = []
+
+        def _load():
+            calls.append(1)
+            config = ChubConfig()
+            if len(calls) <= authorized_calls:
+                config.poster_renamerr.source_dirs = [str(allowed)]
+            return config
+
+        monkeypatch.setattr("backend.util.config.load_config", _load)
+        return calls
+
+    return _install
+
+
+@pytest.fixture
 def instances_config():
     return InstancesConfig(
         radarr={
