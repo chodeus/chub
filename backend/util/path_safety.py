@@ -17,8 +17,10 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     Build the list of allowed filesystem roots from configuration.
 
     Includes:
-    - Poster source and destination directories
+    - Poster renamerr source, music source and destination directories
+    - Asset renamerr source, music source and destination directories
     - Border replacerr source and destination directories
+    - Poster cleanarr asset directories
     - Nohl source directories
     - Jduparr source directories and hash database location
     - GDrive source locations
@@ -29,8 +31,20 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     # Poster renamerr
     pr = config.poster_renamerr
     roots.extend(pr.source_dirs)
+    roots.extend(pr.music_source_dirs)
     if pr.destination_dir:
         roots.append(pr.destination_dir)
+
+    # Asset renamerr — its own scan set feeds the same poster_cache the
+    # poster file endpoints serve from, so it must be authorized too.
+    ar = config.asset_renamerr
+    roots.extend(ar.source_dirs)
+    roots.extend(ar.music_source_dirs)
+    if ar.destination_dir:
+        roots.append(ar.destination_dir)
+
+    # Poster cleanarr orphan / stale-duplicate asset dirs
+    roots.extend(config.poster_cleanarr.asset_dirs)
 
     # Border replacerr
     br = config.border_replacerr
