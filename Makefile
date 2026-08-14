@@ -22,8 +22,8 @@ bootstrap: install ui-install ## Setup everything
 install: ## Install backend dependencies
 	@echo "Installing backend..."
 	@test -d $(VENV) || $(PY) -m venv $(VENV)
-	@$(VENV)/bin/python -c 'import sys; sys.exit(sys.version_info < (3, 10))' || \
-		{ echo "ERROR: $(VENV) is $$($(VENV)/bin/python -V); requirements-dev.txt needs Python >= 3.10 (repo targets 3.14). Recreate the venv with a newer PY=."; exit 1; }
+	@$(VENV)/bin/python -c 'import sys; sys.exit(sys.version_info < (3, 11))' || \
+		{ echo "ERROR: $(VENV) is $$($(VENV)/bin/python -V); this repo needs Python >= 3.11 (shutil.rmtree(dir_fd=) is 3.11+); CI and Docker build on 3.14. Recreate the venv with a newer PY=."; exit 1; }
 	@$(VENV)/bin/python -m pip install --upgrade pip
 	@$(VENV)/bin/pip install -r requirements.txt
 	@$(VENV)/bin/pip install -r requirements-dev.txt

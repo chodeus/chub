@@ -606,3 +606,83 @@ def test_stale_remove_passes_the_descriptor_to_rmtree(tmp_path, monkeypatch):
     assert seen["dir_fd"] is not None  # anchored, not path-walked
     assert seen["path"] == stale.name  # a bare name, resolved against the fd
     assert not stale.exists()
+
+
+def _stale_entry(folder, asset_dir, canonical):
+    """A stale-duplicate entry for `folder`, as _scan_stale_duplicates emits it."""
+    return {
+        "folder": str(folder),
+        "asset_dir": str(asset_dir),
+        "name": os.path.basename(str(folder)),
+        "canonical": canonical,
+        "canonical_present": True,
+        "id": ("tvdb", 1),
+        "size": 1,
+    }
+
+
+def test_execute_stale_move_renames_through_both_parent_descriptors(
+    tmp_path, monkeypatch
+):
+    """The stale move is an os.rename resolved against a descriptor on each parent, not a path pair shutil re-walks."""
+    allowed = tmp_path / "allowed"
+    canonical = "Dune Prophecy (2024) {tvdb-1}"
+    (allowed / canonical).mkdir(parents=True)  # canonical present
+    stale = allowed / "Dune - Prophecy (2024) {tvdb-1}"
+    stale.mkdir()
+    (stale / "poster.jpg").write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    calls = []
+    real_rename = os.rename
+
+    def _recording_rename(src, dst, **kw):
+        calls.append((src, dst, kw.get("src_dir_fd"), kw.get("dst_dir_fd")))
+        return real_rename(src, dst, **kw)
+
+    monkeypatch.setattr(os, "rename", _recording_rename)
+
+    res = m._execute_stale_mode(
+        [_stale_entry(stale, allowed, canonical)], "move", _logger()
+    )
+
+    assert res["count"] == 1
+    assert (allowed / ORPHAN_RESTORE_DIR_NAME / stale.name / "poster.jpg").exists()
+    assert len(calls) == 1
+    src, dst, src_fd, dst_fd = calls[0]
+    assert (src, dst) == (stale.name, stale.name)  # bare names, not paths
+    assert src_fd is not None and dst_fd is not None  # ...against both fds
+
+
+def test_execute_stale_mode_stops_when_config_stops_authorizing(tmp_path, monkeypatch):
+    """Config is re-read per item, so a root dropped mid-batch stops the tail while the head — authorized when its turn came — still ran."""
+    allowed = tmp_path / "allowed"
+    entries = []
+    for tag in ("A", "B"):
+        (allowed / f"Show {tag} (2024) {{tvdb-1}}").mkdir(parents=True)
+        old = allowed / f"Show {tag} old (2024) {{tvdb-1}}"
+        old.mkdir()
+        (old / "poster.jpg").write_bytes(b"x")
+        entries.append(_stale_entry(old, allowed, f"Show {tag} (2024) {{tvdb-1}}"))
+    m = _make(allowed)
+    calls = []
+
+    def _load():
+        """Authorize `allowed` for the first load only, nothing afterwards."""
+        calls.append(1)
+        cfg = ChubConfig()
+        if len(calls) == 1:
+            cfg.poster_renamerr.source_dirs = [str(allowed)]
+        return cfg
+
+    monkeypatch.setattr("backend.util.config.load_config", _load)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_stale_mode(entries, "remove", logger)
+
+    assert res["count"] == 1
+    assert not os.path.exists(entries[0]["folder"])
+    assert os.path.exists(entries[1]["folder"])  # de-authorized before its turn
+    assert len(calls) >= 2  # one load per item, not one per batch
+    assert errors

@@ -15,6 +15,7 @@ from backend.util.config import ChubConfig, ConfigError
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
 from backend.util.path_safety import resolve_confined
+import errno
 import os
 
 def _logger():
@@ -737,6 +738,200 @@ def test_resolve_orphan_instances_handles_missing_attrs():
     assert PosterCleanarr._resolve_orphan_instances(SimpleNamespace()) == []
     cfg = SimpleNamespace(orphan_instances=None, instances=None)
     assert PosterCleanarr._resolve_orphan_instances(cfg) == []
+
+
+# ── Anchored moves, anchored rmdir, per-item authorization ──────────────────
+
+
+def test_execute_orphan_mode_move_renames_through_both_parent_descriptors(
+    tmp_path, monkeypatch
+):
+    """The move is an os.rename resolved against a descriptor on each parent, not a path pair shutil re-walks."""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    f = allowed / "orphan.png"
+    f.write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    calls = []
+    real_rename = os.rename
+
+    def _recording_rename(src, dst, **kw):
+        calls.append((src, dst, kw.get("src_dir_fd"), kw.get("dst_dir_fd")))
+        return real_rename(src, dst, **kw)
+
+    monkeypatch.setattr(os, "rename", _recording_rename)
+
+    res = m._execute_orphan_mode([_orphan_item(f, allowed)], "move", _logger())
+
+    assert res["count"] == 1
+    assert (allowed / ORPHAN_RESTORE_DIR_NAME / "orphan.png").exists()
+    assert len(calls) == 1
+    src, dst, src_fd, dst_fd = calls[0]
+    assert (src, dst) == ("orphan.png", "orphan.png")  # bare names, not paths
+    assert src_fd is not None and dst_fd is not None  # ...against both fds
+
+
+def test_execute_orphan_mode_move_refuses_a_parent_swapped_after_the_check(
+    tmp_path, monkeypatch
+):
+    """The source parent becomes a link to an outside dir the instant after confinement passes: the move must refuse, not relocate the outside file."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    victim = outside / "poster.png"
+    victim.write_bytes(b"x")
+    show = allowed / "Show"
+    show.mkdir()
+    f = show / "poster.png"
+    f.write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    logger, errors = _collecting_logger()
+
+    real_confined = m._confined_target
+    swapped = []
+
+    def _swapping_confined(path, config, log):
+        """Swap `Show` for a link to `outside` once the file itself is confined."""
+        result = real_confined(path, config, log)
+        if not swapped and str(path) == str(f):
+            swapped.append(True)
+            show.rename(allowed / "Show_real")
+            show.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(m, "_confined_target", _swapping_confined)
+
+    res = m._execute_orphan_mode([_orphan_item(f, allowed)], "move", logger)
+
+    assert swapped  # the race window was actually entered
+    assert res["count"] == 0
+    assert victim.exists()  # never dragged into the restore dir
+    assert (allowed / "Show_real" / "poster.png").exists()  # nor the pinned one
+    assert errors
+
+
+def test_execute_orphan_mode_move_falls_back_across_devices(tmp_path, monkeypatch):
+    """EXDEV is the one case the anchored rename can't serve: it must fall back to the copy path, not drop the move."""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    f = allowed / "orphan.png"
+    f.write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    def _cross_device(*a, **kw):
+        raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+    # shutil.move's own os.rename is patched too, so it takes its copy branch.
+    monkeypatch.setattr(os, "rename", _cross_device)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_orphan_mode([_orphan_item(f, allowed)], "move", logger)
+
+    assert res["count"] == 1
+    assert not f.exists()
+    assert (allowed / ORPHAN_RESTORE_DIR_NAME / "orphan.png").exists()
+    assert not errors  # a cross-device move is normal, not a refusal
+
+
+def test_clean_empty_dirs_rmdirs_through_a_parent_descriptor(tmp_path, monkeypatch):
+    """With a config the prune goes through os.rmdir(name, dir_fd=...) — a bare os.rmdir(path) would re-walk every component."""
+    allowed = tmp_path / "allowed"
+    (allowed / "Show" / "empty").mkdir(parents=True)
+    cfg = _live(monkeypatch, allowed)
+    m = _make(allowed)
+    m.logger, errors = _collecting_logger()
+
+    calls = []
+    real_rmdir = os.rmdir
+
+    def _recording_rmdir(path, *a, dir_fd=None, **kw):
+        calls.append((path, dir_fd))
+        return real_rmdir(path, *a, dir_fd=dir_fd, **kw)
+
+    monkeypatch.setattr(os, "rmdir", _recording_rmdir)
+
+    assert m._clean_empty_dirs(str(allowed), cfg) == 2
+    assert not (allowed / "Show").exists()  # pruned bottom-up, root kept
+    assert [name for name, _fd in calls] == ["empty", "Show"]  # names, not paths
+    assert all(fd is not None for _name, fd in calls)
+    assert not errors
+
+
+def test_clean_empty_dirs_refuses_a_parent_swapped_after_the_check(
+    tmp_path, monkeypatch
+):
+    """A parent swapped to a link in the confine→rmdir window must not have the outside tree pruned through it."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    (outside / "empty").mkdir(parents=True)
+    base = allowed / "assets"
+    show = base / "Show"
+    (show / "empty").mkdir(parents=True)
+    cfg = _live(monkeypatch, allowed)
+    m = _make(allowed)
+    m.logger, errors = _collecting_logger()
+
+    real_confined = m._confined_target
+    swapped = []
+
+    def _swapping_confined(path, config, log):
+        """Swap `Show` for a link to `outside` once its child dir is confined."""
+        result = real_confined(path, config, log)
+        if not swapped and str(path) == str(show / "empty"):
+            swapped.append(True)
+            show.rename(base / "Show_real")
+            show.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(m, "_confined_target", _swapping_confined)
+
+    assert m._clean_empty_dirs(str(base), cfg) == 0
+    assert swapped  # the race window was actually entered
+    assert (outside / "empty").is_dir()  # pruning never reached through the link
+    assert errors
+
+
+def _tightening_config(monkeypatch, allowed, authorized_calls=1):
+    """load_config authorizes `allowed` for the first N calls, then nothing."""
+    calls = []
+
+    def _load():
+        calls.append(1)
+        cfg = ChubConfig()
+        if len(calls) <= authorized_calls:
+            cfg.poster_renamerr.source_dirs = [str(allowed)]
+        return cfg
+
+    monkeypatch.setattr("backend.util.config.load_config", _load)
+    return calls
+
+
+def test_execute_orphan_mode_stops_when_config_stops_authorizing(tmp_path, monkeypatch):
+    """Config is re-read per item, so a root dropped mid-batch stops the tail while the head — authorized when its turn came — still ran."""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    head = allowed / "head.png"
+    head.write_bytes(b"x")
+    tail = allowed / "tail.png"
+    tail.write_bytes(b"x")
+    m = _make(allowed)
+    calls = _tightening_config(monkeypatch, allowed)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_orphan_mode(
+        [_orphan_item(head, allowed), _orphan_item(tail, allowed)], "remove", logger
+    )
+
+    assert res["count"] == 1
+    assert not head.exists()
+    assert tail.exists()  # de-authorized before its turn
+    assert len(calls) >= 2  # one load per item, not one per batch
+    assert errors
 
 
 def test_build_library_id_sets_filters_by_instance(db):

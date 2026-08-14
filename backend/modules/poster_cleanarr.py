@@ -1,5 +1,6 @@
 # modules/poster_cleanarr.py
 
+import errno
 import glob
 import json
 import os
@@ -936,8 +937,8 @@ class PosterCleanarr(ChubModule):
         """Descriptor on `path`'s confined parent, or None (logged); caller closes."""
         if self._confined_target(path, config, logger) is None:
             return None
-        # Confine the PARENT, not the leaf: the leaf is what we delete, and
-        # deleting it by name through this descriptor is what closes the race.
+        # Confine the PARENT, not the leaf: the leaf is what we act on, and
+        # naming it through this descriptor is what closes the race.
         parent = self._confined_target(os.path.dirname(path), config, logger)
         if parent is None or config is None:
             return None
@@ -949,11 +950,11 @@ class PosterCleanarr(ChubModule):
             # this still catches the parent being renamed after it was opened.
             opened, authorized = os.fstat(dir_fd), os.stat(parent)
             if (opened.st_dev, opened.st_ino) != (authorized.st_dev, authorized.st_ino):
-                logger.error(f"Refusing to delete {path}: its parent changed under us")
+                logger.error(f"Refusing to touch {path}: its parent changed under us")
                 os.close(dir_fd)
                 return None
         except OSError as e:
-            logger.error(f"Refusing to delete {path}: parent unverifiable ({e})")
+            logger.error(f"Refusing to touch {path}: parent unverifiable ({e})")
             os.close(dir_fd)
             return None
         return dir_fd
@@ -991,6 +992,69 @@ class PosterCleanarr(ChubModule):
             return False
         finally:
             os.close(dir_fd)
+
+    def _rmdir_confined(self, dir_path: str, config: ChubConfig) -> bool:
+        """rmdir `dir_path` by name through a descriptor on its confined parent."""
+        dir_fd = self._confined_parent_fd(dir_path, config, self.logger)
+        if dir_fd is None:
+            return False
+        try:
+            # OSError propagates: the sweep's own handler explains the count gap.
+            os.rmdir(os.path.basename(dir_path), dir_fd=dir_fd)
+            return True
+        finally:
+            os.close(dir_fd)
+
+    def _anchored_rename(
+        self, src: str, dest: str, config: Optional[ChubConfig], logger: Logger
+    ) -> Optional[bool]:
+        """rename `src` to `dest` through both confined parents; None = cross-device."""
+        src_fd = self._confined_parent_fd(src, config, logger)
+        if src_fd is None:
+            return False
+        try:
+            dest_parent = self._confined_target(os.path.dirname(dest), config, logger)
+            if dest_parent is None or config is None:
+                return False
+            dest_fd = self._walk_open_dir(dest_parent, config, logger)
+            if dest_fd is None:
+                return False
+            try:
+                # Both ends resolved by the kernel against a pinned descriptor,
+                # so neither parent can be swapped for a link after the check.
+                os.rename(
+                    os.path.basename(src),
+                    os.path.basename(dest),
+                    src_dir_fd=src_fd,
+                    dst_dir_fd=dest_fd,
+                )
+                return True
+            except OSError as e:
+                if e.errno == errno.EXDEV:
+                    return None
+                logger.error(f"Failed to move {src}: {e}")
+                return False
+            finally:
+                os.close(dest_fd)
+        finally:
+            os.close(src_fd)
+
+    def _move_confined(
+        self, src: str, dest: str, config: Optional[ChubConfig], logger: Logger
+    ) -> bool:
+        """Move `src` to `dest`, anchored to both parents; copies only across devices."""
+        renamed = self._anchored_rename(src, dest, config, logger)
+        if renamed is not None:
+            return renamed
+        # Cross-device has no anchored primitive: this copy+unlink re-resolves
+        # both paths, the one case the descriptor pin cannot cover.
+        logger.debug(f"Anchored rename unavailable across devices: {src} -> {dest}")
+        try:
+            shutil.move(src, dest)
+            return True
+        except OSError as e:
+            logger.error(f"Failed to move {src}: {e}")
+            return False
 
     def _authorized_asset_dirs(
         self, asset_dirs: List[str], logger: Logger
@@ -1248,7 +1312,6 @@ class PosterCleanarr(ChubModule):
         count = 0
         total_size = 0
         touched: Set[str] = set()
-        config = self._live_config(logger)
         for d in dupes:
             folder = d["folder"]
             size = d.get("size", 0)
@@ -1263,24 +1326,28 @@ class PosterCleanarr(ChubModule):
                     "not staged yet; keeping the only copy"
                 )
                 continue
+            # Re-read per item, not once per batch: a root dropped from config
+            # mid-run must stop the REST of the batch. load_config is mtime-cached.
+            config = self._live_config(logger)
+            if config is None:
+                self._refuse(logger, f"No live config, refusing to {mode}: {folder}")
+                continue
             if mode == "move":
                 dest_root = os.path.join(d["asset_dir"], ORPHAN_RESTORE_DIR_NAME)
                 dest = os.path.join(dest_root, d["name"])
-                dest_parent = os.path.dirname(dest)
                 if self._confined_target(folder, config, logger) is None:
                     continue
                 try:
-                    os.makedirs(dest_parent, exist_ok=True)
-                    # The leaf can't exist yet — confine the parent makedirs just made.
-                    if self._confined_target(dest_parent, config, logger) is None:
-                        continue
-                    shutil.move(folder, dest)
-                    logger.info(f"  [STALE MOVED] {folder} -> {dest}")
-                    count += 1
-                    total_size += size
-                    touched.add(d["asset_dir"])
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
                 except OSError as e:
                     logger.error(f"Failed to move {folder}: {e}")
+                    continue
+                if not self._move_confined(folder, dest, config, logger):
+                    continue
+                logger.info(f"  [STALE MOVED] {folder} -> {dest}")
+                count += 1
+                total_size += size
+                touched.add(d["asset_dir"])
             elif mode == "remove":
                 if not self._rmtree_confined(folder, config, logger):
                     continue
@@ -1289,7 +1356,13 @@ class PosterCleanarr(ChubModule):
                 total_size += size
                 touched.add(d["asset_dir"])
         self._report_refusals(logger, "Stale-duplicate cleanup")
-        empty = sum(self._clean_empty_dirs(d, config) for d in touched)
+        empty = 0
+        if touched:
+            # Re-read before the sweep too, and skip it entirely on None: the
+            # weaker base_dir-only floor is for the bloat pass, not for this one.
+            sweep_config = self._live_config(logger)
+            if sweep_config is not None:
+                empty = sum(self._clean_empty_dirs(d, sweep_config) for d in touched)
         logger.info(
             f"   → stale duplicates: {count} {mode}d"
             + (f", {empty} empty dir(s) pruned" if empty else "")
@@ -1496,7 +1569,6 @@ class PosterCleanarr(ChubModule):
         count = 0
         total_size = 0
         touched_dirs: Set[str] = set()
-        config = self._live_config(logger)
 
         for item in orphans:
             path = item["path"]
@@ -1508,27 +1580,32 @@ class PosterCleanarr(ChubModule):
                 total_size += size
                 continue
 
+            # Re-read per item, not once per batch: a root dropped from config
+            # mid-run must stop the REST of the batch. load_config is mtime-cached.
+            config = self._live_config(logger)
+            if config is None:
+                self._refuse(logger, f"No live config, refusing to {mode}: {path}")
+                continue
+
             if mode == "move":
                 dest_root = os.path.join(item["asset_dir"], ORPHAN_RESTORE_DIR_NAME)
                 rel = os.path.relpath(path, item["asset_dir"])
                 dest = os.path.join(dest_root, rel)
-                dest_parent = os.path.dirname(dest)
                 if self._confined_target(path, config, logger) is None:
                     continue
                 try:
-                    os.makedirs(dest_parent, exist_ok=True)
-                    # The leaf can't exist yet — confine the parent makedirs just made.
-                    if self._confined_target(dest_parent, config, logger) is None:
-                        continue
-                    shutil.move(path, dest)
-                    # Destructive ops stay at INFO deliberately — audit trail
-                    # without debug mode (mirrors the bloat-cleanup pass).
-                    logger.info(f"  [MOVED] {path} -> {dest}")
-                    count += 1
-                    total_size += size
-                    touched_dirs.add(item["asset_dir"])
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
                 except OSError as e:
                     logger.error(f"Failed to move {path}: {e}")
+                    continue
+                if not self._move_confined(path, dest, config, logger):
+                    continue
+                # Destructive ops stay at INFO deliberately — audit trail
+                # without debug mode (mirrors the bloat-cleanup pass).
+                logger.info(f"  [MOVED] {path} -> {dest}")
+                count += 1
+                total_size += size
+                touched_dirs.add(item["asset_dir"])
                 continue
 
             if mode == "remove":
@@ -1540,8 +1617,15 @@ class PosterCleanarr(ChubModule):
                 touched_dirs.add(item["asset_dir"])
 
         self._report_refusals(logger, "Orphan cleanup")
-        # Prune empty dirs left behind by move/remove.
-        empty_dirs = sum(self._clean_empty_dirs(d, config) for d in touched_dirs)
+        # Prune empty dirs left behind by move/remove, on a re-read config: the
+        # loop above can run for minutes, and None must skip the sweep entirely.
+        empty_dirs = 0
+        if touched_dirs:
+            sweep_config = self._live_config(logger)
+            if sweep_config is not None:
+                empty_dirs = sum(
+                    self._clean_empty_dirs(d, sweep_config) for d in touched_dirs
+                )
 
         logger.info(
             f"   → orphan scan: {count} {mode}d"
@@ -1577,11 +1661,12 @@ class PosterCleanarr(ChubModule):
                         continue
                     # Confine at the rmdir, not at the walk: a component swapped
                     # to a symlink mid-sweep resolves outside the roots.
-                    if config is not None and (
-                        self._confined_target(dir_path, config, self.logger) is None
-                    ):
+                    if config is None:
+                        # The bloat pass passes no config, so it has no allowed
+                        # root to anchor against — the floor above is its guard.
+                        os.rmdir(dir_path)
+                    elif not self._rmdir_confined(dir_path, config):
                         continue
-                    os.rmdir(dir_path)
                     count += 1
                 except OSError as e:
                     # Dir vanished, became non-empty, or permissions — skip,
