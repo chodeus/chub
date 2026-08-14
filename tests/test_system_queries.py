@@ -499,3 +499,89 @@ def test_health_snapshots_route_filters_by_instance(db):
 
     body = _client(db).get("/api/system/health/snapshots?instance=sonarr-main").json()
     assert [s["instance_name"] for s in body["data"]["snapshots"]] == ["sonarr-main"]
+
+
+def test_latest_per_instance_keeps_every_service_on_a_shared_instance(db):
+    """Grouping by instance alone dropped whichever service probed less recently."""
+    _seed_snapshot(db, "shared", "2026-01-05 10:00:00", service="radarr")
+    _seed_snapshot(db, "shared", "2026-01-05 10:05:00", service="sonarr")
+
+    rows = db.system_health.latest_per_instance()
+
+    assert sorted(r["service"] for r in rows) == ["radarr", "sonarr"]
+
+
+def test_latest_per_instance_returns_one_row_per_pair_on_a_timestamp_tie(db):
+    """A scheduler pass writes identical snapshot_at values; id breaks the tie."""
+    _seed_snapshot(db, "radarr1", "2026-01-05 10:00:00", status="healthy")
+    newest = _seed_snapshot(db, "radarr1", "2026-01-05 10:00:00", status="error")
+
+    rows = db.system_health.latest_per_instance()
+
+    assert len(rows) == 1
+    assert rows[0]["status"] == "error"  # highest id wins, deterministically
+    assert newest  # the tie-breaking row is the one that was seeded last
+
+
+def test_health_route_answers_503_when_the_database_is_unusable(db, monkeypatch):
+    """Docker HEALTHCHECK curls -f this, so an unusable DB must not answer 200."""
+    healthy = _client(db).get("/api/health")
+    assert healthy.status_code == 200
+
+    def _boom():
+        raise RuntimeError("disk gone")
+
+    monkeypatch.setattr(type(db.maintenance), "ping", lambda _self: _boom())
+    resp = _client(db).get("/api/health")
+
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["error_code"] == "DATABASE_UNAVAILABLE"
+    assert body["data"]["checks"]["database"] == "error"  # diagnostics survive
+
+
+def test_count_by_status_since_reads_the_cutoff_as_an_instant(db):
+    """A caller-supplied offset cutoff must not shift the window via TEXT compare."""
+    db.worker.execute_query(
+        "INSERT INTO jobs (type, payload, status, received_at) VALUES (?,?,?,?)",
+        ("webhook", "{}", "error", "2026-01-05 18:30:00"),
+    )
+
+    counts = db.worker.count_by_status_since("2026-01-05T09:00:00+00:00")
+
+    assert counts.get("error") == 1
+
+
+def _modules_client(db):
+    """Mount the modules router the way _client mounts system's."""
+    from backend.api import modules as modules_api
+
+    app = FastAPI()
+    app.state.logger = _StubLog()
+    app.state.db = db
+    app.include_router(modules_api.router)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_cancel_reports_conflict_when_the_job_stopped_first(db, monkeypatch):
+    """cancel_running_job returning 0 means it finished — don't answer 'cancelling'."""
+    job_id = db.worker.execute_query(
+        "INSERT INTO jobs (type, payload, status, received_at) VALUES (?,?,?,?)",
+        ("poster_renamerr", "{}", "running", "2026-01-05T10:00:00+00:00"),
+        last_row_id=True,
+    )
+    # The handler imports it inside the function, so patch it at the source.
+    monkeypatch.setattr(
+        "backend.util.job_processor.request_cancellation", lambda _id: True
+    )
+    # The guarded UPDATE finds nothing: the job stopped between check and write.
+    monkeypatch.setattr(
+        type(db.worker), "cancel_running_job", lambda *_a, **_kw: 0
+    )
+
+    resp = _modules_client(db).delete(
+        f"/api/modules/poster_renamerr/execution/{job_id}"
+    )
+
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["error_code"] == "JOB_NOT_RUNNING"

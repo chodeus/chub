@@ -35,17 +35,19 @@ class SystemHealth(DatabaseBase):
         return [dict(r) for r in rows or []]
 
     def latest_per_instance(self) -> List[Dict[str, Any]]:
-        """The most recent snapshot row for each instance."""
+        """The most recent snapshot row for each (instance, service) pair."""
         rows = self.execute_query(
             """
-            SELECT s.instance_name, s.service, s.status, s.response_time_ms,
-                   s.status_code, s.snapshot_at, s.error
-            FROM system_health_snapshots s
-            INNER JOIN (
-              SELECT instance_name, MAX(snapshot_at) AS latest
-              FROM system_health_snapshots GROUP BY instance_name
-            ) latest ON s.instance_name = latest.instance_name
-                    AND s.snapshot_at = latest.latest
+            SELECT instance_name, service, status, response_time_ms,
+                   status_code, snapshot_at, error
+            FROM (
+              SELECT s.*, ROW_NUMBER() OVER (
+                       PARTITION BY instance_name, service
+                       ORDER BY snapshot_at DESC, id DESC
+                     ) AS rn
+              FROM system_health_snapshots s
+            )
+            WHERE rn = 1
             """,
             fetch_all=True,
         )

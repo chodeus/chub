@@ -502,10 +502,12 @@ class DBWorker(DatabaseBase):
         self, cutoff: str, table_name: str = "jobs"
     ) -> Dict[str, int]:
         """{status: count} for jobs received at or after an ISO cutoff."""
+        # datetime() on both sides: the cutoff is caller-supplied, so a differing
+        # separator or UTC offset would silently shift a TEXT compare's window.
         self._check_table(table_name)
         rows = self.execute_query(
             f"SELECT status, COUNT(*) AS total FROM {table_name} "  # noqa: S608
-            "WHERE received_at >= ? GROUP BY status",
+            "WHERE datetime(received_at) >= datetime(?) GROUP BY status",
             (cutoff,),
             fetch_all=True,
         )
@@ -520,7 +522,7 @@ class DBWorker(DatabaseBase):
         # a webhook burst, so without it the LIMIT window would be arbitrary.
         rows = self.execute_query(
             f"SELECT id, type, payload, error, received_at FROM {table_name} "  # noqa: S608
-            "WHERE status='error' AND received_at >= ? "
+            "WHERE status='error' AND datetime(received_at) >= datetime(?) "
             "ORDER BY received_at DESC, id DESC LIMIT ?",
             (cutoff, limit),
             fetch_all=True,
@@ -534,7 +536,8 @@ class DBWorker(DatabaseBase):
         self._check_table(table_name)
         rows = self.execute_query(
             f"SELECT id, payload, status, received_at FROM {table_name} "  # noqa: S608
-            "WHERE type=? AND received_at >= ? ORDER BY received_at DESC, id DESC",
+            "WHERE type=? AND datetime(received_at) >= datetime(?) "
+            "ORDER BY received_at DESC, id DESC",
             (job_type, cutoff),
             fetch_all=True,
         )

@@ -184,15 +184,22 @@ async def health_check(request: Request) -> JSONResponse:
 
     version = get_version()
 
-    return ok(
-        "Healthy" if status == "ok" else "Degraded",
-        {
-            "status": status,
-            "version": version,
-            "uptime_seconds": uptime,
-            "checks": checks,
-        },
-    )
+    payload = {
+        "status": status,
+        "version": version,
+        "uptime_seconds": uptime,
+        "checks": checks,
+    }
+    # Docker HEALTHCHECK curls -f this, so an unusable DB must not answer 200.
+    # A stopped worker stays 200 — degraded, but still serving.
+    if checks.get("database") == "error":
+        return error(
+            "Database unavailable",
+            code="DATABASE_UNAVAILABLE",
+            data=payload,
+            status_code=503,
+        )
+    return ok("Healthy" if status == "ok" else "Degraded", payload)
 
 
 @router.get(
