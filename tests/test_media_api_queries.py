@@ -380,7 +380,8 @@ def test_orphaned_purge_route_deletes_and_guards_empty_ids(db):
     doomed = _seed(db, "Doomed")
     keeper = _seed(db, "Keeper")
 
-    assert client.post("/api/media/orphaned/purge", json={"ids": []}).status_code == 400
+    empty = client.post("/api/media/orphaned/purge", json={"ids": []})
+    assert empty.status_code == 400
     resp = client.post("/api/media/orphaned/purge", json={"ids": [doomed, 999999]})
     assert resp.status_code == 200
     # The absent id must not inflate the count — `purged` is what was deleted.

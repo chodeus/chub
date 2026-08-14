@@ -416,13 +416,13 @@ class NotificationManager:
         output: Any,
         test: bool = False,
     ) -> Tuple[bool, str]:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         from backend.util.notification_formatting import format_for_discord
 
         hook = auth_data.webhook.rstrip("/")
         bot_name = auth_data.bot_name
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         color = self.resolve_color(output, auth_data.color, default=0x00FF00)
 
         if test:

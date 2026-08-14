@@ -406,9 +406,9 @@ class PosterCache(DatabaseBase):
         sql += " ORDER BY priority DESC, id DESC LIMIT 1"
         return self.execute_query(sql, params, fetch_one=True)
 
-    def clear(self) -> None:
-        """Delete all rows from poster_cache."""
-        self.execute_query("DELETE FROM poster_cache")
+    def clear(self) -> int:
+        """Delete all rows from poster_cache; returns rows deleted."""
+        return int(self.execute_query("DELETE FROM poster_cache") or 0)
 
     def analyze(self) -> None:
         """Refresh planner stats; without them the match queries mis-pick indexes."""

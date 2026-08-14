@@ -186,21 +186,16 @@ class MediaAssetMatches(DatabaseBase):
         )
         return int(deleted or 0)
 
-    def clear(self, keep_ignored: bool = False) -> None:
-        """Delete artwork-match rows.
-
-        With ``keep_ignored`` the user's intentional rows — the per-type "not
-        needed" flags (ignored=1) AND manual-pick locks (user_confirmed=1) — are
-        preserved and only auto-matched applied/failed provenance is dropped.
-        Used by the Unmatched page's artwork reset, which must honour both the
-        user's ignores and their locked picks (so a re-run reuses the chosen
-        file instead of re-resolving it).
-        """
+    def clear(self, keep_ignored: bool = False) -> int:
+        """Delete artwork-match rows; returns rows deleted."""
+        # keep_ignored preserves the user's intent rows: ignored=1 AND
+        # user_confirmed=1 (the reset must honour locked picks).
         if keep_ignored:
-            self.execute_query(
+            deleted = self.execute_query(
                 "DELETE FROM media_asset_matches "
                 "WHERE (ignored IS NULL OR ignored = 0) "
                 "AND (user_confirmed IS NULL OR user_confirmed = 0)"
             )
         else:
-            self.execute_query("DELETE FROM media_asset_matches")
+            deleted = self.execute_query("DELETE FROM media_asset_matches")
+        return int(deleted or 0)

@@ -315,6 +315,15 @@ class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, Databa
             or []
         )
 
+    def count_by_instance(self, instance_name: str) -> int:
+        """Count rows for one instance without loading them (libraries are large)."""
+        row = self.execute_query(
+            "SELECT COUNT(*) AS total FROM media_cache WHERE instance_name=?",
+            (instance_name,),
+            fetch_one=True,
+        )
+        return int(row["total"]) if row else 0
+
     def get_by_id(self, id: int) -> Optional[dict]:
         """Return a single media_cache row by its unique integer ID."""
         return self.execute_query(

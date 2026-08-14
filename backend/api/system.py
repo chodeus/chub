@@ -9,10 +9,9 @@ import io
 import json
 import os
 import shutil
-import sqlite3
 import time
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -177,7 +176,7 @@ async def health_check(request: Request) -> JSONResponse:
     db = getattr(request.app.state, "db", None)
     if db:
         try:
-            db.worker.execute_query("SELECT 1")
+            db.maintenance.ping()
             checks["database"] = "ok"
         except Exception:
             checks["database"] = "error"
@@ -755,22 +754,10 @@ async def get_health_snapshots(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Return the newest scheduler health snapshots, optionally for one instance."""
     try:
         limit = max(1, min(limit, 500))
-        if instance:
-            rows = db.worker.execute_query(
-                "SELECT * FROM system_health_snapshots WHERE instance_name=? "
-                "ORDER BY snapshot_at DESC LIMIT ?",
-                (instance, limit),
-                fetch_all=True,
-            )
-        else:
-            rows = db.worker.execute_query(
-                "SELECT * FROM system_health_snapshots ORDER BY snapshot_at DESC LIMIT ?",
-                (limit,),
-                fetch_all=True,
-            )
-        snaps = [dict(r) for r in rows or []]
+        snaps = db.system_health.recent_snapshots(limit=limit, instance=instance)
         return ok(f"Retrieved {len(snaps)} snapshots", {"snapshots": snaps})
     except Exception as e:
         logger.error(f"Error fetching health snapshots: {e}")
@@ -793,40 +780,21 @@ async def get_system_digest(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Aggregate media/job/health activity over the last N days."""
     from datetime import timedelta
 
     try:
         days = max(1, min(days, 90))
-        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
-        # Media added in window
-        media_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM media_cache WHERE created_at >= ?",
-            (cutoff,),
-            fetch_one=True,
-        )
-        media_added = media_row["total"] if media_row else 0
+        media_added = db.media.count_added_since(cutoff)
+        job_counts = db.worker.count_by_status_since(cutoff)
+        failed_runs = db.worker.recent_failures(cutoff, limit=20)
 
-        # Job stats in window
-        job_rows = db.worker.execute_query(
-            "SELECT status, COUNT(*) AS total FROM jobs WHERE received_at >= ? GROUP BY status",
-            (cutoff,),
-            fetch_all=True,
-        )
-        job_counts = {r["status"]: r["total"] for r in job_rows or []}
-
-        # Failed module runs in window, with module names
-        failed_runs = db.worker.execute_query(
-            "SELECT id, type, payload, error, received_at FROM jobs "
-            "WHERE status='error' AND received_at >= ? "
-            "ORDER BY received_at DESC LIMIT 20",
-            (cutoff,),
-            fetch_all=True,
-        )
         recent_failures = []
         import json as _json
 
-        for r in failed_runs or []:
+        for r in failed_runs:
             payload = r["payload"]
             try:
                 payload = _json.loads(payload) if isinstance(payload, str) else payload
@@ -842,21 +810,7 @@ async def get_system_digest(
                 }
             )
 
-        # Latest health per instance
-        health_rows = db.worker.execute_query(
-            """
-            SELECT s.instance_name, s.service, s.status, s.response_time_ms,
-                   s.status_code, s.snapshot_at, s.error
-            FROM system_health_snapshots s
-            INNER JOIN (
-              SELECT instance_name, MAX(snapshot_at) AS latest
-              FROM system_health_snapshots GROUP BY instance_name
-            ) latest ON s.instance_name = latest.instance_name
-                    AND s.snapshot_at = latest.latest
-            """,
-            fetch_all=True,
-        )
-        latest_health = [dict(r) for r in health_rows or []]
+        latest_health = db.system_health.latest_per_instance()
 
         return ok(
             f"Digest for last {days}d",
@@ -887,29 +841,14 @@ async def get_cleanup_candidates(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Report counts of items worth cleaning up; read-only, no mutations."""
     try:
-        old_jobs_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM jobs WHERE status='error'",
-            fetch_one=True,
-        )
-        unmatched_media_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM media_cache WHERE matched=0",
-            fetch_one=True,
-        )
-        unmatched_coll_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM collections_cache WHERE matched=0",
-            fetch_one=True,
-        )
         return ok(
             "Cleanup candidates",
             {
-                "errored_jobs": old_jobs_row["total"] if old_jobs_row else 0,
-                "unmatched_media": unmatched_media_row["total"]
-                if unmatched_media_row
-                else 0,
-                "unmatched_collections": unmatched_coll_row["total"]
-                if unmatched_coll_row
-                else 0,
+                "errored_jobs": db.worker.count_by_status("error"),
+                "unmatched_media": db.media.count_unmatched(),
+                "unmatched_collections": db.collection.count_unmatched(),
             },
         )
     except Exception as e:
@@ -919,29 +858,6 @@ async def get_cleanup_candidates(
             code="CLEANUP_CANDIDATES_ERROR",
             status_code=500,
         )
-
-
-# Tables listed in db-stats / vacuum responses. Kept explicit instead of
-# enumerating sqlite_master so we don't surface internal SQLite tables
-# (sqlite_sequence, sqlite_stat1) that users have no reason to see.
-_DB_STATS_TABLES = (
-    "media_cache",
-    "poster_cache",
-    "collections_cache",
-    "plex_media_cache",
-    "jobs",
-    "webhook_cache",
-    "gdrive_stats",
-    "scan_cache",
-    "system_health_snapshots",
-    "media_edit_history",
-    "upgradinatorr_progress",
-    "poster_collections",
-    "poster_collection_items",
-    "holiday_status",
-    "run_state",
-    "schema_migrations",
-)
 
 
 @router.get(
@@ -954,64 +870,23 @@ async def get_db_stats(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Return per-table row counts, SQLite page stats and the migration log."""
     try:
         logger.debug("Serving GET /api/system/db-stats")
-        tables = []
-        existing = {
-            row["name"]
-            for row in (
-                db.worker.execute_query(
-                    "SELECT name FROM sqlite_master WHERE type='table'",
-                    fetch_all=True,
-                )
-                or []
-            )
-        }
-        for name in _DB_STATS_TABLES:
-            if name not in existing:
-                continue
-            count_row = db.worker.execute_query(
-                f"SELECT COUNT(*) AS total FROM {name}", fetch_one=True
-            )
-            tables.append(
-                {"name": name, "rows": count_row["total"] if count_row else 0}
-            )
-
-        page_size_row = db.worker.execute_query("PRAGMA page_size", fetch_one=True)
-        page_count_row = db.worker.execute_query("PRAGMA page_count", fetch_one=True)
-        freelist_row = db.worker.execute_query("PRAGMA freelist_count", fetch_one=True)
-        page_size = int(page_size_row["page_size"]) if page_size_row else 0
-        page_count = int(page_count_row["page_count"]) if page_count_row else 0
-        freelist_count = int(freelist_row["freelist_count"]) if freelist_row else 0
-        total_bytes = page_size * page_count
-        free_bytes = page_size * freelist_count
+        pages = db.maintenance.page_stats()
 
         try:
             file_bytes = os.path.getsize(db.db_path)
         except OSError:
-            file_bytes = total_bytes
-
-        migrations = []
-        if "schema_migrations" in existing:
-            migrations = (
-                db.worker.execute_query(
-                    "SELECT name, applied_at FROM schema_migrations ORDER BY applied_at DESC, name DESC",
-                    fetch_all=True,
-                )
-                or []
-            )
+            file_bytes = pages["total_bytes"]
 
         return ok(
             "Database statistics",
             {
-                "tables": tables,
-                "page_size": page_size,
-                "page_count": page_count,
-                "freelist_count": freelist_count,
-                "total_bytes": total_bytes,
-                "free_bytes": free_bytes,
+                "tables": db.maintenance.table_row_counts(),
+                **pages,
                 "file_bytes": file_bytes,
-                "schema_migrations": migrations,
+                "schema_migrations": db.maintenance.list_migrations(),
             },
         )
     except Exception as e:
@@ -1034,6 +909,7 @@ def vacuum_database(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Run SQLite VACUUM and report the bytes it reclaimed."""
     try:
         logger.debug("Serving POST /api/system/db/vacuum")
         try:
@@ -1041,16 +917,8 @@ def vacuum_database(
         except OSError:
             bytes_before = 0
 
-        # VACUUM cannot run inside an explicit transaction and ignores the
-        # connection's normal isolation; bypass the worker's helper and use
-        # a raw sqlite3 connection scoped to this call.
         start = time.time()
-        conn = sqlite3.connect(db.db_path, timeout=60)
-        try:
-            conn.isolation_level = None
-            conn.execute("VACUUM")
-        finally:
-            conn.close()
+        db.maintenance.vacuum()
         duration_ms = int((time.time() - start) * 1000)
 
         try:
@@ -1093,6 +961,7 @@ async def clear_poster_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Delete every poster_cache row so the next poster_renamerr run rescans."""
     try:
         logger.debug("Serving POST /api/system/db/poster-cache/clear")
         # Serialize against poster_renamerr's clear()+rebuild+match critical
@@ -1100,19 +969,14 @@ async def clear_poster_cache(
         from backend.modules.poster_renamerr import _POSTER_CACHE_REBUILD_LOCK
 
         with _POSTER_CACHE_REBUILD_LOCK:
-            count_row = db.worker.execute_query(
-                "SELECT COUNT(*) AS total FROM poster_cache", fetch_one=True
-            )
-            before = int(count_row["total"]) if count_row else 0
-
-            db.poster.clear()
+            deleted = db.poster.clear()
 
         logger.info(
-            f"Wiped poster_cache via /api/system/db/poster-cache/clear ({before} rows)"
+            f"Wiped poster_cache via /api/system/db/poster-cache/clear ({deleted} rows)"
         )
         return ok(
             "Poster cache cleared",
-            {"deleted": before},
+            {"deleted": deleted},
         )
     except Exception as e:
         logger.error(f"Error clearing poster_cache: {e}")
@@ -1137,20 +1001,16 @@ async def clear_artwork_matches(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Delete every media_asset_matches row, ignores and locks included."""
     try:
         logger.debug("Serving POST /api/system/db/artwork-matches/clear")
-        count_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM media_asset_matches", fetch_one=True
-        )
-        before = int(count_row["total"]) if count_row else 0
-
-        db.media_asset_matches.clear()
+        deleted = db.media_asset_matches.clear()
 
         logger.info(
             f"Wiped media_asset_matches via /api/system/db/artwork-matches/clear "
-            f"({before} rows)"
+            f"({deleted} rows)"
         )
-        return ok("Artwork match state cleared", {"deleted": before})
+        return ok("Artwork match state cleared", {"deleted": deleted})
     except Exception as e:
         logger.error(f"Error clearing media_asset_matches: {e}")
         return error(
@@ -1175,6 +1035,7 @@ async def reset_poster_matches(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Clear poster-match state for media and collections, keeping curated rows."""
     try:
         logger.debug("Serving POST /api/system/db/poster-matches/reset")
         media_reset = db.media.reset_match_state()
@@ -1215,22 +1076,16 @@ async def reset_artwork_matches(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
+    """Drop auto-matched artwork rows, preserving the user's ignores and locks."""
     try:
         logger.debug("Serving POST /api/system/db/artwork-matches/reset")
-        count_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM media_asset_matches "
-            "WHERE ignored IS NULL OR ignored = 0",
-            fetch_one=True,
-        )
-        before = int(count_row["total"]) if count_row else 0
-
-        db.media_asset_matches.clear(keep_ignored=True)
+        deleted = db.media_asset_matches.clear(keep_ignored=True)
 
         logger.info(
             "Reset additional-artwork coverage via "
-            f"/api/system/db/artwork-matches/reset ({before} rows; ignores kept)"
+            f"/api/system/db/artwork-matches/reset ({deleted} rows; ignores kept)"
         )
-        return ok("Artwork match coverage reset", {"deleted": before})
+        return ok("Artwork match coverage reset", {"deleted": deleted})
     except Exception as e:
         logger.error(f"Error resetting artwork match state: {e}")
         return error(

@@ -11,6 +11,7 @@ from .border_state import BorderState
 from .collection_cache import CollectionCache
 from .db_base import DatabaseBase, escape_like
 from .holiday import HolidayStatus
+from .maintenance import DbMaintenance
 from .media_asset_matches import MediaAssetMatches
 from .media_cache import MediaCache
 from .media_metadata import (
@@ -25,6 +26,7 @@ from .run_state import RunState
 from .schema import SchemaManager
 from .stats import Stats
 from .sync_state import SyncState
+from .system_health import SystemHealth
 from .tmdb_id_cache import TmdbIdCache
 from .tmdb_details_cache import TmdbDetailsCache
 from .tmdb_images_cache import TmdbImagesCache
@@ -222,6 +224,16 @@ class ChubDB:
         return self._get_interface("sync_state", SyncState)
 
     @property
+    def system_health(self) -> SystemHealth:
+        """Access to the scheduler's periodic instance-health snapshots."""
+        return self._get_interface("system_health", SystemHealth)
+
+    @property
+    def maintenance(self) -> DbMaintenance:
+        """Access to whole-file database operations (row counts, pages, VACUUM)."""
+        return self._get_interface("maintenance", DbMaintenance)
+
+    @property
     def holiday(self) -> HolidayStatus:
         """Access to holiday status operations."""
         return self._get_interface("holiday", HolidayStatus)
@@ -407,6 +419,7 @@ def with_database(logger: Logger, quiet: bool = False):
 
 __all__ = [
     "DatabaseBase",
+    "DbMaintenance",
     "SchemaManager",
     "PlexCache",
     "CollectionCache",
@@ -414,6 +427,7 @@ __all__ = [
     "RunState",
     "Stats",
     "SyncState",
+    "SystemHealth",
     "ChubDB",
     "DBWorker",
     "HolidayStatus",

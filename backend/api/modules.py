@@ -1289,10 +1289,7 @@ async def cancel_module_execution(
         if request_cancellation(job_id):
             # Update job status to reflect cancellation is in progress
             now = datetime.now(timezone.utc).isoformat()
-            db.worker.execute_query(
-                "UPDATE jobs SET status='cancelled', completed_at=? WHERE id=? AND status='running'",
-                (now, job_id),
-            )
+            db.worker.cancel_running_job(job_id, now)
             logger.info(f"Cancellation requested for module {name} job {job_id}")
             return ok(
                 f"Cancellation requested for module {name} job {job_id}",
