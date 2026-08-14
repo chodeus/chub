@@ -99,7 +99,7 @@ const SetupDetails = ({ wiring }) => {
                                 </span>
                                 <button
                                     type="button"
-                                    className="text-xs text-accent hover:underline"
+                                    className="touch-expand text-xs text-accent hover:underline"
                                     onClick={() => setRevealSecret(r => !r)}
                                 >
                                     {revealSecret ? 'Hide' : 'Reveal'}
@@ -397,7 +397,7 @@ const AutoSetupBoard = () => {
                     </Link>{' '}
                     to persist.
                 </span>
-                <label className="mt-1.5 flex items-center gap-2 text-[12.5px] text-fg-muted select-none">
+                <label className="touch-target mt-1.5 flex items-center gap-2 text-[12.5px] text-fg-muted select-none">
                     <input
                         type="checkbox"
                         checked={includeUpgrade}
@@ -477,7 +477,7 @@ const AutoSetupBoard = () => {
                                                             onClick={() =>
                                                                 runProvision([inst.name])
                                                             }
-                                                            className="text-xs text-accent hover:underline disabled:opacity-50"
+                                                            className="touch-target text-xs text-accent hover:underline disabled:opacity-50"
                                                         >
                                                             {inst.status === 'drift'
                                                                 ? 'Fix'
@@ -489,7 +489,7 @@ const AutoSetupBoard = () => {
                                                             type="button"
                                                             disabled={busy}
                                                             onClick={() => runRemove([inst.name])}
-                                                            className="text-xs text-fg-subtle hover:text-error hover:underline disabled:opacity-50"
+                                                            className="touch-target text-xs text-fg-subtle hover:text-error hover:underline disabled:opacity-50"
                                                         >
                                                             Remove
                                                         </button>
@@ -604,7 +604,7 @@ export const WebhooksPage = () => {
                 <button
                     type="button"
                     onClick={copyBase}
-                    className="flex items-center gap-1.5 h-8 px-3 rounded-[7px] bg-surface-inset border border-border text-accent text-xs font-semibold hover:bg-row-hover transition-colors shrink-0"
+                    className="touch-expand flex items-center gap-1.5 h-8 px-3 rounded-[7px] bg-surface-inset border border-border text-accent text-xs font-semibold hover:bg-row-hover transition-colors shrink-0"
                 >
                     <span className="material-symbols-outlined text-[14px]">content_copy</span>
                     Copy

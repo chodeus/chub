@@ -148,7 +148,7 @@ export const InstanceCard = ({
             : null;
 
     const iconBtn =
-        'w-8 h-8 touch-expand rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
+        'w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
 
     return (
         <div className="rounded-xl bg-surface border border-border hover:border-[#3b3d72] transition-colors overflow-hidden">

@@ -1,4 +1,4 @@
-@layer reset, base, components, utilities, pages;
+@layer vendor, reset, theme, base, components, utilities, pages;
 
 @layer reset {
     *,
@@ -44,7 +44,14 @@
         -moz-osx-font-smoothing: grayscale;
         text-rendering: optimizelegibility;
         min-height: 100vh;
-        min-height: 100dvh;
+    }
+
+    /* Separate rule, not a second declaration above: the minifier dedupes those
+       and drops the vh fallback (same trap as tailwind.css's h-app). */
+    @supports (min-height: 100dvh) {
+        body {
+            min-height: 100dvh;
+        }
     }
 
     ul,

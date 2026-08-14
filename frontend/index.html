@@ -17,9 +17,11 @@
       Google Material Symbols — display=block hides the icon slot until the
       font is ready instead of falling back to the ligature name (which was
       showing up as raw text like "home", "refresh" during route transitions).
+      Preloaded, not applied: css/index.css @imports both into layer(vendor) so
+      icon size utilities can win. Dropping these preloads costs an extra RTT.
     -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" />
   </head>
   <body>
     <div id="root"></div>
