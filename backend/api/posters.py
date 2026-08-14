@@ -3650,6 +3650,7 @@ async def get_poster(
             "description": "Thumbnail image served successfully",
             "content": {"image/jpeg": {"example": "Binary image data"}},
         },
+        403: {"description": "Access denied - path outside allowed directory"},
         404: {"description": "Poster or file not found"},
     },
 )
@@ -3689,8 +3690,26 @@ def get_poster_thumbnail(
                 "Poster file not found on disk", code="FILE_NOT_FOUND", status_code=404
             )
 
-        # Resolve to a real path to prevent path traversal
-        full_path = os.path.realpath(raw_path)
+        # Confine the served path to configured roots — realpath normalizes
+        # but authorizes nothing, so a poisoned row could point anywhere.
+        from backend.util.config import load_config
+        from backend.util.path_safety import resolve_confined
+
+        try:
+            config = load_config()
+        except ConfigError:
+            raise
+        except Exception:  # noqa: S110 — fail closed below
+            config = None
+
+        real = resolve_confined(raw_path, config) if config is not None else None
+        if real is None:
+            return error(
+                "Access denied - path outside allowed directory",
+                code="PATH_TRAVERSAL_DENIED",
+                status_code=403,
+            )
+        full_path = str(real)
         if not os.path.isfile(full_path):
             return error(
                 "Poster file not found on disk", code="FILE_NOT_FOUND", status_code=404
@@ -3721,6 +3740,8 @@ def get_poster_thumbnail(
 
         return FileResponse(thumb_path, media_type="image/jpeg")
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error generating thumbnail for poster {poster_id}: {e}")
         return error(
@@ -3739,6 +3760,7 @@ def get_poster_thumbnail(
             "description": "Poster file served successfully",
             "content": {"image/*": {"example": "Binary image data"}},
         },
+        403: {"description": "Access denied - path outside allowed directory"},
         404: {"description": "Poster or file not found"},
     },
 )
@@ -3790,8 +3812,26 @@ def download_poster(
                 "No file path for poster", code="NO_FILE_PATH", status_code=404
             )
 
-        # Resolve to a real path to prevent path traversal
-        full_path = os.path.realpath(raw_path)
+        # Confine the served path to configured roots — realpath normalizes
+        # but authorizes nothing, so a poisoned row could point anywhere.
+        from backend.util.config import load_config
+        from backend.util.path_safety import resolve_confined
+
+        try:
+            config = load_config()
+        except ConfigError:
+            raise
+        except Exception:  # noqa: S110 — fail closed below
+            config = None
+
+        real = resolve_confined(raw_path, config) if config is not None else None
+        if real is None:
+            return error(
+                "Access denied - path outside allowed directory",
+                code="PATH_TRAVERSAL_DENIED",
+                status_code=403,
+            )
+        full_path = str(real)
 
         if not os.path.exists(full_path):
             return error(
@@ -3834,6 +3874,8 @@ def download_poster(
             background=BackgroundTask(os.unlink, tmp.name),
         )
 
+    except ConfigError:
+        raise
     except Exception as e:
         logger.error(f"Error downloading poster {poster_id}: {e}")
         return error(
