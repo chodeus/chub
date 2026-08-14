@@ -2,6 +2,7 @@
 whose {tvdb/tmdb} id matches a live media item but whose name != the item's
 canonical folder (media_cache.folder). Safety: never remove the only copy."""
 
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -10,7 +11,6 @@ from backend.modules.poster_cleanarr import ORPHAN_RESTORE_DIR_NAME, PosterClean
 from backend.util.config import ChubConfig, ConfigError
 from backend.util.database import ChubDB
 from backend.util.path_safety import resolve_confined
-
 
 def _logger():
     return SimpleNamespace(
@@ -420,6 +420,95 @@ def _victim_folder(outside):
     return victim
 
 
+def test_execute_stale_remove_refuses_a_swapped_parent(tmp_path, monkeypatch):
+    """A parent component swapped to a symlink between scan and rmtree must not delete the tree it now points at."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    victim = _victim_folder(outside)
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    entry = _swap_parent_for_link(allowed, outside)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_stale_mode([entry], "remove", logger)
+
+    assert res["count"] == 0
+    assert victim.exists()  # the swapped-in target is untouched
+    assert errors
+
+
+def test_execute_stale_move_refuses_a_swapped_parent(tmp_path, monkeypatch):
+    """Same swap on the move path — shutil.move must not relocate an outside folder."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    victim = _victim_folder(outside)
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    entry = _swap_parent_for_link(allowed, outside)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_stale_mode([entry], "move", logger)
+
+    assert res["count"] == 0
+    assert victim.exists()  # not dragged into the restore dir
+    assert errors
+
+
+def test_execute_stale_remove_rmtrees_through_a_parent_descriptor(
+    tmp_path, monkeypatch
+):
+    """The recursive delete is anchored to a descriptor on the confined parent, so a parent re-pointed the instant after it is opened is refused."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    victim = _victim_folder(outside)
+    shows = allowed / "shows"
+    shows.mkdir()
+    stale = shows / "Dune - Prophecy (2024) {tvdb-1}"
+    stale.mkdir()
+    (stale / "poster.jpg").write_bytes(b"x")
+    (shows / "Dune Prophecy (2024) {tvdb-1}").mkdir()  # canonical present
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    real_open = os.open
+
+    def _swapping_open(path, *a, **kw):
+        """Open normally, then re-point that same dir at `outside`."""
+        fd = real_open(path, *a, **kw)
+        # Match on the basename: the walk opens each component by NAME.
+        if (
+            os.path.basename(str(path)) == shows.name
+            and shows.is_dir()
+            and not shows.is_symlink()
+        ):
+            shows.rename(allowed / "shows_real")
+            shows.symlink_to(outside, target_is_directory=True)
+        return fd
+
+    # `os` here is the same module object poster_cleanarr calls through.
+    monkeypatch.setattr(os, "open", _swapping_open)
+    logger, errors = _collecting_logger()
+    entry = {
+        "folder": str(stale),
+        "asset_dir": str(allowed),
+        "name": stale.name,
+        "canonical": "Dune Prophecy (2024) {tvdb-1}",
+        "canonical_present": True,
+        "id": ("tvdb", 1),
+        "size": 1,
+    }
+
+    res = m._execute_stale_mode([entry], "remove", logger)
+
+    assert res["count"] == 0
+    assert victim.exists()  # the swapped-in tree is never deleted through
+    assert (allowed / "shows_real" / stale.name).exists()  # nor the pinned one
+    assert errors
+
+
 def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
     """run() with mode='nothing' (skips Plex/bloat) must still invoke BOTH the
     orphan and stale passes when their config flags are set — the path a
@@ -479,3 +568,116 @@ def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
     m.run()
     assert "orphan" in calls
     assert "stale" in calls
+def test_stale_remove_passes_the_descriptor_to_rmtree(tmp_path, monkeypatch):
+    """The delete resolves its name against dir_fd, not a path the kernel re-walks."""
+    import shutil
+
+    allowed = tmp_path / "allowed"
+    shows = allowed / "shows"
+    stale = shows / "Dune - Prophecy (2024) {tvdb-1}"
+    stale.mkdir(parents=True)
+    (stale / "poster.jpg").write_bytes(b"x")
+    (shows / "Dune Prophecy (2024) {tvdb-1}").mkdir()
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    seen = {}
+    real_rmtree = shutil.rmtree
+
+    def _recording_rmtree(path, *a, **kw):
+        seen["path"] = path
+        seen["dir_fd"] = kw.get("dir_fd")
+        return real_rmtree(path, *a, **kw)
+
+    monkeypatch.setattr(shutil, "rmtree", _recording_rmtree)
+    entry = {
+        "folder": str(stale),
+        "asset_dir": str(allowed),
+        "name": stale.name,
+        "canonical": "Dune Prophecy (2024) {tvdb-1}",
+        "canonical_present": True,
+        "id": ("tvdb", 1),
+        "size": 1,
+    }
+
+    res = m._execute_stale_mode([entry], "remove", _collecting_logger()[0])
+
+    assert res["count"] == 1
+    assert seen["dir_fd"] is not None  # anchored, not path-walked
+    assert seen["path"] == stale.name  # a bare name, resolved against the fd
+    assert not stale.exists()
+
+
+def _stale_entry(folder, asset_dir, canonical):
+    """A stale-duplicate entry for `folder`, as _scan_stale_duplicates emits it."""
+    return {
+        "folder": str(folder),
+        "asset_dir": str(asset_dir),
+        "name": os.path.basename(str(folder)),
+        "canonical": canonical,
+        "canonical_present": True,
+        "id": ("tvdb", 1),
+        "size": 1,
+    }
+
+
+def test_execute_stale_move_renames_through_both_parent_descriptors(
+    tmp_path, monkeypatch
+):
+    """The stale move is an os.rename resolved against a descriptor on each parent, not a path pair shutil re-walks."""
+    allowed = tmp_path / "allowed"
+    canonical = "Dune Prophecy (2024) {tvdb-1}"
+    (allowed / canonical).mkdir(parents=True)  # canonical present
+    stale = allowed / "Dune - Prophecy (2024) {tvdb-1}"
+    stale.mkdir()
+    (stale / "poster.jpg").write_bytes(b"x")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+
+    calls = []
+    real_rename = os.rename
+
+    def _recording_rename(src, dst, **kw):
+        calls.append((src, dst, kw.get("src_dir_fd"), kw.get("dst_dir_fd")))
+        return real_rename(src, dst, **kw)
+
+    monkeypatch.setattr(os, "rename", _recording_rename)
+
+    res = m._execute_stale_mode(
+        [_stale_entry(stale, allowed, canonical)], "move", _logger()
+    )
+
+    assert res["count"] == 1
+    assert (allowed / ORPHAN_RESTORE_DIR_NAME / stale.name / "poster.jpg").exists()
+    assert len(calls) == 1
+    src, dst, src_fd, dst_fd = calls[0]
+    assert (src, dst) == (stale.name, stale.name)  # bare names, not paths
+    assert src_fd is not None and dst_fd is not None  # ...against both fds
+
+
+def test_execute_stale_mode_stops_when_config_stops_authorizing(
+    tmp_path, tightening_config
+):
+    """Config is re-read per item, so a root dropped mid-batch stops the tail while the head — authorized when its turn came — still ran."""
+    allowed = tmp_path / "allowed"
+    entries = []
+    for tag in ("A", "B"):
+        (allowed / f"Show {tag} (2024) {{tvdb-1}}").mkdir(parents=True)
+        old = allowed / f"Show {tag} old (2024) {{tvdb-1}}"
+        old.mkdir()
+        (old / "poster.jpg").write_bytes(b"x")
+        entries.append(_stale_entry(old, allowed, f"Show {tag} (2024) {{tvdb-1}}"))
+    m = _make(allowed)
+    calls = tightening_config(allowed, authorized_calls=1)
+    logger, errors = _collecting_logger()
+
+    res = m._execute_stale_mode(entries, "remove", logger)
+
+    assert res["count"] == 1
+    assert not os.path.exists(entries[0]["folder"])
+    assert os.path.exists(entries[1]["folder"])  # de-authorized before its turn
+    assert len(calls) >= 2  # one load per item, not one per batch
+    # Labelled by pass, so an empty-dir-sweep refusal cannot satisfy it.
+    assert [
+        "Stale-duplicate cleanup: refused 1 path(s)" in e for e in errors
+    ].count(True) == 1
