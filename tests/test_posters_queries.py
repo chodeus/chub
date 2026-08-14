@@ -13,8 +13,9 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backend.util.config import ConfigError  # noqa: E402
+from backend.util.config import ChubConfig, ConfigError  # noqa: E402
 from backend.util.database import ChubDB  # noqa: E402
+from backend.util.path_safety import is_path_allowed  # noqa: E402
 
 
 class _StubLog:
@@ -473,3 +474,208 @@ def test_delete_poster_route_leaves_lookalike_filenames_matched(db):
     assert body["data"]["media_unmatched"] == 1
     assert db.media.get_by_id(literal)["matched"] == 0
     assert db.media.get_by_id(lookalike)["matched"] == 1
+
+
+# --- Stage 2: helpers that moved out of posters.py --------------------------
+
+
+def test_rank_candidates_ranks_matches_first_and_drops_prefix_noise(db):
+    """The picker's shared ranker: real match first, same-prefix strangers dropped."""
+    from backend.util.asset_candidates import rank_candidates
+
+    _seed_poster(db, "Dune", file="/src/Dune (2021).jpg")
+    _seed_poster(db, "Dungeons and Dragons Honor Among Thieves")
+    row = db.media.get_by_id(_seed_media(db, "Dune"))
+
+    ranked = rank_candidates(db, row, "movie")
+
+    assert [c["title"] for c, *_ in ranked] == ["Dune"]
+    assert ranked[0][1] is True
+
+
+def test_rank_candidates_caps_the_pool_across_alternate_titles(db):
+    """The 800 cap is absolute: extra alternate titles must not each add another 800."""
+    from backend.util.asset_candidates import rank_candidates
+
+    calls = []
+
+    class _Poster:
+        def get_candidates_by_prefix(self, prefix, **kw):
+            calls.append(prefix)
+            return [
+                {"file": f"/src/{prefix}-{i}.jpg", "title": "Dune", "id": i}
+                for i in range(800)
+            ]
+
+    class _DB:
+        poster = _Poster()
+
+    row = {
+        "title": "Dune",
+        "normalized_title": "dune",
+        "alternate_titles": '["Duna", "Dyuna"]',
+    }
+
+    rank_candidates(_DB(), row, "movie")
+
+    # One title fills the pool; the remaining two must never be queried.
+    assert len(calls) == 1, calls
+
+
+def test_rank_candidates_scopes_to_the_requested_image_type(db):
+    """An artwork lookup must not surface the poster row for the same title."""
+    from backend.util.asset_candidates import rank_candidates
+
+    _seed_poster(db, "Dune", file="/src/Dune (2021).jpg")
+    _seed_poster(db, "Dune", file="/src/Dune (2021) - Logo.png", image_type="logo")
+    row = db.media.get_by_id(_seed_media(db, "Dune"))
+
+    ranked = rank_candidates(db, row, "movie", image_type="logo")
+
+    assert [c["file"] for c, *_ in ranked] == ["/src/Dune (2021) - Logo.png"]
+
+
+def test_resolve_format_maps_aliases_and_falls_back_to_jpeg():
+    """Every download/optimize call resolves its target through this one map."""
+    from backend.util.poster_images import resolve_format
+
+    assert resolve_format("jpg") == ("JPEG", ".jpg")
+    assert resolve_format("WEBP") == ("WEBP", ".webp")
+    assert resolve_format(None) == ("JPEG", ".jpg")
+
+
+def test_thumbnail_and_download_refuse_rows_outside_allowed_roots(
+    db, monkeypatch, tmp_path
+):
+    """A poisoned row pointing outside every configured root is 403, not served."""
+    victim = tmp_path / "elsewhere" / "secret.jpg"
+    victim.parent.mkdir()
+    victim.write_bytes(b"x")
+    pid = _seed_poster(db, "Evil", file=str(victim), folder=str(victim.parent))
+
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    # Precondition: the 403s below must come from confinement, not from a
+    # tmp_path that happened to be unreachable.
+    assert not is_path_allowed(str(victim), ChubConfig())
+    client = _client(db)
+
+    thumb = client.get(f"/api/posters/{pid}/thumbnail")
+    dl = client.post(f"/api/posters/{pid}/download")
+    assert thumb.status_code == 403, thumb.text
+    assert dl.status_code == 403, dl.text
+
+
+def _config_error():
+    """Stand-in load_config for a malformed config file."""
+    raise ConfigError("corrupt config")
+
+
+def test_thumbnail_surfaces_config_error_as_config_invalid(db, monkeypatch):
+    """A malformed config reaches main.py's handler, not the generic 500."""
+    pid = _seed_poster(db, "Dune")
+    monkeypatch.setattr("backend.util.config.load_config", _config_error)
+
+    resp = _client(db).get(f"/api/posters/{pid}/thumbnail")
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_download_surfaces_config_error_as_config_invalid(db, monkeypatch):
+    """Same for the download route — CONFIG_INVALID, not POSTER_DOWNLOAD_ERROR."""
+    pid = _seed_poster(db, "Dune")
+    monkeypatch.setattr("backend.util.config.load_config", _config_error)
+
+    resp = _client(db).post(f"/api/posters/{pid}/download")
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_optimize_surfaces_config_error_as_config_invalid(db, monkeypatch):
+    """Optimize loads config to confine its writes; a bad one is CONFIG_INVALID."""
+    monkeypatch.setattr("backend.util.config.load_config", _config_error)
+
+    resp = _client(db).post("/api/posters/optimize", json={"mode": "report"})
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_cleanup_route_refuses_asset_dirs_outside_allowed_roots(db, monkeypatch):
+    """asset_dirs feed a deleting job — an outside dir is a 400, never enqueued."""
+    import backend.api.posters as posters
+
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    client = _client(db)
+    # The real dependency builds a file-backed module logger.
+    client.app.dependency_overrides[posters.get_cleanarr_logger] = _StubLog
+
+    resp = client.post(
+        "/api/posters/plex-metadata/cleanup",
+        json={"mode": "remove", "asset_dirs": ["/etc"]},
+    )
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error_code"] == "INVALID_MODE"
+
+
+def test_cleanup_route_rejects_malformed_field_types(db, monkeypatch):
+    """A non-string mode or non-bool flag is a 400, not a 500 and not a silent enable."""
+    import backend.api.posters as posters
+
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    client = _client(db)
+    client.app.dependency_overrides[posters.get_cleanarr_logger] = _StubLog
+
+    for body in ({"mode": 5}, {"mode": "report", "orphan_assets_enabled": "false"}):
+        resp = client.post("/api/posters/plex-metadata/cleanup", json=body)
+        assert resp.status_code == 400, resp.text
+        assert resp.json()["error_code"] == "INVALID_MODE"
+
+
+def test_cleanup_route_surfaces_config_error_as_config_invalid(db, monkeypatch):
+    """The cleanup route loads config too — malformed must not read as INVALID_MODE."""
+    import backend.api.posters as posters
+
+    monkeypatch.setattr("backend.util.config.load_config", _config_error)
+    client = _client(db)
+    client.app.dependency_overrides[posters.get_cleanarr_logger] = _StubLog
+
+    resp = client.post(
+        "/api/posters/plex-metadata/cleanup", json={"mode": "remove"}
+    )
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_optimize_poster_files_skips_rows_outside_allowed_roots(db, tmp_path):
+    """A poisoned row is skipped and left on disk; the confined poster still runs."""
+    from PIL import Image
+
+    from backend.util.poster_images import optimize_poster_files
+
+    allowed = tmp_path / "posters"
+    allowed.mkdir()
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    good = allowed / "Dune.jpg"
+    evil = outside / "secret.jpg"
+    for path in (good, evil):
+        Image.new("RGB", (2000, 3000)).save(path)
+    untouched = evil.read_bytes()
+    _seed_poster(db, "Dune", file=str(good), folder=str(allowed))
+    _seed_poster(db, "Evil", file=str(evil), folder=str(outside))
+
+    config = ChubConfig()
+    config.poster_renamerr.source_dirs = [str(allowed)]
+
+    _msg, data = optimize_poster_files(
+        db, _StubLog(), config, 1000, 1500, "JPEG", ".jpg", 85, "optimize"
+    )
+
+    assert (data["processed"], data["skipped"], data["failed"]) == (1, 1, 0)
+    assert evil.read_bytes() == untouched
+    with Image.open(good) as img:
+        assert img.size == (1000, 1500)

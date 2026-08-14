@@ -453,6 +453,182 @@ def test_delete_poster_refuses_file_outside_allowed_roots(
     assert victim.exists()
 
 
+# --- Poster file serving is confined to the configured roots ---
+
+
+def _db_with_poster_row(row):
+    """A db stub whose poster repo returns one fixed cache row."""
+
+    class _Poster:
+        """Stub poster repository."""
+
+        def get_by_integer_id(self, _pid):
+            """Return the seeded row for any id."""
+            return row
+
+    class _DB:
+        """Minimal db stub exposing only the poster repository."""
+
+        poster = _Poster()
+
+    return _DB()
+
+
+def _seed_poster_file(directory, name="Movie (2021).jpg"):
+    """Write a real JPEG into *directory* and return its path."""
+    from PIL import Image as _Image
+
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / name
+    _Image.new("RGB", (10, 15), (255, 0, 0)).save(path, "JPEG")
+    return path
+
+
+def _serving_app(app_with_router, monkeypatch, config, row):
+    """Mount the posters router with a fixed config and one poster row."""
+    monkeypatch.setattr("backend.util.config.load_config", lambda *a, **kw: config)
+    app = app_with_router(posters_router.router)
+    app.state.db = _db_with_poster_row(row)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_download_poster_serves_a_file_under_asset_renamerr_source_dir(
+    monkeypatch, app_with_router, tmp_path
+):
+    """The gap-fill root: asset_renamerr rows must still download after confining."""
+    src = tmp_path / "assets_src"
+    poster = _seed_poster_file(src)
+    config = ChubConfig()
+    config.asset_renamerr.source_dirs = [str(src)]
+
+    client = _serving_app(
+        app_with_router,
+        monkeypatch,
+        config,
+        # Production row shape: `folder` is a label, `file` the absolute path.
+        {"file": str(poster), "folder": src.name},
+    )
+    resp = client.post("/api/posters/1/download")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.content
+
+
+def test_download_poster_refuses_a_file_outside_the_allowed_roots(
+    monkeypatch, app_with_router, tmp_path
+):
+    """A poisoned row pointing outside every root is denied, not served."""
+    src = tmp_path / "assets_src"
+    src.mkdir()
+    victim = _seed_poster_file(tmp_path / "elsewhere", "secret.jpg")
+    config = ChubConfig()
+    config.asset_renamerr.source_dirs = [str(src)]
+
+    client = _serving_app(
+        app_with_router,
+        monkeypatch,
+        config,
+        {"file": str(victim), "folder": victim.parent.name},
+    )
+    resp = client.post("/api/posters/1/download")
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error_code"] == "PATH_TRAVERSAL_DENIED"
+
+
+def test_poster_thumbnail_serves_a_file_under_music_source_dir(
+    monkeypatch, app_with_router, tmp_path
+):
+    """The gap-fill root: music art rows must still thumbnail after confining."""
+    music = tmp_path / "music_src"
+    poster = _seed_poster_file(music, "Artist.jpg")
+    config = ChubConfig()
+    config.poster_renamerr.music_source_dirs = [str(music)]
+
+    client = _serving_app(
+        app_with_router,
+        monkeypatch,
+        config,
+        {"file": str(poster), "folder": music.name},
+    )
+    resp = client.get("/api/posters/1/thumbnail")
+
+    assert resp.status_code == 200, resp.text
+    assert (music / ".thumbnails").is_dir()
+
+
+def test_poster_thumbnail_refuses_a_file_outside_the_allowed_roots(
+    monkeypatch, app_with_router, tmp_path
+):
+    """No thumbnail cache is written for a row that escapes the roots."""
+    music = tmp_path / "music_src"
+    music.mkdir()
+    outside_dir = tmp_path / "elsewhere"
+    victim = _seed_poster_file(outside_dir, "secret.jpg")
+    config = ChubConfig()
+    config.poster_renamerr.music_source_dirs = [str(music)]
+
+    client = _serving_app(
+        app_with_router,
+        monkeypatch,
+        config,
+        {"file": str(victim), "folder": outside_dir.name},
+    )
+    resp = client.get("/api/posters/1/thumbnail")
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error_code"] == "PATH_TRAVERSAL_DENIED"
+    assert not (outside_dir / ".thumbnails").exists()
+
+
+def _first_boot_client(app_with_router, monkeypatch, tmp_path):
+    """Serving client for a container with a bind mount but no config.yml yet."""
+    from backend.util.config import load_config
+
+    mount = tmp_path / "kometa"
+    poster = _seed_poster_file(mount)
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    monkeypatch.setattr(
+        "backend.util.path_safety._discover_container_mounts", lambda: [mount]
+    )
+    config = load_config()
+    # The mount IS an allowed root here, so only the provenance guard can deny —
+    # without this the 403 could come from ordinary confinement instead.
+    from backend.util.path_safety import get_allowed_roots
+
+    assert mount.resolve() in get_allowed_roots(config)
+    client = _serving_app(
+        app_with_router,
+        monkeypatch,
+        config,
+        {"file": str(poster), "folder": mount.name},
+    )
+    return client, mount
+
+
+def test_poster_thumbnail_refuses_before_a_config_file_exists(
+    monkeypatch, app_with_router, tmp_path
+):
+    """A discovered bind mount is not an authorized root until config.yml exists."""
+    client, mount = _first_boot_client(app_with_router, monkeypatch, tmp_path)
+    resp = client.get("/api/posters/1/thumbnail")
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error_code"] == "PATH_TRAVERSAL_DENIED"
+    assert not (mount / ".thumbnails").exists()
+
+
+def test_download_poster_refuses_before_a_config_file_exists(
+    monkeypatch, app_with_router, tmp_path
+):
+    """Same gap on the download path: no config file, no file serving."""
+    client, _ = _first_boot_client(app_with_router, monkeypatch, tmp_path)
+    resp = client.post("/api/posters/1/download")
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error_code"] == "PATH_TRAVERSAL_DENIED"
+
+
 # --- Inbound webhook verification under a broken config ---
 
 
