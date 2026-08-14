@@ -5,11 +5,14 @@ Restricts directory listing, creation, and file access to
 roots derived from application configuration.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import List, Optional
 
-from backend.util.config import ChubConfig
+from backend.util.config import ChubConfig, has_config_file
+
+_log = logging.getLogger("chub.path_safety")
 
 
 def get_allowed_roots(config: ChubConfig) -> List[Path]:
@@ -257,6 +260,15 @@ def is_path_allowed(path: str, config: ChubConfig) -> bool:
 def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
     """Resolve *path* and return it only when the resolved target is inside an allowed root, else None."""
     if not path or not isinstance(path, str):
+        return None
+    # Serving/deleting a file is privileged, so it needs a config the user
+    # actually wrote — the picker (get_browse_roots) deliberately has no guard.
+    if not has_config_file(config):
+        _log.warning(
+            "Refusing file access to %s: no config file exists yet, so the "
+            "auto-discovered container mounts are not authorized roots",
+            path,
+        )
         return None
     try:
         resolved = os.path.realpath(os.path.expanduser(path))

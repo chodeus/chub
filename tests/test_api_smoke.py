@@ -581,6 +581,48 @@ def test_poster_thumbnail_refuses_a_file_outside_the_allowed_roots(
     assert not (outside_dir / ".thumbnails").exists()
 
 
+def _first_boot_client(app_with_router, monkeypatch, tmp_path):
+    """Serving client for a container with a bind mount but no config.yml yet."""
+    from backend.util.config import load_config
+
+    mount = tmp_path / "kometa"
+    poster = _seed_poster_file(mount)
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    monkeypatch.setattr(
+        "backend.util.path_safety._discover_container_mounts", lambda: [mount]
+    )
+    client = _serving_app(
+        app_with_router,
+        monkeypatch,
+        load_config(),
+        {"file": str(poster), "folder": mount.name},
+    )
+    return client, mount
+
+
+def test_poster_thumbnail_refuses_before_a_config_file_exists(
+    monkeypatch, app_with_router, tmp_path
+):
+    """A discovered bind mount is not an authorized root until config.yml exists."""
+    client, mount = _first_boot_client(app_with_router, monkeypatch, tmp_path)
+    resp = client.get("/api/posters/1/thumbnail")
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error_code"] == "PATH_TRAVERSAL_DENIED"
+    assert not (mount / ".thumbnails").exists()
+
+
+def test_download_poster_refuses_before_a_config_file_exists(
+    monkeypatch, app_with_router, tmp_path
+):
+    """Same gap on the download path: no config file, no file serving."""
+    client, _ = _first_boot_client(app_with_router, monkeypatch, tmp_path)
+    resp = client.post("/api/posters/1/download")
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error_code"] == "PATH_TRAVERSAL_DENIED"
+
+
 # --- Inbound webhook verification under a broken config ---
 
 

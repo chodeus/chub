@@ -1,5 +1,7 @@
 """Tests for backend/util/path_safety.py — filesystem access guard."""
 
+import logging
+
 import pytest
 
 from backend.util.path_safety import (
@@ -226,6 +228,20 @@ def test_browse_roots_empty_when_no_config(empty_config, monkeypatch, tmp_path):
     assert get_browse_roots(empty_config) == []
 
 
+def test_browse_roots_survive_a_missing_config_file(tmp_path, monkeypatch):
+    """First boot has no config.yml — the picker must still offer the mounts."""
+    from backend.util.config import load_config
+
+    mount = tmp_path / "kometa"
+    mount.mkdir()
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    monkeypatch.setattr(
+        "backend.util.path_safety._discover_container_mounts", lambda: [mount]
+    )
+
+    assert get_browse_roots(load_config()) == [mount.resolve()]
+
+
 def test_get_allowed_roots_includes_gdrive_list(empty_config, tmp_path):
     """Configured gdrive_list[*].location paths should appear in allowed roots."""
     from backend.util.config import GDriveListEntry
@@ -342,6 +358,43 @@ def test_resolve_confined_denies_a_symlink_escaping_the_roots(config_with_roots)
 
     # The link itself sits inside an allowed root; its target does not.
     assert resolve_confined(str(link), config) is None
+
+
+def test_resolve_confined_denies_when_no_config_file_exists(
+    tmp_path, monkeypatch, caplog
+):
+    """Auto-discovered mounts must not authorize file serving before config.yml."""
+    from backend.util.config import load_config
+
+    mount = tmp_path / "kometa"
+    mount.mkdir()
+    poster = mount / "Movie (2021).jpg"
+    poster.write_text("x")
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    monkeypatch.setattr(
+        "backend.util.path_safety._discover_container_mounts", lambda: [mount]
+    )
+    config = load_config()
+
+    # The mount IS an allowed root here, so only the provenance guard can deny.
+    assert mount.resolve() in get_allowed_roots(config)
+    with caplog.at_level(logging.WARNING):
+        assert resolve_confined(str(poster), config) is None
+    assert "no config file exists yet" in caplog.text
+
+
+def test_resolve_confined_trusts_a_hand_built_config(
+    empty_config, tmp_path, monkeypatch
+):
+    """Provenance is marked, never probed: a config built in code stays trusted."""
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "absent"))
+    root = tmp_path / "posters_src"
+    root.mkdir()
+    poster = root / "Movie (2021).jpg"
+    poster.write_text("x")
+    empty_config.poster_renamerr.source_dirs = [str(root)]
+
+    assert resolve_confined(str(poster), empty_config) == poster.resolve()
 
 
 def test_resolve_confined_denies_traversal_and_unusable_input(config_with_roots):
