@@ -32,6 +32,10 @@ def rank_candidates(
     seen = set()
     gathered = []
     for st in search_titles:
+        # Checked per title too: an inner break alone lets each alternate
+        # title add another 800 rows before anything is scored.
+        if len(gathered) >= 800:
+            break
         for c in db.poster.get_candidates_by_prefix(
             st or "", asset_type=asset_type, image_type=image_type
         ):
@@ -39,7 +43,7 @@ def rank_candidates(
             if f and f not in seen:
                 seen.add(f)
                 gathered.append(c)
-            if len(gathered) >= 800:  # bound the pool before scoring
+            if len(gathered) >= 800:
                 break
 
     # Score every candidate by title similarity. The prefix bucket alone is

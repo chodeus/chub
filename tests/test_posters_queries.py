@@ -480,6 +480,35 @@ def test_rank_candidates_ranks_matches_first_and_drops_prefix_noise(db):
     assert ranked[0][1] is True
 
 
+def test_rank_candidates_caps_the_pool_across_alternate_titles(db):
+    """The 800 cap is absolute: extra alternate titles must not each add another 800."""
+    from backend.util.asset_candidates import rank_candidates
+
+    calls = []
+
+    class _Poster:
+        def get_candidates_by_prefix(self, prefix, **kw):
+            calls.append(prefix)
+            return [
+                {"file": f"/src/{prefix}-{i}.jpg", "title": "Dune", "id": i}
+                for i in range(800)
+            ]
+
+    class _DB:
+        poster = _Poster()
+
+    row = {
+        "title": "Dune",
+        "normalized_title": "dune",
+        "alternate_titles": '["Duna", "Dyuna"]',
+    }
+
+    rank_candidates(_DB(), row, "movie")
+
+    # One title fills the pool; the remaining two must never be queried.
+    assert len(calls) == 1, calls
+
+
 def test_rank_candidates_scopes_to_the_requested_image_type(db):
     """An artwork lookup must not surface the poster row for the same title."""
     from backend.util.asset_candidates import rank_candidates
