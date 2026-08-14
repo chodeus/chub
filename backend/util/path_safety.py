@@ -5,11 +5,14 @@ Restricts directory listing, creation, and file access to
 roots derived from application configuration.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import List, Optional
 
-from backend.util.config import ChubConfig
+from backend.util.config import ChubConfig, has_config_file
+
+_log = logging.getLogger("chub.path_safety")
 
 
 def get_allowed_roots(config: ChubConfig) -> List[Path]:
@@ -17,8 +20,10 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     Build the list of allowed filesystem roots from configuration.
 
     Includes:
-    - Poster source and destination directories
+    - Poster renamerr source, music source and destination directories
+    - Asset renamerr source, music source and destination directories
     - Border replacerr source and destination directories
+    - Poster cleanarr asset directories
     - Nohl source directories
     - Jduparr source directories and hash database location
     - GDrive source locations
@@ -29,8 +34,20 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     # Poster renamerr
     pr = config.poster_renamerr
     roots.extend(pr.source_dirs)
+    roots.extend(pr.music_source_dirs)
     if pr.destination_dir:
         roots.append(pr.destination_dir)
+
+    # Asset renamerr — its own scan set feeds the same poster_cache the
+    # poster file endpoints serve from, so it must be authorized too.
+    ar = config.asset_renamerr
+    roots.extend(ar.source_dirs)
+    roots.extend(ar.music_source_dirs)
+    if ar.destination_dir:
+        roots.append(ar.destination_dir)
+
+    # Poster cleanarr orphan / stale-duplicate asset dirs
+    roots.extend(config.poster_cleanarr.asset_dirs)
 
     # Border replacerr
     br = config.border_replacerr
@@ -214,11 +231,9 @@ def get_browse_roots(config: ChubConfig) -> List[Path]:
 def is_path_allowed(path: str, config: ChubConfig) -> bool:
     """
     Check whether *path* falls under one of the allowed roots.
-    Returns True if the resolved path is inside any allowed root.
 
-    The path is resolved to an absolute path and then checked against
-    each allowed root using Path.relative_to(), which is safe against
-    traversal attacks (symlinks, .., etc.) because resolve() normalizes.
+    realpath resolves symlinks and `..` before the comparison, so traversal
+    can't win; the os.sep suffix keeps `/root_evil` out of `/root`.
     """
     if not path or not isinstance(path, str):
         return False
@@ -226,26 +241,73 @@ def is_path_allowed(path: str, config: ChubConfig) -> bool:
     if "\x00" in path:
         return False
     try:
-        target = Path(path).expanduser().resolve()  # noqa: S108 — validated below
+        target = os.path.realpath(os.path.expanduser(path))
     except (ValueError, OSError):
         return False
 
+    # realpath + os.sep prefix: same verdict relative_to gave, in the shape
+    # CodeQL accepts as a traversal barrier. os.sep stops /root_evil.
     for root in get_allowed_roots(config):
-        try:
-            target.relative_to(root)
+        base = str(root)
+        if target == base or target.startswith(base + os.sep):
             return True
-        except ValueError:
-            continue
 
     return False
+
+
+def containing_root(path: str, config: ChubConfig) -> Optional[Path]:
+    """Longest allowed root containing the already-resolved *path*, or None."""
+    # Callers walk down from this root, so the LONGEST match is the tightest
+    # anchor. os.sep suffix stops `/root_evil` matching `/root`, as above.
+    best: Optional[Path] = None
+    for root in get_allowed_roots(config):
+        base = str(root)
+        if path != base and not path.startswith(base + os.sep):
+            continue
+        if best is None or len(base) > len(str(best)):
+            best = root
+    return best
 
 
 def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
     """Resolve *path* and return it only when the resolved target is inside an allowed root, else None."""
     if not path or not isinstance(path, str):
         return None
+    # Serving/deleting a file is privileged, so it needs a config the user
+    # actually wrote — the picker (get_browse_roots) deliberately has no guard.
+    if not has_config_file(config):
+        # CR/LF stripped: `path` is request data, and a newline in it would
+        # otherwise forge a second log line (py/log-injection).
+        _log.warning(
+            "Refusing file access to %s: no config file exists yet, so the "
+            "auto-discovered container mounts are not authorized roots",
+            path.replace("\r", "").replace("\n", ""),
+        )
+        return None
     try:
         resolved = os.path.realpath(os.path.expanduser(path))
     except (ValueError, OSError):
         return None
     return Path(resolved) if is_path_allowed(resolved, config) else None
+
+
+def resolve_under_root(location: str, path: str, config: ChubConfig) -> Optional[Path]:
+    """Resolve an absolute *path*, or one under *location*, confined to allowed roots."""
+    if Path(path).is_absolute():
+        # Absolute paths (grid passes item.file; location is a label, not a
+        # root) validate on their own — resolve_confined covers symlink escapes.
+        return resolve_confined(path, config)
+
+    # Relative path — `location` must be an allowed root and the resolved
+    # result must stay inside it. os.sep suffix keeps `/posters_evil/x`
+    # from slipping past a `/posters` prefix.
+    if not is_path_allowed(location, config):
+        return None
+    base_dir = os.path.realpath(location)
+    # Re-confine the resolved root too — location may itself be a link.
+    if not is_path_allowed(base_dir, config):
+        return None
+    resolved = os.path.realpath(os.path.join(base_dir, path))
+    if resolved != base_dir and not resolved.startswith(base_dir + os.sep):
+        return None
+    return Path(resolved)
