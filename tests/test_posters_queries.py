@@ -607,6 +607,20 @@ def test_cleanup_route_refuses_asset_dirs_outside_allowed_roots(db, monkeypatch)
     assert resp.json()["error_code"] == "INVALID_MODE"
 
 
+def test_cleanup_route_rejects_malformed_field_types(db, monkeypatch):
+    """A non-string mode or non-bool flag is a 400, not a 500 and not a silent enable."""
+    import backend.api.posters as posters
+
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    client = _client(db)
+    client.app.dependency_overrides[posters.get_cleanarr_logger] = _StubLog
+
+    for body in ({"mode": 5}, {"mode": "report", "orphan_assets_enabled": "false"}):
+        resp = client.post("/api/posters/plex-metadata/cleanup", json=body)
+        assert resp.status_code == 400, resp.text
+        assert resp.json()["error_code"] == "INVALID_MODE"
+
+
 def test_cleanup_route_surfaces_config_error_as_config_invalid(db, monkeypatch):
     """The cleanup route loads config too — malformed must not read as INVALID_MODE."""
     import backend.api.posters as posters

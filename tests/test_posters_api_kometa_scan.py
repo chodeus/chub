@@ -83,6 +83,50 @@ def test_cleanup_overrides_allows_nothing_and_rejects_bad_stale_mode():
         )
 
 
+def test_cleanup_overrides_rejects_non_string_mode():
+    """A non-string mode is a 400, not an AttributeError escaping as a 500."""
+    import pytest
+
+    from backend.util.poster_cleanarr_settings import build_cleanup_overrides
+
+    cfg = ChubConfig()
+    with pytest.raises(ValueError):
+        build_cleanup_overrides({"mode": 5}, cfg)
+    # absent / None still default to report
+    assert build_cleanup_overrides({"mode": None}, cfg)["mode"] == "report"
+    assert build_cleanup_overrides({}, cfg)["mode"] == "report"
+
+
+def test_cleanup_overrides_rejects_non_bool_flags():
+    """bool("false") is True — a malformed flag must never enable a deleting pass."""
+    import pytest
+
+    from backend.util.poster_cleanarr_settings import build_cleanup_overrides
+
+    cfg = ChubConfig()
+    for key in (
+        "orphan_assets_enabled",
+        "stale_duplicates_enabled",
+        "overlays_only",
+    ):
+        with pytest.raises(ValueError):
+            build_cleanup_overrides({"mode": "remove", key: "false"}, cfg)
+
+
+def test_cleanup_overrides_rejects_non_string_sub_modes():
+    """A malformed sub-mode is rejected instead of silently falling back to config."""
+    import pytest
+
+    from backend.util.poster_cleanarr_settings import build_cleanup_overrides
+
+    cfg = ChubConfig()
+    for key in ("orphan_assets_mode", "stale_duplicates_mode"):
+        with pytest.raises(ValueError):
+            build_cleanup_overrides({"mode": "remove", key: 5}, cfg)
+        # None keeps "not specified" — the module's saved mode applies
+        assert key not in build_cleanup_overrides({"mode": "remove", key: None}, cfg)
+
+
 def test_cleanup_overrides_confines_asset_dirs(tmp_path):
     """A configured asset_dir survives the guard and comes back resolved."""
     from backend.util.poster_cleanarr_settings import build_cleanup_overrides

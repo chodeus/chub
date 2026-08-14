@@ -5,7 +5,7 @@ Reads the `poster_cleanarr` config section on behalf of the UI/API layer and
 turns a cleanup request body into the overrides a `module_run` job expects.
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from backend.util.config import ChubConfig, ConfigError
 from backend.util.path_safety import resolve_confined
@@ -55,12 +55,39 @@ def get_excluded_libraries() -> List[str]:
     return list(getattr(section, "excluded_libraries", None) or [])
 
 
+def _require_bool(body: dict, key: str) -> bool:
+    """Return body[key] only when it is a real bool."""
+    # bool("false") is True — coercing would silently enable a deleting pass.
+    value = body.get(key)
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid {key} type: {type(value).__name__}")
+    return value
+
+
+def _validate_sub_mode(value: Any, key: str) -> Optional[str]:
+    """Lowercase an orphan/stale sub-mode; None when absent, ValueError when malformed."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"Invalid {key} type: {type(value).__name__}")
+    mode = value.lower()
+    if mode not in ("report", "move", "remove"):
+        raise ValueError(f"Invalid {key} '{mode}'")
+    return mode
+
+
 def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
     """Assemble the poster_cleanarr job overrides from a cleanup request body.
-    Raises ValueError on an invalid mode or an asset_dir outside the allowed
-    roots (the route maps it to a 400). Bloat accepts "nothing" so the UI can
-    run stale/orphan cleanup with bloat off."""
-    mode = (body.get("mode") or "report").lower()
+    Raises ValueError on a malformed field type, an invalid mode, or an
+    asset_dir outside the allowed roots (the route maps it to a 400). Bloat
+    accepts "nothing" so the UI can run stale/orphan cleanup with bloat off."""
+    raw_mode = body.get("mode")
+    if raw_mode is None:
+        mode = "report"
+    elif isinstance(raw_mode, str):
+        mode = raw_mode.lower() or "report"
+    else:
+        raise ValueError(f"Invalid mode type: {type(raw_mode).__name__}")
     if mode not in ("report", "move", "remove", "nothing"):
         raise ValueError(f"Invalid mode '{mode}'")
     overrides: dict = {"mode": mode}
@@ -70,23 +97,23 @@ def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
         overrides["target_paths"] = [str(p) for p in target_paths]
 
     if "orphan_assets_enabled" in body:
-        overrides["orphan_assets_enabled"] = bool(body.get("orphan_assets_enabled"))
-    orphan_mode = body.get("orphan_assets_mode")
-    if isinstance(orphan_mode, str):
-        orphan_mode = orphan_mode.lower()
-        if orphan_mode not in ("report", "move", "remove"):
-            raise ValueError(f"Invalid orphan_assets_mode '{orphan_mode}'")
+        overrides["orphan_assets_enabled"] = _require_bool(
+            body, "orphan_assets_enabled"
+        )
+    orphan_mode = _validate_sub_mode(
+        body.get("orphan_assets_mode"), "orphan_assets_mode"
+    )
+    if orphan_mode is not None:
         overrides["orphan_assets_mode"] = orphan_mode
 
     if "stale_duplicates_enabled" in body:
-        overrides["stale_duplicates_enabled"] = bool(
-            body.get("stale_duplicates_enabled")
+        overrides["stale_duplicates_enabled"] = _require_bool(
+            body, "stale_duplicates_enabled"
         )
-    stale_mode = body.get("stale_duplicates_mode")
-    if isinstance(stale_mode, str):
-        stale_mode = stale_mode.lower()
-        if stale_mode not in ("report", "move", "remove"):
-            raise ValueError(f"Invalid stale_duplicates_mode '{stale_mode}'")
+    stale_mode = _validate_sub_mode(
+        body.get("stale_duplicates_mode"), "stale_duplicates_mode"
+    )
+    if stale_mode is not None:
         overrides["stale_duplicates_mode"] = stale_mode
 
     asset_dirs = body.get("asset_dirs")
@@ -102,5 +129,5 @@ def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
         overrides["asset_dirs"] = confined
 
     if "overlays_only" in body:
-        overrides["overlays_only"] = bool(body.get("overlays_only"))
+        overrides["overlays_only"] = _require_bool(body, "overlays_only")
     return overrides

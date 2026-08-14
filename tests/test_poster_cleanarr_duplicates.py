@@ -7,7 +7,9 @@ from types import SimpleNamespace
 import pytest
 
 from backend.modules.poster_cleanarr import ORPHAN_RESTORE_DIR_NAME, PosterCleanarr
+from backend.util.config import ChubConfig, ConfigError
 from backend.util.database import ChubDB
+from backend.util.path_safety import resolve_confined
 
 
 def _logger():
@@ -20,9 +22,12 @@ def _logger():
     )
 
 
-def _make():
+def _make(*allowed_roots):
+    """Bare instance; `allowed_roots` are the config roots the passes confine to."""
     m = object.__new__(PosterCleanarr)
     m.logger = _logger()
+    m.full_config = ChubConfig()
+    m.full_config.poster_renamerr.source_dirs = [str(r) for r in allowed_roots]
     return m
 
 
@@ -246,7 +251,7 @@ def test_scan_stale_both_ids_resolves_via_tvdb(db, tmp_path):
 
 
 def test_run_stale_pass_aborts_when_no_instances(db, tmp_path):
-    m = _make()
+    m = _make(tmp_path)
     res = m._run_stale_pass(
         db=db,
         instances=[],
@@ -258,7 +263,7 @@ def test_run_stale_pass_aborts_when_no_instances(db, tmp_path):
 
 
 def test_run_stale_pass_reports(db, tmp_path):
-    m = _make()
+    m = _make(tmp_path)
     _seed(db, "sonarr", "Dune Prophecy (2024) {tvdb-367118}", tvdb=367118)
     root = tmp_path / "assets"
     old = root / "Dune - Prophecy (2024) {tvdb-367118}"
@@ -272,6 +277,66 @@ def test_run_stale_pass_reports(db, tmp_path):
         logger=_logger(),
     )
     assert res["count"] == 1
+
+
+def _seed_stale_pair(root, canonical="Dune Prophecy (2024) {tvdb-367118}"):
+    """A stale-named folder plus its canonical sibling, so remove mode is allowed."""
+    (root / canonical).mkdir(parents=True)
+    old = root / "Dune - Prophecy (2024) {tvdb-367118}"
+    old.mkdir(parents=True)
+    (old / "poster.jpg").write_bytes(b"x")
+    return old
+
+
+def test_run_stale_pass_skips_asset_dir_outside_allowed_roots(db, tmp_path):
+    """The stale pass refuses an unconfined dir at execution time; the allowed one still cleans."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    confined_stale = _seed_stale_pair(allowed)
+    outside_stale = _seed_stale_pair(outside)
+    m = _make(allowed)
+    assert resolve_confined(str(outside), m.full_config) is None  # control
+    _seed(db, "sonarr", "Dune Prophecy (2024) {tvdb-367118}", tvdb=367118)
+
+    res = m._run_stale_pass(
+        db=db,
+        instances=["sonarr"],
+        asset_dirs=[str(allowed), str(outside)],
+        mode="remove",
+        logger=_logger(),
+    )
+
+    assert res["count"] == 1
+    assert not confined_stale.exists()  # allowed root still processed
+    assert outside_stale.exists()  # unauthorized root untouched
+
+
+def test_run_stale_pass_fails_closed_when_config_unavailable(db, tmp_path, monkeypatch):
+    """Without a loadable config nothing can be authorized, so nothing is removed."""
+    m = object.__new__(PosterCleanarr)  # shim entry point's shape: no full_config
+    m.logger = _logger()
+
+    def _boom():
+        raise ConfigError("corrupt config")
+
+    monkeypatch.setattr("backend.util.config.load_config", _boom)
+    stale = _seed_stale_pair(tmp_path / "assets")
+    _seed(db, "sonarr", "Dune Prophecy (2024) {tvdb-367118}", tvdb=367118)
+    errors = []
+    logger = _logger()
+    logger.error = errors.append
+
+    res = m._run_stale_pass(
+        db=db,
+        instances=["sonarr"],
+        asset_dirs=[str(tmp_path / "assets")],
+        mode="remove",
+        logger=logger,
+    )
+
+    assert res["count"] == 0
+    assert stale.exists()  # nothing removed on an unverifiable authorization
+    assert errors  # and the refusal is logged, not silent
 
 
 def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):

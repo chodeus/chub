@@ -11,8 +11,10 @@ from types import SimpleNamespace
 import pytest
 
 from backend.modules.poster_cleanarr import PosterCleanarr
+from backend.util.config import ChubConfig, ConfigError
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
+from backend.util.path_safety import resolve_confined
 
 
 def _logger():
@@ -25,9 +27,12 @@ def _logger():
     )
 
 
-def _make():
+def _make(*allowed_roots):
+    """Bare instance; `allowed_roots` are the config roots the passes confine to."""
     m = object.__new__(PosterCleanarr)
     m.logger = _logger()
+    m.full_config = ChubConfig()
+    m.full_config.poster_renamerr.source_dirs = [str(r) for r in allowed_roots]
     return m
 
 
@@ -49,7 +54,7 @@ def test_orphan_pass_aborts_when_title_set_empty(db, tmp_path):
     """If media_cache is empty for the configured instances, the comparison
     set is empty and the pass must abort WITHOUT deleting anything — the last
     line of defense against wiping every asset."""
-    m = _make()
+    m = _make(tmp_path)
     orphan = tmp_path / "Some Movie (2020).png"
     orphan.write_bytes(b"x")
 
@@ -59,6 +64,76 @@ def test_orphan_pass_aborts_when_title_set_empty(db, tmp_path):
 
     assert res["count"] == 0
     assert orphan.exists()  # nothing deleted
+
+
+def test_orphan_pass_skips_asset_dir_outside_allowed_roots(db, tmp_path):
+    """A dir outside the allowed roots is refused at execution time; its neighbour still cleans."""
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    m = _make(allowed)
+    assert resolve_confined(str(outside), m.full_config) is None  # control
+    _seed_media(db, "k1", "radarr1", normalize_titles("Keeper (2020)"))
+    confined_orphan = allowed / "Gone Movie (2019).png"
+    confined_orphan.write_bytes(b"x")
+    outside_orphan = outside / "Gone Movie (2019).png"
+    outside_orphan.write_bytes(b"x")
+
+    res = m._run_orphan_pass(
+        db,
+        ["radarr1"],
+        [str(allowed), str(outside)],
+        "remove",
+        False,
+        _logger(),
+    )
+
+    assert res["count"] == 1
+    assert not confined_orphan.exists()  # allowed root still processed
+    assert outside_orphan.exists()  # unauthorized root untouched
+
+
+def test_orphan_pass_works_via_the_shim_shape_with_a_live_config(db, tmp_path, monkeypatch):
+    """poster_renamerr's post-rename cleanup builds a bare instance — it must still clean."""
+    m = object.__new__(PosterCleanarr)  # shim entry point's shape: no full_config
+    m.logger = _logger()
+
+    live = ChubConfig()
+    live.poster_renamerr.destination_dir = str(tmp_path)
+    monkeypatch.setattr("backend.util.config.load_config", lambda: live)
+
+    _seed_media(db, "k1", "radarr1", normalize_titles("Keeper (2020)"))
+    orphan = tmp_path / "Gone Movie (2019).png"
+    orphan.write_bytes(b"x")
+
+    res = m._run_orphan_pass(db, ["radarr1"], [str(tmp_path)], "remove", False, _logger())
+
+    assert res["count"] == 1, res
+    assert not orphan.exists()
+
+
+def test_orphan_pass_fails_closed_when_config_unavailable(db, tmp_path, monkeypatch):
+    """No config means no authorization, so the pass must delete nothing."""
+    m = object.__new__(PosterCleanarr)  # shim entry point's shape: no full_config
+    m.logger = _logger()
+
+    def _boom():
+        raise ConfigError("corrupt config")
+
+    monkeypatch.setattr("backend.util.config.load_config", _boom)
+    _seed_media(db, "k1", "radarr1", normalize_titles("Keeper (2020)"))
+    orphan = tmp_path / "Gone Movie (2019).png"
+    orphan.write_bytes(b"x")
+    errors = []
+    logger = _logger()
+    logger.error = errors.append
+
+    res = m._run_orphan_pass(db, ["radarr1"], [str(tmp_path)], "remove", False, logger)
+
+    assert res["count"] == 0
+    assert orphan.exists()  # nothing deleted on an unverifiable authorization
+    assert errors  # and the refusal is logged, not silent
 
 
 def test_build_title_set_filters_by_instance_and_absorbs_alternates(db):
