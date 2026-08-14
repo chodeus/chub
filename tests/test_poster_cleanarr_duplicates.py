@@ -2,6 +2,7 @@
 whose {tvdb/tmdb} id matches a live media item but whose name != the item's
 canonical folder (media_cache.folder). Safety: never remove the only copy."""
 
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -10,7 +11,6 @@ from backend.modules.poster_cleanarr import ORPHAN_RESTORE_DIR_NAME, PosterClean
 from backend.util.config import ChubConfig, ConfigError
 from backend.util.database import ChubDB
 from backend.util.path_safety import resolve_confined
-import os
 
 def _logger():
     return SimpleNamespace(
@@ -655,7 +655,9 @@ def test_execute_stale_move_renames_through_both_parent_descriptors(
     assert src_fd is not None and dst_fd is not None  # ...against both fds
 
 
-def test_execute_stale_mode_stops_when_config_stops_authorizing(tmp_path, monkeypatch):
+def test_execute_stale_mode_stops_when_config_stops_authorizing(
+    tmp_path, tightening_config
+):
     """Config is re-read per item, so a root dropped mid-batch stops the tail while the head — authorized when its turn came — still ran."""
     allowed = tmp_path / "allowed"
     entries = []
@@ -666,17 +668,7 @@ def test_execute_stale_mode_stops_when_config_stops_authorizing(tmp_path, monkey
         (old / "poster.jpg").write_bytes(b"x")
         entries.append(_stale_entry(old, allowed, f"Show {tag} (2024) {{tvdb-1}}"))
     m = _make(allowed)
-    calls = []
-
-    def _load():
-        """Authorize `allowed` for the first load only, nothing afterwards."""
-        calls.append(1)
-        cfg = ChubConfig()
-        if len(calls) == 1:
-            cfg.poster_renamerr.source_dirs = [str(allowed)]
-        return cfg
-
-    monkeypatch.setattr("backend.util.config.load_config", _load)
+    calls = tightening_config(allowed, authorized_calls=1)
     logger, errors = _collecting_logger()
 
     res = m._execute_stale_mode(entries, "remove", logger)
@@ -685,4 +677,7 @@ def test_execute_stale_mode_stops_when_config_stops_authorizing(tmp_path, monkey
     assert not os.path.exists(entries[0]["folder"])
     assert os.path.exists(entries[1]["folder"])  # de-authorized before its turn
     assert len(calls) >= 2  # one load per item, not one per batch
-    assert errors
+    # Labelled by pass, so an empty-dir-sweep refusal cannot satisfy it.
+    assert [
+        "Stale-duplicate cleanup: refused 1 path(s)" in e for e in errors
+    ].count(True) == 1

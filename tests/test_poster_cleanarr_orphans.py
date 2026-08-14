@@ -896,22 +896,9 @@ def test_clean_empty_dirs_refuses_a_parent_swapped_after_the_check(
     assert errors
 
 
-def _tightening_config(monkeypatch, allowed, authorized_calls=1):
-    """load_config authorizes `allowed` for the first N calls, then nothing."""
-    calls = []
-
-    def _load():
-        calls.append(1)
-        cfg = ChubConfig()
-        if len(calls) <= authorized_calls:
-            cfg.poster_renamerr.source_dirs = [str(allowed)]
-        return cfg
-
-    monkeypatch.setattr("backend.util.config.load_config", _load)
-    return calls
-
-
-def test_execute_orphan_mode_stops_when_config_stops_authorizing(tmp_path, monkeypatch):
+def test_execute_orphan_mode_stops_when_config_stops_authorizing(
+    tmp_path, tightening_config
+):
     """Config is re-read per item, so a root dropped mid-batch stops the tail while the head — authorized when its turn came — still ran."""
     allowed = tmp_path / "allowed"
     allowed.mkdir()
@@ -920,7 +907,7 @@ def test_execute_orphan_mode_stops_when_config_stops_authorizing(tmp_path, monke
     tail = allowed / "tail.png"
     tail.write_bytes(b"x")
     m = _make(allowed)
-    calls = _tightening_config(monkeypatch, allowed)
+    calls = tightening_config(allowed)
     logger, errors = _collecting_logger()
 
     res = m._execute_orphan_mode(
@@ -931,7 +918,8 @@ def test_execute_orphan_mode_stops_when_config_stops_authorizing(tmp_path, monke
     assert not head.exists()
     assert tail.exists()  # de-authorized before its turn
     assert len(calls) >= 2  # one load per item, not one per batch
-    assert errors
+    # Labelled by pass, so an empty-dir-sweep refusal cannot satisfy it.
+    assert ["Orphan cleanup: refused 1 path(s)" in e for e in errors].count(True) == 1
 
 
 def test_build_library_id_sets_filters_by_instance(db):
