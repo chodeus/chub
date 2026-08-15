@@ -326,9 +326,12 @@ class PosterCache(DatabaseBase):
     ) -> list:
         """Return poster_cache rows added at or after the ISO-8601 cutoff."""
         it_sql, it_params = self._image_type_clause(image_type)
+        # The cutoff is caller-supplied, so its separator/offset needn't match the
+        # stored form — compare instants. created_at is deliberately unindexed.
         rows = (
             self.execute_query(
-                "SELECT * FROM poster_cache WHERE created_at >= ?" + it_sql + " "
+                "SELECT * FROM poster_cache "
+                "WHERE datetime(created_at) >= datetime(?)" + it_sql + " "
                 "ORDER BY created_at DESC LIMIT ?",
                 (iso_cutoff, *it_params, int(limit)),
                 fetch_all=True,
@@ -419,9 +422,9 @@ class PosterCache(DatabaseBase):
         sql += " ORDER BY priority DESC, id DESC LIMIT 1"
         return self.execute_query(sql, params, fetch_one=True)
 
-    def clear(self) -> None:
-        """Delete all rows from poster_cache."""
-        self.execute_query("DELETE FROM poster_cache")
+    def clear(self) -> int:
+        """Delete all rows from poster_cache; returns rows deleted."""
+        return int(self.execute_query("DELETE FROM poster_cache") or 0)
 
     def analyze(self) -> None:
         """Refresh planner stats; without them the match queries mis-pick indexes."""
