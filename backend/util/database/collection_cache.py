@@ -262,6 +262,14 @@ class CollectionCache(DatabaseBase):
             (matched_at, matched_poster_file, id),
         )
 
+    def count_unmatched(self) -> int:
+        """Rows with no poster match — the Unmatched page's collections figure."""
+        row = self.execute_query(
+            "SELECT COUNT(*) AS total FROM collections_cache WHERE matched=0",
+            fetch_one=True,
+        )
+        return int(row["total"]) if row else 0
+
     def clear(self) -> None:
         """Delete all rows from collections_cache."""
         self.execute_query("DELETE FROM collections_cache")

@@ -142,20 +142,12 @@ async def list_webhook_origins(
     Summarize webhook jobs in the last N days by origin (client_host + endpoint)
     and status. Helpful for spotting a noisy Sonarr instance or a dead webhook.
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     try:
         days = max(1, min(days, 90))
-        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
-        rows = (
-            db.worker.execute_query(
-                "SELECT id, payload, status, received_at FROM jobs "
-                "WHERE type='webhook' AND received_at >= ? ORDER BY received_at DESC",
-                (cutoff,),
-                fetch_all=True,
-            )
-            or []
-        )
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = db.worker.jobs_of_type_since("webhook", cutoff)
         from collections import Counter
 
         by_origin: Counter = Counter()

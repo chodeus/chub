@@ -1681,12 +1681,7 @@ async def get_instance_stats(
         else:
             # Count rows cheaply rather than loading the whole library to len()
             # it (a Lidarr instance is tens of thousands of rows).
-            row = db.media.execute_query(
-                "SELECT COUNT(*) AS n FROM media_cache WHERE instance_name=?",
-                (instance_id,),
-                fetch_one=True,
-            )
-            total = row["n"] if row else 0
+            total = db.media.count_by_instance(instance_id)
             # ARR freshness comes from sync_state (written when the ARR sync
             # completes), not media_cache.updated_at — the latter only moves on
             # changed rows, so it would read "stale" right after a fresh sync of

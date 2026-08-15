@@ -5,7 +5,7 @@ import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .db_base import DatabaseBase
 
@@ -487,6 +487,75 @@ class DBWorker(DatabaseBase):
                 "message": f"Error fetching job stats: {e}",
                 "error_code": "DB_JOB_STATS_ERROR",
             }
+
+    def count_by_status(self, status: str, table_name: str = "jobs") -> int:
+        """Number of jobs currently in one status."""
+        self._check_table(table_name)
+        row = self.execute_query(
+            f"SELECT COUNT(*) AS total FROM {table_name} WHERE status=?",  # noqa: S608
+            (status,),
+            fetch_one=True,
+        )
+        return int(row["total"]) if row else 0
+
+    def count_by_status_since(
+        self, cutoff: str, table_name: str = "jobs"
+    ) -> Dict[str, int]:
+        """{status: count} for jobs received at or after an ISO cutoff."""
+        # datetime() on both sides: the cutoff is caller-supplied, so a differing
+        # separator or UTC offset would silently shift a TEXT compare's window.
+        self._check_table(table_name)
+        rows = self.execute_query(
+            f"SELECT status, COUNT(*) AS total FROM {table_name} "  # noqa: S608
+            "WHERE datetime(received_at) >= datetime(?) GROUP BY status",
+            (cutoff,),
+            fetch_all=True,
+        )
+        return {row["status"]: row["total"] for row in rows or []}
+
+    def recent_failures(
+        self, cutoff: str, limit: int = 20, table_name: str = "jobs"
+    ) -> List[Dict[str, Any]]:
+        """Errored jobs since an ISO cutoff, newest first."""
+        self._check_table(table_name)
+        # `, id DESC` breaks ties: received_at has second-level collisions under
+        # a webhook burst, so without it the LIMIT window would be arbitrary.
+        rows = self.execute_query(
+            f"SELECT id, type, payload, error, received_at FROM {table_name} "  # noqa: S608
+            "WHERE status='error' AND datetime(received_at) >= datetime(?) "
+            "ORDER BY received_at DESC, id DESC LIMIT ?",
+            (cutoff, limit),
+            fetch_all=True,
+        )
+        return [dict(r) for r in rows or []]
+
+    def jobs_of_type_since(
+        self, job_type: str, cutoff: str, table_name: str = "jobs"
+    ) -> List[Dict[str, Any]]:
+        """Jobs of one type received at or after an ISO cutoff, newest first."""
+        self._check_table(table_name)
+        rows = self.execute_query(
+            f"SELECT id, payload, status, received_at FROM {table_name} "  # noqa: S608
+            "WHERE type=? AND datetime(received_at) >= datetime(?) "
+            "ORDER BY received_at DESC, id DESC",
+            (job_type, cutoff),
+            fetch_all=True,
+        )
+        return [dict(r) for r in rows or []]
+
+    def cancel_running_job(
+        self, job_id: int, completed_at: str, table_name: str = "jobs"
+    ) -> int:
+        """Mark a still-running job cancelled; returns rows changed (0 if it finished)."""
+        self._check_table(table_name)
+        return (
+            self.execute_query(
+                f"UPDATE {table_name} SET status='cancelled', completed_at=? "  # noqa: S608
+                "WHERE id=? AND status='running'",
+                (completed_at, job_id),
+            )
+            or 0
+        )
 
     def update_progress(self, table_name: str, job_id: int, progress: int):
         self._check_table(table_name)

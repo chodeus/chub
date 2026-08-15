@@ -72,6 +72,26 @@ _MONITORED_ARTISTS_SQL = (
 class StatsMixin(DatabaseBase):
     """Aggregate library-health statistics over the media_cache table."""
 
+    def count_added_since(self, cutoff: str) -> int:
+        """Rows first seen at or after an ISO cutoff (created_at is first-insert)."""
+        # created_at is CURRENT_TIMESTAMP ('YYYY-MM-DD HH:MM:SS'), the cutoff is
+        # Python isoformat ('...T...'): compare instants, not text. No index to lose.
+        row = self.execute_query(
+            "SELECT COUNT(*) AS total FROM media_cache "
+            "WHERE datetime(created_at) >= datetime(?)",
+            (cutoff,),
+            fetch_one=True,
+        )
+        return int(row["total"]) if row else 0
+
+    def count_unmatched(self) -> int:
+        """Rows with no poster match — the Unmatched page's media figure."""
+        row = self.execute_query(
+            "SELECT COUNT(*) AS total FROM media_cache WHERE matched=0",
+            fetch_one=True,
+        )
+        return int(row["total"]) if row else 0
+
     def get_stats(
         self, asset_type: Optional[str] = None, period_days: int = None
     ) -> dict:

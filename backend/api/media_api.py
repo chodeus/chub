@@ -1709,10 +1709,10 @@ async def update_media_metadata(
 
         # Audit trail: capture each field's old→new so reverts and diffs
         # are possible later without having to replay the whole edit stream.
-        from datetime import datetime as _dt
+        from datetime import datetime as _dt, timezone as _tz
 
         edited_by = getattr(request.state, "user", "") or "unknown"
-        now_iso = _dt.utcnow().isoformat()
+        now_iso = _dt.now(_tz.utc).isoformat()
         for field, new_value in update_kwargs.items():
             old_value = item.get(field)
             if old_value == new_value:
@@ -2000,9 +2000,9 @@ async def generate_collection_from_tag(
                 {"created": False, "matched_media": len(media_rows)},
             )
 
-        from datetime import datetime as _dt
+        from datetime import datetime as _dt, timezone as _tz
 
-        created_at = _dt.utcnow().isoformat()
+        created_at = _dt.now(_tz.utc).isoformat()
         coll_id = db.poster.create_collection(
             name, f"Auto-generated from tag '{tag}'", created_at
         )
