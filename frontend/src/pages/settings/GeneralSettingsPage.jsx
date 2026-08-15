@@ -341,7 +341,7 @@ export const GeneralSettingsPage = () => {
                                         aria-label={a.label}
                                         aria-pressed={active}
                                         title={a.label}
-                                        className="w-8 h-8 rounded-lg transition-transform hover:scale-105"
+                                        className="touch-expand w-9 h-9 rounded-lg transition-transform hover:scale-105"
                                         style={{
                                             background: a.brand,
                                             boxShadow: active

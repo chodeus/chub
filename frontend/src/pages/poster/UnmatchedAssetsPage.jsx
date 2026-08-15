@@ -489,7 +489,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
-                <div className="inline-flex items-center h-10 p-1 gap-0.5 bg-surface border border-border rounded-lg">
+                <div className="inline-flex items-center h-11 p-1 gap-0.5 bg-surface border border-border rounded-lg">
                     {presentTabs.map(t => (
                         <button
                             key={t.key}
@@ -497,7 +497,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                 setTypeKey(t.key);
                                 setPage(0);
                             }}
-                            className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                            className={`touch-expand h-9 min-w-11 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                 typeKey === t.key
                                     ? 'bg-primary text-on-color'
                                     : 'text-fg-muted hover:text-fg'
@@ -1324,7 +1324,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-                <div className="inline-flex items-center h-10 p-1 gap-0.5 bg-surface border border-border rounded-lg">
+                <div className="inline-flex items-center h-11 p-1 gap-0.5 bg-surface border border-border rounded-lg">
                     {mediaTabs.map(t => (
                         <button
                             key={t.key}
@@ -1332,7 +1332,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                 setMediaTypeKey(t.key);
                                 setPage(0);
                             }}
-                            className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                            className={`touch-expand h-9 min-w-11 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                 mediaTypeKey === t.key
                                     ? 'bg-primary text-on-color'
                                     : 'text-fg-muted hover:text-fg'
@@ -1349,7 +1349,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                     <button
                         type="button"
                         onClick={() => setTypeFilter(null)}
-                        className="text-xs text-fg-muted hover:text-fg underline"
+                        className="inline-flex items-center min-h-11 text-xs text-fg-muted hover:text-fg underline"
                     >
                         Clear {ARTWORK_TYPES.find(a => a.key === typeFilter)?.label} filter
                     </button>
@@ -1751,7 +1751,7 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                 {targets.length > 1 && (
                     // Candidates are filtered to the row's exact season server-side,
                     // so each missing season needs its own fetch to be matchable.
-                    <div className="flex flex-wrap items-center gap-1 mb-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
                         {targets.map((t, i) => (
                             <button
                                 key={t.id}
@@ -1763,7 +1763,7 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                                     setTargetIdx(i);
                                     setResult({ targetId: undefined, list: null });
                                 }}
-                                className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                                className={`touch-expand h-9 min-w-11 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                     i === targetIdx
                                         ? 'bg-primary text-on-color'
                                         : 'bg-surface-inset text-fg-muted hover:text-fg'

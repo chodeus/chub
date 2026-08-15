@@ -70,19 +70,21 @@ export default function RecentQueries({ entries, onSelect, onClear, label = 'Rec
                     <button
                         type="button"
                         onClick={handleClearClick}
-                        className="text-xs text-fg-subtle hover:text-fg underline-offset-2 hover:underline bg-transparent border-0 p-0 cursor-pointer"
+                        className="touch-expand inline-flex items-center text-xs text-fg-subtle hover:text-fg underline-offset-2 hover:underline bg-transparent border-0 p-0 cursor-pointer"
                     >
                         Clear
                     </button>
                 )}
             </div>
+            {/* min-w-11 keeps touch-expand's 44px box inside the chip, so a
+                one-character query can't reach into its neighbour. */}
             <div className="flex flex-wrap items-center gap-2">
                 {entries.map(q => (
                     <button
                         key={q}
                         type="button"
                         onClick={() => onSelect(q)}
-                        className="text-xs px-2.5 py-1 rounded-full bg-surface-alt text-fg-muted hover:bg-surface hover:text-fg border border-border-light"
+                        className="touch-expand inline-flex items-center justify-center min-h-9 min-w-11 text-xs px-2.5 rounded-full bg-surface-alt text-fg-muted hover:bg-surface hover:text-fg border border-border-light"
                     >
                         {q}
                     </button>

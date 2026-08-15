@@ -167,7 +167,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                         value={activeRoot || ''}
                         onChange={handleRootChange}
                         disabled={disabled || loading}
-                        className="flex-1 px-2 py-1 text-xs bg-input border border-border rounded text-fg focus:border-primary focus:outline-none"
+                        className="flex-1 h-11 px-2 text-xs bg-input border border-border rounded text-fg focus:border-primary focus:outline-none"
                     >
                         {roots.map(r => (
                             <option key={r} value={r}>

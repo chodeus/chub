@@ -147,8 +147,10 @@ export const InstanceCard = ({
             ? formatSecondsAgo(instanceStats.snapshot_age_seconds)
             : null;
 
+    // 36px real box + touch-expand's 44px coarse hit area; the row's gap-2.5
+    // covers the 4px each neighbour reaches past its own edge.
     const iconBtn =
-        'w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
+        'touch-expand w-9 h-9 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
 
     return (
         <div className="rounded-xl bg-surface border border-border hover:border-[#3b3d72] transition-colors overflow-hidden">
@@ -195,7 +197,7 @@ export const InstanceCard = ({
                     )}
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0 w-full justify-end sm:w-auto">
+                <div className="flex items-center gap-2.5 shrink-0 w-full justify-end sm:w-auto">
                     <Button variant="surface" size="small" onClick={onTest} disabled={isTesting}>
                         {isTesting ? 'Testing…' : 'Test'}
                     </Button>
@@ -376,7 +378,7 @@ export const InstanceCard = ({
                                     onClick={() =>
                                         onFetchLibraries && onFetchLibraries(instance.name)
                                     }
-                                    className="text-xs text-fg-subtle hover:text-fg underline underline-offset-2"
+                                    className="inline-flex items-center min-h-11 text-xs text-fg-subtle hover:text-fg underline underline-offset-2"
                                 >
                                     Load libraries
                                 </button>

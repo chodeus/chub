@@ -189,12 +189,11 @@ const PosterGDriveSearchPage = () => {
             {sources.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3">
                     <SegmentedControl
-                        size="sm"
                         options={FILTER_OPTIONS}
                         value={filterBy}
                         onChange={setFilterBy}
                     />
-                    <div className="flex items-center h-9 rounded-[9px] bg-surface border border-border">
+                    <div className="flex items-center h-11 rounded-[9px] bg-surface border border-border">
                         <span className="material-symbols-outlined text-[16px] text-fg-subtle pl-3">
                             sort
                         </span>
@@ -217,7 +216,7 @@ const PosterGDriveSearchPage = () => {
                         <select
                             value={pickerSelection}
                             onChange={e => setPickerSelection(e.target.value)}
-                            className="h-9 min-w-[180px] rounded-[9px] bg-surface border border-border text-[13px] text-fg-muted px-3 cursor-pointer outline-none focus:border-primary"
+                            className="h-11 min-w-[180px] rounded-[9px] bg-surface border border-border text-[13px] text-fg-muted px-3 cursor-pointer outline-none focus:border-primary"
                             aria-label="Sync a specific folder"
                         >
                             <option value="">Sync folder…</option>
