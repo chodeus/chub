@@ -18,16 +18,6 @@
       ],
       "allowedVersions": "<10",
       "description": "ESLint v10 is not compatible with the current frontend lint setup. Keep ESLint packages on v9 until the config is migrated."
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "python"
-      ],
-      "allowedVersions": "<3.14",
-      "description": "The ruamel.yaml.clib pin that first blocked 3.14 is gone and no runtime dependency declares a 3.14 incompatibility, but the image is only ever exercised on 3.13 (CI python-version, pyproject target-version). Move those to 3.14 first, then drop this rule."
     }
   ]
 }
