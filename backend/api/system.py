@@ -174,7 +174,12 @@ async def health_check(request: Request) -> JSONResponse:
 
     # Database health
     db = getattr(request.app.state, "db", None)
-    if db:
+    if db is None:
+        # No handle at all is as unserviceable as a failing ping — say so, so
+        # the check below can't read an absent key as healthy.
+        checks["database"] = "unavailable"
+        status = "degraded"
+    else:
         try:
             db.maintenance.ping()
             checks["database"] = "ok"
@@ -192,7 +197,7 @@ async def health_check(request: Request) -> JSONResponse:
     }
     # Docker HEALTHCHECK curls -f this, so an unusable DB must not answer 200.
     # A stopped worker stays 200 — degraded, but still serving.
-    if checks.get("database") == "error":
+    if checks.get("database") != "ok":
         return error(
             "Database unavailable",
             code="DATABASE_UNAVAILABLE",

@@ -585,3 +585,20 @@ def test_cancel_reports_conflict_when_the_job_stopped_first(db, monkeypatch):
 
     assert resp.status_code == 409, resp.text
     assert resp.json()["error_code"] == "JOB_NOT_RUNNING"
+
+
+def test_health_route_answers_503_when_there_is_no_database_handle(db):
+    """No handle is as unserviceable as a failing ping — it must not pass the check."""
+    from backend.api import system as system_api
+
+    app = FastAPI()
+    app.state.logger = _StubLog()  # state.db deliberately never set
+    app.include_router(system_api.router)
+
+    resp = TestClient(app, raise_server_exceptions=False).get("/api/health")
+
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["error_code"] == "DATABASE_UNAVAILABLE"
+    assert body["data"]["checks"]["database"] == "unavailable"
+    assert body["data"]["status"] == "degraded"  # payload isn't claiming health
