@@ -414,7 +414,7 @@ const PosterStatsPage = () => {
                     </p>
                 </div>
                 <div className="flex items-center gap-2.5">
-                    <div className="flex items-center h-[38px] rounded-lg bg-surface border border-border">
+                    <div className="flex items-center h-11 rounded-lg bg-surface border border-border">
                         <select
                             value={period}
                             onChange={e => setPeriod(e.target.value)}

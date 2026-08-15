@@ -254,7 +254,7 @@ const IncompleteMetadataCard = () => {
                             key={f.key}
                             type="button"
                             onClick={() => toggleField(f.key)}
-                            className="px-3 py-1.5 rounded-full text-sm cursor-pointer"
+                            className="inline-flex items-center min-h-11 px-3 rounded-full text-sm cursor-pointer"
                             style={{
                                 background: active
                                     ? 'color-mix(in srgb, var(--accent) 18%, transparent)'

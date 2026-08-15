@@ -74,7 +74,7 @@ const InsetSelect = ({ value, onChange, disabled, children, ariaLabel }) => (
             onChange={onChange}
             disabled={disabled}
             aria-label={ariaLabel}
-            className="appearance-none h-[34px] pl-3 pr-8 rounded-lg bg-surface-inset border border-border font-mono text-[13px] text-fg cursor-pointer disabled:opacity-50 focus:border-primary outline-none"
+            className="appearance-none h-11 pl-3 pr-8 rounded-lg bg-surface-inset border border-border font-mono text-[13px] text-fg cursor-pointer disabled:opacity-50 focus:border-primary outline-none"
         >
             {children}
         </select>

@@ -216,6 +216,19 @@ def test_find_missing_dimensions_walks_ids_in_order_under_the_limit(db):
     assert set(rows[0]) == {"id", "file"}
 
 
+# --- PosterCache.added_since -----------------------------------------------
+
+
+def test_added_since_reads_the_cutoff_as_an_instant_not_a_string(db):
+    """created_at is stored in UTC; a cutoff in another offset must be converted first."""
+    _seed_poster(db, "Later", created_at="2026-01-05T10:00:00+00:00")
+    _seed_poster(db, "Earlier", created_at="2026-01-05T08:00:00+00:00")
+
+    # 17:00+08:00 is 09:00 UTC, but a TEXT compare reads "17" as after both rows.
+    rows = db.poster.added_since("2026-01-05T17:00:00+08:00")
+    assert [r["title"] for r in rows] == ["Later"]
+
+
 # --- MediaCache / CollectionCache approve_match + reopen_for_review ---------
 
 

@@ -96,8 +96,10 @@ export default function Logs() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    // 36px real pill; touch-expand tops the coarse hit box to 44px, and min-w-11
+    // keeps that box inside the pill so the bar's gap-2 stays clear.
     const pillBase =
-        'px-3 py-1.5 rounded-full font-mono text-[11px] font-semibold capitalize cursor-pointer border transition-colors select-none';
+        'touch-expand inline-flex items-center justify-center min-h-9 min-w-11 px-3 rounded-full font-mono text-[11px] font-semibold capitalize cursor-pointer border transition-colors select-none';
     const pillOff = 'bg-transparent text-fg-subtle border-border hover:text-fg';
     const levelOnClass = level => {
         if (level === 'critical') return 'bg-error/20 text-error border-error/40';
@@ -181,7 +183,7 @@ export default function Logs() {
                     <button
                         type="button"
                         onClick={scrollToTop}
-                        className={`${pillBase} ${pillOff} inline-flex items-center gap-1`}
+                        className={`${pillBase} ${pillOff} gap-1`}
                         title="Scroll to top"
                     >
                         <span className="material-symbols-outlined text-sm">
@@ -192,7 +194,7 @@ export default function Logs() {
                     <button
                         type="button"
                         onClick={scrollToBottom}
-                        className={`${pillBase} ${pillOff} inline-flex items-center gap-1`}
+                        className={`${pillBase} ${pillOff} gap-1`}
                         title="Scroll to bottom"
                     >
                         <span className="material-symbols-outlined text-sm">

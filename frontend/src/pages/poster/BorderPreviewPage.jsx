@@ -630,7 +630,7 @@ const PreviewSection = ({ isDirty }) => {
                                 value={holiday}
                                 onChange={handleHolidayChange}
                                 disabled={isLoadingOptions || isGenerating}
-                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                                className="h-11 bg-surface border border-border rounded px-2 text-sm text-fg"
                             >
                                 {options.map(opt => (
                                     <option key={opt.value} value={opt.value}>

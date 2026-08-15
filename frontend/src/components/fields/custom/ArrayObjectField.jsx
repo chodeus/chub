@@ -462,7 +462,7 @@ export const ArrayObjectField = ({
         }));
         const lbl = 'font-mono text-[10px] tracking-[0.8px] text-fg-subtle';
         const ctrl =
-            'h-9 px-2.5 rounded-md bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary w-full';
+            'h-11 px-2.5 rounded-md bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary w-full';
         return (
             <div
                 key={index}
@@ -854,7 +854,7 @@ export const ArrayObjectField = ({
                         value={item.app_instance || ''}
                         onChange={e => set('app_instance', e.target.value)}
                         disabled={disabled}
-                        className="h-9 px-2.5 rounded-md bg-surface border border-border text-fg text-sm font-semibold outline-none focus:border-primary min-w-[160px] flex-1"
+                        className="h-11 px-2.5 rounded-md bg-surface border border-border text-fg text-sm font-semibold outline-none focus:border-primary min-w-[160px] flex-1"
                     >
                         <option value="">— Select —</option>
                         {instanceOptions.map(o => (

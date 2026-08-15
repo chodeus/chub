@@ -104,13 +104,13 @@ export const CronInput = React.memo(
                 />
 
                 {/* Help text */}
-                <div className="text-xs text-fg-subtle mt-1">
-                    Format: minute hour day month weekday
+                <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle mt-1">
+                    <span>Format: minute hour day month weekday</span>
                     <a
                         href="https://crontab.guru"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="ml-2 text-fg hover:text-primary-hover underline"
+                        className="inline-flex items-center min-h-11 text-fg hover:text-primary-hover underline"
                     >
                         crontab.guru helper
                     </a>

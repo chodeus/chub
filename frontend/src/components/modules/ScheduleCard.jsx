@@ -43,8 +43,10 @@ export const ScheduleCard = React.memo(
             },
             [moduleKey, onCancel]
         );
+        // 36px real box + touch-expand's 44px coarse hit area; the row's gap-2.5
+        // covers the 4px each neighbour reaches past its own edge.
         const iconBtn =
-            'w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors';
+            'touch-expand w-9 h-9 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors';
 
         return (
             <div
@@ -78,7 +80,7 @@ export const ScheduleCard = React.memo(
                         )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0">
                         {isRunning && onCancel && (
                             <Button variant="danger" size="small" onClick={handleCancelClick}>
                                 Cancel

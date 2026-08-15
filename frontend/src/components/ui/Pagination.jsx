@@ -35,7 +35,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = '' }) =
                     value={currentPage}
                     onChange={handleSelect}
                     aria-label="Jump to page"
-                    className="appearance-none bg-input border border-border rounded-md text-sm text-fg pl-2 pr-7 py-1 cursor-pointer hover:border-primary hover:bg-input-hover focus:ring-primary transition-colors"
+                    className="appearance-none h-11 bg-input border border-border rounded-md text-sm text-fg pl-2 pr-7 cursor-pointer hover:border-primary hover:bg-input-hover focus:ring-primary transition-colors"
                 >
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
                         <option key={n} value={n}>

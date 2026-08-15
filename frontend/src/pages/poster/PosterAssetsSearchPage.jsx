@@ -358,7 +358,7 @@ const PosterAssetsSearchPage = () => {
     };
 
     const selectCls =
-        'h-9 rounded-[9px] bg-surface border border-border text-fg-muted text-[13px] px-3 cursor-pointer outline-none focus:border-primary';
+        'h-11 rounded-[9px] bg-surface border border-border text-fg-muted text-[13px] px-3 cursor-pointer outline-none focus:border-primary';
 
     return (
         <div className="flex flex-col gap-5">
@@ -750,7 +750,9 @@ const PosterAssetsSearchPage = () => {
                                         delete confirmation instead of the lightbox.
                                         On a touch screen hover never fires, so show
                                         it outright. */}
-                                    <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-lg bg-black/55 backdrop-blur-sm p-0.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto pointer-coarse:opacity-100 pointer-coarse:pointer-events-auto transition-fast">
+                                    {/* gap-2 separates the 44px coarse hit boxes; max-w + wrap
+                                        stop the wider bar clipping on the dense poster grids. */}
+                                    <div className="absolute top-1.5 right-1.5 z-10 flex flex-wrap justify-end items-center gap-2 max-w-[calc(100%-12px)] rounded-lg bg-black/55 backdrop-blur-sm p-0.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto pointer-coarse:opacity-100 pointer-coarse:pointer-events-auto transition-fast">
                                         <IconButton
                                             icon="playlist_add"
                                             aria-label="Add to collection"
@@ -1044,7 +1046,7 @@ const PosterAssetsSearchPage = () => {
                                 onChange={e =>
                                     setDownloadOpts(prev => ({ ...prev, format: e.target.value }))
                                 }
-                                className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm cursor-pointer"
+                                className="w-full h-11 px-2 bg-input border border-border rounded-md text-fg text-sm cursor-pointer"
                             >
                                 <option value="">Original</option>
                                 <option value="webp">WebP</option>
@@ -1123,7 +1125,7 @@ const PosterAssetsSearchPage = () => {
                     <select
                         value={selectedCollectionId}
                         onChange={e => setSelectedCollectionId(e.target.value)}
-                        className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm cursor-pointer"
+                        className="w-full h-11 px-2 bg-input border border-border rounded-md text-fg text-sm cursor-pointer"
                     >
                         <option value="">Select a collection...</option>
                         {collections.map(col => (

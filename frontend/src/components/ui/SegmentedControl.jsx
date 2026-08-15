@@ -21,7 +21,9 @@ const SegmentedControl = ({
     fullWidth = false,
 }) => {
     const wrapH = size === 'sm' ? 'h-9' : 'h-11';
-    const segH = size === 'sm' ? 'h-7 px-3 text-xs' : 'h-9 px-3.5 text-[13px]';
+    // min-w-11 pins touch-expand's 44px box to the segment's own width, so a
+    // one-character schema label can't reach across gap-0.5 into its neighbour.
+    const segH = size === 'sm' ? 'h-7 min-w-11 px-3 text-xs' : 'h-9 min-w-11 px-3.5 text-[13px]';
     const wrapLayout = fullWidth ? 'flex w-full' : 'inline-flex';
     const segFlex = fullWidth ? 'flex-1' : '';
     return (
@@ -48,7 +50,7 @@ const SegmentedControl = ({
                         role="tab"
                         aria-selected={active}
                         onClick={() => onChange(opt.value)}
-                        className={`inline-flex items-center justify-center ${segFlex} ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${stateCls}`}
+                        className={`touch-expand inline-flex items-center justify-center ${segFlex} ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${stateCls}`}
                     >
                         {opt.label}
                     </button>

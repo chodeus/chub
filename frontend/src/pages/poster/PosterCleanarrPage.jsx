@@ -1143,7 +1143,7 @@ const PosterCleanarrPage = () => {
                     <select
                         value={mode}
                         onChange={e => setMode(e.target.value)}
-                        className="h-[34px] bg-surface-inset border border-border rounded-lg px-3 text-[13px] font-semibold text-fg outline-none focus:border-primary cursor-pointer"
+                        className="h-11 bg-surface-inset border border-border rounded-lg px-3 text-[13px] font-semibold text-fg outline-none focus:border-primary cursor-pointer"
                     >
                         {Object.entries(MODE_META).map(([k, m]) => (
                             <option key={k} value={k}>
@@ -1326,7 +1326,7 @@ const PosterCleanarrPage = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => selectNode(null)}
-                                                        className="mb-2 text-sm text-fg cursor-pointer inline-flex items-center gap-1 hover:underline"
+                                                        className="mb-2 min-h-11 text-sm text-fg cursor-pointer inline-flex items-center gap-1 hover:underline"
                                                     >
                                                         ← Back to list
                                                     </button>

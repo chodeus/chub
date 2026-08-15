@@ -9,6 +9,10 @@ import PropTypes from 'prop-types';
  *
  * Hover and focus-within alone left every field's helpText unreachable on a
  * touch screen, so the button also toggles it outright.
+ *
+ * The 15px glyph sits in a real 24px box; touch-expand takes the coarse-pointer
+ * hit area to 44px, which reaches ~6px into the control below (a mis-tap opens
+ * the tooltip rather than focusing the field — the honest trade for a 15px icon).
  */
 const InfoTooltip = ({ text, label = 'More info' }) => {
     const [open, setOpen] = useState(false);
@@ -23,7 +27,7 @@ const InfoTooltip = ({ text, label = 'More info' }) => {
                 aria-describedby={open ? tooltipId : undefined}
                 onClick={() => setOpen(o => !o)}
                 onBlur={() => setOpen(false)}
-                className="inline-flex items-center justify-center text-fg-faint hover:text-fg-muted focus-visible:text-fg-muted outline-none cursor-help"
+                className="touch-expand inline-flex items-center justify-center w-6 h-6 shrink-0 text-fg-faint hover:text-fg-muted focus-visible:text-fg-muted outline-none cursor-help"
             >
                 <span className="material-symbols-outlined text-[15px] leading-none">info</span>
             </button>
