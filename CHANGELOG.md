@@ -2,6 +2,26 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.46.1](https://github.com/chodeus/chub/compare/v2.46.0...v2.46.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* **security:** allowed-roots gap-fill; thumbnail and download confined ([#534](https://github.com/chodeus/chub/issues/534)) ([158787b](https://github.com/chodeus/chub/commit/158787b36d998b4668465d124814d48eaa036b64))
+* **security:** confine and anchor every cleanup delete ([#540](https://github.com/chodeus/chub/issues/540)) ([171227b](https://github.com/chodeus/chub/commit/171227b4d7c085fabee53b0fdcae3718caebfb78))
+* **ui:** 44px touch batch + vendor icon layer + dvh truth ([#526](https://github.com/chodeus/chub/issues/526)) ([c863872](https://github.com/chodeus/chub/commit/c86387269c69845fb28f0d6671ed2cf1574681e5))
+* **ui:** device touch pass — real geometry for the deferred controls ([#533](https://github.com/chodeus/chub/issues/533)) ([227f22f](https://github.com/chodeus/chub/commit/227f22f78596ae3484176a47ca7b53d8a09c9287))
+
+
+### Refactoring
+
+* **api:** media_api queries move behind named interface methods ([#523](https://github.com/chodeus/chub/issues/523)) ([1b6dc2d](https://github.com/chodeus/chub/commit/1b6dc2d25f1640b6c67c467d36cdb31fff539fa0))
+* **api:** posters router splits into a package by resource ([#541](https://github.com/chodeus/chub/issues/541)) ([8b647fd](https://github.com/chodeus/chub/commit/8b647fd049be8342b902d6862e7aaa36e8db3605))
+* **api:** posters.py queries move behind named interface methods ([#527](https://github.com/chodeus/chub/issues/527)) ([0a86f89](https://github.com/chodeus/chub/commit/0a86f89ecc3ba2bf7dbfadd5009bd8e8e3df492c))
+* **api:** posters.py stage 2 — non-route logic moves to util owners ([#536](https://github.com/chodeus/chub/issues/536)) ([de0e3eb](https://github.com/chodeus/chub/commit/de0e3eb655e010a6450f19bef7b0971c76973bf2))
+* **api:** system/jobs/modules/instances SQL moves behind interfaces ([#535](https://github.com/chodeus/chub/issues/535)) ([940e525](https://github.com/chodeus/chub/commit/940e525977160ef7feef0879b220f3946c1adb94))
+* **db:** media_cache splits into domain mixins ([#531](https://github.com/chodeus/chub/issues/531)) ([0f068df](https://github.com/chodeus/chub/commit/0f068df08e85e22d2ea88624f1840a40f204f9e6))
+
 ## [2.46.0](https://github.com/chodeus/chub/compare/v2.45.0...v2.46.0) (2026-08-13)
 
 
