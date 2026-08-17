@@ -602,3 +602,45 @@ def test_health_route_answers_503_when_there_is_no_database_handle(db):
     assert body["error_code"] == "DATABASE_UNAVAILABLE"
     assert body["data"]["checks"]["database"] == "unavailable"
     assert body["data"]["status"] == "degraded"  # payload isn't claiming health
+
+
+def test_record_snapshots_writes_a_pass_readably(db):
+    """One scheduler pass lands atomically and reads back through the same mixin."""
+    db.system_health.record_snapshots(
+        [
+            ("2026-01-05T10:00:00", "radarr", "radarr1", "healthy", 200, 42, None),
+            ("2026-01-05T10:00:00", "sonarr", "sonarr1", "timeout", None, 3000, None),
+        ]
+    )
+
+    rows = db.system_health.recent_snapshots()
+
+    assert len(rows) == 2
+    assert {r["status"] for r in rows} == {"healthy", "timeout"}
+
+
+def test_record_snapshots_with_no_rows_is_a_noop(db):
+    db.system_health.record_snapshots([])
+    assert db.system_health.recent_snapshots() == []
+
+
+def test_prune_snapshots_before_removes_only_older_rows(db):
+    _seed_snapshot(db, "radarr1", "2026-01-01T10:00:00")
+    _seed_snapshot(db, "radarr1", "2026-01-09T10:00:00")
+
+    removed = db.system_health.prune_snapshots_before("2026-01-05T00:00:00")
+
+    assert removed == 1
+    kept = db.system_health.recent_snapshots()
+    assert [r["snapshot_at"] for r in kept] == ["2026-01-09T10:00:00"]
+
+
+def test_record_snapshots_raises_when_the_write_fails(db):
+    """Fail loud: the scheduler's caller logs it — a swallow left dead
+    instances looking merely un-probed."""
+    db.worker.execute_query("DROP TABLE system_health_snapshots")
+
+    with pytest.raises(Exception, match="system_health_snapshots"):
+        db.system_health.record_snapshots(
+            [("2026-01-05T10:00:00", "radarr", "radarr1", "healthy", 200, 1, None)]
+        )
