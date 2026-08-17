@@ -53,7 +53,10 @@ jobs:
             exit 0
           fi
 
-          gh pr create \
+          # The two guards above race a concurrent develop sync: GitHub can decide
+          # there is nothing to open between the ancestry check and this create.
+          set +e
+          create_out="$(gh pr create \
             --base develop \
             --head main \
             --title "chore: sync develop with main" \
@@ -69,4 +72,16 @@ jobs:
           git checkout develop && git merge origin/main && git push
           \`\`\`
 
-          Then verify \`git diff main develop\` is added extension files plus \`deploy/docker/Dockerfile\` only. GitHub marks this PR merged on its own once develop contains main's tip. Opened by the sync-develop workflow."
+          Then verify \`git diff main develop\` is added extension files plus \`deploy/docker/Dockerfile\` only. GitHub marks this PR merged on its own once develop contains main's tip. Opened by the sync-develop workflow." 2>&1)"
+          create_rc=$?
+          set -e
+          printf '%s\n' "$create_out"
+          if [ "$create_rc" -ne 0 ]; then
+            case "$create_out" in
+              *"No commits between"*|*"already exists"*)
+                echo "develop was synced concurrently; nothing to open."
+                exit 0
+                ;;
+            esac
+            exit "$create_rc"
+          fi

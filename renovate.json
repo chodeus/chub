@@ -20,14 +20,28 @@
       "description": "ESLint v10 is not compatible with the current frontend lint setup. Keep ESLint packages on v9 until the config is migrated."
     },
     {
-      "matchDatasources": [
-        "docker"
-      ],
       "matchPackageNames": [
-        "python"
+        "ghcr.io/chodeus/chub"
       ],
-      "allowedVersions": "<3.14",
-      "description": "The ruamel.yaml.clib pin that first blocked 3.14 is gone and no runtime dependency declares a 3.14 incompatibility, but the image is only ever exercised on 3.13 (CI python-version, pyproject target-version). Move those to 3.14 first, then drop this rule."
+      "enabled": false,
+      "description": "CHUB's own image. A digest pin on our own :latest chases every merge to main forever (9 auto-merged bump PRs in 3 days) and each develop-side merge edits the shared compose.yaml, failing the Develop Invariant Guard. The compose example stays on bare :latest; do not pin or update it."
+    },
+    {
+      "matchBaseBranches": [
+        "develop"
+      ],
+      "enabled": false,
+      "description": "Shared files on develop change only via the main->develop sync merge; a renovate PR merged to develop edits them directly and fails the Develop Invariant Guard. Updates reach develop through main."
+    },
+    {
+      "matchBaseBranches": [
+        "develop"
+      ],
+      "matchFileNames": [
+        "requirements-cl2k.txt"
+      ],
+      "enabled": true,
+      "description": "The one dependency file that exists only on develop (CL2K extension), so renovate may update it there."
     }
   ]
 }
