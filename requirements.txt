@@ -4,7 +4,7 @@ annotated-types==0.8.0
 anyio==4.14.2
 bcrypt==5.0.0
 certifi==2026.7.22
-charset-normalizer==3.4.9
+charset-normalizer==3.5.1
 click==8.4.2
 croniter==6.2.4
 defusedxml==0.7.1
@@ -16,7 +16,7 @@ pillow==12.3.0
 PlexAPI==4.18.2
 pydantic==2.13.4
 python-dateutil==2.9.0.post0
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 # No import anywhere: FastAPI requires it to parse the UploadFile/File routes
 # in backend/api/posters.py and backend/api/system.py, or they raise on startup.
 python-multipart==0.0.32
@@ -27,9 +27,9 @@ requests==2.34.2
 six==1.17.0
 starlette==1.6.0
 tqdm==4.70.0
-typing-inspection==0.4.2
+typing-inspection==0.4.4
 typing_extensions==4.16.0
 Unidecode==1.4.0
 urllib3==2.7.0
-uvicorn==0.52.1
+uvicorn==0.52.3
 watchdog==6.0.0
