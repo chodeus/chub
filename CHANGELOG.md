@@ -2,6 +2,24 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.47.0](https://github.com/chodeus/chub/compare/v2.46.1...v2.47.0) (2026-08-18)
+
+
+### Features
+
+* one branch, two images — :latest lean, :full with extensions ([#577](https://github.com/chodeus/chub/issues/577)) ([03ba390](https://github.com/chodeus/chub/commit/03ba39085b299f94865a86db3d4a17d31ae72b14))
+
+
+### Bug Fixes
+
+* **cl2k:** as-is handlers respect unmount; effects abort their requests ([03ba390](https://github.com/chodeus/chub/commit/03ba39085b299f94865a86db3d4a17d31ae72b14))
+* **ui:** touch follow-ups — shared SegmentedControl, min-w pins, grid density ([#575](https://github.com/chodeus/chub/issues/575)) ([bf4bc1f](https://github.com/chodeus/chub/commit/bf4bc1f8b634e912d62915fc484f419f3d12834d))
+
+
+### Refactoring
+
+* **db:** scheduler health writes move behind SystemHealth ([#572](https://github.com/chodeus/chub/issues/572)) ([d1fb773](https://github.com/chodeus/chub/commit/d1fb7737116db61d9a43d068f414518773088a59))
+
 ## [2.46.1](https://github.com/chodeus/chub/compare/v2.46.0...v2.46.1) (2026-08-17)
 
 
