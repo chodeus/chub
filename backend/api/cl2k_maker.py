@@ -170,9 +170,21 @@ def _mask_bytes(b64: Optional[str]) -> Optional[bytes]:
     return _b64_to_bytes(b64, validate=True)
 
 
-def _b64_to_bytes(b64: Optional[str], validate: bool = False) -> Optional[bytes]:
-    """Decode a base64 image, tolerating a ``data:...;base64,`` URL prefix."""
-    return base64.b64decode(b64.split(",")[-1], validate=validate) if b64 else None
+def _b64_to_bytes(
+    b64: Optional[str], validate: bool = False, raster_only: bool = True
+) -> Optional[bytes]:
+    """Decode a base64 image, tolerating a ``data:...;base64,`` URL prefix.
+
+    ``raster_only`` (the default) refuses markup-leading bytes: masks and
+    backdrops must be raster, and SVG smuggled into them would otherwise reach
+    ImageMagick's XML delegates. Only the logo field may carry SVG — the
+    renderer routes that through sandboxed cairosvg."""
+    if not b64:
+        return None
+    data = base64.b64decode(b64.split(",")[-1], validate=validate)
+    if raster_only and data[:1024].lstrip(b"\xef\xbb\xbf \t\r\n\f\v").startswith(b"<"):
+        raise ValueError("markup is not a valid raster image for this field")
+    return data
 
 
 def _ai_config_or_error(logger: Any, what: str):
@@ -277,7 +289,7 @@ def _resolve_logo_bytes(
     host-allowlisted image downloader (so a crafted path can't trigger an
     SSRF). Download failures raise :class:`LogoFetchError`."""
     if logo_b64:
-        return _b64_to_bytes(logo_b64)
+        return _b64_to_bytes(logo_b64, raster_only=False)
     if logo_path:
         try:
             return download_image(logo_path)
@@ -639,7 +651,7 @@ def preview(
             backdrop_path=req.backdrop_path,
             backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
             logo_path=req.logo_path,
-            custom_logo_bytes=_b64_to_bytes(req.logo_b64),
+            custom_logo_bytes=_b64_to_bytes(req.logo_b64, raster_only=False),
             tvdb_id=req.tvdb_id,
             imdb_id=req.imdb_id,
             mask_bytes=mask_bytes,

@@ -375,6 +375,7 @@ class SyncGDrive(ChubModule):
             )
 
         # Use service account if configured, otherwise use OAuth token
+        auth_env: dict = {}
         sa_path = getattr(self.config, "gdrive_sa_location", None)
         if sa_path:
             if not self._reject_unsafe_arg(sa_path, "gdrive_sa_location", self.logger):
@@ -382,26 +383,23 @@ class SyncGDrive(ChubModule):
                 return False, counters
             cmd.extend(["--drive-service-account-file", sa_path])
         else:
-            cmd.extend(
-                [
-                    "--drive-client-id",
-                    self.config.client_id or "",
-                    "--drive-client-secret",
-                    self.config.client_secret or "",
-                    "--drive-token",
-                    (
-                        self.config.token
-                        if isinstance(self.config.token, str)
-                        else json.dumps(
-                            self.config.token.model_dump()
-                            if hasattr(self.config.token, "model_dump")
-                            else dict(self.config.token)
-                        )
+            # Env, not argv: /proc/<pid>/cmdline is world-readable in-container,
+            # and the debug command log below would otherwise print the token.
+            auth_env = {
+                "RCLONE_DRIVE_CLIENT_ID": self.config.client_id or "",
+                "RCLONE_DRIVE_CLIENT_SECRET": self.config.client_secret or "",
+                "RCLONE_DRIVE_TOKEN": (
+                    self.config.token
+                    if isinstance(self.config.token, str)
+                    else json.dumps(
+                        self.config.token.model_dump()
+                        if hasattr(self.config.token, "model_dump")
+                        else dict(self.config.token)
                     )
-                    if self.config.token
-                    else "",
-                ]
-            )
+                )
+                if self.config.token
+                else "",
+            }
 
         cmd.extend(["posters:", sync_location])
 
@@ -414,7 +412,11 @@ class SyncGDrive(ChubModule):
                 return False, counters
 
             process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env={**os.environ, **auth_env},
             )
             for line in process.stdout:
                 if self.is_cancelled():
