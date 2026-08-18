@@ -8,6 +8,17 @@ circular imports.
 """
 
 
+def available():
+    """True only when the renderer's deps import — find_spec can't tell a
+    pip-present wand from one whose libMagickWand is missing."""
+    try:
+        import psd_tools  # noqa: F401
+        import wand.image  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def routers():
     from backend.api.cl2k_maker import router
 

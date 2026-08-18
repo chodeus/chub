@@ -22,10 +22,37 @@
 // With no extension folders present (main) every aggregate below is empty
 // and the consumers render exactly as if this module did not exist.
 
+import { makeUnavailableNotice } from './UnavailableNotice.jsx';
+
 const manifestModules = import.meta.glob('./*/manifest.jsx', { eager: true });
-const MANIFESTS = Object.values(manifestModules)
-    .map(mod => mod.default)
-    .filter(Boolean);
+// './cl2k/manifest.jsx' -> 'cl2k'; the folder name IS the extension name the
+// backend reports, so no per-manifest registration is needed.
+const ALL = Object.entries(manifestModules)
+    .map(([path, mod]) => ({ name: path.split('/')[1], manifest: mod.default }))
+    .filter(entry => Boolean(entry.manifest));
+
+async function fetchEnabledExtensions() {
+    const res = await fetch('/api/version', { credentials: 'same-origin' });
+    if (!res.ok) return new Set();
+    const body = await res.json();
+    const names = body?.data?.extensions;
+    return new Set(Array.isArray(names) ? names : []);
+}
+
+// Resolved once at module load (top-level await), before any consumer reads the
+// registry — several consume it at import time, so reactivity can't gate them.
+// Any failure or a 3s stall reads as "no extensions": fail lean, never broken.
+const ENABLED =
+    ALL.length === 0
+        ? new Set()
+        : await Promise.race([
+              fetchEnabledExtensions().catch(() => new Set()),
+              new Promise(resolve => setTimeout(() => resolve(new Set()), 3000)),
+          ]);
+
+const MANIFESTS = ALL.filter(entry => ENABLED.has(entry.name)).map(
+    entry => entry.manifest
+);
 
 /**
  * Splice anchored additions into a copy of `list`.
@@ -50,7 +77,15 @@ export function spliceByAnchor(list, additions, keyOf) {
 }
 
 export function extensionRoutes() {
-    return MANIFESTS.flatMap(m => m.routes ?? []);
+    // Unavailable extensions keep their routes mounted so a deep link explains
+    // itself (":full image required") instead of falling into the 404 page.
+    return ALL.flatMap(({ name, manifest }) =>
+        (manifest.routes ?? []).map(route =>
+            ENABLED.has(name)
+                ? route
+                : { ...route, Component: makeUnavailableNotice(route.pageName) }
+        )
+    );
 }
 
 /** NAV_SECTIONS with every extension's navChildren spliced in. */

@@ -1,5 +1,7 @@
 services:
   chub:
+    # :latest is the minimal image; use :full for the CL2K poster maker +
+    # poster self-heal (see README "Image tags").
     image: ghcr.io/chodeus/chub:latest
     container_name: chub
     restart: unless-stopped

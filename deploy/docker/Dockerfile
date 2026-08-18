@@ -54,13 +54,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# ---- CL2K maker (develop-only extension) ----
-# Extra Python deps for the maker: psd-tools (.psd export) and Wand
-# (ImageMagick bindings for rendering). Separate file + layer so
-# requirements.txt stays identical to main.
-COPY requirements-cl2k.txt .
-RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
-
 # Install rclone: fetch the current release and verify it against the official
 # SHA256SUMS, instead of piping an unpinned install script into a root shell.
 # Always-latest (like the old install.sh) but with integrity + no remote code.
@@ -85,21 +78,24 @@ RUN pip3 install --no-cache-dir cairosvg && \
     python3 scripts/rasterize_borders.py && \
     pip3 uninstall -y cairosvg
 
-# ---- CL2K maker (develop-only extension) ----
-# The rasterize step above uninstalls its build-only cairosvg, which also strips
-# the copy requirements-cl2k pinned for SVG logo rendering. Re-run that file
-# rather than re-pinning here, so the version lives in exactly one place; every
-# other pin in it is already satisfied, so pip only restores cairosvg.
-RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
-
 # Frontend assets come from the native-platform `frontend` stage above — dist is
 # just JS/CSS, so emulating the bundler for arm64 bought nothing and hung it.
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 
 # -------------------------
-# Stage 2: Final runtime image
+# Stage 1b: builder + the :full image's Python deps
 # -------------------------
-FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
+# psd-tools (.psd export), Wand (ImageMagick bindings) and the cairosvg pin
+# for SVG logo rendering — requirements-cl2k.txt is the one place they're
+# pinned. Only the `full` runtime copies this stage's site-packages.
+FROM builder AS builder-full
+COPY requirements-cl2k.txt .
+RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
+
+# -------------------------
+# Stage 2: shared runtime base — everything except site-packages
+# -------------------------
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS runtime-base
 
 WORKDIR /app
 
@@ -109,40 +105,6 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl git tzdata jdupes && \
     rm -rf /var/lib/apt/lists/*
-
-# ---- CL2K maker (develop-only extension) ----
-# imagemagick (Wand's libMagickWand), librsvg2-2 (so IM can read SVG clear
-# logos), fonts-dejavu-core (guaranteed fallback font), and cabextract to
-# unpack the vendored Arial below. Kept as a separate appended layer so the
-# shared apt line above stays identical to main. No `contrib` component or
-# ttf-mscorefonts-installer here: that package downloads MS fonts from
-# SourceForge at build time, and a flaky mirror failed the whole image build.
-RUN set -eux; \
-    apt-get update; \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        imagemagick librsvg2-2 fonts-dejavu-core \
-        fontconfig cabextract; \
-    rm -rf /var/lib/apt/lists/*
-
-# Real Microsoft Arial (regular + bold) for CL2K text rendering, extracted at
-# build from the vendored, unmodified arial32.exe (deploy/docker/fonts/) — so
-# the build never touches the network for fonts. Renamed to the msttcorefonts
-# paths geometry.resolve_font() probes (Arial.ttf / Arial_Bold.ttf).
-# Redistributing the original .exe is permitted by its EULA (shipped alongside
-# as LICENSE-mscorefonts.txt); the extracted .ttf stays inside the image and is
-# never committed to the repo.
-COPY deploy/docker/fonts/arial32.exe /tmp/arial32.exe
-RUN set -eux; \
-    mkdir -p /usr/share/fonts/truetype/msttcorefonts /tmp/arialout; \
-    cabextract -L -d /tmp/arialout /tmp/arial32.exe; \
-    cp /tmp/arialout/arial.ttf   /usr/share/fonts/truetype/msttcorefonts/Arial.ttf; \
-    cp /tmp/arialout/arialbd.ttf /usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf; \
-    fc-cache -f; \
-    rm -rf /tmp/arial32.exe /tmp/arialout
-
-# Copy only Python runtime and site-packages from builder
-COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy rclone binary (installed to /usr/bin by rclone install script)
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
@@ -204,3 +166,56 @@ ENV DOCKER_ENV=true
 ENV PYTHONUNBUFFERED=1
 
 ENTRYPOINT ["bash", "scripts/start.sh"]
+
+# -------------------------
+# Stage 3: :full — the lean runtime plus the CL2K toolchain
+# -------------------------
+FROM runtime-base AS full
+
+# imagemagick (Wand's libMagickWand), librsvg2-2 (so IM can read SVG clear
+# logos), fonts-dejavu-core (guaranteed fallback font), and cabextract to
+# unpack the vendored Arial below. No `contrib` component or
+# ttf-mscorefonts-installer: that package downloads MS fonts from SourceForge
+# at build time, and a flaky mirror failed the whole image build.
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        imagemagick librsvg2-2 fonts-dejavu-core \
+        fontconfig cabextract; \
+    rm -rf /var/lib/apt/lists/*
+
+# Real Microsoft Arial (regular + bold) for CL2K text rendering, extracted at
+# build from the vendored, unmodified arial32.exe (deploy/docker/fonts/) — so
+# the build never touches the network for fonts. Renamed to the msttcorefonts
+# paths geometry.resolve_font() probes (Arial.ttf / Arial_Bold.ttf).
+# Redistributing the original .exe is permitted by its EULA (shipped alongside
+# as LICENSE-mscorefonts.txt); the extracted .ttf stays inside the image and is
+# never committed to the repo.
+COPY deploy/docker/fonts/arial32.exe /tmp/arial32.exe
+RUN set -eux; \
+    mkdir -p /usr/share/fonts/truetype/msttcorefonts /tmp/arialout; \
+    cabextract -L -d /tmp/arialout /tmp/arial32.exe; \
+    cp /tmp/arialout/arial.ttf   /usr/share/fonts/truetype/msttcorefonts/Arial.ttf; \
+    cp /tmp/arialout/arialbd.ttf /usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf; \
+    fc-cache -f; \
+    rm -rf /tmp/arial32.exe /tmp/arialout
+
+# Python deps from the full builder — the only place cl2k wheels exist.
+COPY --from=builder-full /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder-full /usr/local/bin /usr/local/bin
+
+# Turns every extension's functional hooks on (backend/extensions/__init__.py).
+ENV CHUB_IMAGE_FLAVOR=full
+
+# -------------------------
+# Stage 4: :latest — lean runtime. LAST so a bare `docker build` builds it.
+# -------------------------
+FROM runtime-base AS runtime
+
+# Python deps from the lean builder: no cl2k wheels anywhere in this image.
+COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Extensions' functional hooks off; config/tables stay registered so a config
+# written under :full keeps loading and round-tripping here.
+ENV CHUB_IMAGE_FLAVOR=lean
