@@ -675,9 +675,9 @@ const PosterAssetsSearchPage = () => {
                             onPageChange={page => setOffset((page - 1) * PAGE_SIZE)}
                         />
                     </div>
-                    {/* 2-up on phones: at 3-up a tile is ~111px, narrower than the
-                        per-poster action bar it has to host. */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3">
+                    {/* Column counts keep every tile wider than the 3-action
+                        44px bar it hosts (~150px) — same rule as 2-up phones. */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-3">
                         {items.map(item => {
                             const suffixParts = [
                                 item.year,
