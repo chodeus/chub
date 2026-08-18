@@ -33,28 +33,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
 
       - name: Open develop-sync PR if needed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          git fetch --quiet origin main develop
-
-          if [ "$(gh pr list --base develop --head main --state open --json number --jq 'length')" -gt 0 ]; then
-            echo "A main -> develop sync PR is already open; it tracks main automatically."
-            exit 0
-          fi
-
-          if git merge-base --is-ancestor origin/main origin/develop; then
-            echo "develop already contains main; nothing to sync."
-            exit 0
-          fi
-
-          # The two guards above race a concurrent develop sync: GitHub can decide
-          # there is nothing to open between the ancestry check and this create.
+          # No pre-checks: the create itself answers "already exists" and
+          # "No commits between", and both mean the work is already done.
           set +e
           create_out="$(gh pr create \
             --base develop \
