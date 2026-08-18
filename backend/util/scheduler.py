@@ -675,14 +675,19 @@ class ChubScheduler:
 
         import requests
 
+        from backend.util.config import load_config
         from backend.util.database import ChubDB
         from backend.util.ssrf_guard import is_safe_url
+
+        # Live config, not the __init__ capture — mirrors _tick; a reload
+        # otherwise keeps probing removed instances and misses new ones.
+        config = load_config()
 
         now_iso = datetime.now().isoformat()
         rows = []
         probes = []  # (service, name, test_url, headers) for reachable targets
         for service in ("plex", "radarr", "sonarr", "lidarr"):
-            instances = getattr(self.config.instances, service, {})
+            instances = getattr(config.instances, service, {})
             for name, details in instances.items():
                 url = details.url.rstrip("/") if details.url else ""
                 api = details.api or ""
@@ -734,17 +739,10 @@ class ChubScheduler:
 
         if not rows:
             return
+        # Failures propagate to _run's handler, which logs them — a silent
+        # drop here left dead instances looking merely un-probed.
         with ChubDB(logger=self.logger, quiet=True) as db:
-            for row in rows:
-                try:
-                    db.worker.execute_query(
-                        "INSERT INTO system_health_snapshots "
-                        "(snapshot_at, service, instance_name, status, status_code, response_time_ms, error) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        row,
-                    )
-                except Exception:
-                    pass
+            db.system_health.record_snapshots(rows)
 
     def _prune_old_health_snapshots(self) -> None:
         from datetime import timedelta
@@ -754,11 +752,5 @@ class ChubScheduler:
         cutoff = (
             datetime.now() - timedelta(days=SCHEDULER_HEALTH_RETENTION_DAYS)
         ).isoformat()
-        try:
-            with ChubDB(logger=self.logger, quiet=True) as db:
-                db.worker.execute_query(
-                    "DELETE FROM system_health_snapshots WHERE snapshot_at < ?",
-                    (cutoff,),
-                )
-        except Exception:
-            pass
+        with ChubDB(logger=self.logger, quiet=True) as db:
+            db.system_health.prune_snapshots_before(cutoff)

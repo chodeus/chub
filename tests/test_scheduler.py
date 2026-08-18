@@ -447,3 +447,53 @@ def test_tick_media_sync_skips_when_not_due(monkeypatch):
     enq = []
     _media_sync_scheduler(enq)._tick_media_sync("daily(03:00)")
     assert enq == []
+
+
+def test_health_snapshot_reads_live_config_not_the_init_capture(
+    tmp_path, monkeypatch
+):
+    """A reload must reach the next probe pass — swap load_config, not mutate."""
+    from backend.util.database import ChubDB
+
+    stale = SimpleNamespace(
+        instances=SimpleNamespace(
+            plex={},
+            radarr={"gone": SimpleNamespace(url="http://radarr:7878", api="k")},
+            sonarr={},
+            lidarr={},
+        )
+    )
+    live = SimpleNamespace(
+        instances=SimpleNamespace(plex={}, radarr={}, sonarr={}, lidarr={})
+    )
+    monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: live)
+    monkeypatch.setattr(
+        "backend.util.scheduler.SCHEDULER_HEALTH_RETENTION_DAYS", 30, raising=False
+    )
+
+    calls = []
+    monkeypatch.setattr(
+        "requests.get", lambda *a, **k: calls.append(a) or SimpleNamespace(ok=True, status_code=200)
+    )
+
+    class _Log:
+        def __getattr__(self, _):
+            return lambda *a, **k: None
+
+        def get_adapter(self, *_a, **_kw):
+            return self
+
+    s = ChubScheduler(stale, logger=_Log(), module_orchestrator=SimpleNamespace())
+    db_path = str(tmp_path / "chub.db")
+    real_init = ChubDB.__init__
+    monkeypatch.setattr(
+        ChubDB,
+        "__init__",
+        lambda self, logger, quiet=False: real_init(self, _Log(), db_path=db_path),
+    )
+
+    s._write_health_snapshot()
+
+    assert calls == []  # the removed instance was not probed
+    with ChubDB(_Log()) as db:
+        assert db.system_health.recent_snapshots() == []  # and nothing was recorded
