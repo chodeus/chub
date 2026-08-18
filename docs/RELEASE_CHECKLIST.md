@@ -58,7 +58,7 @@ Working directory: current CHUB clone (what is currently `chodeus/daps` experime
 ## First CI run
 
 - [ ] Trigger the release workflow manually (Actions → Release → Run workflow) OR push a tag to trigger it
-- [ ] Confirm **`ghcr.io/chodeus/chub:latest`** builds and publishes successfully
+- [ ] Confirm **`ghcr.io/chodeus/chub:latest`** and **`:full`** (plus `vX.Y.Z` / `vX.Y.Z-full`) build and publish successfully
 - [ ] Pull the image locally and run it to confirm end-to-end: `docker run --rm -p 8000:8000 ghcr.io/chodeus/chub:latest`
 
 ## Assets & presentation

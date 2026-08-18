@@ -3,10 +3,6 @@
   "extends": [
     "github>chodeus/chodeus-ops"
   ],
-  "baseBranches": [
-    "main",
-    "develop"
-  ],
   "packageRules": [
     {
       "matchManagers": [
@@ -25,23 +21,6 @@
       ],
       "enabled": false,
       "description": "CHUB's own image. A digest pin on our own :latest chases every merge to main forever (9 auto-merged bump PRs in 3 days) and each develop-side merge edits the shared compose.yaml, failing the Develop Invariant Guard. The compose example stays on bare :latest; do not pin or update it."
-    },
-    {
-      "matchBaseBranches": [
-        "develop"
-      ],
-      "enabled": false,
-      "description": "Shared files on develop change only via the main->develop sync merge; a renovate PR merged to develop edits them directly and fails the Develop Invariant Guard. Updates reach develop through main."
-    },
-    {
-      "matchBaseBranches": [
-        "develop"
-      ],
-      "matchFileNames": [
-        "requirements-cl2k.txt"
-      ],
-      "enabled": true,
-      "description": "The one dependency file that exists only on develop (CL2K extension), so renovate may update it there."
     }
   ]
 }

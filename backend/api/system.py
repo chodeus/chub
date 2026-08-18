@@ -76,7 +76,10 @@ class FolderCreationRequest(BaseModel):
                     "example": {
                         "success": True,
                         "message": "Version retrieved",
-                        "data": {"version": "3.0.0-alpha"},
+                        "data": {
+                            "version": "3.0.0-alpha",
+                            "extensions": ["cl2k"],
+                        },
                     }
                 }
             },
@@ -91,9 +94,14 @@ async def get_version_endpoint(logger: Any = Depends(get_logger)) -> JSONRespons
     in the UI and for API client compatibility checks.
     """
     try:
+        from backend.extensions import enabled_extensions
+
         version = get_version()
         logger.debug(f"Serving GET /api/version: {version}")
-        return ok("Version retrieved", {"version": version})
+        return ok(
+            "Version retrieved",
+            {"version": version, "extensions": enabled_extensions()},
+        )
     except Exception as e:
         logger.error(f"Error getting version: {e}")
         return error(

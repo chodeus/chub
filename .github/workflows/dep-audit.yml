@@ -14,6 +14,7 @@ on:
     # images, so triggering on it would imply base-image coverage it lacks.
     paths:
       - "requirements.txt"
+      - "requirements-cl2k.txt"
       - "frontend/package-lock.json"
       - ".github/workflows/dep-audit.yml"
 
@@ -28,12 +29,13 @@ jobs:
       contents: read
       security-events: write
     with:
-      # Only what ships: backend pins + frontend lockfile. refs/ holds vendored
-      # reference repos and must not be scanned; requirements-cl2k.txt is
-      # develop-only and absent on main, so it cannot be listed here.
+      # Only what ships: backend pins (both images) + frontend lockfile. refs/
+      # holds vendored reference repos and must not be scanned.
       scan-args: |-
         -L
         requirements.txt
+        -L
+        requirements-cl2k.txt
         -L
         frontend/package-lock.json
       fail-on-vuln: true

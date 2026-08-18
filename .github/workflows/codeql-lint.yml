@@ -222,87 +222,6 @@ jobs:
         run: npm run check:classes
 
   # ---- Branch isolation guard ----
-  # Develop-only extensions (e.g. the CL2K poster maker) must never reach main.
-  # On main (and PRs targeting main) fail if any extension code is present:
-  # the extensions/ folders may hold only the generic loaders, and no file
-  # named after a develop-only extension may exist anywhere in the tree.
-  branch-isolation-guard:
-    name: Branch Isolation Guard
-    # Always runs (no job-level if) so it stays a satisfiable needs: dependency for
-    # the docker jobs on every ref; the step below no-ops on non-main-bound refs.
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Fail if develop-only extension code is present
-        run: |
-          set -eu
-          # Only main-bound refs must be extension-free; pass on any other ref.
-          if [ "${GITHUB_REF}" != "refs/heads/main" ] && [ "${GITHUB_BASE_REF:-}" != "main" ]; then
-            echo "Not a main-bound ref — branch-isolation check not applicable."
-            exit 0
-          fi
-          # :(icase) — git globs are case-sensitive (else Cl2kMakerPage.jsx slips
-          # through); cover both extensions dirs, poster_self_heal, and the fonts.
-          leaks=$(git ls-files -- \
-            ':(icase)*cl2k*' \
-            ':(icase)*poster_self_heal*' ':(icase)*posterselfheal*' ':(icase)*posterheal*' \
-            'backend/extensions/*' ':!backend/extensions/__init__.py' \
-            'frontend/src/extensions/*' ':!frontend/src/extensions/index.js' \
-            'deploy/docker/fonts/*')
-          if [ -n "$leaks" ]; then
-            echo "::error::Develop-only extension files found on a main-bound ref:"
-            echo "$leaks"
-            exit 1
-          fi
-          echo "OK: no develop-only extension code present."
-
-  # ---- Develop invariant guard ----
-  # Mirror of branch-isolation-guard for the develop half: develop may differ from
-  # main ONLY by added files plus an append-only deploy/docker/Dockerfile.
-  develop-invariant-guard:
-    name: Develop Invariant Guard
-    # Always runs (no job-level if) so it stays a satisfiable needs on every ref;
-    # the step no-ops on non-develop-bound refs.
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-
-      - name: Assert develop only adds files (shared files byte-identical to main)
-        run: |
-          set -eu
-          # Only develop-bound refs carry the extension delta; pass on any other ref.
-          if [ "${GITHUB_REF}" != "refs/heads/develop" ] && [ "${GITHUB_BASE_REF:-}" != "develop" ]; then
-            echo "Not a develop-bound ref — develop-invariant check not applicable."
-            exit 0
-          fi
-          git fetch --quiet origin main
-          # Merge-base diff (origin/main...HEAD): main being ahead of an unsynced
-          # develop must not false-positive; only develop's own delta is inspected.
-          bad=$(git diff origin/main...HEAD --name-status \
-            | grep -Ev '^A[[:space:]]' \
-            | grep -Ev '^M[[:space:]]+deploy/docker/Dockerfile$' || true)
-          if [ -n "$bad" ]; then
-            echo "::error::develop diverges from main beyond added files + an insertion-only Dockerfile:"
-            echo "$bad"
-            exit 1
-          fi
-          # Pure-insertion hunks: no main line removed or edited. CL2K blocks are
-          # inserted MID-FILE (per build stage), so a byte-prefix check would false-fail.
-          if git diff origin/main...HEAD -- deploy/docker/Dockerfile | grep -q '^-[^-]'; then
-            echo "::error::deploy/docker/Dockerfile removes or edits lines present on main; develop may only insert CL2K blocks."
-            exit 1
-          fi
-          echo "OK: develop differs from main only by added files + an insertion-only Dockerfile."
-
   # ---- Docker Build (gated by all quality checks) ----
   docker-validate:
     name: Docker Validate (PR)
@@ -311,7 +230,7 @@ jobs:
     # needs-failure SKIPS this job — which GitHub reports as Success for a
     # required check, turning a hard gate into a free pass. Promote
     # "Frontend Tests" in branch protection to make it block instead.
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard, develop-invariant-guard]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint]
     runs-on: ubuntu-latest
 
     steps:
@@ -333,11 +252,12 @@ jobs:
       - name: Set build number
         run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
 
-      - name: Build Docker image (validation only)
+      - name: Build lean image (validation only)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./deploy/docker/Dockerfile
+          target: runtime
           platforms: linux/amd64
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
@@ -345,10 +265,23 @@ jobs:
           push: false
           tags: chub:ci-${{ github.sha }}
 
+      - name: Build full image (validation only)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/amd64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          push: false
+          tags: chub:ci-full-${{ github.sha }}
+
   docker-push:
     name: Docker Build & Push
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard, develop-invariant-guard]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 45  # see release-please.yml docker-version
     permissions:
@@ -417,11 +350,27 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
+      # :full metadata mirrors the lean tags with a -full suffix; :develop is a
+      # deprecated alias of :full for existing pulls, dropped after a transition.
+      - name: Extract Docker metadata (full)
+        id: meta_full
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/chub
+          tags: |
+            type=semver,pattern={{version}},suffix=-full
+            type=semver,pattern={{major}}.{{minor}},suffix=-full
+            type=semver,pattern={{major}},suffix=-full
+            type=sha,prefix=sha-,suffix=-full,format=short,enable={{is_default_branch}}
+            type=raw,value=full,enable={{is_default_branch}}
+            type=raw,value=develop,enable={{is_default_branch}}
+
+      - name: Build and push lean image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./deploy/docker/Dockerfile
+          target: runtime
           platforms: linux/amd64,linux/arm64
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
@@ -430,8 +379,25 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      # Branch pushes publish lean only (meta_full has no branch tag) — skip the
+      # second build there instead of pushing a tagless manifest.
+      - name: Build and push full image
+        if: steps.meta_full.outputs.tags != ''
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          push: true
+          tags: ${{ steps.meta_full.outputs.tags }}
+          labels: ${{ steps.meta_full.outputs.labels }}
+
   notify-failure:
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, branch-isolation-guard, develop-invariant-guard, docker-push]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@579feb04e3219248963bd27843298a8c2ea6b2fd # main
     with:
