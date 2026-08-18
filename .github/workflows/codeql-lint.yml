@@ -350,7 +350,9 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # :full metadata mirrors the lean tags with a -full suffix.
+      # Full tags are release-shaped only: semver with a -full suffix, plus the
+      # default branch's rolling :full and sha-*-full. No branch tags — branch
+      # pushes build lean only (the empty tag list skips the build below).
       - name: Extract Docker metadata (full)
         id: meta_full
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
