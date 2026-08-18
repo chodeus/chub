@@ -266,3 +266,21 @@ def test_filter_escapes_the_metacharacters_in_real_filenames(monkeypatch):
     got = gd._filter_literal("Cassadaga (2011) {tmdb-92398} - logo.png")
     assert got == r"/Cassadaga (2011) \{tmdb-92398\} - logo.png"
     assert gd._filter_literal("a[b]*c?d") == r"/a\[b\]\*c\?d"
+
+
+def test_timeout_becomes_runtime_error(monkeypatch):
+    """A hung rclone must raise, never wedge the caller — and the ceiling must
+    actually reach subprocess.run, or the hang would be real."""
+
+    def hang(cmd, **kw):
+        assert kw.get("timeout") == gd._RCLONE_TIMEOUT
+        raise gd.subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+
+    monkeypatch.setattr(gd, "_rclone_path", lambda: "/usr/bin/rclone")
+    monkeypatch.setattr(gd, "_ensure_remote", lambda _r: None)
+    monkeypatch.setattr(
+        gd, "_upload_auth_env", lambda _c: {"RCLONE_DRIVE_TOKEN": "x"}
+    )
+    monkeypatch.setattr(gd.subprocess, "run", hang)
+    with pytest.raises(RuntimeError, match="timed out"):
+        gd.upload_file("poster.png", "folder-A", object(), _logger())
