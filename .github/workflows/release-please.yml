@@ -49,11 +49,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push (lean)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./deploy/docker/Dockerfile
+          # Explicit: the bare default is only lean while `runtime` stays the
+          # final stage in the Dockerfile.
+          target: runtime
           platforms: linux/amd64,linux/arm64
           build-args: |
             BRANCH=main
@@ -62,3 +65,18 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.tag_name }}
             ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/chub:latest
+
+      - name: Build and push (full)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BRANCH=main
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.tag_name }}-full
+            ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.version }}-full
+            ghcr.io/${{ github.repository_owner }}/chub:full
