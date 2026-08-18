@@ -1262,7 +1262,7 @@ const PosterCleanarrPage = () => {
                                                 key={v}
                                                 type="button"
                                                 onClick={() => setTab(v)}
-                                                className={`touch-expand flex-1 px-2 py-[7px] text-xs rounded-[7px] cursor-pointer border transition-colors ${
+                                                className={`touch-expand flex-1 min-w-11 px-2 py-[7px] text-xs rounded-[7px] cursor-pointer border transition-colors ${
                                                     tab === v
                                                         ? 'bg-primary text-on-color border-transparent font-semibold'
                                                         : 'bg-transparent text-fg-muted border-transparent hover:bg-row-hover'
