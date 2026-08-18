@@ -566,11 +566,12 @@ _SVG_SCAN = 1024
 
 
 def _is_svg(logo_bytes: bytes) -> bool:
-    """True when the bytes are an SVG document, whatever precedes the root tag."""
+    """True when the bytes lead with markup — treated as SVG, never as raster."""
     head = logo_bytes[:_SVG_SCAN].lstrip(_SVG_LEAD).lower()
-    # Requiring markup first is what keeps a raster whose metadata mentions "<svg"
-    # out: no image format's magic bytes begin with "<".
-    return head.startswith(b"<") and b"<svg" in head
+    # No raster format's magic begins with "<". Anything markup-first MUST take
+    # the sandboxed cairosvg path: a long prologue can push <svg> past this
+    # scan, and ImageMagick's own XML delegates must never see the bytes.
+    return head.startswith(b"<")
 
 
 def _read_logo_image(logo_bytes: bytes) -> Image:

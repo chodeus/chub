@@ -1,4 +1,4 @@
-// CL2K poster maker — self-registration manifest (develop-only extension).
+// CL2K poster maker — self-registration manifest (':full'-image extension).
 // Discovered by src/extensions/index.js; see that file for the contract.
 import React from 'react';
 import { FieldRegistry } from '../../components/fields/FieldRegistry.jsx';

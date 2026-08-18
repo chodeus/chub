@@ -4,7 +4,7 @@
 Grafted onto ChubConfig by backend/extensions/poster_self_heal/manifest.py
 (config_fields), so ``load_config().poster_self_heal`` is typed like the core
 module sections. Lives here (not backend/util/config.py) because poster_self_heal
-is a develop-only extension.
+is part of the :full image.
 
 Deliberately has NO source/drive fields: the healer operates on the CL2K maker's
 output, reading ``cl2k_maker.local_folders`` + ``cl2k_maker.gdrive_uploads`` (and

@@ -58,7 +58,7 @@ def test_list_files_strict_raises_when_rclone_fails(monkeypatch):
 
 
 def test_list_files_strict_raises_without_a_token(monkeypatch):
-    monkeypatch.setattr(gdrive_upload, "_upload_auth_args", lambda cfg: [])
+    monkeypatch.setattr(gdrive_upload, "_upload_auth_env", lambda cfg: {})
     with pytest.raises(RuntimeError, match="token"):
         gdrive_upload.list_files("FOLDER", _Sync(), _Log(), strict=True)
 

@@ -75,10 +75,11 @@ const CoveragePanel = () => {
     const [failed, setFailed] = useState(false);
 
     useEffect(() => {
+        const ctrl = new AbortController();
         let active = true;
         (async () => {
             try {
-                const res = await posterSelfHealAPI.coverage();
+                const res = await posterSelfHealAPI.coverage({ signal: ctrl.signal });
                 if (active) setCov(res?.data || null);
             } catch {
                 if (active) setFailed(true); // non-fatal: the review list still works
@@ -86,6 +87,7 @@ const CoveragePanel = () => {
         })();
         return () => {
             active = false;
+            ctrl.abort();
         };
     }, []);
 
@@ -233,10 +235,11 @@ export const PosterHealReviewPage = () => {
     const [busyId, setBusyId] = useState(null);
 
     useEffect(() => {
+        const ctrl = new AbortController();
         let active = true;
         (async () => {
             try {
-                const res = await posterSelfHealAPI.listReviews();
+                const res = await posterSelfHealAPI.listReviews({ signal: ctrl.signal });
                 if (active) setReviews(res?.data?.reviews || []);
             } catch (err) {
                 if (active)
@@ -247,6 +250,7 @@ export const PosterHealReviewPage = () => {
         })();
         return () => {
             active = false;
+            ctrl.abort();
         };
     }, [toast]);
 

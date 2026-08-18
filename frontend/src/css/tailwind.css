@@ -83,7 +83,7 @@
     --color-default: var(--border); /* legacy alias (.border-default) */
     --color-input-error: var(--error); /* legacy alias (.border-input-error) */
 
-    /* legacy aliases for develop-only/missed classes the migration dropped:
+    /* legacy aliases for ':full'-image/missed classes the migration dropped:
        .bg-error-bg, .bg-warning-bg, .border-error-border,
        .text-sidebar-secondary, .bg-primary-hover (mirrors old colors.css) */
     --color-error-bg: color-mix(in srgb, var(--error) 10%, transparent);

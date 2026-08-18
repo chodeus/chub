@@ -1,4 +1,4 @@
-"""Tests for the develop-only Plex artwork source (backend/util/cl2k/plex_art.py)
+"""Tests for the ':full'-image Plex artwork source (backend/util/cl2k/plex_art.py)
 and the Plex host SSRF allowlist (backend/util/cl2k/image_fetch.py).
 
 No live Plex: plexapi's PlexServer is monkeypatched with a fake that mirrors the
@@ -119,6 +119,20 @@ def test_resolve_skips_disabled_or_unconfigured_instances():
     cfg = _config({"main": SimpleNamespace(url="", api="", enabled=True)})  # no url
     _c, key = _resolve(
         _config(cfg.instances.plex),
+        _db(rows),
+        media_type="movie",
+        tmdb_id=1,
+        tvdb_id=None,
+        imdb_id=None,
+    )
+    assert key is None
+
+    # enabled=False with a fully configured instance — the other half of the name.
+    disabled = _config(
+        {"main": SimpleNamespace(url="http://plex:32400", api="t", enabled=False)}
+    )
+    _c, key = _resolve(
+        disabled,
         _db(rows),
         media_type="movie",
         tmdb_id=1,

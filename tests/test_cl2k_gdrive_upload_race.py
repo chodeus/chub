@@ -42,7 +42,9 @@ def _install(monkeypatch, drive, name="poster.png"):
     """Point upload_file's subprocess at the fake, keeping the real locking."""
     monkeypatch.setattr(gd, "_rclone_path", lambda: "/usr/bin/rclone")
     monkeypatch.setattr(gd, "_ensure_remote", lambda _r: None)
-    monkeypatch.setattr(gd, "_upload_auth_args", lambda _c: ["--drive-token", "x"])
+    monkeypatch.setattr(
+        gd, "_upload_auth_env", lambda _c: {"RCLONE_DRIVE_TOKEN": "x"}
+    )
     monkeypatch.setattr(
         gd, "list_files", lambda fid, cfg, log, strict=False: list(drive.files)
     )
@@ -194,24 +196,35 @@ def test_every_value_reaching_the_rclone_argv_is_validated(monkeypatch):
         gd.upload_file("-X=evil", "folder-A", object(), _logger())
 
 
-def test_an_option_shaped_oauth_value_is_refused(monkeypatch):
+def test_oauth_credentials_ride_env_never_argv(monkeypatch):
+    """The trio must reach rclone as RCLONE_* env — argv is world-readable via
+    /proc, and an env value can't be read as an option either."""
     cfg = types.SimpleNamespace(
-        token='{"access_token": "a"}', client_id="-oops", client_secret=""
-    )
-    with pytest.raises(ValueError, match="gdrive_client_id"):
-        gd._oauth_args(cfg)
-
-
-def test_real_google_credentials_still_pass(monkeypatch):
-    """The validator must not reject legitimate config: ids are numeric-led,
-    secrets are GOCSPX-…, and the token is JSON."""
-    cfg = types.SimpleNamespace(
-        token='{"access_token": "ya29.x", "refresh_token": "1//y"}',
+        token='{"access_token": "ya29.SECRETX", "refresh_token": "1//y"}',
         client_id="123456789-abc.apps.googleusercontent.com",
         client_secret="GOCSPX-abcdef123456",
     )
-    args = gd._oauth_args(cfg)
-    assert "--drive-token" in args and "GOCSPX-abcdef123456" in args
+    env = gd._oauth_env(cfg)
+    assert "SECRETX" in env["RCLONE_DRIVE_TOKEN"]
+    assert env["RCLONE_DRIVE_CLIENT_SECRET"] == "GOCSPX-abcdef123456"
+
+    seen = {}
+
+    def spy_run(cmd, **kw):
+        seen["cmd"] = cmd
+        seen["env"] = kw.get("env") or {}
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(gd, "_rclone_path", lambda: "/usr/bin/rclone")
+    monkeypatch.setattr(gd, "_ensure_remote", lambda _r: None)
+    monkeypatch.setattr(
+        gd, "list_files", lambda fid, c, log, strict=False: ["poster.png"]
+    )
+    monkeypatch.setattr(gd.subprocess, "run", spy_run)
+    gd.upload_file("poster.png", "folder-A", cfg, _logger())
+
+    assert not any("SECRETX" in part for part in seen["cmd"])  # never argv
+    assert "SECRETX" in seen["env"].get("RCLONE_DRIVE_TOKEN", "")
 
 
 def test_the_reap_is_scoped_to_the_uploaded_filename(monkeypatch):

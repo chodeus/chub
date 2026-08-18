@@ -511,12 +511,23 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
 
     const clearFocus = useCallback(() => setFocusIndex(null), [setFocusIndex]);
 
+    // The subfolders arrive from an async call, so the row must be re-found in
+    // the LATEST entries by its stable folder_id — a captured index could point
+    // at a different row (or stale array) after an add/remove mid-flight.
+    const entriesRef = useRef(entries);
+    useEffect(() => {
+        entriesRef.current = entries;
+    }, [entries]);
+
     // Replace the split row with one routed row per type. The parent row's own
     // claimed types are dropped — they now live on the children — and any type
     // it didn't claim is left unclaimed rather than silently switched on.
     const splitRow = useCallback(
-        (index, subfolders) => {
-            const parent = entries[index] || {};
+        (folderId, subfolders) => {
+            const current = entriesRef.current;
+            const index = current.findIndex(e => e.folder_id === folderId);
+            if (index === -1) return; // the row was removed while we fetched
+            const parent = current[index];
             const claimed = parent.types || [];
             const children = subfolders
                 // Only types the parent actually claimed. An unclaimed row splits
@@ -528,9 +539,9 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
                     types: [s.image_type],
                 }));
             if (children.length === 0) return;
-            onChange(entries.flatMap((e, i) => (i === index ? children : [e])));
+            onChange(current.flatMap((e, i) => (i === index ? children : [e])));
         },
-        [entries, onChange]
+        [onChange]
     );
 
     return (
@@ -562,7 +573,7 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
                             onPatch={changes => patch(i, changes)}
                             onDelete={() => remove(i)}
                             onToggleType={type => toggleType(i, type)}
-                            onSplit={subfolders => splitRow(i, subfolders)}
+                            onSplit={subfolders => splitRow(entry.folder_id, subfolders)}
                             autoFocus={focusIndex === i}
                             clearFocus={clearFocus}
                         />

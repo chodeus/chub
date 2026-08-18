@@ -104,7 +104,7 @@ def cl2k_generated_table():
     """TableDefinition for the cl2k_generated table.
 
     Registered through backend/extensions/cl2k/manifest.py (tables), since
-    the CL2K maker is a develop-only extension and core schema.py must not
+    the CL2K maker is part of the :full image and core schema.py must not
     reference it. Imported lazily there — TableDefinition comes from
     schema.py, which calls extension tables mid-init.
     """

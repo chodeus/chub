@@ -12,6 +12,7 @@ import sys
 import pytest
 
 pytest.importorskip("httpx")
+pytest.importorskip("wand.image")  # backend.api.cl2k_maker pulls in the renderer
 
 from fastapi import FastAPI  # noqa: E402
 

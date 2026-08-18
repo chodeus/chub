@@ -4,7 +4,7 @@
 Grafted onto ChubConfig by backend/extensions/cl2k/manifest.py
 (config_fields), so ``load_config().cl2k_maker`` is typed exactly like the
 core module sections. Lives here (not backend/util/config.py) because the
-CL2K maker is a develop-only extension.
+CL2K maker is part of the :full image.
 """
 
 from typing import List

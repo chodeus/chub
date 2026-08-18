@@ -15,9 +15,9 @@ export function makeUnavailableNotice(pageName) {
                 {pageName} ships in the <code>:full</code> image
             </h1>
             <p className="max-w-md text-sm text-fg-muted">
-                This install runs the minimal <code>ghcr.io/chodeus/chub:latest</code> image.
-                Switch the container to the <code>:full</code> tag to enable it — your
-                config and data carry over unchanged.
+                This install runs the minimal <code>ghcr.io/chodeus/chub:latest</code> image. Switch
+                the container to the <code>:full</code> tag to enable it — your config and data
+                carry over unchanged.
             </p>
         </div>
     );

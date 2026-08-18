@@ -53,7 +53,6 @@ class PosterHealReview(DatabaseBase):
                 title_new=excluded.title_new,
                 confidence=excluded.confidence,
                 reason=excluded.reason,
-                created_at=excluded.created_at,
                 status=CASE
                     WHEN poster_heal_review.status IN ('applied', 'dismissed')
                     THEN poster_heal_review.status

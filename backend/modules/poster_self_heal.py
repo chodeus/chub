@@ -194,8 +194,9 @@ class PosterSelfHeal(ChubModule):
                 if not os.path.isabs(pf):
                     continue
                 # Outside every configured folder — e.g. another owner's synced
-                # posters, or a folder since removed.
-                if not any(_is_under(pf, d) for d in local_dirs):
+                # posters, or a folder since removed. No folders configured
+                # means nothing is out of scope — never a purge of everything.
+                if local_dirs and not any(_is_under(pf, d) for d in local_dirs):
                     reviews.delete(row["id"])
                     pruned += 1
                 # Already renamed: the row describes history, and its Apply would

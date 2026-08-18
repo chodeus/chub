@@ -361,7 +361,7 @@ jobs:
             type=semver,pattern={{version}},suffix=-full
             type=semver,pattern={{major}}.{{minor}},suffix=-full
             type=semver,pattern={{major}},suffix=-full
-            type=sha,prefix=sha-,suffix=-full,format=short
+            type=sha,prefix=sha-,suffix=-full,format=short,enable={{is_default_branch}}
             type=raw,value=full,enable={{is_default_branch}}
             type=raw,value=develop,enable={{is_default_branch}}
 

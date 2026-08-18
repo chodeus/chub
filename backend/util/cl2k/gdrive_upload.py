@@ -18,7 +18,7 @@ import threading
 import uuid
 from collections import defaultdict
 from shutil import which
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Serialises writes per Drive folder: concurrent uploads both list "absent" and
 # both create, and Drive allows duplicate names. Thread lock — single process only.
@@ -65,24 +65,35 @@ def _reject_unsafe_id(value: str, field: str) -> None:
         raise ValueError(f"Refusing unsafe {field} value: {value!r}")
 
 
+# A hung rclone must fail the call loudly, never wedge a worker.
+_RCLONE_TIMEOUT = 600
+
+
+def _run_rclone(
+    cmd: List[str], env: Optional[Dict[str, str]] = None
+) -> "subprocess.CompletedProcess[str]":
+    """Every rclone invocation: credentials ride env (never argv), bounded."""
+    try:
+        return subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            env={**os.environ, **(env or {})},
+            timeout=_RCLONE_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"rclone timed out after {_RCLONE_TIMEOUT}s") from exc
+
+
 def _ensure_remote(rclone: str) -> None:
     """Create the rclone 'posters' remote if missing (idempotent)."""
-    subprocess.run(
-        [rclone, "config", "create", "posters", "drive", "config_is_local=false"],
-        check=False,
-        capture_output=True,
-        text=True,
+    _run_rclone(
+        [rclone, "config", "create", "posters", "drive", "config_is_local=false"]
     )
 
 
-def _sa_args(sa_location: Optional[str]) -> List[str]:
-    if not sa_location:
-        return []
-    _reject_unsafe(sa_location, "gdrive_sa_location")
-    return ["--drive-service-account-file", sa_location]
-
-
-def _oauth_args(sync_cfg: Any) -> List[str]:
+def _oauth_env(sync_cfg: Any) -> Dict[str, str]:
     """rclone OAuth flags from the sync_gdrive config; [] when there is no
     *usable* token, so callers fall back to the service account.
 
@@ -99,45 +110,29 @@ def _oauth_args(sync_cfg: Any) -> List[str]:
         )
     token = (token or "").strip()
     if "access_token" not in token and "refresh_token" not in token:
-        return []
+        return {}
     client_id = getattr(sync_cfg, "client_id", "") or ""
     client_secret = getattr(sync_cfg, "client_secret", "") or ""
-    # A leading "-" would reach rclone as an option, not data. Real Google
-    # credentials never start with one.
-    _reject_unsafe(client_id, "gdrive_client_id")
-    _reject_unsafe(client_secret, "gdrive_client_secret")
-    _reject_unsafe(token, "gdrive_token")
-    return [
-        "--drive-client-id",
-        client_id,
-        "--drive-client-secret",
-        client_secret,
-        "--drive-token",
-        token,
-    ]
+    # Env, not argv: /proc/<pid>/cmdline is world-readable in-container, so a
+    # token on the command line is exposed to any process and ps output.
+    return {
+        "RCLONE_DRIVE_CLIENT_ID": client_id,
+        "RCLONE_DRIVE_CLIENT_SECRET": client_secret,
+        "RCLONE_DRIVE_TOKEN": token,
+    }
 
 
-def _auth_args(sync_cfg: Any) -> List[str]:
-    """Auth for READING shared drives (browse): service account first, then OAuth.
-
-    The community .psd drives are shared with the service account, so SA is the
-    natural credential; OAuth is the fallback.
-    """
-    sa = _sa_args(getattr(sync_cfg, "gdrive_sa_location", None))
-    return sa or _oauth_args(sync_cfg)
-
-
-def _upload_auth_args(sync_cfg: Any) -> List[str]:
+def _upload_auth_env(sync_cfg: Any) -> Dict[str, str]:
     """Auth for WRITING to the user's own drive (upload): the OAuth token ONLY.
 
     Uploading with the user's OAuth token writes as the user, so files land in
     their own Drive folder and are owned by them (this is how PosterFlow does it).
     A service account is intentionally NOT used here: an SA has no storage quota
     and cannot own files in a personal Drive ("Service Accounts do not have
-    storage quota"), so the SA upload path always fails. ``[]`` when there is no
+    storage quota"), so the SA upload path always fails. ``{}`` when there is no
     usable OAuth token, so the caller can raise a clear error.
     """
-    return _oauth_args(sync_cfg)
+    return _oauth_env(sync_cfg)
 
 
 def has_upload_token(sync_cfg: Any) -> bool:
@@ -146,7 +141,7 @@ def has_upload_token(sync_cfg: Any) -> bool:
     Lets callers (e.g. the maker UI) warn the user that upload is enabled but
     will fail, without exposing the (redacted) token itself.
     """
-    return bool(_upload_auth_args(sync_cfg))
+    return bool(_upload_auth_env(sync_cfg))
 
 
 def upload_file(
@@ -163,7 +158,7 @@ def upload_file(
     """
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
     _reject_unsafe(local_path, "local_path")
-    auth = _upload_auth_args(sync_cfg)
+    auth = _upload_auth_env(sync_cfg)
     if not auth:
         raise RuntimeError(
             "no usable Google Drive OAuth token configured — set a token under "
@@ -181,12 +176,11 @@ def upload_file(
         "--drive-use-trash=false",
         "--no-update-modtime",
         "-v",
-        *auth,
     ]
     # Serialised per folder: see _FOLDER_LOCKS. rclone replaces a same-named file
     # correctly on its own — it only duplicates when two runs overlap.
     with _folder_lock(folder_id):
-        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        result = _run_rclone(cmd, auth)
         if result.returncode != 0:
             raise RuntimeError(
                 f"rclone copy failed: {_rclone_error_detail(result.stderr)}"
@@ -220,9 +214,9 @@ def _reap_duplicates(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
         logger.warning(
             f"CL2K drive {folder_id}: {name} exists more than once — keeping the newest"
         )
-        auth = _upload_auth_args(sync_cfg)
+        auth = _upload_auth_env(sync_cfg)
         rclone = _rclone_path()
-        result = subprocess.run(
+        result = _run_rclone(
             [
                 rclone,
                 "dedupe",
@@ -235,11 +229,8 @@ def _reap_duplicates(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
                 # dedupe honours filters from rclone 1.61.
                 "--include",
                 _filter_literal(name),
-                *auth,
             ],
-            check=False,
-            capture_output=True,
-            text=True,
+            auth,
         )
         if result.returncode != 0:
             logger.warning(
@@ -267,7 +258,7 @@ def move_file(
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
     _reject_unsafe(old_name, "gdrive_old_name")
     _reject_unsafe(new_name, "gdrive_new_name")
-    auth = _upload_auth_args(sync_cfg)
+    auth = _upload_auth_env(sync_cfg)
     if not auth:
         raise RuntimeError(
             "no usable Google Drive OAuth token configured — set a token under "
@@ -285,12 +276,11 @@ def move_file(
         "--drive-use-trash=false",
         "--no-update-modtime",
         "-v",
-        *auth,
     ]
     # Upload's lock: this is the folder's other writer, and a rename onto a name
     # an upload is creating duplicates the same way.
     with _folder_lock(folder_id):
-        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        result = _run_rclone(cmd, auth)
     if result.returncode != 0:
         raise RuntimeError(
             f"rclone moveto failed: {_rclone_error_detail(result.stderr)}"
@@ -316,7 +306,7 @@ def list_files(folder_id: str, sync_cfg: Any, logger, strict: bool = False) -> L
     rename proceed.
     """
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
-    auth = _upload_auth_args(sync_cfg)
+    auth = _upload_auth_env(sync_cfg)
     if not auth:
         if strict:
             raise RuntimeError(
@@ -337,9 +327,8 @@ def list_files(folder_id: str, sync_cfg: Any, logger, strict: bool = False) -> L
         "--drive-root-folder-id",
         folder_id,
         "--files-only",
-        *auth,
     ]
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    result = _run_rclone(cmd, auth)
     if result.returncode != 0:
         detail = _rclone_error_detail(result.stderr)
         if strict:
@@ -366,7 +355,7 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
     Drive folder per destination. Raises on a missing token or rclone failure.
     """
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
-    auth = _upload_auth_args(sync_cfg)
+    auth = _upload_auth_env(sync_cfg)
     if not auth:
         raise RuntimeError(
             "no usable Google Drive OAuth token configured — set a token under "
@@ -376,7 +365,7 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
     _ensure_remote(rclone)
 
     def _dir_ids() -> dict:
-        result = subprocess.run(
+        result = _run_rclone(
             [
                 rclone,
                 "lsjson",
@@ -384,11 +373,8 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
                 "--drive-root-folder-id",
                 folder_id,
                 "--dirs-only",
-                *auth,
             ],
-            check=False,
-            capture_output=True,
-            text=True,
+            auth,
         )
         if result.returncode != 0:
             raise RuntimeError(
@@ -409,11 +395,9 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
     for name in TYPE_SUBFOLDERS.values():
         if name in existing:
             continue
-        result = subprocess.run(
-            [rclone, "mkdir", f"posters:{name}", "--drive-root-folder-id", folder_id, *auth],
-            check=False,
-            capture_output=True,
-            text=True,
+        result = _run_rclone(
+            [rclone, "mkdir", f"posters:{name}", "--drive-root-folder-id", folder_id],
+            auth,
         )
         if result.returncode != 0:
             raise RuntimeError(
@@ -448,7 +432,7 @@ def delete_file(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
     token or non-zero rclone exit."""
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
     _reject_unsafe(name, "gdrive_name")
-    auth = _upload_auth_args(sync_cfg)
+    auth = _upload_auth_env(sync_cfg)
     if not auth:
         raise RuntimeError("no usable Google Drive OAuth token configured")
     rclone = _rclone_path()
@@ -460,9 +444,8 @@ def delete_file(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
         "--drive-root-folder-id",
         folder_id,
         "--drive-use-trash=false",
-        *auth,
     ]
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    result = _run_rclone(cmd, auth)
     if result.returncode != 0:
         raise RuntimeError(
             f"rclone deletefile failed: {_rclone_error_detail(result.stderr)}"

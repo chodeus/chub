@@ -10,7 +10,7 @@ read the true ink colours from the detected strokes.
 Fail-soft by design: every entry point returns ``None`` if onnxruntime or the
 vendored model is unavailable, or on any inference error, so ``tighten_text_mask``
 degrades to the colour-key rather than breaking. The model
-(``models/ppocr_v4_det.onnx``, ~4.7 MB) is a develop-only vendored asset;
+(``models/ppocr_v4_det.onnx``, ~4.7 MB) is a ':full'-image vendored asset;
 ``onnxruntime`` is in requirements-cl2k.txt.
 """
 

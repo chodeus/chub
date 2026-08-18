@@ -733,7 +733,7 @@ const Cl2kMakerPage = () => {
     return (
         <div className="cl2k-page p-4 md:p-6 pb-24">
             {/* Brand-styled range sliders (mock spec) — scoped to this page so
-                it stays develop-only and doesn't touch shared CSS. */}
+                it stays ':full'-image and doesn't touch shared CSS. */}
             <style>{`
 .cl2k-page input[type=range]{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#2a3052;accent-color:var(--primary);cursor:pointer;}
 .cl2k-page input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer;}

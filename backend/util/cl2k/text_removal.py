@@ -123,15 +123,19 @@ def _mask_to_image_dims(image_bytes: bytes, mask_bytes: bytes) -> bytes:
     """
     from PIL import Image
 
+    from backend.util.cl2k.limits import ImageTooLargeError, open_bounded
+
     try:
         with Image.open(io.BytesIO(image_bytes)) as im:
-            size = im.size
-        mask = Image.open(io.BytesIO(mask_bytes)).convert("L")
+            size = im.size  # header only — no pixel decode
+        mask = open_bounded(mask_bytes, "L")
         if mask.size == size:
             return mask_bytes
         buf = io.BytesIO()
         mask.resize(size).save(buf, "PNG")
         return buf.getvalue()
+    except ImageTooLargeError:
+        raise  # never pass an unbounded mask through to the provider decode
     except Exception:
         return mask_bytes
 
@@ -142,15 +146,12 @@ def _composite_masked(
     """Keep ``result`` only where the mask is white; original pixels elsewhere."""
     from PIL import Image, ImageFilter
 
-    orig = Image.open(io.BytesIO(original_bytes)).convert("RGB")
-    res = (
-        Image.open(io.BytesIO(result_bytes))
-        .convert("RGB")
-        .resize(orig.size, Image.Resampling.LANCZOS)
-    )
+    from backend.util.cl2k.limits import open_bounded
+
+    orig = open_bounded(original_bytes, "RGB")
+    res = open_bounded(result_bytes, "RGB").resize(orig.size, Image.Resampling.LANCZOS)
     mask = (
-        Image.open(io.BytesIO(mask_bytes))
-        .convert("L")
+        open_bounded(mask_bytes, "L")
         .resize(orig.size)
         .filter(ImageFilter.GaussianBlur(4))  # feather for a seamless blend
     )
@@ -218,7 +219,12 @@ def _lama_sidecar(image_bytes: bytes, mask_bytes: bytes, config) -> bytes:
     if dilate >= 0:
         payload["dilate"] = dilate
     resp = requests.post(
-        url, json=payload, headers=_lama_headers(config), timeout=_timeout(config)
+        url,
+        json=payload,
+        headers=_lama_headers(config),
+        timeout=_timeout(config),
+        # The key must never follow a redirect off the configured sidecar.
+        allow_redirects=False,
     )
     resp.raise_for_status()
     return resp.content
@@ -257,6 +263,7 @@ def upscale_image(
             json={"image": base64.b64encode(image_bytes).decode(), "scale": scale},
             headers=_lama_headers(config),
             timeout=_timeout(config),
+            allow_redirects=False,
         )
         if resp.status_code != 200:
             if logger:
@@ -305,14 +312,16 @@ def _openai(
         or ("Remove all text from this image and reconstruct the background.")
     )
 
-    src = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    from backend.util.cl2k.limits import open_bounded
+
+    src = open_bounded(image_bytes, "RGB")
     img_buf = io.BytesIO()
     src.save(img_buf, "PNG")  # gpt-image-1 edits expect PNG input
     files = {"image": ("image.png", img_buf.getvalue(), "image/png")}
     data = {"model": model, "prompt": prompt, "size": "auto"}
 
     if mask_bytes:
-        m = Image.open(io.BytesIO(mask_bytes)).convert("L").resize(src.size)
+        m = open_bounded(mask_bytes, "L").resize(src.size)
         rgba = Image.new("RGBA", src.size, (0, 0, 0, 255))
         rgba.putalpha(Image.eval(m, lambda px: 255 - px))  # white(remove) -> alpha 0
         mask_buf = io.BytesIO()

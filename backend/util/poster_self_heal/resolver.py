@@ -156,10 +156,24 @@ def _find_media(
     confidence id hit on any of tmdb/tvdb/imdb), "title" (a unique title+year
     hit), or "". ``ambiguous`` is True when title+year matched >1 row.
     """
+    # A season marker means show; otherwise an absent asset_type stays unknown —
+    # defaulting it to "movie" mis-filed typeless Drive posters (parse leaves
+    # the type for this function to refine).
+    at = poster.get("asset_type") or (
+        "show" if poster.get("season_number") is not None else None
+    )
     t = _as_int(poster.get("tmdb_id"))
-    tk = (_media_type(poster.get("asset_type") or "movie"), t) if t else None
-    if tk and tk in idx["tmdb"]:
-        return idx["tmdb"][tk], "id", False
+    if t:
+        if at:
+            hits = [idx["tmdb"].get((_media_type(at), t))]
+        else:
+            # TMDB numbers movies and shows separately, so try both spaces.
+            hits = [idx["tmdb"].get(("movie", t)), idx["tmdb"].get(("tv", t))]
+        hits = [h for h in hits if h]
+        if len(hits) == 1:
+            return hits[0], "id", False
+        if len(hits) > 1:
+            return None, "", True
     v = _as_int(poster.get("tvdb_id"))
     if v and v in idx["tvdb"]:
         return idx["tvdb"][v], "id", False
@@ -170,9 +184,11 @@ def _find_media(
     nt = poster.get("normalized_title") or _norm(poster.get("title"))
     candidates = idx["title"].get(nt, []) if nt else []
     # Same media type only — a movie poster must not match a show of the same
-    # title/year (and get the show's ids backfilled onto it).
-    pt = _media_type(poster.get("asset_type") or "movie")
-    candidates = [m for m in candidates if _media_type(m.get("asset_type")) == pt]
+    # title/year. Unknown type filters nothing: the unique-match rule below
+    # turns a movie/show title collision into "ambiguous", never a wrong match.
+    if at:
+        pt = _media_type(at)
+        candidates = [m for m in candidates if _media_type(m.get("asset_type")) == pt]
     poster_year = _as_int(poster.get("year"))
     if poster_year is not None:
         yeared = [

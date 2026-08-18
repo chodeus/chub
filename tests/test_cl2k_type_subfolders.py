@@ -168,6 +168,6 @@ def test_rejects_an_unsafe_parent_id(rclone):
 
 
 def test_raises_without_an_upload_token(monkeypatch, rclone):
-    monkeypatch.setattr(gdrive_upload, "_upload_auth_args", lambda cfg: [])
+    monkeypatch.setattr(gdrive_upload, "_upload_auth_env", lambda cfg: {})
     with pytest.raises(RuntimeError, match="OAuth token"):
         gdrive_upload.ensure_type_subfolders("PARENT", _Sync(), _Log())

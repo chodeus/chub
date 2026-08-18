@@ -26,9 +26,9 @@ const ENCODE = encodeURIComponent;
 const TOKEN_STORAGE_KEY = 'chub-auth-token';
 
 // Client timeout for AI-bound calls (OpenAI text removal, PSD flatten). Must be
-// LONGER than the backend ai_timeout (default 120s) so the backend's own error
+// LONGER than the backend ai_timeout (default 300s) so the backend's own error
 // surfaces instead of a silent client-side abort.
-const AI_TIMEOUT_MS = 180000;
+const AI_TIMEOUT_MS = 360000;
 
 const qs = params => {
     const sp = new URLSearchParams();
@@ -46,6 +46,8 @@ const qs = params => {
  * move again instead of letting requests pile up on the backend.
  */
 const postBlob = async (path, body, { signal } = {}) => {
+    // AI-bound blobs get the same ceiling as the JSON calls; a caller signal wins.
+    signal = signal ?? AbortSignal.timeout(AI_TIMEOUT_MS);
     const headers = { 'Content-Type': 'application/json' };
     try {
         const token = localStorage.getItem(TOKEN_STORAGE_KEY);

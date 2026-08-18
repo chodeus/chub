@@ -1,5 +1,5 @@
 # backend/extensions/poster_self_heal/__init__.py
-"""Poster Self-Heal — develop-only extension.
+"""Poster Self-Heal — ':full'-image extension.
 
 Keeps the user's CL2K poster drive current: re-resolves each generated poster
 against TMDB and proposes rewriting a stale embedded id, a changed title, or a

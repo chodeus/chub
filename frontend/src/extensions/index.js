@@ -50,9 +50,7 @@ const ENABLED =
               new Promise(resolve => setTimeout(() => resolve(new Set()), 3000)),
           ]);
 
-const MANIFESTS = ALL.filter(entry => ENABLED.has(entry.name)).map(
-    entry => entry.manifest
-);
+const MANIFESTS = ALL.filter(entry => ENABLED.has(entry.name)).map(entry => entry.manifest);
 
 /**
  * Splice anchored additions into a copy of `list`.
