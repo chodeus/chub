@@ -11,6 +11,7 @@ import { extensionCapability } from '../../extensions/index.js';
 import { Button, IconButton, Modal } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { StyleStamp } from '../../components/ui/StyleStamp.jsx';
+import SegmentedControl from '../../components/ui/SegmentedControl.jsx';
 
 // Optional extension hook: (item) => { to, title, ariaLabel, icon } | null.
 // Renders an extra per-row action link (e.g. a poster-maker shortcut) when an
@@ -489,24 +490,14 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
-                <div className="inline-flex items-center h-11 p-1 gap-0.5 bg-surface border border-border rounded-lg">
-                    {presentTabs.map(t => (
-                        <button
-                            key={t.key}
-                            onClick={() => {
-                                setTypeKey(t.key);
-                                setPage(0);
-                            }}
-                            className={`touch-expand h-9 min-w-11 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
-                                typeKey === t.key
-                                    ? 'bg-primary text-on-color'
-                                    : 'text-fg-muted hover:text-fg'
-                            }`}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
-                </div>
+                <SegmentedControl
+                    options={presentTabs.map(t => ({ value: t.key, label: t.label }))}
+                    value={typeKey}
+                    onChange={key => {
+                        setTypeKey(key);
+                        setPage(0);
+                    }}
+                />
                 <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-warning/15 text-warning">
                     {filtered.length}
                 </span>
@@ -1324,24 +1315,14 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-                <div className="inline-flex items-center h-11 p-1 gap-0.5 bg-surface border border-border rounded-lg">
-                    {mediaTabs.map(t => (
-                        <button
-                            key={t.key}
-                            onClick={() => {
-                                setMediaTypeKey(t.key);
-                                setPage(0);
-                            }}
-                            className={`touch-expand h-9 min-w-11 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
-                                mediaTypeKey === t.key
-                                    ? 'bg-primary text-on-color'
-                                    : 'text-fg-muted hover:text-fg'
-                            }`}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
-                </div>
+                <SegmentedControl
+                    options={mediaTabs.map(t => ({ value: t.key, label: t.label }))}
+                    value={mediaTypeKey}
+                    onChange={key => {
+                        setMediaTypeKey(key);
+                        setPage(0);
+                    }}
+                />
                 <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-warning/15 text-warning">
                     {filtered.length}
                 </span>

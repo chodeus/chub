@@ -709,14 +709,14 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
                 <button
                     type="button"
                     onClick={onSelectAll}
-                    className="touch-expand flex-1 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-[11.5px] font-semibold"
+                    className="touch-expand flex-1 min-w-11 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-[11.5px] font-semibold"
                 >
                     Select all
                 </button>
                 <button
                     type="button"
                     onClick={onClearAll}
-                    className="touch-expand flex-1 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-data text-[11.5px] font-semibold"
+                    className="touch-expand flex-1 min-w-11 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-data text-[11.5px] font-semibold"
                 >
                     Clear
                 </button>
