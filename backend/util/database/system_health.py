@@ -28,9 +28,8 @@ class SystemHealth(DatabaseBase):
 
     def prune_snapshots_before(self, cutoff: str) -> int:
         """Delete snapshots older than the cutoff; returns rows removed."""
-        # TEXT compare on purpose: writer and cutoff share one clock/format
-        # (scheduler datetime.now().isoformat()), and system_health_time_idx
-        # stays usable — datetime() wrapping would forfeit it.
+        # TEXT compare on purpose: one writer/clock, and datetime() wrapping
+        # would forfeit system_health_time_idx.
         return (
             self.execute_query(
                 "DELETE FROM system_health_snapshots WHERE snapshot_at < ?",

@@ -675,14 +675,19 @@ class ChubScheduler:
 
         import requests
 
+        from backend.util.config import load_config
         from backend.util.database import ChubDB
         from backend.util.ssrf_guard import is_safe_url
+
+        # Live config, not the __init__ capture — mirrors _tick; a reload
+        # otherwise keeps probing removed instances and misses new ones.
+        config = load_config()
 
         now_iso = datetime.now().isoformat()
         rows = []
         probes = []  # (service, name, test_url, headers) for reachable targets
         for service in ("plex", "radarr", "sonarr", "lidarr"):
-            instances = getattr(self.config.instances, service, {})
+            instances = getattr(config.instances, service, {})
             for name, details in instances.items():
                 url = details.url.rstrip("/") if details.url else ""
                 api = details.api or ""
