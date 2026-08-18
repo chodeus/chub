@@ -6,11 +6,37 @@ from .db_base import DatabaseBase
 
 
 class SystemHealth(DatabaseBase):
-    """Read access to the periodic instance-health probes the scheduler records.
+    """The periodic instance-health probes: the scheduler records and prunes
+    them here; the system API reads them."""
 
-    Rows are append-only snapshots of one (instance, service) probe; the
-    scheduler owns writing and pruning them.
-    """
+    def record_snapshots(self, rows: List[tuple]) -> None:
+        """Append one scheduler pass's probe rows in a single transaction."""
+        if not rows:
+            return
+        self.execute_transaction(
+            [
+                (
+                    "INSERT INTO system_health_snapshots "
+                    "(snapshot_at, service, instance_name, status, "
+                    "status_code, response_time_ms, error) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    tuple(row),
+                )
+                for row in rows
+            ]
+        )
+
+    def prune_snapshots_before(self, cutoff: str) -> int:
+        """Delete snapshots older than the cutoff; returns rows removed."""
+        # TEXT compare on purpose: one writer/clock, and datetime() wrapping
+        # would forfeit system_health_time_idx.
+        return (
+            self.execute_query(
+                "DELETE FROM system_health_snapshots WHERE snapshot_at < ?",
+                (cutoff,),
+            )
+            or 0
+        )
 
     def recent_snapshots(
         self, limit: int = 50, instance: Optional[str] = None
