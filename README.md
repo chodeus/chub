@@ -84,7 +84,6 @@ Full walk-through: **[Wiki → Installation](https://github.com/chodeus/chub/wik
 | `latest` | Core CHUB, kept deliberately minimal (~210 MB compressed). |
 | `full` | Everything in `latest` plus the extension toolchain: the **CL2K poster maker** (ImageMagick + librsvg rendering, real Arial, layered PSD export) and the **poster self-heal** module (~345 MB). |
 | `vX.Y.Z` / `vX.Y.Z-full` | The same two images pinned to a release. |
-| `develop` | Deprecated alias of `full` — switch to `full`; this alias will stop updating. |
 
 Switching between tags is safe in both directions: the tools live in the image, not your volume. A config written under `full` keeps its extension sections on `latest` (typed, preserved across saves), database tables and generated posters are never touched, and moving back to `full` finds everything as you left it. Leaving `full` for good and want a spotless config? Delete the `cl2k_maker:` and `poster_self_heal:` blocks from `config.yml` — that's all there is.
 

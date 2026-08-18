@@ -350,8 +350,7 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # :full metadata mirrors the lean tags with a -full suffix; :develop is a
-      # deprecated alias of :full for existing pulls, dropped after a transition.
+      # :full metadata mirrors the lean tags with a -full suffix.
       - name: Extract Docker metadata (full)
         id: meta_full
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
@@ -363,7 +362,6 @@ jobs:
             type=semver,pattern={{major}},suffix=-full
             type=sha,prefix=sha-,suffix=-full,format=short,enable={{is_default_branch}}
             type=raw,value=full,enable={{is_default_branch}}
-            type=raw,value=develop,enable={{is_default_branch}}
 
       - name: Build and push lean image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7

@@ -24,7 +24,7 @@ jobs:
       - name: Skip protected branches
         id: guard
         run: |
-          if [[ "$REF" == "main" || "$REF" == "master" || "$REF" == "experimental" || "$REF" == "develop" ]]; then
+          if [[ "$REF" == "main" || "$REF" == "master" || "$REF" == "experimental" ]]; then
             echo "Skipping deletion for protected branch: $REF"
             echo "protected=true" >> "$GITHUB_OUTPUT"
           fi
