@@ -150,9 +150,10 @@ jobs:
           # pytest + httpx (Starlette's TestClient) — kept out of requirements.txt
           # so the runtime image never installs a test stack.
           pip install -r requirements-dev.txt
-          # Develop-only extensions keep their extra deps in requirements-*.txt
-          # (e.g. requirements-cl2k.txt) so requirements.txt stays identical to
-          # main. Install any that exist — no-op on main.
+          # Extensions keep their extra deps in requirements-*.txt (e.g.
+          # requirements-cl2k.txt), which only the Dockerfile's builder-full
+          # stage installs — requirements.txt stays the lean set both images
+          # share. Install every one: CI has no flavour gate, so it tests :full.
           for extra in requirements-*.txt; do
             if [ -e "$extra" ] && [ "$extra" != "requirements-dev.txt" ]; then
               pip install -r "$extra"
@@ -221,7 +222,6 @@ jobs:
         working-directory: frontend
         run: npm run check:classes
 
-  # ---- Branch isolation guard ----
   # ---- Docker Build (gated by all quality checks) ----
   docker-validate:
     name: Docker Validate (PR)

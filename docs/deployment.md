@@ -2,6 +2,8 @@
 
 CHUB ships as a prebuilt container image at `ghcr.io/chodeus/chub:latest`. You don't need to clone or build the repo to run it.
 
+Two tags are published from every build: `:latest` is core CHUB, kept deliberately minimal, and `:full` adds the extension toolchain (CL2K poster maker, poster self-heal). Swap the tag in any example below to switch — it is safe in both directions, because the tools live in the image and not in your volume. See [Image tags](../README.md#image-tags) for the full comparison.
+
 ---
 
 ## Docker Compose (recommended)
