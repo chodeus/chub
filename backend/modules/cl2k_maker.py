@@ -202,6 +202,7 @@ def _resolve_and_render(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
@@ -392,6 +393,7 @@ def _resolve_and_render(
         crop=crop,
         v_pos=v_pos,
         zoom=zoom,
+        mirror=mirror,
         band_label=band_label,
         place_logo=place_logo,
         text_logo_stroke=cfg.text_logo_stroke,
@@ -435,6 +437,7 @@ def generate_for_item(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
@@ -507,6 +510,7 @@ def generate_for_item(
         crop=crop,
         v_pos=v_pos,
         zoom=zoom,
+        mirror=mirror,
         band_label=band_label,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
@@ -560,6 +564,7 @@ def generate_square_art(
     fit_mode: str = "cover",
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
     season_number: Optional[int] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
@@ -600,6 +605,7 @@ def generate_square_art(
         fit_mode=fit_mode,
         v_pos=v_pos,
         zoom=zoom,
+        mirror=mirror,
     )
     return _persist_poster(
         db,
@@ -643,6 +649,7 @@ def generate_background_art(
     fit_mode: str = "cover",
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
     resolution: str = "1080p",
     season_number: Optional[int] = None,
     save_local: bool = True,
@@ -689,6 +696,7 @@ def generate_background_art(
         fit_mode=fit_mode,
         v_pos=v_pos,
         zoom=zoom,
+        mirror=mirror,
     )
     return _persist_poster(
         db,
@@ -1444,6 +1452,7 @@ def generate_seasons(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
@@ -1499,6 +1508,7 @@ def generate_seasons(
                 crop=crop,
                 v_pos=v_pos,
                 zoom=zoom,
+                mirror=mirror,
                 logo_scale=logo_scale,
                 logo_y_offset=logo_y_offset,
                 whiten=whiten,
@@ -1552,6 +1562,7 @@ def psd_for_item(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     logo_3d: bool = False,  # extruded art -> flat-white lit face; wins over flat_white
@@ -1599,6 +1610,7 @@ def psd_for_item(
         crop=crop,
         v_pos=v_pos,
         zoom=zoom,
+        mirror=mirror,
     )
     logo_bytes = custom_logo_bytes
     if logo_bytes is None and logo_path:
