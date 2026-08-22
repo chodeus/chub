@@ -13,8 +13,9 @@ the PSD. See memory ``cl2k-poster-maker-spec`` for the extraction method.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 # ----- canvas ----------------------------------------------------------------
 CANVAS_W = 1000
@@ -125,6 +126,23 @@ ZOOM_MIN, ZOOM_MAX = 0.5, 3.0
 # The one vertical framing control; 0 = centred crop. Negative pans up into real
 # source only, positive pans down and may edge-extend into the gradient zone.
 V_POS_MIN, V_POS_MAX = -1.0, 1.0
+
+
+@dataclass(frozen=True)
+class Framing:
+    """How a backdrop is fitted to the canvas; one bundle for every art path.
+
+    The API wire format stays FLAT — build one of these at the endpoint boundary.
+    """
+
+    focus_x: float = 0.5  # 0..1 horizontal focal point; 0.5 = centre
+    fit_mode: str = "cover"  # cover (crop to fill) | fit (contain) | extend (AI)
+    v_pos: float = 0.0  # -1..1, 0 = centred (fit/extend read it 0..1 top-anchored)
+    zoom: float = 1.0  # scale relative to the cover/fit baseline
+    mirror: bool = False  # flip the artwork horizontally, at the end of framing
+    # fit/extend only: isolates the subject region before the fit. render_framed_art
+    # (square + background art) has no crop stage and ignores this.
+    crop: Optional[Tuple[float, float, float, float]] = None
 
 # ----- logo whitening (CL2K two-tone) -----------------------------------------
 # Real CL2K logos are black & white, not flat white silhouettes: coloured/bright

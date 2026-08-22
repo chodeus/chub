@@ -17,6 +17,7 @@ from wand.color import Color  # noqa: E402
 from wand.image import Image  # noqa: E402
 
 import backend.modules.cl2k_maker as maker  # noqa: E402
+from backend.util.cl2k import geometry as geo  # noqa: E402
 
 
 def _logo_png(width, height):
@@ -162,12 +163,15 @@ def test_a_successful_ai_extend_is_not_reframed_again(env, monkeypatch):
         tmdb_id=221230,
         backdrop_bytes=_backdrop_png(),
         logo_path="/iMuXNXkPq9OCKw5jljoIxkv8IRV.png",
-        fit_mode="extend",
-        v_pos=0.4,
-        zoom=1.5,
+        framing=geo.Framing(fit_mode="extend", v_pos=0.4, zoom=1.5, mirror=True),
     )
 
-    assert seen["fit_mode"] == "cover"
-    assert seen["crop"] is None
-    assert seen["v_pos"] == 0.0, "v_pos was already baked into the extended canvas"
-    assert seen["zoom"] == 1.0, "zoom was already baked into the extended canvas"
+    framing = seen["framing"]
+    assert framing.fit_mode == "cover"
+    assert framing.crop is None
+    assert framing.v_pos == 0.0, "v_pos was already baked into the extended canvas"
+    assert framing.zoom == 1.0, "zoom was already baked into the extended canvas"
+    # The reset is scoped to what fit_extend_canvas baked in. mirror is applied
+    # later, at the end of framing, so clearing it here would silently un-flip
+    # every extended poster.
+    assert framing.mirror is True
