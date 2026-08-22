@@ -44,6 +44,84 @@ def get_version() -> str:
         return base_version
 
 
+# ----- what is actually published -------------------------------------------
+GHCR_IMAGE = "chodeus/chub"
+_GHCR_ACCEPT = ",".join(
+    (
+        "application/vnd.oci.image.index.v1+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.oci.image.manifest.v1+json",
+    )
+)
+
+
+def _image_tag() -> str:
+    """Rolling tag this container tracks: :full when the extensions are baked in."""
+    return "full" if os.getenv("CHUB_IMAGE_FLAVOR") == "full" else "latest"
+
+
+def _published_build(logger, tag: str | None = None) -> int | None:
+    """BUILD_NUMBER baked into the newest published image, or None if unknown.
+
+    Asks the registry what exists rather than counting commits on main: a commit
+    that changes no image path (docs, workflows) publishes nothing, and comparing
+    against the commit count told every user an update was ready that they could
+    never pull. None on any failure — an unknown remote must never raise a badge.
+    """
+    tag = tag or _image_tag()
+    try:
+        tok = requests.get(
+            f"https://ghcr.io/token?scope=repository:{GHCR_IMAGE}:pull&service=ghcr.io",
+            timeout=5,
+        )
+        if not tok.ok:
+            logger.debug(f"GHCR token failed: {tok.status_code}")
+            return None
+        head = {
+            "Authorization": f"Bearer {tok.json()['token']}",
+            "Accept": _GHCR_ACCEPT,
+        }
+        man = requests.get(
+            f"https://ghcr.io/v2/{GHCR_IMAGE}/manifests/{tag}", headers=head, timeout=5
+        )
+        if not man.ok:
+            logger.debug(f"GHCR manifest {tag} failed: {man.status_code}")
+            return None
+        doc = man.json()
+        if "manifests" in doc:  # multi-arch index; BUILD_NUMBER is per-build, not per-arch
+            children = [
+                m
+                for m in doc["manifests"]
+                if m.get("platform", {}).get("architecture") not in (None, "unknown")
+            ]
+            if not children:
+                return None
+            man = requests.get(
+                f"https://ghcr.io/v2/{GHCR_IMAGE}/manifests/{children[0]['digest']}",
+                headers=head,
+                timeout=5,
+            )
+            if not man.ok:
+                logger.debug(f"GHCR child manifest failed: {man.status_code}")
+                return None
+            doc = man.json()
+        blob = requests.get(
+            f"https://ghcr.io/v2/{GHCR_IMAGE}/blobs/{doc['config']['digest']}",
+            headers=head,
+            timeout=5,
+        )
+        if not blob.ok:
+            logger.debug(f"GHCR config blob failed: {blob.status_code}")
+            return None
+        for entry in blob.json().get("config", {}).get("Env", []):
+            if entry.startswith("BUILD_NUMBER="):
+                return int(entry.split("=", 1)[1])
+        return None
+    except Exception as exc:
+        logger.debug(f"Exception reading the published image: {exc}")
+        return None
+
+
 def _check_remote_version(local_version, branch, logger):
 
     raw_url = f"https://raw.githubusercontent.com/chodeus/chub/{branch}/.release-please-manifest.json"
@@ -59,22 +137,8 @@ def _check_remote_version(local_version, branch, logger):
         logger.debug(f"Exception fetching manifest: {e}")
         return None, None, False
 
-    api_url = (
-        f"https://api.github.com/repos/chodeus/chub/commits?sha={branch}&per_page=1"
-    )
-    try:
-        resp = requests.get(api_url, timeout=5)
-        if not resp.ok:
-            logger.debug(f"Could not fetch commit count: {resp.status_code}")
-            return remote_version_str, None, False
-        link = resp.headers.get("Link")
-        if not link:
-            build_count = 1
-        else:
-            match = re.search(r"&page=(\d+)>; rel=\"last\"", link)
-            build_count = int(match.group(1)) if match else 1
-    except Exception as e:
-        logger.debug(f"Exception fetching build count: {e}")
+    build_count = _published_build(logger)
+    if build_count is None:
         return remote_version_str, None, False
 
     remote_full = f"{remote_version_str}.{branch}{build_count}"

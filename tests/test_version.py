@@ -1,7 +1,12 @@
 """Tests for backend/util/version.py — manifest-driven versioning."""
 
+import json
 import subprocess
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+import backend.util.version as version_mod
 
 from backend.util.version import _read_base_version, check_for_update, get_version
 
@@ -69,3 +74,95 @@ def test_check_for_update_handles_network_failure():
     assert result["update_available"] is False
     assert result["checked"] is False
     assert result["branch"] == "develop"
+
+
+# ----- update check compares against what is PUBLISHED, not commits on main ----
+
+
+class _Resp:
+    def __init__(self, payload=None, ok=True, status=200, text=None):
+        self._payload, self.ok, self.status_code = payload, ok, status
+        self.text = text if text is not None else json.dumps(payload or {})
+
+    def json(self):
+        return self._payload
+
+
+def _ghcr(build_number="1550", **over):
+    """URL -> response for a healthy GHCR read; `over` replaces one leg."""
+    routes = {
+        "token": _Resp({"token": "t"}),
+        "manifests/full": _Resp({"manifests": [
+            {"digest": "sha256:child", "platform": {"architecture": "amd64"}}]}),
+        "manifests/latest": _Resp({"manifests": [
+            {"digest": "sha256:child", "platform": {"architecture": "amd64"}}]}),
+        "manifests/sha256:child": _Resp({"config": {"digest": "sha256:cfg"}}),
+        "blobs/": _Resp({"config": {"Env": ["PATH=/usr/bin", f"BUILD_NUMBER={build_number}"]}}),
+    }
+    routes.update(over)
+
+    def get(url, **kwargs):
+        for key, resp in routes.items():
+            if key in url:
+                return resp
+        raise AssertionError(f"unexpected URL {url}")
+
+    return get
+
+
+def test_published_build_reads_the_image_env(monkeypatch):
+    monkeypatch.setattr(version_mod.requests, "get", _ghcr("1556"))
+    assert version_mod._published_build(MagicMock()) == 1556
+
+
+@pytest.mark.parametrize("leg", ["token", "manifests/latest", "blobs/"])
+def test_published_build_is_none_when_the_registry_fails(leg, monkeypatch):
+    """Unknown must never raise an update badge."""
+    monkeypatch.setattr(
+        version_mod.requests, "get", _ghcr(**{leg: _Resp(ok=False, status=503)})
+    )
+    assert version_mod._published_build(MagicMock()) is None
+
+
+def test_image_tag_follows_the_flavour(monkeypatch):
+    monkeypatch.setenv("CHUB_IMAGE_FLAVOR", "full")
+    assert version_mod._image_tag() == "full"
+    monkeypatch.setenv("CHUB_IMAGE_FLAVOR", "lean")
+    assert version_mod._image_tag() == "latest"
+    monkeypatch.delenv("CHUB_IMAGE_FLAVOR", raising=False)
+    assert version_mod._image_tag() == "latest"
+
+
+def test_commits_that_publish_no_image_do_not_raise_an_update(monkeypatch):
+    """The bug this replaced: a docs/CI-only commit bumps the commit count on main
+    but publishes nothing, so every user was told an update was ready that did not
+    exist. The comparison must read the registry and never the commits API."""
+    seen = []
+
+    def get(url, **kwargs):
+        seen.append(url)
+        if "raw.githubusercontent.com" in url:
+            return _Resp(text=json.dumps({".": "2.48.0"}))
+        return _ghcr("1556")(url, **kwargs)
+
+    monkeypatch.setattr(version_mod.requests, "get", get)
+    remote, build, update = version_mod._check_remote_version(
+        "2.48.0.main1556", "main", MagicMock()
+    )
+
+    assert build == 1556
+    assert update is False, "running the newest published image is not an update"
+    assert not any("api.github.com" in u for u in seen), "must not count commits"
+
+
+def test_a_newer_published_image_is_an_update(monkeypatch):
+    def get(url, **kwargs):
+        if "raw.githubusercontent.com" in url:
+            return _Resp(text=json.dumps({".": "2.48.0"}))
+        return _ghcr("1560")(url, **kwargs)
+
+    monkeypatch.setattr(version_mod.requests, "get", get)
+    _remote, build, update = version_mod._check_remote_version(
+        "2.48.0.main1556", "main", MagicMock()
+    )
+    assert (build, update) == (1560, True)
