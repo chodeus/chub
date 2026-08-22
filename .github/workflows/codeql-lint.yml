@@ -25,7 +25,13 @@ on:
       - '.dockerignore'
       - 'scripts/start.sh'
       - '.release-please-manifest.json'
-      - '.github/workflows/codeql-lint.yml'
+      # Deliberately NOT self-referential on push: docker-push runs on push
+      # events only, so a comment-level edit to this file used to rebuild and
+      # republish :latest and :full with a fresh digest (BUILD_NUMBER is baked
+      # in, so identical code still churns the tag). The pull_request trigger
+      # below KEEPS the self-reference, so a workflow edit is still exercised
+      # end to end before it lands — and actionlint (validate-workflows.yml)
+      # runs on it independently. Use workflow_dispatch to force a run.
   pull_request:
     branches:
       - '**'
