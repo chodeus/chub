@@ -115,7 +115,8 @@ docker run -d \
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Listen port |
 | `DOCKER_ENV` | `false` | Set to `true` in containers; influences logging banner |
-| `BRANCH` | `master` | Build metadata only |
+| `BRANCH` | `master` | Baked at build time. With `BUILD_NUMBER` it forms the version string (`2.47.0.main1550`) |
+| `BUILD_NUMBER` | *(unset)* | Commit count at build time. The update check compares it against the commit count on GitHub — **not** decoration; removing it disables update notifications |
 
 ---
 
