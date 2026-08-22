@@ -20,7 +20,7 @@
         "ghcr.io/chodeus/chub"
       ],
       "enabled": false,
-      "description": "CHUB's own image. A digest pin on our own :latest chases every merge to main forever (9 auto-merged bump PRs in 3 days) and each develop-side merge edits the shared compose.yaml, failing the Develop Invariant Guard. The compose example stays on bare :latest; do not pin or update it."
+      "description": "CHUB's own image. A digest pin on our own :latest chases every merge to main forever (9 auto-merged bump PRs in 3 days). The compose example stays on bare :latest; do not pin or update it."
     }
   ]
 }
