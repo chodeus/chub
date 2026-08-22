@@ -130,16 +130,9 @@ V_POS_MIN, V_POS_MAX = -1.0, 1.0
 
 @dataclass(frozen=True)
 class Framing:
-    """How a backdrop is fitted to the canvas — one bundle for every art path.
+    """How a backdrop is fitted to the canvas; one bundle for every art path.
 
-    These travel together and are only meaningful together: the identical set
-    crosses api -> module -> renderer untouched. Bundled because they were
-    threaded as six separate parameters through four layers, so each new knob
-    cost a signature edit at ~29 sites; add the seventh here instead.
-
-    The API wire format stays FLAT (the frontend posts focus_x/zoom/... as
-    scalars) — the request models keep their own fields and build one of these
-    at the endpoint boundary.
+    The API wire format stays FLAT — build one of these at the endpoint boundary.
     """
 
     focus_x: float = 0.5  # 0..1 horizontal focal point; 0.5 = centre

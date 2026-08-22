@@ -269,14 +269,10 @@ def _save_response(logger: Any, *, done: str, what: str, run) -> JSONResponse:
 
 
 def _framing(req: Any) -> geo.Framing:
-    """Build the renderer's framing bundle from a request's flat wire fields.
+    """Flat request fields -> the renderer's framing bundle.
 
-    The wire format stays flat because the frontend posts scalars; this is the
-    one place that shape becomes the object every layer below passes on untouched.
-
-    ``crop_*`` exists only on the poster models (GenerateRequest, SeasonsRequest)
-    — square/background art has no crop stage — and all four parts must be present
-    for a crop to apply, so a partial crop fits the whole backdrop instead."""
+    ``crop_*`` is poster-models-only, and a PARTIAL crop is ignored (whole backdrop).
+    """
     parts = (
         getattr(req, "crop_x", None),
         getattr(req, "crop_y", None),

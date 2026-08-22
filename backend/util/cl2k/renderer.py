@@ -1015,10 +1015,8 @@ def _framed_inset_base(backdrop_bytes: bytes, framing: geo.Framing) -> Image:
     render_cl2k and frame_backdrop both go through here, so they stay
     pixel-identical (the PSD POSTER-layer parity the exporter relies on).
 
-    ``mirror`` flips the framed artwork horizontally. It lands HERE, at the end
-    of framing, rather than on the source bytes: the AI text-removal mask and the
-    extend outpaint (modules.cl2k_maker) are brushed/built in source space, and
-    the logo/label the caller composites next must never come out backwards.
+    ``mirror`` flips the artwork HERE, at the end of framing — never on the source
+    bytes: the AI mask and extend outpaint are built in source space.
     """
     base = Image(
         width=geo.CANVAS_W, height=geo.CANVAS_H, background=Color(geo.BORDER_COLOR)
