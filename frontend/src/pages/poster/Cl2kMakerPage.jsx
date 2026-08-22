@@ -1294,6 +1294,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // wide backdrop isn't shrunk to a tiny strip.
     const [zoom, setZoom] = useState(saved.zoom ?? 1);
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
+    // Mirror flips the ARTWORK only, at the end of the backend's framing — the
+    // crop box, focal point and AI mask all stay in unmirrored source space, so
+    // nothing here re-maps and the framer keeps showing the source as it is.
+    const [mirror, setMirror] = useState(saved.mirror ?? false);
     // Measured by CropFramer's <img onLoad>; owned here because the Vertical
     // position slider's real range depends on it. null until measured.
     const [backdropRatio, setBackdropRatio] = useState(null);
@@ -1340,6 +1344,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         setVPos(0);
         setZoom(1);
         setFocusX(0.5);
+        setMirror(false); // which way a subject faces is a property of THAT image
         setBackdropRatio(null); // re-measured by the new image's onLoad
     }, []);
     // fitMode is deliberately NOT reset — it's a per-user way of working
@@ -1419,6 +1424,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             vPos,
             zoom,
             focusX,
+            mirror,
             logoScale,
             logoYOffset,
             whitenLogo,
@@ -1441,6 +1447,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         vPos,
         zoom,
         focusX,
+        mirror,
         logoScale,
         logoYOffset,
         whitenLogo,
@@ -1681,6 +1688,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             // v_pos applies to every mode now (Fill pans up; fit/extend position).
             v_pos: vPos,
             zoom: zoom,
+            mirror,
             // Banner overrides the auto COLLECTION / SEASON label — e.g. a season
             // poster drawing COMPLETE LIMITED SERIES in place of SEASON N.
             band_label: bandLabel,
@@ -1710,6 +1718,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             vPos,
             zoom,
             focusX,
+            mirror,
             bandLabel,
             saveTargets.saveLocal,
             saveTargets.uploadGdrive,
@@ -1749,6 +1758,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 vp: vPos,
                 zm: zoom,
                 fx: focusX,
+                mi: mirror,
                 bl: bandLabel,
                 pl: !hasLogo,
                 ti: hasLogo ? null : item.title,
@@ -1769,6 +1779,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             vPos,
             zoom,
             focusX,
+            mirror,
             bandLabel,
             hasLogo,
             logoScale,
@@ -1918,6 +1929,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
                 v_pos: vPos,
                 zoom: zoom,
+                mirror,
                 logo_scale: logoScale,
                 logo_y_offset: logoYOffset,
                 save_local: saveTargets.saveLocal,
@@ -1958,6 +1970,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         crop,
         vPos,
         zoom,
+        mirror,
         logoScale,
         logoYOffset,
         toast,
@@ -2089,6 +2102,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setVPos={setVPos}
                     zoom={zoom}
                     setZoom={setZoomClamped}
+                    mirror={mirror}
+                    setMirror={setMirror}
                     vPosLimits={vPosLimits}
                     backdropRatio={backdropRatio}
                     onBackdropRatio={onBackdropRatio}
@@ -2259,6 +2274,8 @@ const RenderPanel = ({
     setVPos,
     zoom,
     setZoom,
+    mirror,
+    setMirror,
     vPosLimits,
     backdropRatio,
     onBackdropRatio,
@@ -3208,6 +3225,8 @@ const RenderPanel = ({
                                     focusX={focusX}
                                     vPos={vPos}
                                     zoom={zoom}
+                                    mirror={mirror}
+                                    setMirror={setMirror}
                                     ratio={backdropRatio}
                                     onRatio={onBackdropRatio}
                                     onChange={onFocusChange}
@@ -4270,6 +4289,8 @@ const CropFramer = ({
     focusX,
     vPos,
     zoom,
+    mirror,
+    setMirror,
     onChange,
     // Natural aspect ratio (h/w) of the backdrop, owned by the parent: the
     // Vertical position slider's real travel depends on it, and it must not be
@@ -4423,6 +4444,18 @@ const CropFramer = ({
                         size="small"
                     >
                         Extend (AI)
+                    </Button>
+                    {/* The photo below stays unmirrored on purpose: the crop box and
+                        the AI mask are both in source space. Only the render flips. */}
+                    <Button
+                        onClick={() => setMirror(!mirror)}
+                        variant={mirror ? 'primary' : 'secondary'}
+                        icon="flip"
+                        size="small"
+                        aria-pressed={mirror}
+                        title="Flip the artwork horizontally (the logo and label stay as they are)"
+                    >
+                        Mirror
                     </Button>
                     {/* Span wrapper carries the tooltip: a disabled <button>
                         doesn't reliably fire native title tooltips cross-browser. */}
@@ -5472,6 +5505,8 @@ const FramingSliders = ({
 // every setter that can shrink the range re-clamps here rather than in an effect.
 const useAssetFraming = aspect => {
     const [vPos, setVPos] = useState(0);
+    // Flips the rendered art only — the framer below keeps showing the source.
+    const [mirror, setMirror] = useState(false);
     const [fitMode, setFitModeRaw] = useState('cover'); // cover (fill) | fit (contain)
     const [zoom, setZoomRaw] = useState(1);
     const [srcRatio, setSrcRatio] = useState(null); // measured from the source image
@@ -5507,7 +5542,19 @@ const useAssetFraming = aspect => {
         },
         [boundsFor, fitMode, zoom]
     );
-    return { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits };
+    return {
+        vPos,
+        setVPos,
+        fitMode,
+        setFitMode,
+        zoom,
+        setZoom,
+        mirror,
+        setMirror,
+        srcRatio,
+        onSrcRatio,
+        vPosLimits,
+    };
 };
 
 const SquareFramer = ({
@@ -5519,6 +5566,8 @@ const SquareFramer = ({
     setFitMode,
     zoom,
     setZoom,
+    mirror,
+    setMirror,
     aspect = 1, // target frame h/w: 1 = square, 9/16 = background art
     title = 'Crop to square',
     frameName = '1:1 square',
@@ -5600,6 +5649,18 @@ const SquareFramer = ({
                     >
                         Fit
                     </button>
+                    {/* The photo below stays unmirrored: the drag picks a region of
+                        the SOURCE, and only the rendered art is flipped. */}
+                    <Button
+                        onClick={() => setMirror(!mirror)}
+                        variant={mirror ? 'primary' : 'secondary'}
+                        icon="flip"
+                        size="small"
+                        aria-pressed={mirror}
+                        title="Flip the artwork horizontally"
+                    >
+                        Mirror
+                    </Button>
                     <Button
                         onClick={() => {
                             onChange(0.5, 0);
@@ -5721,8 +5782,19 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         onSrcRatio(null); // the old ratio must not outlive the old image
     };
     const [focusX, setFocusX] = useState(0.5);
-    const { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits } =
-        useAssetFraming(1);
+    const {
+        vPos,
+        setVPos,
+        fitMode,
+        setFitMode,
+        zoom,
+        setZoom,
+        mirror,
+        setMirror,
+        srcRatio,
+        onSrcRatio,
+        vPosLimits,
+    } = useAssetFraming(1);
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
     const [previewing, setPreviewing] = useState(false);
@@ -5747,6 +5819,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             fit_mode: fitMode,
             v_pos: vPos,
             zoom,
+            mirror,
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
         }),
@@ -5758,6 +5831,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             fitMode,
             vPos,
             zoom,
+            mirror,
             seasonNum,
             saveTargets.saveLocal,
             saveTargets.uploadGdrive,
@@ -5768,7 +5842,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         reqRef.current = req;
     }, [req]);
 
-    const sig = `${customSig(customBg) || backdrop}|${focusX}|${vPos}|${fitMode}|${zoom}`;
+    const sig = `${customSig(customBg) || backdrop}|${focusX}|${vPos}|${fitMode}|${zoom}|${mirror}`;
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
@@ -5910,6 +5984,8 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             setFitMode={setFitMode}
                             zoom={zoom}
                             setZoom={setZoom}
+                            mirror={mirror}
+                            setMirror={setMirror}
                             ratio={srcRatio}
                             onRatio={onSrcRatio}
                         />
@@ -5985,8 +6061,19 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         onSrcRatio(null); // the old ratio must not outlive the old image
     };
     const [focusX, setFocusX] = useState(0.5);
-    const { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits } =
-        useAssetFraming(9 / 16);
+    const {
+        vPos,
+        setVPos,
+        fitMode,
+        setFitMode,
+        zoom,
+        setZoom,
+        mirror,
+        setMirror,
+        srcRatio,
+        onSrcRatio,
+        vPosLimits,
+    } = useAssetFraming(9 / 16);
     const [resolution, setResolution] = useState('1080p'); // 1080p | 4k (Plex dims)
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
@@ -6012,6 +6099,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
             fit_mode: fitMode,
             v_pos: vPos,
             zoom,
+            mirror,
             resolution,
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
@@ -6024,6 +6112,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
             fitMode,
             vPos,
             zoom,
+            mirror,
             resolution,
             seasonNum,
             saveTargets.saveLocal,
@@ -6036,7 +6125,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     }, [req]);
 
     // Preview renders at 1080p regardless of resolution — same 16:9 frame.
-    const sig = `${customSig(customBg) || backdrop}|${focusX}|${vPos}|${fitMode}|${zoom}`;
+    const sig = `${customSig(customBg) || backdrop}|${focusX}|${vPos}|${fitMode}|${zoom}|${mirror}`;
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
@@ -6178,6 +6267,8 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                             setFitMode={setFitMode}
                             zoom={zoom}
                             setZoom={setZoom}
+                            mirror={mirror}
+                            setMirror={setMirror}
                             ratio={srcRatio}
                             onRatio={onSrcRatio}
                             aspect={9 / 16}

@@ -142,6 +142,9 @@ class GenerateRequest(BaseModel):
     # fit (sides crop) so a wide backdrop isn't shrunk to a tiny strip; in cover
     # ("Fill"), <1 shrinks the art below the fill onto black. 1.0 = plain fit/cover.
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
+    # Mirror: flip the artwork horizontally. Applied at the END of framing, so
+    # the crop/focal point, the AI mask and the logo/label are unaffected.
+    mirror: bool = False
     # Explicit bottom banner (e.g. "COMPLETE LIMITED SERIES"); overrides the auto
     # COLLECTION / season label when set.
     band_label: str = ""
@@ -661,6 +664,7 @@ def preview(
             crop=_crop_tuple(req),
             v_pos=req.v_pos,
             zoom=req.zoom,
+            mirror=req.mirror,
             band_label=req.band_label,
             logo_scale=req.logo_scale,
             logo_y_offset=req.logo_y_offset,
@@ -723,6 +727,7 @@ def generate(
             crop=_crop_tuple(req),
             v_pos=req.v_pos,
             zoom=req.zoom,
+            mirror=req.mirror,
             band_label=req.band_label,
             logo_scale=req.logo_scale,
             logo_y_offset=req.logo_y_offset,
@@ -779,6 +784,7 @@ class SquareArtRequest(BaseModel):
     v_pos: float = Field(0.0, ge=geo.V_POS_MIN, le=geo.V_POS_MAX)
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
+    mirror: bool = False  # flip the artwork horizontally
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
 
@@ -867,6 +873,7 @@ def square_preview(
             fit_mode=req.fit_mode,
             v_pos=req.v_pos,
             zoom=req.zoom,
+            mirror=req.mirror,
         ),
     )
 
@@ -902,6 +909,7 @@ def square_generate(
             fit_mode=req.fit_mode,
             v_pos=req.v_pos,
             zoom=req.zoom,
+            mirror=req.mirror,
             season_number=req.season_number,
             save_local=req.save_local,
             upload_gdrive=req.upload_gdrive,
@@ -927,6 +935,7 @@ class BackgroundArtRequest(BaseModel):
     v_pos: float = Field(0.0, ge=geo.V_POS_MIN, le=geo.V_POS_MAX)
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
+    mirror: bool = False  # flip the artwork horizontally
     resolution: str = "1080p"  # 1080p (1920x1080) | 4k (3840x2160), per Plex dims
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
@@ -954,6 +963,7 @@ def background_preview(
             fit_mode=req.fit_mode,
             v_pos=req.v_pos,
             zoom=req.zoom,
+            mirror=req.mirror,
         ),
     )
 
@@ -989,6 +999,7 @@ def background_generate(
             fit_mode=req.fit_mode,
             v_pos=req.v_pos,
             zoom=req.zoom,
+            mirror=req.mirror,
             resolution=req.resolution,
             season_number=req.season_number,
             save_local=req.save_local,
@@ -1176,6 +1187,7 @@ def psd_export(
             crop=_crop_tuple(req),
             v_pos=req.v_pos,
             zoom=req.zoom,
+            mirror=req.mirror,
             whiten=req.whiten,
             flat_white=req.flat_white,
             logo_3d=req.logo_3d,
@@ -1219,6 +1231,7 @@ class SeasonsRequest(BaseModel):
     crop_h: Optional[float] = None
     v_pos: float = Field(0.0, ge=geo.V_POS_MIN, le=geo.V_POS_MAX)
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
+    mirror: bool = False  # flip the artwork horizontally
     logo_scale: float = Field(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX)
     logo_y_offset: int = Field(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX)
     whiten: Optional[bool] = None  # None = module config (whiten_logo)
@@ -1374,6 +1387,7 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
                 crop=_crop_tuple(req),
                 v_pos=req.v_pos,
                 zoom=req.zoom,
+                mirror=req.mirror,
                 logo_scale=req.logo_scale,
                 logo_y_offset=req.logo_y_offset,
                 whiten=req.whiten,

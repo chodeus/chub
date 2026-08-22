@@ -947,6 +947,7 @@ def render_framed_art(
     fit_mode: str = "cover",
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
 ) -> bytes:
     """Render plain framed artwork at ``width``×``height`` — no gradient/logo/label.
 
@@ -957,7 +958,7 @@ def render_framed_art(
     horizontally and ``v_pos`` (-1..1, 0 = centred) vertically, where the image
     overflows the canvas; plain black letterbox where it doesn't. There is no
     gradient here to hide an extended band, so ``v_pos`` is source-bounded both
-    ways. Encoded at CL2K quality.
+    ways. ``mirror`` flips the finished frame horizontally. Encoded at CL2K quality.
     """
     zoom = max(geo.ZOOM_MIN, min(float(zoom or 1.0), geo.ZOOM_MAX))
     with Image(blob=backdrop_bytes) as img:
@@ -977,6 +978,8 @@ def render_framed_art(
         oy = -_v_pos_top(nh, height, v_pos) if nh >= height else (height - nh) // 2
         with Image(width=width, height=height, background=Color("black")) as canvas:
             canvas.composite(img, left=ox, top=oy)
+            if mirror:
+                canvas.flop()
             return _encode_jpeg(canvas)
 
 
@@ -988,6 +991,7 @@ def render_square_art(
     fit_mode: str = "cover",
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
 ) -> bytes:
     """Render square (1:1) art from a backdrop/poster — just the framed artwork."""
     return render_framed_art(
@@ -998,6 +1002,7 @@ def render_square_art(
         fit_mode=fit_mode,
         v_pos=v_pos,
         zoom=zoom,
+        mirror=mirror,
     )
 
 
@@ -1009,6 +1014,7 @@ def _framed_inset_base(
     crop: Optional[Tuple[float, float, float, float]],
     v_pos: float,
     zoom: float,
+    mirror: bool,
 ) -> Image:
     """Frame the backdrop FULL-BLEED and return a full CANVAS image.
 
@@ -1025,6 +1031,11 @@ def _framed_inset_base(
 
     render_cl2k and frame_backdrop both go through here, so they stay
     pixel-identical (the PSD POSTER-layer parity the exporter relies on).
+
+    ``mirror`` flips the framed artwork horizontally. It lands HERE, at the end
+    of framing, rather than on the source bytes: the AI text-removal mask and the
+    extend outpaint (modules.cl2k_maker) are brushed/built in source space, and
+    the logo/label the caller composites next must never come out backwards.
     """
     base = Image(
         width=geo.CANVAS_W, height=geo.CANVAS_H, background=Color(geo.BORDER_COLOR)
@@ -1035,6 +1046,8 @@ def _framed_inset_base(
         else:
             _cover_resize(art, geo.CANVAS_W, geo.CANVAS_H, focus_x, v_pos, zoom)
         base.composite(art, left=0, top=0)
+    if mirror:
+        base.flop()
     return base
 
 
@@ -1046,6 +1059,7 @@ def frame_backdrop(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
 ) -> bytes:
     """Frame a backdrop to the 2:3 canvas exactly as :func:`render_cl2k` would
     and return PNG bytes.
@@ -1062,6 +1076,7 @@ def frame_backdrop(
         crop=crop,
         v_pos=v_pos,
         zoom=zoom,
+        mirror=mirror,
     ) as base:
         base.format = "png"
         return base.make_blob()
@@ -1089,6 +1104,7 @@ def render_cl2k(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     zoom: float = 1.0,
+    mirror: bool = False,
     band_label: str = "",
     place_logo: bool = True,
     text_logo_stroke: int = 0,
@@ -1114,6 +1130,9 @@ def render_cl2k(
       optionally isolates the subject region first; the black bottom band is the
       gradient/logo zone. ``v_pos`` applies here too, but on :func:`_fit_resize`'s
       0..1 top-anchored scale (0 = top), not cover's -1..1.
+
+    ``mirror`` flips the ARTWORK horizontally; the logo and label are composited
+    afterwards and stay the right way round.
     """
     kind = kind.lower()
     baseline = geo.logo_baseline(kind)
@@ -1127,6 +1146,7 @@ def render_cl2k(
         crop=crop,
         v_pos=v_pos,
         zoom=zoom,
+        mirror=mirror,
     ) as base:
         with Image(filename=str(geo.GRADIENT_PNG)) as grad:
             base.composite(grad, left=0, top=0)
@@ -1341,6 +1361,9 @@ def main() -> None:
     ap.add_argument(
         "--no-whiten", action="store_true", help="keep the logo's original colours"
     )
+    ap.add_argument(
+        "--mirror", action="store_true", help="flip the artwork horizontally"
+    )
     ap.add_argument("--font", help="font file for text")
     ap.add_argument("--out", required=True, help="output .jpg path")
     args = ap.parse_args()
@@ -1360,6 +1383,7 @@ def main() -> None:
         season_text=args.season_text,
         logo_max_width=args.width,
         whiten=not args.no_whiten,
+        mirror=args.mirror,
         font_path=args.font,
     )
     with open(args.out, "wb") as fh:
