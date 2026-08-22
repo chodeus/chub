@@ -268,14 +268,29 @@ def _save_response(logger: Any, *, done: str, what: str, run) -> JSONResponse:
     )
 
 
-def _crop_tuple(req: Any):
-    """Assemble the (x, y, w, h) fit crop from a request, or None if unset.
+def _framing(req: Any) -> geo.Framing:
+    """Build the renderer's framing bundle from a request's flat wire fields.
 
-    Works for any request carrying ``crop_x/y/w/h`` (GenerateRequest, SeasonsRequest).
-    Only used in ``fit`` mode; all four fields must be present for a crop to apply
-    (a partial crop is ignored so the whole backdrop is fitted)."""
-    parts = (req.crop_x, req.crop_y, req.crop_w, req.crop_h)
-    return tuple(parts) if all(p is not None for p in parts) else None
+    The wire format stays flat because the frontend posts scalars; this is the
+    one place that shape becomes the object every layer below passes on untouched.
+
+    ``crop_*`` exists only on the poster models (GenerateRequest, SeasonsRequest)
+    — square/background art has no crop stage — and all four parts must be present
+    for a crop to apply, so a partial crop fits the whole backdrop instead."""
+    parts = (
+        getattr(req, "crop_x", None),
+        getattr(req, "crop_y", None),
+        getattr(req, "crop_w", None),
+        getattr(req, "crop_h", None),
+    )
+    return geo.Framing(
+        focus_x=req.focus_x,
+        fit_mode=req.fit_mode,
+        v_pos=req.v_pos,
+        zoom=req.zoom,
+        mirror=req.mirror,
+        crop=tuple(parts) if all(p is not None for p in parts) else None,
+    )
 
 
 class LogoFetchError(Exception):
@@ -659,12 +674,7 @@ def preview(
             imdb_id=req.imdb_id,
             mask_bytes=mask_bytes,
             apply_ai=req.remove_text,
-            focus_x=req.focus_x,
-            fit_mode=req.fit_mode,
-            crop=_crop_tuple(req),
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            mirror=req.mirror,
+            framing=_framing(req),
             band_label=req.band_label,
             logo_scale=req.logo_scale,
             logo_y_offset=req.logo_y_offset,
@@ -722,12 +732,7 @@ def generate(
             custom_logo_bytes=_b64_to_bytes(req.logo_b64),
             mask_bytes=mask_bytes,
             apply_ai=req.remove_text,
-            focus_x=req.focus_x,
-            fit_mode=req.fit_mode,
-            crop=_crop_tuple(req),
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            mirror=req.mirror,
+            framing=_framing(req),
             band_label=req.band_label,
             logo_scale=req.logo_scale,
             logo_y_offset=req.logo_y_offset,
@@ -869,11 +874,7 @@ def square_preview(
         req,
         lambda raw: render_square_art(
             backdrop_bytes=raw,
-            focus_x=req.focus_x,
-            fit_mode=req.fit_mode,
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            mirror=req.mirror,
+            framing=_framing(req),
         ),
     )
 
@@ -905,11 +906,7 @@ def square_generate(
             imdb_id=req.imdb_id,
             backdrop_path=req.backdrop_path,
             backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
-            focus_x=req.focus_x,
-            fit_mode=req.fit_mode,
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            mirror=req.mirror,
+            framing=_framing(req),
             season_number=req.season_number,
             save_local=req.save_local,
             upload_gdrive=req.upload_gdrive,
@@ -959,11 +956,7 @@ def background_preview(
             backdrop_bytes=raw,
             width=1920,
             height=1080,
-            focus_x=req.focus_x,
-            fit_mode=req.fit_mode,
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            mirror=req.mirror,
+            framing=_framing(req),
         ),
     )
 
@@ -995,11 +988,7 @@ def background_generate(
             imdb_id=req.imdb_id,
             backdrop_path=req.backdrop_path,
             backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
-            focus_x=req.focus_x,
-            fit_mode=req.fit_mode,
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            mirror=req.mirror,
+            framing=_framing(req),
             resolution=req.resolution,
             season_number=req.season_number,
             save_local=req.save_local,
@@ -1182,12 +1171,7 @@ def psd_export(
             logo_y_offset=req.logo_y_offset,
             logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
             logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
-            focus_x=req.focus_x,
-            fit_mode=req.fit_mode,
-            crop=_crop_tuple(req),
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            mirror=req.mirror,
+            framing=_framing(req),
             whiten=req.whiten,
             flat_white=req.flat_white,
             logo_3d=req.logo_3d,
@@ -1382,12 +1366,7 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
                 backdrop_bytes=backdrop_bytes,
                 logo_path=req.logo_path,
                 custom_logo_bytes=logo_bytes,
-                fit_mode=req.fit_mode,
-                focus_x=req.focus_x,
-                crop=_crop_tuple(req),
-                v_pos=req.v_pos,
-                zoom=req.zoom,
-                mirror=req.mirror,
+                framing=_framing(req),
                 logo_scale=req.logo_scale,
                 logo_y_offset=req.logo_y_offset,
                 whiten=req.whiten,

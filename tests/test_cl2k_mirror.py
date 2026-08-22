@@ -14,6 +14,7 @@ up only as "the toggle does nothing", so each hop is asserted.
 
 import base64
 import types
+from dataclasses import replace
 
 import pytest
 
@@ -66,6 +67,12 @@ def _strip(blob, top, height):
         return img.make_blob("RGB")
 
 
+# What every hop must receive: mirror on, the rest defaulted. Comparing the whole
+# bundle (not just .mirror) is the point of the refactor — a layer that rebuilds
+# the object field by field and drops one now fails here.
+_FRAMING = geo.Framing(mirror=True)
+
+
 def _logger():
     return types.SimpleNamespace(
         info=lambda *a, **k: None,
@@ -85,21 +92,25 @@ def test_framed_art_mirror_swaps_the_sides(size):
     width, height = size
     kw = dict(backdrop_bytes=_two_tone(), width=width, height=height)
     plain_l, plain_r = _sides(render_framed_art(**kw))
-    mirror_l, mirror_r = _sides(render_framed_art(**kw, mirror=True))
+    mirror_l, mirror_r = _sides(render_framed_art(**kw, framing=geo.Framing(mirror=True)))
 
     assert plain_l.red > 0.9 and plain_r.blue > 0.9
     assert mirror_l.blue > 0.9 and mirror_r.red > 0.9
 
 
 def test_square_art_forwards_mirror():
-    left, right = _sides(render_square_art(backdrop_bytes=_two_tone(), mirror=True))
+    left, right = _sides(
+        render_square_art(backdrop_bytes=_two_tone(), framing=geo.Framing(mirror=True))
+    )
     assert left.blue > 0.9 and right.red > 0.9
 
 
 def test_frame_backdrop_mirrors_the_poster_frame():
     # The .psd POSTER layer is this function's output, so an unmirrored frame here
     # would export a document that disagrees with the poster beside it.
-    left, right = _sides(frame_backdrop(backdrop_bytes=_two_tone(), mirror=True))
+    left, right = _sides(
+        frame_backdrop(backdrop_bytes=_two_tone(), framing=geo.Framing(mirror=True))
+    )
     assert left.blue > 0.9 and right.red > 0.9
 
 
@@ -108,14 +119,12 @@ def test_mirror_composes_with_the_framing_it_does_not_replace_it(fit_mode):
     # Off-centre framing, so a flip applied to the SOURCE instead of the framed
     # result would land the crop window on the other side and fail this.
     # frame_backdrop returns PNG, so the comparison is lossless and exact.
-    kw = dict(
-        backdrop_bytes=_two_tone(),
-        fit_mode=fit_mode,
-        focus_x=0.2,
-        v_pos=0.3,
-        zoom=1.6,
+    off = geo.Framing(fit_mode=fit_mode, focus_x=0.2, v_pos=0.3, zoom=1.6)
+    on = replace(off, mirror=True)
+    art = _two_tone()
+    assert _sig(frame_backdrop(backdrop_bytes=art, framing=on)) == _sig(
+        frame_backdrop(backdrop_bytes=art, framing=off), flop=True
     )
-    assert _sig(frame_backdrop(**kw, mirror=True)) == _sig(frame_backdrop(**kw), flop=True)
 
 
 def test_render_cl2k_mirrors_the_artwork_and_never_the_label():
@@ -126,7 +135,8 @@ def test_render_cl2k_mirrors_the_artwork_and_never_the_label():
         title="Mirror Test",
         season_text="Season one",
     )
-    plain, mirrored = render_cl2k(**kw), render_cl2k(**kw, mirror=True)
+    plain = render_cl2k(**kw)
+    mirrored = render_cl2k(**kw, framing=geo.Framing(mirror=True))
 
     left, right = _sides(mirrored)
     assert left.blue > 0.9 and right.red > 0.9  # artwork flipped
@@ -175,7 +185,7 @@ def test_an_endpoint_forwards_mirror_to_its_maker(route, target, model, tasks, m
     # Split, because these endpoints answer a raising stub with a clean 4xx —
     # "never called" would otherwise read as "called without mirror".
     assert seen, f"{route} never reached {target}"
-    assert seen.get("mirror") is True, f"{route} dropped mirror on the way to {target}"
+    assert seen["framing"] == _FRAMING, f"{route} mangled the framing reaching {target}"
 
 
 @pytest.mark.parametrize("route,model", [("square_preview", api.SquareArtRequest),
@@ -189,7 +199,7 @@ def test_an_art_preview_forwards_mirror_to_the_renderer(route, model, monkeypatc
 
     getattr(api, route)(req, db=object(), logger=_logger())
 
-    assert seen.get("mirror") is True
+    assert seen["framing"] == _FRAMING
 
 
 def test_the_seasons_job_carries_mirror_into_every_season(monkeypatch):
@@ -202,7 +212,7 @@ def test_the_seasons_job_carries_mirror_into_every_season(monkeypatch):
 
     api._run_seasons_job(api._new_season_job(1, "T"), object(), _logger(), req)
 
-    assert seen.get("mirror") is True
+    assert seen["framing"] == _FRAMING
 
 
 @pytest.mark.parametrize(
@@ -228,10 +238,10 @@ def test_an_asset_maker_forwards_mirror_to_the_renderer(maker_fn, renderer_fn, m
         title="T",
         tmdb_id=7,
         backdrop_bytes=b"ART",
-        mirror=True,
+        framing=_FRAMING,
     )
 
-    assert seen.get("mirror") is True
+    assert seen["framing"] == _FRAMING
 
 
 def test_resolve_and_render_forwards_mirror_to_the_poster_renderer(monkeypatch):
@@ -257,10 +267,10 @@ def test_resolve_and_render_forwards_mirror_to_the_poster_renderer(monkeypatch):
         tmdb_id=7,
         backdrop_bytes=b"ART",
         custom_logo_bytes=b"LOGO",
-        mirror=True,
+        framing=_FRAMING,
     )
 
-    assert seen.get("mirror") is True
+    assert seen["framing"] == _FRAMING
 
 
 def test_generate_seasons_carries_mirror_into_each_poster(monkeypatch):
@@ -276,10 +286,10 @@ def test_generate_seasons_carries_mirror_into_each_poster(monkeypatch):
         title="T",
         tmdb_id=7,
         seasons=[1],
-        mirror=True,
+        framing=_FRAMING,
     )
 
-    assert seen.get("mirror") is True
+    assert seen["framing"] == _FRAMING
 
 
 @pytest.mark.parametrize(

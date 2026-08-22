@@ -943,13 +943,11 @@ def render_framed_art(
     backdrop_bytes: bytes,
     width: int,
     height: int,
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
 ) -> bytes:
     """Render plain framed artwork at ``width``×``height`` — no gradient/logo/label.
+
+    Framing knobs below are :class:`geometry.Framing` fields.
 
     ``fit_mode`` ``"cover"`` fills the canvas (cropping the overflowing edges);
     ``"fit"`` contains the whole image on black (letterbox). ``zoom`` (0.5–3.0)
@@ -960,7 +958,9 @@ def render_framed_art(
     gradient here to hide an extended band, so ``v_pos`` is source-bounded both
     ways. ``mirror`` flips the finished frame horizontally. Encoded at CL2K quality.
     """
-    zoom = max(geo.ZOOM_MIN, min(float(zoom or 1.0), geo.ZOOM_MAX))
+    focus_x, fit_mode = framing.focus_x, framing.fit_mode
+    v_pos, mirror = framing.v_pos, framing.mirror
+    zoom = max(geo.ZOOM_MIN, min(float(framing.zoom or 1.0), geo.ZOOM_MAX))
     with Image(blob=backdrop_bytes) as img:
         base = (
             min(width / img.width, height / img.height)
@@ -987,35 +987,18 @@ def render_square_art(
     *,
     backdrop_bytes: bytes,
     size: int = 1000,
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
 ) -> bytes:
     """Render square (1:1) art from a backdrop/poster — just the framed artwork."""
     return render_framed_art(
         backdrop_bytes=backdrop_bytes,
         width=size,
         height=size,
-        focus_x=focus_x,
-        fit_mode=fit_mode,
-        v_pos=v_pos,
-        zoom=zoom,
-        mirror=mirror,
+        framing=framing,
     )
 
 
-def _framed_inset_base(
-    backdrop_bytes: bytes,
-    *,
-    focus_x: float,
-    fit_mode: str,
-    crop: Optional[Tuple[float, float, float, float]],
-    v_pos: float,
-    zoom: float,
-    mirror: bool,
-) -> Image:
+def _framed_inset_base(backdrop_bytes: bytes, framing: geo.Framing) -> Image:
     """Frame the backdrop FULL-BLEED and return a full CANVAS image.
 
     The template's stroke is Style=Inside on a full-canvas layer, so it paints
@@ -1041,25 +1024,22 @@ def _framed_inset_base(
         width=geo.CANVAS_W, height=geo.CANVAS_H, background=Color(geo.BORDER_COLOR)
     )
     with Image(blob=backdrop_bytes) as art:
-        if fit_mode == "fit":
-            _fit_resize(art, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos, zoom)
+        if framing.fit_mode == "fit":
+            _fit_resize(
+                art, geo.CANVAS_W, geo.CANVAS_H, framing.crop, framing.v_pos, framing.zoom
+            )
         else:
-            _cover_resize(art, geo.CANVAS_W, geo.CANVAS_H, focus_x, v_pos, zoom)
+            _cover_resize(
+                art, geo.CANVAS_W, geo.CANVAS_H, framing.focus_x, framing.v_pos, framing.zoom
+            )
         base.composite(art, left=0, top=0)
-    if mirror:
+    if framing.mirror:
         base.flop()
     return base
 
 
 def frame_backdrop(
-    *,
-    backdrop_bytes: bytes,
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    crop: Optional[Tuple[float, float, float, float]] = None,
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    *, backdrop_bytes: bytes, framing: geo.Framing = geo.Framing()
 ) -> bytes:
     """Frame a backdrop to the 2:3 canvas exactly as :func:`render_cl2k` would
     and return PNG bytes.
@@ -1069,15 +1049,7 @@ def frame_backdrop(
     (edge-extend fills, seam blending) live only in this module and must not be
     re-implemented elsewhere.
     """
-    with _framed_inset_base(
-        backdrop_bytes,
-        focus_x=focus_x,
-        fit_mode=fit_mode,
-        crop=crop,
-        v_pos=v_pos,
-        zoom=zoom,
-        mirror=mirror,
-    ) as base:
+    with _framed_inset_base(backdrop_bytes, framing) as base:
         base.format = "png"
         return base.make_blob()
 
@@ -1099,12 +1071,7 @@ def render_cl2k(
     logo_3d: bool = False,  # extruded art -> flat-white lit face
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     font_path: Optional[str] = None,
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    crop: Optional[Tuple[float, float, float, float]] = None,
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
     band_label: str = "",
     place_logo: bool = True,
     text_logo_stroke: int = 0,
@@ -1119,7 +1086,7 @@ def render_cl2k(
     ``COMPLETE LIMITED SERIES`` or ``SPECIALS``), overriding the automatic
     COLLECTION / season label. Long strings use the tighter PSD tracking.
 
-    ``fit_mode`` controls how the backdrop fills the 2:3 canvas:
+    ``framing`` controls how the backdrop fills the 2:3 canvas:
 
     - ``"cover"`` (default): scale up and crop to fill; ``focus_x`` (0..1) and
       ``v_pos`` (-1..1) choose which part is kept (0.5/0 = centre). Best when the
@@ -1139,15 +1106,7 @@ def render_cl2k(
     label_font = font_path or geo.resolve_font(bold=False)
     title_font = font_path or geo.resolve_font(bold=True)
 
-    with _framed_inset_base(
-        backdrop_bytes,
-        focus_x=focus_x,
-        fit_mode=fit_mode,
-        crop=crop,
-        v_pos=v_pos,
-        zoom=zoom,
-        mirror=mirror,
-    ) as base:
+    with _framed_inset_base(backdrop_bytes, framing) as base:
         with Image(filename=str(geo.GRADIENT_PNG)) as grad:
             base.composite(grad, left=0, top=0)
 
@@ -1383,7 +1342,7 @@ def main() -> None:
         season_text=args.season_text,
         logo_max_width=args.width,
         whiten=not args.no_whiten,
-        mirror=args.mirror,
+        framing=geo.Framing(mirror=args.mirror),
         font_path=args.font,
     )
     with open(args.out, "wb") as fh:

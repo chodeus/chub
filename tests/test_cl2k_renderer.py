@@ -321,7 +321,10 @@ def test_render_framed_art_dims_and_format():
 def test_render_framed_art_fit_letterboxes_on_black():
     # A square source contained in a 16:9 frame leaves black pillarboxes.
     blob = render_framed_art(
-        backdrop_bytes=_backdrop(w=500, h=500), width=1920, height=1080, fit_mode="fit"
+        backdrop_bytes=_backdrop(w=500, h=500),
+        width=1920,
+        height=1080,
+        framing=geo.Framing(fit_mode="fit"),
     )
     with Image(blob=blob) as img:
         bar = img[10, 540]  # left pillarbox
@@ -374,7 +377,8 @@ def test_psd_poster_layer_matches_renderer_framing():
     from backend.util.cl2k.psd_export import export_psd
 
     framed = frame_backdrop(
-        backdrop_bytes=_backdrop(), fit_mode="fit", v_pos=0.2, zoom=1.4
+        backdrop_bytes=_backdrop(),
+        framing=geo.Framing(fit_mode="fit", v_pos=0.2, zoom=1.4),
     )
     blob = export_psd(backdrop_bytes=framed, kind="movie", title="X")
     psd = PSDImage.open(io.BytesIO(blob))

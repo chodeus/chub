@@ -3,6 +3,7 @@
 import os
 import shutil
 import tempfile
+from dataclasses import replace
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backend.util.cl2k import color
@@ -197,12 +198,7 @@ def _resolve_and_render(
     mask_bytes: Optional[bytes] = None,
     backdrop_bytes: Optional[bytes] = None,
     apply_ai: bool = False,
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    crop: Optional[Tuple[float, float, float, float]] = None,
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
@@ -265,9 +261,9 @@ def _resolve_and_render(
     # extend). The fill happens here, before the gradient/logo, so the AI only sees
     # the backdrop; the resulting canvas is already 1000×1500, so it renders as a
     # straight cover (identity).
-    if fit_mode == "extend":
+    if framing.fit_mode == "extend":
         canvas_bytes, extend_mask = renderer.fit_extend_canvas(
-            backdrop_bytes, crop, zoom=zoom, v_pos=v_pos
+            backdrop_bytes, framing.crop, zoom=framing.zoom, v_pos=framing.v_pos
         )
         # AI runs only on a real generate (allow_ai_extend) AND when the provider
         # is fully configured — unavailable_reason(), not is_enabled(): a provider
@@ -291,7 +287,7 @@ def _resolve_and_render(
             # CANVAS_W x CANVAS_H with zoom/v_pos baked in by fit_extend_canvas.
             # Re-applying them re-scales the finished image and, for v_pos > 0,
             # crops rows off the top and fades a black band over the fill.
-            fit_mode, crop, zoom, v_pos = "cover", None, 1.0, 0.0
+            framing = replace(framing, fit_mode="cover", crop=None, zoom=1.0, v_pos=0.0)
         else:
             if extend_mask is not None and logger:
                 reason = (
@@ -305,7 +301,7 @@ def _resolve_and_render(
                 logger.info(
                     f"cl2k: extend — {reason}; using the free edge-extend fit instead"
                 )
-            fit_mode = "fit"
+            framing = replace(framing, fit_mode="fit")
 
     # Only run AI removal when explicitly requested (a brushed mask, or the
     # apply_ai flag for OpenAI's maskless mode) — never on every auto-render.
@@ -388,12 +384,7 @@ def _resolve_and_render(
         flat_white=flat_white,
         logo_3d=logo_3d,
         invert=invert,
-        focus_x=focus_x,
-        fit_mode=fit_mode,
-        crop=crop,
-        v_pos=v_pos,
-        zoom=zoom,
-        mirror=mirror,
+        framing=framing,
         band_label=band_label,
         place_logo=place_logo,
         text_logo_stroke=cfg.text_logo_stroke,
@@ -432,12 +423,7 @@ def generate_for_item(
     mask_bytes: Optional[bytes] = None,
     backdrop_bytes: Optional[bytes] = None,
     apply_ai: bool = False,
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    crop: Optional[Tuple[float, float, float, float]] = None,
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
@@ -505,12 +491,7 @@ def generate_for_item(
         mask_bytes=mask_bytes,
         backdrop_bytes=backdrop_bytes,
         apply_ai=apply_ai,
-        focus_x=focus_x,
-        fit_mode=fit_mode,
-        crop=crop,
-        v_pos=v_pos,
-        zoom=zoom,
-        mirror=mirror,
+        framing=framing,
         band_label=band_label,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
@@ -560,11 +541,7 @@ def generate_square_art(
     imdb_id: Optional[str] = None,
     backdrop_path: Optional[str] = None,
     backdrop_bytes: Optional[bytes] = None,
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
     season_number: Optional[int] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
@@ -601,11 +578,7 @@ def generate_square_art(
         backdrop_bytes = image_fetch.download(backdrop_path)
     blob = renderer.render_square_art(
         backdrop_bytes=backdrop_bytes,
-        focus_x=focus_x,
-        fit_mode=fit_mode,
-        v_pos=v_pos,
-        zoom=zoom,
-        mirror=mirror,
+        framing=framing,
     )
     return _persist_poster(
         db,
@@ -645,11 +618,7 @@ def generate_background_art(
     imdb_id: Optional[str] = None,
     backdrop_path: Optional[str] = None,
     backdrop_bytes: Optional[bytes] = None,
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
     resolution: str = "1080p",
     season_number: Optional[int] = None,
     save_local: bool = True,
@@ -692,11 +661,7 @@ def generate_background_art(
         backdrop_bytes=backdrop_bytes,
         width=width,
         height=height,
-        focus_x=focus_x,
-        fit_mode=fit_mode,
-        v_pos=v_pos,
-        zoom=zoom,
-        mirror=mirror,
+        framing=framing,
     )
     return _persist_poster(
         db,
@@ -1447,12 +1412,7 @@ def generate_seasons(
     year: Optional[int] = None,
     tvdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
-    fit_mode: str = "cover",
-    focus_x: float = 0.5,
-    crop: Optional[Tuple[float, float, float, float]] = None,
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
@@ -1503,12 +1463,7 @@ def generate_seasons(
                 backdrop_bytes=backdrop_bytes,
                 logo_path=logo_path,
                 custom_logo_bytes=custom_logo_bytes,
-                fit_mode=fit_mode,
-                focus_x=focus_x,
-                crop=crop,
-                v_pos=v_pos,
-                zoom=zoom,
-                mirror=mirror,
+                framing=framing,
                 logo_scale=logo_scale,
                 logo_y_offset=logo_y_offset,
                 whiten=whiten,
@@ -1557,12 +1512,7 @@ def psd_for_item(
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
     logo_erase_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
-    focus_x: float = 0.5,
-    fit_mode: str = "cover",
-    crop: Optional[Tuple[float, float, float, float]] = None,
-    v_pos: float = 0.0,
-    zoom: float = 1.0,
-    mirror: bool = False,
+    framing: geo.Framing = geo.Framing(),
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     logo_3d: bool = False,  # extruded art -> flat-white lit face; wins over flat_white
@@ -1605,12 +1555,7 @@ def psd_for_item(
         backdrop_bytes = image_fetch.download(backdrop_path)
     framed = renderer.frame_backdrop(
         backdrop_bytes=backdrop_bytes,
-        focus_x=focus_x,
-        fit_mode=fit_mode,
-        crop=crop,
-        v_pos=v_pos,
-        zoom=zoom,
-        mirror=mirror,
+        framing=framing,
     )
     logo_bytes = custom_logo_bytes
     if logo_bytes is None and logo_path:
