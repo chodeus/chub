@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import pytest
 
 from backend.util.version import (
+    GHCR_IMAGE,
     _check_remote_version,
     _image_tag,
     _published_build,
@@ -121,9 +122,28 @@ def _ghcr(build_number="1550", **over):
     return get
 
 
-def test_published_build_reads_the_image_env(monkeypatch):
-    monkeypatch.setattr("backend.util.version.requests.get", _ghcr("1556"))
+@pytest.mark.parametrize(
+    "flavour,tag", [("full", "full"), ("lean", "latest"), (None, "latest")]
+)
+def test_published_build_reads_the_env_of_the_tag_its_flavour_tracks(
+    monkeypatch, flavour, tag
+):
+    """A :full instance compared against :latest would read the wrong build, so
+    the requested tag is asserted — not just the number that comes back."""
+    if flavour is None:
+        monkeypatch.delenv("CHUB_IMAGE_FLAVOR", raising=False)
+    else:
+        monkeypatch.setenv("CHUB_IMAGE_FLAVOR", flavour)
+    seen, routed = [], _ghcr("1556")
+
+    def get(url, **kwargs):
+        seen.append(urlparse(url).path)
+        return routed(url, **kwargs)
+
+    monkeypatch.setattr("backend.util.version.requests.get", get)
+
     assert _published_build(MagicMock()) == 1556
+    assert f"/v2/{GHCR_IMAGE}/manifests/{tag}" in seen
 
 
 @pytest.mark.parametrize("leg", ["token", "manifests/latest", "blobs/"])
