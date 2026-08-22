@@ -61,12 +61,9 @@ def _image_tag() -> str:
 
 
 def _published_build(logger, tag: str | None = None) -> int | None:
-    """BUILD_NUMBER baked into the newest published image, or None if unknown.
+    """BUILD_NUMBER of the newest published image, or None if unknown.
 
-    Asks the registry what exists rather than counting commits on main: a commit
-    that changes no image path (docs, workflows) publishes nothing, and comparing
-    against the commit count told every user an update was ready that they could
-    never pull. None on any failure — an unknown remote must never raise a badge.
+    Every failure returns None, so an unreachable registry never raises a badge.
     """
     tag = tag or _image_tag()
     try:

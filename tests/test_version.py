@@ -3,12 +3,18 @@
 import json
 import subprocess
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 
-import backend.util.version as version_mod
-
-from backend.util.version import _read_base_version, check_for_update, get_version
+from backend.util.version import (
+    _check_remote_version,
+    _image_tag,
+    _published_build,
+    _read_base_version,
+    check_for_update,
+    get_version,
+)
 
 
 def test_read_base_version_returns_string():
@@ -88,6 +94,11 @@ class _Resp:
         return self._payload
 
 
+def _host(url):
+    """Parsed host — a substring test would match an attacker-controlled path."""
+    return urlparse(url).netloc
+
+
 def _ghcr(build_number="1550", **over):
     """URL -> response for a healthy GHCR read; `over` replaces one leg."""
     routes = {
@@ -111,26 +122,26 @@ def _ghcr(build_number="1550", **over):
 
 
 def test_published_build_reads_the_image_env(monkeypatch):
-    monkeypatch.setattr(version_mod.requests, "get", _ghcr("1556"))
-    assert version_mod._published_build(MagicMock()) == 1556
+    monkeypatch.setattr("backend.util.version.requests.get", _ghcr("1556"))
+    assert _published_build(MagicMock()) == 1556
 
 
 @pytest.mark.parametrize("leg", ["token", "manifests/latest", "blobs/"])
 def test_published_build_is_none_when_the_registry_fails(leg, monkeypatch):
     """Unknown must never raise an update badge."""
     monkeypatch.setattr(
-        version_mod.requests, "get", _ghcr(**{leg: _Resp(ok=False, status=503)})
+        "backend.util.version.requests.get", _ghcr(**{leg: _Resp(ok=False, status=503)})
     )
-    assert version_mod._published_build(MagicMock()) is None
+    assert _published_build(MagicMock()) is None
 
 
 def test_image_tag_follows_the_flavour(monkeypatch):
     monkeypatch.setenv("CHUB_IMAGE_FLAVOR", "full")
-    assert version_mod._image_tag() == "full"
+    assert _image_tag() == "full"
     monkeypatch.setenv("CHUB_IMAGE_FLAVOR", "lean")
-    assert version_mod._image_tag() == "latest"
+    assert _image_tag() == "latest"
     monkeypatch.delenv("CHUB_IMAGE_FLAVOR", raising=False)
-    assert version_mod._image_tag() == "latest"
+    assert _image_tag() == "latest"
 
 
 def test_commits_that_publish_no_image_do_not_raise_an_update(monkeypatch):
@@ -140,29 +151,29 @@ def test_commits_that_publish_no_image_do_not_raise_an_update(monkeypatch):
     seen = []
 
     def get(url, **kwargs):
-        seen.append(url)
-        if "raw.githubusercontent.com" in url:
+        seen.append(_host(url))
+        if _host(url) == "raw.githubusercontent.com":
             return _Resp(text=json.dumps({".": "2.48.0"}))
         return _ghcr("1556")(url, **kwargs)
 
-    monkeypatch.setattr(version_mod.requests, "get", get)
-    remote, build, update = version_mod._check_remote_version(
+    monkeypatch.setattr("backend.util.version.requests.get", get)
+    _remote, build, update = _check_remote_version(
         "2.48.0.main1556", "main", MagicMock()
     )
 
     assert build == 1556
     assert update is False, "running the newest published image is not an update"
-    assert not any("api.github.com" in u for u in seen), "must not count commits"
+    assert "api.github.com" not in seen, "must not count commits"
 
 
 def test_a_newer_published_image_is_an_update(monkeypatch):
     def get(url, **kwargs):
-        if "raw.githubusercontent.com" in url:
+        if _host(url) == "raw.githubusercontent.com":
             return _Resp(text=json.dumps({".": "2.48.0"}))
         return _ghcr("1560")(url, **kwargs)
 
-    monkeypatch.setattr(version_mod.requests, "get", get)
-    _remote, build, update = version_mod._check_remote_version(
+    monkeypatch.setattr("backend.util.version.requests.get", get)
+    _remote, build, update = _check_remote_version(
         "2.48.0.main1556", "main", MagicMock()
     )
     assert (build, update) == (1560, True)
