@@ -5,7 +5,7 @@
 psd-tools[composite]==1.17.4
 # psd-tools[composite]'s transitive scipy, pinned explicitly: its own floor
 # (1.9.3) trips PYSEC-2023-102 in the dependency audit. cp314 wheels exist.
-scipy==1.18.0
+scipy==1.18.1
 Wand==0.7.2
 # CPU ONNX runtime for the PP-OCRv4 DBNet text detector (models/ppocr_v4_det.onnx)
 # — powers the polarity-agnostic "tighten to letters" anchor. Fail-soft: if the
