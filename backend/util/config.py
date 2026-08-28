@@ -1330,8 +1330,24 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
     except Exception as e:
         raise ConfigError(f"Unexpected configuration error in {config_path}") from e
 
+    _reconcile_gdrive_presets(config)
+
     _cache_config(config_path, version, config)
     return config
+
+
+def _reconcile_gdrive_presets(config: "ChubConfig") -> None:
+    """Repoint gdrive_list entries whose preset drive moved (in memory only).
+
+    Not persisted here — the healed id reaches every consumer and the UI, and
+    the user's next Settings save writes it through save_config's atomic path.
+    """
+    try:
+        from backend.util.gdrive_presets import reconcile_gdrive_list
+
+        reconcile_gdrive_list(getattr(config.sync_gdrive, "gdrive_list", None))
+    except Exception as exc:  # pragma: no cover - never block a config load
+        _config_log.debug(f"GDrive preset reconcile skipped: {exc}")
 
 
 def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:

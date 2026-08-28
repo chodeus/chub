@@ -316,10 +316,12 @@ def test_gdrive_presets_returns_bundled_catalogue(app_with_router):
 
 def test_gdrive_presets_missing_file_returns_500(monkeypatch, app_with_router):
     """If the bundled JSON is missing, surface a 500 (not a silent empty list)."""
-    monkeypatch.setattr(
-        system_router, "_GDRIVE_PRESETS_PATH", system_router.Path("/nonexistent.json")
-    )
-    monkeypatch.setattr(system_router, "_gdrive_presets_cache", None)
+    from pathlib import Path
+
+    from backend.util import gdrive_presets
+
+    monkeypatch.setattr(gdrive_presets, "PRESETS_PATH", Path("/nonexistent.json"))
+    monkeypatch.setattr(gdrive_presets, "_presets_cache", None)
     app = app_with_router(system_router.router)
     client = TestClient(app)
     resp = client.get("/api/gdrive-presets")
