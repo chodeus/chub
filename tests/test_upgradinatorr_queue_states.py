@@ -189,14 +189,57 @@ def test_queue_row_added_during_the_run_still_counts_as_a_grab():
     assert result["data"][0]["queue_imports"] == []
 
 
-def test_queue_block_skips_searching_an_item_awaiting_import():
+def test_queue_block_skips_the_search_but_still_reports_the_download():
+    """The skipped item must stay visible — silently dropping it from the report
+    defeats the point of surfacing downloads that never imported."""
     module = make_upgradinatorr(dry_run=False)
     app = _StaleQueueARR([[upgradinatorr_media_item([])]], added_hours_ago=5)
 
     result = module.process_instance("radarr", _settings(queue_block_hours=72), app)
 
     assert app.search_calls == [], "already downloaded — must not grab a second copy"
-    assert result is None
+    assert result is not None, "a blocked-only run still has something to report"
+    entry = result["data"][0]
+    assert entry["download"] == {}
+    assert [q["download"] for q in entry["queue_imports"]] == [
+        "Movie.2024.1080p.WEB-DL"
+    ]
+
+
+def test_blocked_media_does_not_trigger_the_unattended_tag_reset():
+    """An empty candidate list caused by the queue guard is deferred work, not a
+    finished rotation — the unattended reset would strip every checked tag."""
+    module = make_upgradinatorr(dry_run=False)
+    app = _StaleQueueARR([[upgradinatorr_media_item([])]], added_hours_ago=5)
+
+    module.process_instance(
+        "radarr", _settings(queue_block_hours=72, unattended=True), app
+    )
+
+    assert app.remove_calls == [], "blocked != rotation complete"
+    assert app.search_calls == []
+
+
+class _BadQueueARR(FakeARR):
+    """An *arr whose queue endpoint returns something that is not a dict."""
+
+    def __init__(self, media_batches, payload):
+        super().__init__(media_batches)
+        self.payload = payload
+
+    def get_queue(self):
+        return self.payload
+
+
+@pytest.mark.parametrize("payload", ["<html>error</html>", [{"a": 1}], 42])
+def test_non_dict_queue_response_fails_open_instead_of_crashing(payload):
+    module = make_upgradinatorr(dry_run=False)
+    app = _BadQueueARR([[upgradinatorr_media_item([])]], payload)
+
+    result = module.process_instance("radarr", _settings(queue_block_hours=72), app)
+
+    assert app.search_calls == [7], "unreadable queue must not block searching"
+    assert result is not None
 
 
 def test_queue_block_expires_so_a_dead_row_cannot_block_forever():

@@ -919,43 +919,77 @@ class Upgradinatorr(ChubModule):
             return [("season", series_id, season) for season in (seasons or [])]
         return []
 
-    def _queue_blocked_downloads(
-        self, app: BaseARRClient, instance_type: str, block_hours: int
-    ) -> Dict[Tuple[Any, ...], str]:
-        """Search targets that already have an unresolved download in the *arr
-        queue, mapped to the reason, so this run doesn't grab a second copy.
-
-        Fails OPEN by design: an unreadable queue, a missing timestamp or an
-        unrecognised id shape leaves the item searchable. Suppressing searches on
-        bad data would stall the whole rotation silently, which is worse than the
-        duplicate grab this avoids. Rows older than ``block_hours`` stop blocking
-        so a forgotten dead row can't sideline an item forever.
-        """
-        blocked: Dict[Tuple[Any, ...], str] = {}
-        if not block_hours or block_hours <= 0:
-            return blocked
+    def _fetch_queue_records(self, app: BaseARRClient) -> Optional[List[Dict[str, Any]]]:
+        """The *arr's queue rows, or None when the queue can't be read. Anything
+        that isn't the expected dict-with-records shape counts as unreadable."""
         try:
-            queue = app.get_queue() or {}
+            queue = app.get_queue()
         except Exception as e:
             self.logger.warning(
-                f"Could not read the {app.instance_name} queue to check for "
-                f"in-flight downloads ({e}); searching without that guard."
+                f"Could not read the {app.instance_name} queue ({e})."
             )
-            return blocked
+            return None
+        if not queue:
+            return []
+        if not isinstance(queue, dict):
+            self.logger.warning(
+                f"{app.instance_name} returned a {type(queue).__name__} for its "
+                "queue, not the expected object."
+            )
+            return None
+        records = queue.get("records")
+        if records is None:
+            return []
+        if not isinstance(records, list):
+            self.logger.warning(
+                f"{app.instance_name} returned a non-list queue 'records' field."
+            )
+            return None
+        return [r for r in records if isinstance(r, dict)]
+
+    def _queue_blocked_downloads(
+        self, app: BaseARRClient, instance_type: str, block_hours: int
+    ) -> Tuple[Dict[Tuple[Any, ...], str], Dict[int, List[Dict[str, Any]]]]:
+        """Search targets holding an unresolved download: (key -> reason) plus the
+        queue rows per parent. Fails OPEN so a bad queue can't stall searching."""
+        blocked: Dict[Tuple[Any, ...], str] = {}
+        rows: Dict[int, List[Dict[str, Any]]] = {}
+        if not block_hours or block_hours <= 0:
+            return blocked, rows
+        records = self._fetch_queue_records(app)
+        if records is None:
+            self.logger.warning(
+                f"Searching {app.instance_name} without the in-flight-download guard."
+            )
+            return blocked, rows
+        owner_field = self._HISTORY_OWNER_FIELD.get(instance_type)
         now = datetime.now(timezone.utc)
-        for record in queue.get("records", []) or []:
-            if not isinstance(record, dict):
-                continue
+        for record in records:
             state = classify_queue_row(record)
             if state == "done":
                 continue
             age = self._queue_row_age_hours(record, now)
             if age is None or age > block_hours:
                 continue
+            keys = self._queue_record_keys(record, instance_type)
+            if not keys:
+                continue
             label = "awaiting import" if state == "pending" else "import stuck"
-            for key in self._queue_record_keys(record, instance_type):
+            for key in keys:
                 blocked.setdefault(key, f"{label} for {age:.0f}h")
-        return blocked
+            media_id = record.get(owner_field) if owner_field else None
+            if media_id is None:
+                continue
+            rows.setdefault(media_id, []).append(
+                {
+                    "state": state,
+                    "download": record.get("title"),
+                    "torrent_custom_format_score": record.get("customFormatScore"),
+                    "age_hours": age,
+                    "messages": self._queue_status_messages(record),
+                }
+            )
+        return blocked, rows
 
     def _get_all_wanted(
         self, app: BaseARRClient, search_mode: str
@@ -1243,7 +1277,7 @@ class Upgradinatorr(ChubModule):
 
         # Read before searching: anything already downloaded and waiting on an
         # import must not be searched again, or the *arr grabs a second copy.
-        blocked_downloads = self._queue_blocked_downloads(
+        blocked_downloads, blocked_rows = self._queue_blocked_downloads(
             app, instance_type, queue_block_hours
         )
         if blocked_downloads:
@@ -1260,7 +1294,10 @@ class Upgradinatorr(ChubModule):
             season_monitored_threshold,
             blocked_downloads,
         )
-        if not filtered_media_dict and unattended:
+        # Blocked work is deferred, not finished — an empty candidate list caused
+        # by it must not reach the reset below, which strips every checked tag.
+        rotation_complete = not filtered_media_dict and not blocked_downloads
+        if rotation_complete and unattended:
             self.logger.info(
                 f"All media for {app.instance_name} is already tagged—removing tags for unattended operation."
             )
@@ -1306,7 +1343,9 @@ class Upgradinatorr(ChubModule):
                 blocked_downloads,
             )
 
-        if not filtered_media_dict and not unattended:
+        # blocked_rows still have to be reported, so only bail when there is
+        # genuinely nothing to say.
+        if not filtered_media_dict and not unattended and not blocked_rows:
             self.logger.info(f"No media left to process for {app.instance_name}.")
             self.logger.warning(
                 f"No media found for {app.instance_name}. Reason: nothing left to tag."
@@ -1500,12 +1539,11 @@ class Upgradinatorr(ChubModule):
                 "Now reconciling grabbed downloads and current queue..."
             )
             searched_ids = [item["media_id"] for item in searched_items]
-            # get_queue() returns None on an API failure — don't discard this
-            # instance's already-completed searches over a crash on None.
-            queue = app.get_queue() or {}
-            self.logger.debug(f"Queue item count: {len(queue.get('records', []))}")
+            # An unreadable queue must not discard searches already completed.
+            records = self._fetch_queue_records(app) or []
+            self.logger.debug(f"Queue item count: {len(records)}")
             queue_dict: List[Dict[str, Any]] = self.process_queue(
-                queue, instance_type, searched_ids
+                {"records": records}, instance_type, searched_ids
             )
             self.logger.debug(f"Queue dict item count: {len(queue_dict)}")
 
@@ -1523,10 +1561,8 @@ class Upgradinatorr(ChubModule):
                         continue
                     added = self._parse_arr_datetime(q.get("added"))
                     if added is None or added >= run_started:
-                        # No timestamp means we can't date the row, so keep the
-                        # long-standing fallback of reporting it as a grab —
-                        # that arm is the only grab signal for *arrs whose grab
-                        # history isn't scoped to the item we searched.
+                        # Undated rows report as grabs: that arm is the only grab
+                        # signal for *arrs with unscoped grab history.
                         downloads.setdefault(
                             q["download"], q["torrent_custom_format_score"]
                         )
@@ -1552,6 +1588,9 @@ class Upgradinatorr(ChubModule):
                         "search_failures": failed_searches.get(item["media_id"], []),
                     }
                 )
+            # Media held back by the queue guard never reach searched_items, so
+            # report their rows here or the skipped work is invisible.
+            self._append_blocked_rows(output_dict, blocked_rows, media_dict)
             output_dict.update(search_stats)
             tagged_in_run = len(searched_items) - sum(
                 1 for v in failed_searches.values() if v
@@ -1581,6 +1620,37 @@ class Upgradinatorr(ChubModule):
                     }
                 )
         return output_dict
+
+    @staticmethod
+    def _append_blocked_rows(
+        output_dict: Dict[str, Any],
+        blocked_rows: Dict[int, List[Dict[str, Any]]],
+        media_dict: List[Dict[str, Any]],
+    ) -> None:
+        """Add queue rows for media the guard skipped, merging into an existing
+        entry when the same parent was also searched."""
+        if not blocked_rows:
+            return
+        titles = {m["media_id"]: m for m in media_dict}
+        by_id = {e["media_id"]: e for e in output_dict["data"]}
+        for media_id, rows in blocked_rows.items():
+            entry = by_id.get(media_id)
+            if entry is None:
+                source = titles.get(media_id) or {}
+                entry = {
+                    "media_id": media_id,
+                    "title": source.get("title", f"ID {media_id}"),
+                    "year": source.get("year"),
+                    "download": {},
+                    "queue_imports": [],
+                    "search_failures": [],
+                }
+                output_dict["data"].append(entry)
+                by_id[media_id] = entry
+            seen = {q.get("download") for q in entry["queue_imports"]}
+            entry["queue_imports"].extend(
+                r for r in rows if r.get("download") not in seen
+            )
 
     @staticmethod
     def _queue_imports(item: Dict[str, Any], state: str) -> List[Dict[str, Any]]:
