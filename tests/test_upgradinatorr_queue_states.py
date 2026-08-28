@@ -285,3 +285,28 @@ def test_notification_splits_grabbed_from_stuck():
     assert any("import stuck" in name for name in names)
     assert "Serum - Jupiter (2019) [single]" in body
     assert "Album match is not close enough: 75.1% vs 80%" in body
+
+
+@pytest.mark.parametrize("bad", [1, "oops", {"a": 1}])
+def test_malformed_status_messages_do_not_raise(bad):
+    """_fetch_queue_records validates only the top-level records, so a junk
+    statusMessages value would otherwise abort the whole instance run."""
+    assert Upgradinatorr._queue_status_messages(_queue_row(statusMessages=bad)) == []
+
+
+@pytest.mark.parametrize("bad", [1, "oops"])
+def test_malformed_inner_messages_do_not_raise(bad):
+    row = _queue_row(statusMessages=[{"title": "a.flac", "messages": bad}])
+    assert Upgradinatorr._queue_status_messages(row) == ["a.flac"]
+
+
+def test_blocked_rows_are_deduplicated_by_download_title():
+    """Two queue rows can share a title (a re-grab, or two files of one track);
+    the report must not list it twice."""
+    out = {"data": []}
+    row = {"state": "stuck", "download": "Dupe", "torrent_custom_format_score": 1,
+           "age_hours": 5.0, "messages": []}
+    Upgradinatorr._append_blocked_rows(
+        out, {7: [dict(row), dict(row)]}, [{"media_id": 7, "title": "M", "year": 2024}]
+    )
+    assert [q["download"] for q in out["data"][0]["queue_imports"]] == ["Dupe"]

@@ -309,10 +309,16 @@ class Upgradinatorr(ChubModule):
     def _queue_status_messages(record: Dict[str, Any]) -> List[str]:
         """The *arr's own reasons for a queue row, flattened to plain strings."""
         out: List[str] = []
-        for entry in record.get("statusMessages") or []:
+        entries = record.get("statusMessages")
+        if not isinstance(entries, list):
+            return out
+        for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            messages = [str(m).strip() for m in (entry.get("messages") or []) if m]
+            raw = entry.get("messages")
+            messages = (
+                [str(m).strip() for m in raw if m] if isinstance(raw, list) else []
+            )
             if messages:
                 out.extend(messages)
             elif entry.get("title"):
@@ -1648,9 +1654,12 @@ class Upgradinatorr(ChubModule):
                 output_dict["data"].append(entry)
                 by_id[media_id] = entry
             seen = {q.get("download") for q in entry["queue_imports"]}
-            entry["queue_imports"].extend(
-                r for r in rows if r.get("download") not in seen
-            )
+            for row in rows:
+                download = row.get("download")
+                if download in seen:
+                    continue
+                entry["queue_imports"].append(row)
+                seen.add(download)
 
     @staticmethod
     def _queue_imports(item: Dict[str, Any], state: str) -> List[Dict[str, Any]]:
