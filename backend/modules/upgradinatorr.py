@@ -159,20 +159,36 @@ class Upgradinatorr(ChubModule):
             return settings.get(key, default)
         return getattr(settings, key, default)
 
+    @staticmethod
+    def _coerce_hours(raw: Any) -> Optional[int]:
+        """A whole, non-negative hour count, or None when the value isn't one.
+        bool is excluded first — it is an int subclass, so True would read as 1."""
+        if raw is None or isinstance(raw, bool):
+            return None
+        if isinstance(raw, float):
+            raw = int(raw) if raw.is_integer() else None
+        elif isinstance(raw, str):
+            try:
+                raw = int(raw.strip())
+            except ValueError:
+                return None
+        if not isinstance(raw, int):
+            return None
+        return raw if raw >= 0 else None
+
     def _queue_block_hours(self, settings: Any) -> int:
-        """Hours an unresolved download suppresses re-searching. An explicit 0
-        opts out; null/blank/junk falls back to the default, never to 0."""
+        """Hours an unresolved download suppresses re-searching. Only an explicit
+        0 opts out — every unusable value falls back, never to 0."""
         raw = self._get_setting(settings, "queue_block_hours", QUEUE_BLOCK_HOURS_DEFAULT)
-        if raw is None or (isinstance(raw, str) and not raw.strip()):
-            return QUEUE_BLOCK_HOURS_DEFAULT
-        try:
-            return int(raw)
-        except (TypeError, ValueError):
+        hours = self._coerce_hours(raw)
+        if hours is not None:
+            return hours
+        if raw is not None and str(raw).strip():
             self.logger.warning(
                 f"Invalid queue_block_hours {raw!r}; using "
                 f"{QUEUE_BLOCK_HOURS_DEFAULT}."
             )
-            return QUEUE_BLOCK_HOURS_DEFAULT
+        return QUEUE_BLOCK_HOURS_DEFAULT
 
     @staticmethod
     def _tag_names(item: Dict[str, Any]) -> set:
@@ -971,11 +987,13 @@ class Upgradinatorr(ChubModule):
             # totalRecords, which the *arrs report stale.
             if len(page_rows) < page_size:
                 return out
+        # Same rule as a failed page: a partial snapshot would suppress only the
+        # rows we happened to read and re-search the rest.
         self.logger.warning(
             f"Stopped reading the {app.instance_name} queue at "
-            f"{QUEUE_MAX_PAGES} pages; later rows are not suppressed."
+            f"{QUEUE_MAX_PAGES} pages; searching without the guard."
         )
-        return out
+        return None
 
     def _queue_blocked_downloads(
         self, app: BaseARRClient, instance_type: str, block_hours: int

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.modules.upgradinatorr import Upgradinatorr
+from backend.modules.upgradinatorr import QUEUE_MAX_PAGES, Upgradinatorr
 from backend.util.arr import classify_queue_row
 from backend.util.notification_formatting import format_for_discord
 
@@ -432,8 +432,13 @@ def test_failed_pending_states_classify_as_stuck(state):
 
 @pytest.mark.parametrize(
     "stored,expected",
-    [(None, 72), ("", 72), ("   ", 72), ("abc", 72), ({}, 72),
-     (0, 0), ("0", 0), (24, 24), ("24", 24)],
+    [
+        # unusable -> default, never 0 (0 would silently disable the guard)
+        (None, 72), ("", 72), ("   ", 72), ("abc", 72), ({}, 72),
+        (-1, 72), ("-5", 72), (0.5, 72), (False, 72), (True, 72),
+        # explicit opt-out and real values survive
+        (0, 0), ("0", 0), (24, 24), ("24", 24), (24.0, 24),
+    ],
 )
 def test_queue_block_hours_falls_back_without_disabling_the_guard(stored, expected):
     """Only an explicit 0 opts out. A null or blank value reaching `or 0` would
@@ -445,3 +450,29 @@ def test_queue_block_hours_falls_back_without_disabling_the_guard(stored, expect
 def test_queue_block_hours_defaults_when_absent():
     module = make_upgradinatorr(dry_run=False)
     assert module._queue_block_hours(SimpleNamespace()) == 72
+
+
+def test_page_cap_discards_the_partial_queue_read():
+    """Hitting the page cap is the same situation as a failed page — a partial
+    snapshot suppresses only what was read and re-searches the rest."""
+    module = make_upgradinatorr(dry_run=False)
+
+    class _EndlessQueueARR(FakeARR):
+        def __init__(self):
+            super().__init__([[upgradinatorr_media_item([])]])
+            self.pages = 0
+
+        def get_queue(self, page=1, page_size=200):
+            self.pages += 1
+            added = _iso(datetime.now(timezone.utc) - timedelta(hours=5))
+            return {
+                "records": [
+                    _queue_row(downloadId=f"p{page}-{i}", movieId=7, albumId=None,
+                               title=f"M.{page}.{i}", added=added)
+                    for i in range(page_size)
+                ]
+            }
+
+    app = _EndlessQueueARR()
+    assert module._fetch_queue_records(app) is None
+    assert app.pages == QUEUE_MAX_PAGES
