@@ -896,6 +896,7 @@ const CORE_SETTINGS_SCHEMA = [
                         type: 'number',
                         required: false,
                         defaultValue: 72,
+                        min: 0,
                         description:
                             'Do not search an item that already has a download sitting in the queue waiting to import, until that download is older than this many hours. Prevents grabbing a second copy of something already on disk. Set to 0 to always search.',
                     },
