@@ -6,7 +6,7 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 from backend.util.base_module import ChubModule
-from backend.util.helper import create_table, print_settings
+from backend.util.helper import as_list, create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 
@@ -50,12 +50,12 @@ class Jduparr(ChubModule):
             return []
 
         groups: List[List[str]] = []
-        for match_set in data.get("matchSets") or []:
+        for match_set in as_list(data.get("matchSets")):
             if not isinstance(match_set, dict):
                 continue
             paths = [
                 entry.get("filePath")
-                for entry in (match_set.get("fileList") or [])
+                for entry in as_list(match_set.get("fileList"))
                 if isinstance(entry, dict) and entry.get("filePath")
             ]
             if len(paths) > 1:

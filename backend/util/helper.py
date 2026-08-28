@@ -32,6 +32,12 @@ from backend.util.normalization import (
 tqdm.__init__ = partialmethod(tqdm.__init__, disable=None)
 
 
+def as_list(value: Any) -> List[Any]:
+    """A JSON field that should be an array, or [] when it isn't. `x or []`
+    still raises TypeError on a truthy scalar — iterate through this instead."""
+    return value if isinstance(value, list) else []
+
+
 def print_json(data: Any, logger: Any, module_name: str, type_: str) -> None:
     """
     Write data as JSON to a debug file for troubleshooting.

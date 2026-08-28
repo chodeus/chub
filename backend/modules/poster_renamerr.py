@@ -20,6 +20,7 @@ from backend.util.constants import (
 )
 from backend.util.database import ChubDB
 from backend.util.helper import (
+    as_list,
     classify_match,
     create_table,
     extract_ids,
@@ -1265,7 +1266,7 @@ class PosterRenamerr(ChubModule):
             "album": [],
         }
         payload = (upload_result or {}).get("payload") or {}
-        for up in payload.get("uploaded") or []:
+        for up in as_list(payload.get("uploaded")):
             asset_type = up.get("asset_type") or "movie"
             season = up.get("season_number")
             libs = up.get("library_name") or "Plex"

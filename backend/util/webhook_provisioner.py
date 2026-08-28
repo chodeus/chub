@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlparse
 
 from backend.util.arr import create_arr_client
+from backend.util.helper import as_list
 
 # The fixed Connect name CHUB owns in each arr. Matching/creating by this exact
 # (case-insensitive) name is what makes provisioning idempotent and keeps CHUB
@@ -116,7 +117,7 @@ def _webhook_template(schema: Any) -> Optional[Dict[str, Any]]:
 
 
 def _field_value(notif: Dict[str, Any], name: str) -> Any:
-    for field in notif.get("fields") or []:
+    for field in as_list(notif.get("fields")):
         if isinstance(field, dict) and field.get("name") == name:
             return field.get("value")
     return None
@@ -144,7 +145,7 @@ def desired_webhook_body(
     if template:
         body = dict(template)
         fields = []
-        for field in template.get("fields") or []:
+        for field in as_list(template.get("fields")):
             field = dict(field)
             if field.get("name") == "url":
                 field["value"] = url

@@ -19,7 +19,7 @@ from backend.util.arr import (
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
 from backend.util.database.upgradinatorr_progress import UpgradinatorrProgress
-from backend.util.helper import create_table, print_settings
+from backend.util.helper import as_list, create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 
@@ -309,16 +309,10 @@ class Upgradinatorr(ChubModule):
     def _queue_status_messages(record: Dict[str, Any]) -> List[str]:
         """The *arr's own reasons for a queue row, flattened to plain strings."""
         out: List[str] = []
-        entries = record.get("statusMessages")
-        if not isinstance(entries, list):
-            return out
-        for entry in entries:
+        for entry in as_list(record.get("statusMessages")):
             if not isinstance(entry, dict):
                 continue
-            raw = entry.get("messages")
-            messages = (
-                [str(m).strip() for m in raw if m] if isinstance(raw, list) else []
-            )
+            messages = [str(m).strip() for m in as_list(entry.get("messages")) if m]
             if messages:
                 out.extend(messages)
             elif entry.get("title"):
@@ -944,14 +938,12 @@ class Upgradinatorr(ChubModule):
             )
             return None
         records = queue.get("records")
-        if records is None:
-            return []
-        if not isinstance(records, list):
+        if records is not None and not isinstance(records, list):
             self.logger.warning(
                 f"{app.instance_name} returned a non-list queue 'records' field."
             )
             return None
-        return [r for r in records if isinstance(r, dict)]
+        return [r for r in as_list(records) if isinstance(r, dict)]
 
     def _queue_blocked_downloads(
         self, app: BaseARRClient, instance_type: str, block_hours: int
@@ -1665,7 +1657,7 @@ class Upgradinatorr(ChubModule):
     def _queue_imports(item: Dict[str, Any], state: str) -> List[Dict[str, Any]]:
         return [
             entry
-            for entry in (item.get("queue_imports") or [])
+            for entry in as_list(item.get("queue_imports"))
             if entry.get("state") == state
         ]
 

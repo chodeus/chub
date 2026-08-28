@@ -324,3 +324,13 @@ def test_dry_run_still_reports_blocked_downloads():
     assert [q["download"] for q in result["data"][0]["queue_imports"]] == [
         "Movie.2024.1080p.WEB-DL"
     ]
+
+
+@pytest.mark.parametrize("bad", [1, "oops", {"a": 1}, None])
+def test_as_list_guards_truthy_scalars(bad):
+    """`x or []` raises TypeError on a truthy scalar; as_list is the one owner
+    of that guard across every *arr response parser."""
+    from backend.util.helper import as_list
+
+    assert as_list(bad) == []
+    assert as_list([1, 2]) == [1, 2]
