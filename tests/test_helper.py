@@ -264,6 +264,32 @@ def test_is_match_yearless_tmdb_collision_rejected():
     assert matched is False
 
 
+def test_is_match_tmdb_rejected_when_the_media_has_no_year():
+    """The asset knowing a year is not enough — with no media year there is
+    nothing to agree WITH, so a shared tmdb number proves nothing."""
+    asset = {
+        "title": "Cunk on Earth",
+        "normalized_title": "cunkonearth",
+        "tmdb_id": "79063",
+        "year": 2022,
+    }
+    media = {
+        "title": "The Unkabogable Praybeyt Benjamin",
+        "normalized_title": "theunkabogablepraybeytbenjamin",
+        "tmdb_id": "79063",
+    }
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_tmdb_accepts_a_secondary_year():
+    """secondary_year/folder_year count as known media years, not just `year`."""
+    asset = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    media = {"title": "Inception", "tmdb_id": "27205", "secondary_year": 2010}
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
 def test_is_match_yearless_tmdb_still_matches_when_the_title_agrees():
     """An untrusted tmdb agreement falls through to the title checks rather than
     rejecting outright, so a genuine yearless poster still lands."""

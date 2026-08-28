@@ -501,6 +501,20 @@ def is_match(
         except Exception:
             return None
 
+    def known_years() -> Tuple[Optional[int], List[int]]:
+        """(asset year, media years that are actually known) — shared by both gates."""
+        return (
+            normalized_year(asset.get("year")),
+            [
+                y
+                for y in (
+                    normalized_year(media.get(key))
+                    for key in ("year", "secondary_year", "folder_year")
+                )
+                if y is not None
+            ],
+        )
+
     def year_matches() -> bool:
         """Year gate for title-based matches.
 
@@ -512,12 +526,7 @@ def is_match(
         detection guards against a yearless poster matching two same-titled
         items.
         """
-        asset_year = normalized_year(asset.get("year"))
-        present_media_years = [
-            normalized_year(media.get(key))
-            for key in ["year", "secondary_year", "folder_year"]
-        ]
-        present_media_years = [y for y in present_media_years if y is not None]
+        asset_year, present_media_years = known_years()
         if asset_year is None or not present_media_years:
             return True
         # ±1 tolerance: Plex/TMDB/*arr routinely disagree by a year (production
@@ -530,10 +539,13 @@ def is_match(
     def year_corroborates() -> bool:
         """Whether the year can vouch for a namespaced (tmdb) id agreement.
 
-        Stricter than year_matches(), which passes when a year is simply absent:
-        a yearless asset carries no tiebreak at all, so it corroborates nothing.
+        Stricter than year_matches(), which passes when EITHER side's year is
+        absent: an unknown year is no tiebreak, so it corroborates nothing.
         """
-        return normalized_year(asset.get("year")) is not None and year_matches()
+        asset_year, present_media_years = known_years()
+        return (
+            asset_year is not None and bool(present_media_years) and year_matches()
+        )
 
     def normalized_id(key: str, data: Dict[str, Any]) -> Optional[str]:
         value = data.get(key)

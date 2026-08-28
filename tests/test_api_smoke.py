@@ -15,7 +15,6 @@ import pytest
 pytest.importorskip("httpx")
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -798,18 +797,15 @@ def test_security_headers_stamped_on_every_response():
 
 
 def test_security_headers_cover_an_unhandled_500():
-    """Starlette hands an `Exception` handler to ServerErrorMiddleware, which sits
-    OUTSIDE the middleware stack — so the catch-all 500 must stamp them itself."""
-    from backend.api.main import SECURITY_HEADERS
+    """Starlette runs an `Exception` handler OUTSIDE the middleware stack, so the
+    production handler must stamp the headers itself. Registering the real
+    handle_exception here means this fails if it ever stops doing so."""
+    from backend.api.main import SECURITY_HEADERS, handle_exception
 
     app = FastAPI()
+    app.state.logger = StubLogger()
     app.add_middleware(SecurityHeadersMiddleware)
-
-    @app.exception_handler(Exception)
-    async def _boom_handler(request, exc):
-        resp = JSONResponse(status_code=500, content={"success": False})
-        resp.headers.update(SECURITY_HEADERS)
-        return resp
+    app.add_exception_handler(Exception, handle_exception)
 
     @app.get("/boom")
     def boom():

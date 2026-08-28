@@ -85,10 +85,8 @@ STREAM_PATH_PREFIXES = (
 )
 
 
-# Applied by SecurityHeadersMiddleware and, separately, by the catch-all 500
-# handler — Starlette hands an `Exception` handler to ServerErrorMiddleware,
-# which sits OUTSIDE the middleware stack, so that response never passes
-# through the middleware below. Keep the two application sites in step.
+# Stamped here AND in handle_exception — Starlette runs an `Exception` handler
+# outside the middleware stack. Keep both sites in step.
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "SAMEORIGIN",
