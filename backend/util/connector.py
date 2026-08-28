@@ -551,9 +551,8 @@ class Connector:
                 artist_mbid = artist.get("musicbrainz_id")
 
                 # Album entries - inherit metadata from parent artist.
-                # seasons=None is normal (include_episode=False). A malformed
-                # value is NOT — coercing it to [] would delete this artist's
-                # cached album rows as stale, so refuse the sync instead.
+                # Coercing a malformed seasons to [] deletes this artist's
+                # cached albums as stale. seasons=None is normal, though.
                 seasons = artist.get("seasons")
                 if seasons is not None and not isinstance(seasons, list):
                     raise ValueError(

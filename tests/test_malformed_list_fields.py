@@ -24,14 +24,25 @@ def test_webhook_template_rejected_when_fields_is_not_a_list(bad):
     assert _webhook_template(schema) is None
 
 
-def test_webhook_template_accepted_when_fields_is_a_list():
-    tmpl = {"implementation": "Webhook", "fields": [{"name": "url"}]}
+def test_webhook_template_accepted_with_both_required_fields():
+    tmpl = {
+        "implementation": "Webhook",
+        "fields": [{"name": "url"}, {"name": "method"}],
+    }
     assert _webhook_template([tmpl]) == tmpl
 
 
-def test_webhook_template_accepted_when_fields_absent():
+@pytest.mark.parametrize(
+    "fields",
+    [None, [], [{"name": "url"}], [{"name": "method"}], [{"name": "other"}]],
+)
+def test_webhook_template_rejected_without_url_and_method(fields):
+    """url/method are written onto existing descriptors by name, so a template
+    missing either produces a webhook with no destination."""
     tmpl = {"implementation": "Webhook"}
-    assert _webhook_template([tmpl]) == tmpl
+    if fields is not None:
+        tmpl["fields"] = fields
+    assert _webhook_template([tmpl]) is None
 
 
 @pytest.mark.parametrize("bad", [1, "seasons", {"a": 1}])

@@ -113,9 +113,13 @@ def _webhook_template(schema: Any) -> Optional[Dict[str, Any]]:
     for tmpl in schema:
         if not isinstance(tmpl, dict) or tmpl.get("implementation") != "Webhook":
             continue
-        # A non-list 'fields' would yield a body with no url/method. Reject the
-        # template so the caller's stable fallback is used instead.
-        if not isinstance(tmpl.get("fields", []), list):
+        # url/method are set by name onto existing descriptors, so a template
+        # missing either yields a webhook with no destination — use the fallback.
+        fields = tmpl.get("fields")
+        if not isinstance(fields, list):
+            return None
+        names = {f.get("name") for f in fields if isinstance(f, dict)}
+        if not {"url", "method"} <= names:
             return None
         return tmpl
     return None

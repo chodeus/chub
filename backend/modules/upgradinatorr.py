@@ -934,8 +934,8 @@ class Upgradinatorr(ChubModule):
                     f"Could not read the {app.instance_name} queue ({e})."
                 )
                 return None
-            if not queue:
-                break
+            # None/""/[] is a failed page, not the end of the queue — breaking
+            # here would suppress from a partial read.
             if not isinstance(queue, dict):
                 self.logger.warning(
                     f"{app.instance_name} returned a {type(queue).__name__} for "

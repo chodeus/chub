@@ -378,3 +378,42 @@ def test_queue_pagination_covers_rows_past_the_first_page():
     assert len(records) == 250
     assert app.pages_requested[:2] == [1, 2]
     assert records[249]["title"] == "Movie.249"
+
+
+class _FlakyPagedQueueARR(FakeARR):
+    """Page 1 is full, page 2 fails. A partial read must not be used for
+    suppression — rows past it would be searched again."""
+
+    def __init__(self, media_batches, page2):
+        super().__init__(media_batches)
+        self.page2 = page2
+
+    def get_queue(self, page=1, page_size=200):
+        if page == 1:
+            added = _iso(datetime.now(timezone.utc) - timedelta(hours=5))
+            return {
+                "records": [
+                    _queue_row(downloadId=f"d{i}", movieId=7, albumId=None,
+                               title=f"Movie.{i}", added=added)
+                    for i in range(page_size)
+                ]
+            }
+        return self.page2
+
+
+@pytest.mark.parametrize("page2", [None, [], "", 0])
+def test_failed_later_page_discards_the_partial_queue_read(page2):
+    module = make_upgradinatorr(dry_run=False)
+    app = _FlakyPagedQueueARR([[upgradinatorr_media_item([])]], page2)
+
+    assert module._fetch_queue_records(app) is None
+
+
+def test_genuine_empty_later_page_ends_pagination():
+    """A real *arr returns {"records": []} past the end — that is the terminator,
+    unlike a failed page."""
+    module = make_upgradinatorr(dry_run=False)
+    app = _FlakyPagedQueueARR([[upgradinatorr_media_item([])]], {"records": []})
+
+    records = module._fetch_queue_records(app)
+    assert records is not None and len(records) == 200
