@@ -85,19 +85,24 @@ STREAM_PATH_PREFIXES = (
 )
 
 
+# Applied by SecurityHeadersMiddleware and, separately, by the catch-all 500
+# handler — Starlette hands an `Exception` handler to ServerErrorMiddleware,
+# which sits OUTSIDE the middleware stack, so that response never passes
+# through the middleware below. Keep the two application sites in step.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Stamp baseline security headers on every response."""
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        # setdefault, not assignment: a route that deliberately sets its own
-        # (e.g. a looser frame policy for an embed) must keep it.
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-        response.headers.setdefault("Referrer-Policy", "same-origin")
-        response.headers.setdefault(
-            "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
-        )
+        response.headers.update(SECURITY_HEADERS)
         return response
 
 
@@ -484,9 +489,10 @@ async def handle_exception(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all exception handler with standardized payload."""
     logger = get_logger(request, "ERROR")
     logger.error(f"Unhandled Exception: {exc}", exc_info=True)
-    return error(
-        "Internal server error", code="INTERNAL_ERROR", status_code=500
-    )
+    response = error("Internal server error", code="INTERNAL_ERROR", status_code=500)
+    # ServerErrorMiddleware owns this path, outside SecurityHeadersMiddleware.
+    response.headers.update(SECURITY_HEADERS)
+    return response
 
 
 @app.exception_handler(StarletteHTTPException)

@@ -527,6 +527,14 @@ def is_match(
             abs(asset_year - y) <= YEAR_MATCH_TOLERANCE for y in present_media_years
         )
 
+    def year_corroborates() -> bool:
+        """Whether the year can vouch for a namespaced (tmdb) id agreement.
+
+        Stricter than year_matches(), which passes when a year is simply absent:
+        a yearless asset carries no tiebreak at all, so it corroborates nothing.
+        """
+        return normalized_year(asset.get("year")) is not None and year_matches()
+
     def normalized_id(key: str, data: Dict[str, Any]) -> Optional[str]:
         value = data.get(key)
         if value in (None, "", "None", 0, "0"):
@@ -577,12 +585,12 @@ def is_match(
         media_id = normalized_id(key, media)
         if not asset_id or not media_id:
             continue
-        # A namespaced id (tmdb) needs the year to corroborate; an uncorroborated
-        # one falls through to shared_id_sources and blocks the title fallback.
-        if asset_id == media_id and (
-            key in GLOBALLY_UNIQUE_ID_SOURCES or year_matches()
-        ):
-            return True, f"ID match: {key}"
+        if asset_id == media_id:
+            if key in GLOBALLY_UNIQUE_ID_SOURCES or year_corroborates():
+                return True, f"ID match: {key}"
+            # Agreement we can't trust — not evidence of a *different* entity
+            # either, so let the title checks decide instead of rejecting.
+            continue
         shared_id_sources.append(key)
 
     if shared_id_sources:

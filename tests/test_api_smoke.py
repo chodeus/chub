@@ -14,7 +14,8 @@ import pytest
 # when it's not installed (e.g. minimal local environments).
 pytest.importorskip("httpx")
 
-from fastapi import FastAPI, HTTPException, Response  # noqa: E402
+from fastapi import FastAPI, HTTPException  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -770,11 +771,11 @@ def test_error_body_omits_exception_text(app_with_router):
 
 # --- Baseline security headers ---
 
+from backend.api.main import SecurityHeadersMiddleware  # noqa: E402
+
 
 def test_security_headers_stamped_on_every_response():
     """Headers must ride every response, including a route that errors."""
-    from backend.api.main import SecurityHeadersMiddleware
-
     app = FastAPI()
     app.add_middleware(SecurityHeadersMiddleware)
 
@@ -796,17 +797,25 @@ def test_security_headers_stamped_on_every_response():
         assert "camera=()" in resp.headers["Permissions-Policy"]
 
 
-def test_security_headers_do_not_override_a_route_that_sets_its_own():
-    from backend.api.main import SecurityHeadersMiddleware
+def test_security_headers_cover_an_unhandled_500():
+    """Starlette hands an `Exception` handler to ServerErrorMiddleware, which sits
+    OUTSIDE the middleware stack — so the catch-all 500 must stamp them itself."""
+    from backend.api.main import SECURITY_HEADERS
 
     app = FastAPI()
     app.add_middleware(SecurityHeadersMiddleware)
 
-    @app.get("/embed")
-    def embed(response: Response):
-        response.headers["X-Frame-Options"] = "ALLOWALL"
-        return {"ok": True}
+    @app.exception_handler(Exception)
+    async def _boom_handler(request, exc):
+        resp = JSONResponse(status_code=500, content={"success": False})
+        resp.headers.update(SECURITY_HEADERS)
+        return resp
 
-    resp = TestClient(app).get("/embed")
-    assert resp.headers["X-Frame-Options"] == "ALLOWALL"
-    assert resp.headers["X-Content-Type-Options"] == "nosniff"
+    @app.get("/boom")
+    def boom():
+        raise RuntimeError("unhandled")
+
+    resp = TestClient(app, raise_server_exceptions=False).get("/boom")
+    assert resp.status_code == 500
+    for header, value in SECURITY_HEADERS.items():
+        assert resp.headers[header] == value
