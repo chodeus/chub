@@ -8,7 +8,7 @@ import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from shutil import which
+from shutil import rmtree, which
 from typing import Any, List, Optional, Tuple
 
 from backend.util.base_module import ChubModule
@@ -476,6 +476,70 @@ class SyncGDrive(ChubModule):
             progress_cb(100)
             return False, counters
 
+    def _prune_orphan_drive_folders(self) -> Tuple[List[str], List[Tuple[str, int]]]:
+        """Drop local folders of drives that have left gdrive_list. (removed, kept).
+
+        Nothing else ever cleans these: sync only visits configured drives, and
+        poster_cleanarr's orphan pass is scoped to destination_dir. Only folders
+        with NO files are removed — a populated one may still be feeding poster
+        matching through a source_dir.
+        """
+        raw = self.config.gdrive_list
+        entries = raw if isinstance(raw, list) else [raw]
+        configured = {
+            os.path.realpath(loc).rstrip(os.sep)
+            for loc in (getattr(e, "location", None) for e in entries)
+            if loc
+        }
+        removed: List[str] = []
+        kept: List[Tuple[str, int]] = []
+        if not configured:
+            return removed, kept
+
+        # Only ever look inside directories that already hold a configured
+        # drive, so this can't wander outside the sync tree.
+        for parent in sorted({os.path.dirname(p) for p in configured}):
+            real_parent = os.path.realpath(parent).rstrip(os.sep)
+            if not os.path.isdir(real_parent):
+                continue
+            for name in sorted(os.listdir(real_parent)):
+                full = os.path.join(real_parent, name)
+                if os.path.islink(full) or not os.path.isdir(full):
+                    continue
+                real = os.path.realpath(full).rstrip(os.sep)
+                # Re-confine after resolving, before any delete.
+                if not real.startswith(real_parent + os.sep):
+                    continue
+                if real in configured:
+                    continue
+                files = sum(len(f) for _, _, f in os.walk(real))
+                if files:
+                    kept.append((real, files))
+                    continue
+                if self.config.dry_run:
+                    removed.append(real)
+                    continue
+                try:
+                    rmtree(real)
+                    removed.append(real)
+                except OSError as e:
+                    self.logger.error(f"Could not remove orphan folder '{real}': {e}")
+        return removed, kept
+
+    def _report_orphan_drive_folders(self) -> None:
+        """Run the orphan-folder prune and log what it did."""
+        if not getattr(self.config, "prune_orphan_drives", True):
+            return
+        removed, kept = self._prune_orphan_drive_folders()
+        verb = "Would remove" if self.config.dry_run else "Removed"
+        for path in removed:
+            self.logger.info(f"{verb} empty orphan drive folder: {path}")
+        for path, files in kept:
+            self.logger.warning(
+                f"Orphan drive folder kept ({files} files, not in gdrive_list): "
+                f"{path} — delete it manually if you no longer want those posters."
+            )
+
     def _refresh_poster_cache_for_folder(self, sync_location: str) -> None:
         """Re-index a single source-dir's slice of poster_cache after rclone.
 
@@ -819,6 +883,11 @@ class SyncGDrive(ChubModule):
 
                 progress_cb(100)
                 self._report_progress(100)
+
+                # Full runs only: on a filtered sync the unvisited drives are
+                # still configured, so everything else would look orphaned.
+                if not only_folders:
+                    self._report_orphan_drive_folders()
 
                 # Workers complete out of order; restore the configured
                 # gdrive_list order for the notification's per-folder listing.
