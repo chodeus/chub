@@ -1,5 +1,10 @@
 [
   {
+    "from": "1jdIjB5OOJGq52UPRC4m5lXf3Lp6-Sf9o",
+    "to": "18Rv6LBp9YZWpnT2qt5wXELFNXj9GSa2s",
+    "note": "Chodeus CL2K relocated 2026-06-13; picks made before then kept the old id"
+  },
+  {
     "from": "1HjwMWfI6XpQVYH36VBzYiJA4UWfoqcQ9",
     "to": "19_kDCSHFdeZypxOxmODWmEt6jtBBtOYw",
     "note": "IamSpartacus (#1) MM2K relocated; the old folder resolves but holds 0 objects"
