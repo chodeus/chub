@@ -411,6 +411,10 @@ def compare_strings(string1: str, string2: str) -> bool:
 # year), so a strict equality check produced false "no match" results.
 YEAR_MATCH_TOLERANCE = 1
 
+# Id sources that identify an entity on their own. tmdb is absent on purpose:
+# its ids are unique only WITHIN a media type (movie 79063 is not tv 79063).
+GLOBALLY_UNIQUE_ID_SOURCES = frozenset({"tvdb_id", "imdb_id"})
+
 
 def is_match(
     asset: Dict[str, Any],
@@ -420,8 +424,10 @@ def is_match(
 
     The matcher prioritizes **ID equality** (TMDB/TVDB/IMDB). When **both**
     sides provide at least one valid ID, we **only** accept an ID match; title
-    similarity is *not* considered in that branch. When IDs are missing on
-    either side, we fall back to a set of increasingly permissive title checks
+    similarity is *not* considered in that branch. TVDB and IMDB ids are
+    globally unique, but TMDB ids are unique only *within* a media type, so a
+    TMDB-only agreement is additionally gated by the year check below. When IDs
+    are missing on either side, we fall back to increasingly permissive title checks
     (exact, normalized, alternate titles, and a loose alphanumeric compare),
     gated by a year check.
 
@@ -571,7 +577,11 @@ def is_match(
         media_id = normalized_id(key, media)
         if not asset_id or not media_id:
             continue
-        if asset_id == media_id:
+        # A namespaced id (tmdb) needs the year to corroborate; an uncorroborated
+        # one falls through to shared_id_sources and blocks the title fallback.
+        if asset_id == media_id and (
+            key in GLOBALLY_UNIQUE_ID_SOURCES or year_matches()
+        ):
             return True, f"ID match: {key}"
         shared_id_sources.append(key)
 

@@ -231,6 +231,47 @@ def test_is_match_id_tmdb():
     assert "tmdb_id" in reason
 
 
+def test_is_match_tmdb_namespace_collision_rejected():
+    """movie 79063 and tv 79063 are different entities. A logo-only artwork drive
+    has no season/tvdb files to type its TV entries as shows, so they reach the
+    matcher typed "movie" carrying only {tmdb-N} — the years must reject them."""
+    asset = {"title": "Cunk on Earth", "tmdb_id": "79063", "year": 2022}
+    media = {"title": "The Unkabogable Praybeyt Benjamin", "tmdb_id": "79063", "year": 2011}
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_tmdb_id_with_agreeing_year_still_matches():
+    asset = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    media = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
+def test_is_match_tmdb_id_yearless_asset_still_matches():
+    """A yearless poster can't corroborate, so the gate must not block it."""
+    asset = {"title": "Inception", "tmdb_id": "27205"}
+    media = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
+def test_is_match_tvdb_id_not_gated_by_year():
+    """tvdb ids are globally unique, so a year disagreement must NOT block them —
+    180 live rows match on tvdb while carrying a stale/other-namespace tmdb id."""
+    asset = {"title": "Doctor Who", "tvdb_id": "78804", "year": 1963}
+    media = {"title": "Doctor Who", "tvdb_id": "78804", "year": 2005}
+    matched, reason = is_match(asset, media)
+    assert matched and "tvdb_id" in reason
+
+
+def test_is_match_imdb_id_not_gated_by_year():
+    asset = {"title": "Doctor Who", "imdb_id": "tt0436992", "year": 1963}
+    media = {"title": "Doctor Who", "imdb_id": "tt0436992", "year": 2005}
+    matched, reason = is_match(asset, media)
+    assert matched and "imdb_id" in reason
+
+
 def test_is_match_id_mismatch_blocks_title_fallback():
     """When both have IDs and they don't match, return False (no title fallback)."""
     asset = {"tmdb_id": "1", "title": "Same Title", "year": 2020}
