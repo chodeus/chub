@@ -68,16 +68,19 @@ class Cl2kGenerated(DatabaseBase):
         return row is not None
 
     def get_backdrop_for(self, tmdb_id: Optional[int]) -> Optional[str]:
-        """Most-recent backdrop_path generated for a tmdb_id (any kind).
+        """Most-recent backdrop_path generated for this SERIES tmdb_id.
 
         Lets a new season reuse the show's existing background (DAPS: reuse the
-        same backdrop across seasons, only change the season number).
+        same backdrop across seasons, only change the season number). Scoped to
+        show/season: tmdb ids are unique only WITHIN a media type, so an
+        unscoped lookup can hand a same-numbered movie's backdrop to a season.
         """
         if not tmdb_id:
             return None
         row = self.execute_query(
             "SELECT backdrop_path FROM cl2k_generated "
-            "WHERE tmdb_id=? AND backdrop_path IS NOT NULL "
+            "WHERE tmdb_id=? AND kind IN ('show', 'season') "
+            "AND backdrop_path IS NOT NULL "
             "ORDER BY generated_at DESC LIMIT 1",
             (tmdb_id,),
             fetch_one=True,
