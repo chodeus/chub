@@ -1347,7 +1347,7 @@ def _reconcile_gdrive_presets(config: "ChubConfig") -> None:
 
         reconcile_gdrive_list(getattr(config.sync_gdrive, "gdrive_list", None))
     except Exception as exc:  # pragma: no cover - never block a config load
-        _config_log.debug(f"GDrive preset reconcile skipped: {exc}")
+        _config_log.error(f"GDrive preset reconcile skipped: {exc}")
 
 
 def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:

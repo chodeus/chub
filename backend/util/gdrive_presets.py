@@ -36,24 +36,19 @@ def load_moves() -> Dict[str, Optional[str]]:
 
 
 def reconcile_gdrive_list(entries: Iterable[Any], logger: Any = None) -> int:
-    """Repoint saved gdrive_list entries whose preset drive moved. Returns the count healed.
+    """Repoint saved gdrive_list entries by preset id; never rewrite ``location``.
 
-    Keyed on the saved ``id``, NOT the name: preset names have been reformatted
-    over time (saved "CL2K Dweagle" vs catalogue "Dweagle79"), so name matching
-    finds nothing on real configs. A move must be recorded in
-    gdrive_preset_moves.json — editing gdrive_presets.json alone reaches new
-    picks only, never an existing config.
-
-    ``location`` is deliberately never rewritten: it is a live directory that
-    sync_gdrive writes into and source_dirs point at.
+    Matching is by id, not name — names have been reformatted over time, so
+    name matching finds nothing on real configs.
     """
     log = logger or _log
     try:
         moves = load_moves()
     except Exception as exc:
-        # Fail OPEN: healing an id is a convenience, and refusing to load the
-        # whole config over an unreadable catalogue would be far worse.
-        _log.debug(f"gdrive preset moves unavailable, skipping reconcile: {exc}")
+        # Fail OPEN, but loudly: the move table is bundled in the image, so a
+        # read failure means a broken image, not a bad user config — refusing to
+        # load config at all would take the app down over a cosmetic heal.
+        _log.error(f"GDrive preset move table unreadable, ids not reconciled: {exc}")
         return 0
 
     healed = 0

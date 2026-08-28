@@ -72,6 +72,10 @@ def test_location_and_name_are_never_rewritten():
 
 
 def test_missing_move_table_fails_open(monkeypatch, tmp_path):
+    # DELIBERATE: the move table ships inside the image, so an unreadable one
+    # means a broken image, not a bad user config. Healing an id is a
+    # convenience — taking the whole app down over it would be far worse. The
+    # failure is logged at error level rather than swallowed.
     monkeypatch.setattr(gdrive_presets, "MOVES_PATH", tmp_path / "nope.json")
     entry = _entry("1HjwMWfI6XpQVYH36VBzYiJA4UWfoqcQ9")
     assert gdrive_presets.reconcile_gdrive_list([entry]) == 0

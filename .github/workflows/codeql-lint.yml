@@ -153,9 +153,11 @@ jobs:
           python-version: '3.14'
 
       - name: Every dropped drive id has a move record
-        run: |
-          python3 scripts/check_gdrive_preset_moves.py \
-            --base "origin/${{ github.event.pull_request.base.ref }}"
+        # Base ref reaches the shell via env, never ${{ }} interpolation — a
+        # fork PR controls its branch name, which would otherwise be executed.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/check_gdrive_preset_moves.py --base "$BASE_SHA"
 
   # ---- Backend Smoke Test & Tests ----
   backend-smoke:
