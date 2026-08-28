@@ -39,6 +39,27 @@ COMMAND_QUEUE_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_QUEUE_TIMEOUT", 3
 COMMAND_RUN_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_RUN_TIMEOUT", 3600)
 COMMAND_MAX_POLL_ERRORS = 12
 COMMAND_TERMINAL_FAILURES = ("failed", "aborted", "cancelled", "orphaned")
+# TrackedDownloadState values meaning the *arr is done with a queue row — nothing
+# left to report or act on. Union of the Lidarr and Sonarr enums, which differ.
+QUEUE_STATES_DONE = {"imported", "ignored"}
+# States a download will not leave without someone intervening.
+QUEUE_STATES_STUCK = {"downloadfailed", "importfailed", "importblocked", "failed"}
+
+
+def classify_queue_row(record: Dict[str, Any]) -> str:
+    """``done`` | ``stuck`` | ``pending`` for one *arr queue record."""
+    state = str(record.get("trackedDownloadState") or "").strip().lower()
+    if state in QUEUE_STATES_DONE:
+        return "done"
+    if state in QUEUE_STATES_STUCK:
+        return "stuck"
+    status = str(record.get("trackedDownloadStatus") or "").strip().lower()
+    queue_status = str(record.get("status") or "").strip().lower()
+    # Enum-drift guard: a finished download the *arr flags warning/error is stuck
+    # even when its state name isn't one of the two sets above.
+    if status in {"warning", "error"} and queue_status == "completed":
+        return "stuck"
+    return "pending"
 
 
 # Custom exception types for specific error categories

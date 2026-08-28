@@ -419,18 +419,48 @@ def format_for_discord(
         for inst, data in o.items():
             srv = data.get("server_name", inst)
             lines: List[str] = []
+            waiting: List[str] = []
+            stuck: List[str] = []
             for item in data.get("data", []):
+                title = item.get("title", "Unknown")
+                year = f" ({item.get('year')})" if item.get("year") else ""
                 dl = item.get("download") or {}
                 if dl:
-                    title = item.get("title", "Unknown")
-                    year = f" ({item.get('year')})" if item.get("year") else ""
                     lines.append(f"{title}{year}")
                     for t, score in dl.items():
                         lines.append(f"\t{t}")
                         lines.append(f"\tCF Score: {score}")
                     lines.append("")
+                queued = item.get("queue_imports") or []
+                for state, sink in (("pending", waiting), ("stuck", stuck)):
+                    entries = [e for e in queued if e.get("state") == state]
+                    if not entries:
+                        continue
+                    sink.append(f"{title}{year}")
+                    for entry in entries:
+                        age = entry.get("age_hours")
+                        age_text = f" (waiting {age:.0f}h)" if age is not None else ""
+                        sink.append(f"\t{entry.get('download')}{age_text}")
+                        # The *arr's own rejection reason is the actionable part.
+                        for message in entry.get("messages", []):
+                            sink.append(f"\t\t{message}")
+                    sink.append("")
             if lines:
                 fields.extend(chunk_code_fields(srv, "\n".join(lines).strip()))
+            if waiting:
+                fields.extend(
+                    chunk_code_fields(
+                        f"{srv} — downloaded, awaiting import",
+                        "\n".join(waiting).strip(),
+                    )
+                )
+            if stuck:
+                fields.extend(
+                    chunk_code_fields(
+                        f"{srv} — downloaded, import stuck (needs attention)",
+                        "\n".join(stuck).strip(),
+                    )
+                )
         return fields
 
     def fmt_labelarr(o: Any) -> List[Dict[str, Any]]:

@@ -891,6 +891,15 @@ const CORE_SETTINGS_SCHEMA = [
                         },
                     },
                     {
+                        key: 'queue_block_hours',
+                        label: 'Skip Items Awaiting Import (hours)',
+                        type: 'number',
+                        required: false,
+                        defaultValue: 72,
+                        description:
+                            'Do not search an item that already has a download sitting in the queue waiting to import, until that download is older than this many hours. Prevents grabbing a second copy of something already on disk. Set to 0 to always search.',
+                    },
+                    {
                         key: 'tag_name',
                         label: 'Tag Name',
                         type: 'text',
