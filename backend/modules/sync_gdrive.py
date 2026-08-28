@@ -58,6 +58,19 @@ _RCLONE_FILE_ACTION_PATTERN = re.compile(
 _RCLONE_ACTION_PATTERN = re.compile(r": (Copied|Deleted|Updated|Renamed|Removed)\b")
 
 
+def uses_shared_rclone_client_id(sync_config: Any) -> bool:
+    """Whether syncs will fall back to rclone's built-in Google Drive client_id.
+
+    Mirrors the credential choice in ``SyncGDrive.sync_folder``: a service
+    account wins, else the configured OAuth client, else rclone's shared client
+    — which every rclone install worldwide competes over for one 10 tps Google
+    quota, and which rclone is retiring during 2026.
+    """
+    if (getattr(sync_config, "gdrive_sa_location", None) or "").strip():
+        return False
+    return not (getattr(sync_config, "client_id", "") or "").strip()
+
+
 def _empty_counters() -> dict:
     """Zeroed delta counter dict used as the sync_folder default return."""
     return {"copied": 0, "deleted": 0, "updated": 0, "renamed": 0}

@@ -57,6 +57,30 @@ const CORE_SETTINGS_SCHEMA = [
         fields: [
             // ─── Authentication ────────────────────────────────────────
             {
+                // Not a config key — read-only copy, shown only while neither
+                // auth method is set. Mirrors the startup warning in
+                // sync_gdrive.uses_shared_rclone_client_id.
+                key: 'shared_client_id_notice',
+                type: 'notice',
+                variant: 'warning',
+                section: 'Authentication',
+                label: "Using rclone's shared Google Drive credentials",
+                conditional: {
+                    field: 'gdrive_sa_location',
+                    condition: 'all_empty',
+                    value: ['gdrive_sa_location', 'client_id'],
+                },
+                description:
+                    'With neither a service account nor your own Client ID, rclone falls back ' +
+                    'to the client_id built into every rclone install. rclone is RETIRING that ' +
+                    'client during 2026, after which syncs stop working — and until then it ' +
+                    'shares a single 10 requests/sec Google quota with every other rclone user, ' +
+                    'which throttles large syncs. A service account is the simplest fix: it ' +
+                    'skips OAuth entirely and gets its own quota.',
+                link: 'https://rclone.org/drive/#making-your-own-client-id',
+                link_label: 'How to create your own client ID',
+            },
+            {
                 key: 'client_id',
                 label: 'Client ID',
                 type: 'password',

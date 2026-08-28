@@ -26,6 +26,7 @@ const FIELD_RESOLVERS = {
     textarea: () => BasicFields.TextareaField,
     float: () => BasicFields.FloatField,
     hidden: () => BasicFields.HiddenField,
+    notice: () => BasicFields.NoticeField,
     check_box: () => SelectFields.CheckboxField,
     toggle: () => SelectFields.CheckboxField,
     dropdown: () => SelectFields.DropdownField,

@@ -37,6 +37,13 @@ const CONDITION_TYPES = {
         selectedValue !== null &&
         selectedValue !== '' &&
         !(Array.isArray(selectedValue) && selectedValue.length === 0),
+    // True when EVERY named field is empty. `value` is a list of field keys, so
+    // a notice can depend on more than one field — the single-`field` form above
+    // can't express "neither auth method is configured".
+    all_empty: (_selectedValue, fieldNames, _apiData, formData) =>
+        Array.isArray(fieldNames) &&
+        fieldNames.length > 0 &&
+        fieldNames.every(name => CONDITION_TYPES.is_empty(formData?.[name])),
     // True when at least one instance of the given service type is configured.
     // `apiData` is the instances dict (via api_lookup: 'instances'); `value` is
     // the service type, e.g. 'lidarr'. Used to reveal music-only options only
@@ -63,7 +70,8 @@ export const shouldShowField = (field, formData, apiData = {}) => {
 
         const evaluator = CONDITION_TYPES[condition];
         if (evaluator) {
-            return evaluator(selectedValue, value, lookupData);
+            // formData is 4th so the existing 3-arg evaluators are unaffected.
+            return evaluator(selectedValue, value, lookupData, formData);
         } else {
             console.warn('[conditionalFields] Unknown condition type:', condition);
             return true;
