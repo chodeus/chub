@@ -50,6 +50,8 @@ QUEUE_REPORT_SECTIONS = (
     ("pending", "AWAITING IMPORT", "already downloaded, not searched again", "info"),
     ("stuck", "IMPORT STUCK", "needs attention — the *arr will not import them", "warning"),
 )
+# Bound on queue paging so a mispaginating *arr can't spin the run forever.
+QUEUE_MAX_PAGES = 50
 
 
 class _BufferingLogger:
@@ -916,34 +918,47 @@ class Upgradinatorr(ChubModule):
                 seasons = [record["seasonNumber"]]
             # Some Sonarr rows carry neither field; without a season we can't
             # tell which search to suppress, so leave the series searchable.
-            return [("season", series_id, season) for season in (seasons or [])]
+            return [("season", series_id, season) for season in as_list(seasons)]
         return []
 
     def _fetch_queue_records(self, app: BaseARRClient) -> Optional[List[Dict[str, Any]]]:
-        """The *arr's queue rows, or None when the queue can't be read. Anything
-        that isn't the expected dict-with-records shape counts as unreadable."""
-        try:
-            queue = app.get_queue()
-        except Exception as e:
-            self.logger.warning(
-                f"Could not read the {app.instance_name} queue ({e})."
-            )
-            return None
-        if not queue:
-            return []
-        if not isinstance(queue, dict):
-            self.logger.warning(
-                f"{app.instance_name} returned a {type(queue).__name__} for its "
-                "queue, not the expected object."
-            )
-            return None
-        records = queue.get("records")
-        if records is not None and not isinstance(records, list):
-            self.logger.warning(
-                f"{app.instance_name} returned a non-list queue 'records' field."
-            )
-            return None
-        return [r for r in as_list(records) if isinstance(r, dict)]
+        """Every queue row across all pages, or None when the queue can't be
+        read. A single page would leave later rows unsuppressed and re-searched."""
+        page_size = 200
+        out: List[Dict[str, Any]] = []
+        for page in range(1, QUEUE_MAX_PAGES + 1):
+            try:
+                queue = app.get_queue(page=page, page_size=page_size)
+            except Exception as e:
+                self.logger.warning(
+                    f"Could not read the {app.instance_name} queue ({e})."
+                )
+                return None
+            if not queue:
+                break
+            if not isinstance(queue, dict):
+                self.logger.warning(
+                    f"{app.instance_name} returned a {type(queue).__name__} for "
+                    "its queue, not the expected object."
+                )
+                return None
+            records = queue.get("records")
+            if records is not None and not isinstance(records, list):
+                self.logger.warning(
+                    f"{app.instance_name} returned a non-list queue 'records' field."
+                )
+                return None
+            page_rows = as_list(records)
+            out.extend(r for r in page_rows if isinstance(r, dict))
+            # A short page is the end of the queue and doesn't depend on
+            # totalRecords, which the *arrs report stale.
+            if len(page_rows) < page_size:
+                return out
+        self.logger.warning(
+            f"Stopped reading the {app.instance_name} queue at "
+            f"{QUEUE_MAX_PAGES} pages; later rows are not suppressed."
+        )
+        return out
 
     def _queue_blocked_downloads(
         self, app: BaseARRClient, instance_type: str, block_hours: int

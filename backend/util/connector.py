@@ -551,9 +551,17 @@ class Connector:
                 artist_mbid = artist.get("musicbrainz_id")
 
                 # Album entries - inherit metadata from parent artist.
-                # Lidarr normalize returns seasons=None when include_episode=False,
-                # so coerce to [] to avoid "NoneType is not iterable".
-                for season in as_list(artist.get("seasons")):
+                # seasons=None is normal (include_episode=False). A malformed
+                # value is NOT — coercing it to [] would delete this artist's
+                # cached album rows as stale, so refuse the sync instead.
+                seasons = artist.get("seasons")
+                if seasons is not None and not isinstance(seasons, list):
+                    raise ValueError(
+                        f"Artist {artist.get('title')!r} returned a "
+                        f"{type(seasons).__name__} for 'seasons'; refusing to "
+                        "sync album rows from malformed data."
+                    )
+                for season in as_list(seasons):
                     album_title = season.get("album_title") or ""
                     album_row = dict(artist)  # Copy parent artist metadata
                     album_row["asset_type"] = "album"

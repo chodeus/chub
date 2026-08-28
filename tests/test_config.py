@@ -445,7 +445,7 @@ class FakeARR:
     def add_tags(self, media_id, tag_id):
         self.add_calls.append((media_id, tag_id))
 
-    def get_queue(self):
+    def get_queue(self, page=1, page_size=200):
         return {"records": []}
 
 
@@ -458,7 +458,7 @@ class FakeFailingARR(FakeARR):
 
 
 class FakeQueueARR(FakeARR):
-    def get_queue(self):
+    def get_queue(self, page=1, page_size=200):
         return {
             "records": [
                 {

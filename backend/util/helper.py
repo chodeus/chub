@@ -34,7 +34,12 @@ tqdm.__init__ = partialmethod(tqdm.__init__, disable=None)
 
 def as_list(value: Any) -> List[Any]:
     """A JSON field that should be an array, or [] when it isn't. `x or []`
-    still raises TypeError on a truthy scalar — iterate through this instead."""
+    still raises TypeError on a truthy scalar — iterate through this instead.
+
+    Only where an empty result is a SAFE outcome. Where empty drives a delete or
+    writes a degraded record, reject the malformed value instead — coercing there
+    turns a loud crash into silent data loss.
+    """
     return value if isinstance(value, list) else []
 
 

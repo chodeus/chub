@@ -1065,13 +1065,10 @@ class RadarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/history/{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
-    def get_queue(self) -> Any:
-        """
-        Get the current queue from Radarr.
-        Returns:
-            Any: API response.
-        """
-        url_addon = "page=1&pageSize=200&includeMovie=true"
+    def get_queue(self, page: int = 1, page_size: int = 200) -> Any:
+        """One page of the current queue from Radarr. Callers must paginate —
+        the queue routinely exceeds a single page on a busy instance."""
+        url_addon = f"page={page}&pageSize={page_size}&includeMovie=true"
         endpoint = f"{self.api_base}/queue?{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
@@ -1511,13 +1508,10 @@ class SonarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/history/{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
-    def get_queue(self) -> Any:
-        """
-        Get the current queue from Sonarr.
-        Returns:
-            Any: API response.
-        """
-        url_addon = "page=1&pageSize=200&includeSeries=true"
+    def get_queue(self, page: int = 1, page_size: int = 200) -> Any:
+        """One page of the current queue from Sonarr. Callers must paginate —
+        the queue routinely exceeds a single page on a busy instance."""
+        url_addon = f"page={page}&pageSize={page_size}&includeSeries=true"
         endpoint = f"{self.api_base}/queue?{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
@@ -1753,9 +1747,10 @@ class LidarrClient(BaseARRClient):
             self.logger.error(f"Album search failed for IDs: {album_ids}")
             return None
 
-    def get_queue(self) -> Any:
-        """Get the current queue from Lidarr."""
-        url_addon = "page=1&pageSize=200&includeArtist=true"
+    def get_queue(self, page: int = 1, page_size: int = 200) -> Any:
+        """One page of the current queue from Lidarr. Callers must paginate —
+        the queue routinely exceeds a single page on a busy instance."""
+        url_addon = f"page={page}&pageSize={page_size}&includeArtist=true"
         endpoint = f"{self.api_base}/queue?{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 

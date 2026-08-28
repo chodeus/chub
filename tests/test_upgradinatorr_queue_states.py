@@ -131,7 +131,7 @@ class _StaleQueueARR(FakeARR):
         self.added_hours_ago = added_hours_ago
         self.queue_reads = 0
 
-    def get_queue(self):
+    def get_queue(self, page=1, page_size=200):
         self.queue_reads += 1
         # Relative to the real clock: process_instance stamps its run start with
         # datetime.now(), so a fixed date here would drift as the day passes.
@@ -227,7 +227,7 @@ class _BadQueueARR(FakeARR):
         super().__init__(media_batches)
         self.payload = payload
 
-    def get_queue(self):
+    def get_queue(self, page=1, page_size=200):
         return self.payload
 
 
@@ -334,3 +334,47 @@ def test_as_list_guards_truthy_scalars(bad):
 
     assert as_list(bad) == []
     assert as_list([1, 2]) == [1, 2]
+
+
+@pytest.mark.parametrize("scalar", [3, "3"])
+def test_scalar_season_numbers_fails_open(scalar):
+    """A scalar seasonNumbers must not raise — that would abort Sonarr queue
+    processing rather than leave the series searchable."""
+    row = {"seriesId": 12, "seasonNumbers": scalar}
+    assert Upgradinatorr._queue_record_keys(row, "sonarr") == []
+
+
+class _PagedQueueARR(FakeARR):
+    """A queue larger than one page. Rows past the first page must still
+    suppress, or they get a duplicate search."""
+
+    PAGE = 200
+
+    def __init__(self, media_batches, total):
+        super().__init__(media_batches)
+        self.total = total
+        self.pages_requested = []
+
+    def get_queue(self, page=1, page_size=200):
+        self.pages_requested.append(page)
+        start = (page - 1) * page_size
+        end = min(start + page_size, self.total)
+        added = _iso(datetime.now(timezone.utc) - timedelta(hours=5))
+        return {
+            "records": [
+                _queue_row(downloadId=f"d{i}", movieId=7, albumId=None,
+                           title=f"Movie.{i}", added=added)
+                for i in range(start, max(start, end))
+            ]
+        }
+
+
+def test_queue_pagination_covers_rows_past_the_first_page():
+    module = make_upgradinatorr(dry_run=False)
+    app = _PagedQueueARR([[upgradinatorr_media_item([])]], total=250)
+
+    records = module._fetch_queue_records(app)
+
+    assert len(records) == 250
+    assert app.pages_requested[:2] == [1, 2]
+    assert records[249]["title"] == "Movie.249"
