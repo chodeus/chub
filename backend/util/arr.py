@@ -39,6 +39,34 @@ COMMAND_QUEUE_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_QUEUE_TIMEOUT", 3
 COMMAND_RUN_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_RUN_TIMEOUT", 3600)
 COMMAND_MAX_POLL_ERRORS = 12
 COMMAND_TERMINAL_FAILURES = ("failed", "aborted", "cancelled", "orphaned")
+# TrackedDownloadState values meaning the *arr is done with a queue row — nothing
+# left to report or act on. Union of the Lidarr and Sonarr enums, which differ.
+QUEUE_STATES_DONE = {"imported", "ignored"}
+# States a download will not leave without someone intervening.
+QUEUE_STATES_STUCK = {
+    "downloadfailed",
+    "downloadfailedpending",
+    "failed",
+    "failedpending",
+    "importblocked",
+    "importfailed",
+}
+
+
+def classify_queue_row(record: Dict[str, Any]) -> str:
+    """``done`` | ``stuck`` | ``pending`` for one *arr queue record."""
+    state = str(record.get("trackedDownloadState") or "").strip().lower()
+    if state in QUEUE_STATES_DONE:
+        return "done"
+    if state in QUEUE_STATES_STUCK:
+        return "stuck"
+    status = str(record.get("trackedDownloadStatus") or "").strip().lower()
+    queue_status = str(record.get("status") or "").strip().lower()
+    # Enum-drift guard: a finished download the *arr flags warning/error is stuck
+    # even when its state name isn't one of the two sets above.
+    if status in {"warning", "error"} and queue_status == "completed":
+        return "stuck"
+    return "pending"
 
 
 # Custom exception types for specific error categories
@@ -1044,13 +1072,10 @@ class RadarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/history/{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
-    def get_queue(self) -> Any:
-        """
-        Get the current queue from Radarr.
-        Returns:
-            Any: API response.
-        """
-        url_addon = "page=1&pageSize=200&includeMovie=true"
+    def get_queue(self, page: int = 1, page_size: int = 200) -> Any:
+        """One page of the current queue from Radarr. Callers must paginate —
+        the queue routinely exceeds a single page on a busy instance."""
+        url_addon = f"page={page}&pageSize={page_size}&includeMovie=true"
         endpoint = f"{self.api_base}/queue?{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
@@ -1490,13 +1515,10 @@ class SonarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/history/{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
-    def get_queue(self) -> Any:
-        """
-        Get the current queue from Sonarr.
-        Returns:
-            Any: API response.
-        """
-        url_addon = "page=1&pageSize=200&includeSeries=true"
+    def get_queue(self, page: int = 1, page_size: int = 200) -> Any:
+        """One page of the current queue from Sonarr. Callers must paginate —
+        the queue routinely exceeds a single page on a busy instance."""
+        url_addon = f"page={page}&pageSize={page_size}&includeSeries=true"
         endpoint = f"{self.api_base}/queue?{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
@@ -1732,9 +1754,10 @@ class LidarrClient(BaseARRClient):
             self.logger.error(f"Album search failed for IDs: {album_ids}")
             return None
 
-    def get_queue(self) -> Any:
-        """Get the current queue from Lidarr."""
-        url_addon = "page=1&pageSize=200&includeArtist=true"
+    def get_queue(self, page: int = 1, page_size: int = 200) -> Any:
+        """One page of the current queue from Lidarr. Callers must paginate —
+        the queue routinely exceeds a single page on a busy instance."""
+        url_addon = f"page={page}&pageSize={page_size}&includeArtist=true"
         endpoint = f"{self.api_base}/queue?{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 

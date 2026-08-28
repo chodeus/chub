@@ -17,6 +17,7 @@ from backend.util.config import (
     seed_plex_enabled_libraries,
 )
 from backend.util.database import ChubDB
+from backend.util.helper import as_list
 from backend.util.logger import Logger
 from backend.util.plex import PlexClient
 
@@ -550,9 +551,16 @@ class Connector:
                 artist_mbid = artist.get("musicbrainz_id")
 
                 # Album entries - inherit metadata from parent artist.
-                # Lidarr normalize returns seasons=None when include_episode=False,
-                # so coerce to [] to avoid "NoneType is not iterable".
-                for season in artist.get("seasons") or []:
+                # Coercing a malformed seasons to [] deletes this artist's
+                # cached albums as stale. seasons=None is normal, though.
+                seasons = artist.get("seasons")
+                if seasons is not None and not isinstance(seasons, list):
+                    raise ValueError(
+                        f"Artist {artist.get('title')!r} returned a "
+                        f"{type(seasons).__name__} for 'seasons'; refusing to "
+                        "sync album rows from malformed data."
+                    )
+                for season in as_list(seasons):
                     album_title = season.get("album_title") or ""
                     album_row = dict(artist)  # Copy parent artist metadata
                     album_row["asset_type"] = "album"

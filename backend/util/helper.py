@@ -32,6 +32,12 @@ from backend.util.normalization import (
 tqdm.__init__ = partialmethod(tqdm.__init__, disable=None)
 
 
+def as_list(value: Any) -> List[Any]:
+    """A JSON field that should be an array, or [] when it isn't. Use only where
+    an empty result is safe — where empty deletes or degrades, reject instead."""
+    return value if isinstance(value, list) else []
+
+
 def print_json(data: Any, logger: Any, module_name: str, type_: str) -> None:
     """
     Write data as JSON to a debug file for troubleshooting.

@@ -423,6 +423,9 @@ class UpgradinatorrInstance(BaseModel):
     season_monitored_threshold: Optional[float] = None
     search_mode: str = "upgrade"  # "upgrade" | "missing" | "cutoff"
     count_mode: str = "series_artist"  # "series_artist" | "season_album"
+    # Hours an unresolved queue row suppresses re-searching its item. 0 = never
+    # suppress. Past the cap a forgotten row stops blocking the item forever.
+    queue_block_hours: int = 72
 
 
 class UpgradinatorrConfig(BaseModel):
