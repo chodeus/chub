@@ -273,33 +273,32 @@ class AssetRenamerrConfig(BaseModel):
           background (uploadArt), squareart (uploadSquareArt). plexapi has NO
           banner endpoint.
         - "kometa": rename/copy the file into destination_dir using Kometa's
-          asset names for Kometa to apply. Per Kometa, asset directories read
-          only logo (logo.ext) and background (background.ext) — NOT squareart
-          or banner.
+          asset names for Kometa to apply — logo.ext, background.ext and
+          square.ext. Square art needs Kometa 2.4.5+; older versions ignore
+          the file rather than erroring. Banner is not read at all.
 
     Net capability matrix:
-        logo       → plex ✓ / kometa ✓
-        background → plex ✓ / kometa ✓
-        squareart  → plex ✓ / kometa ✗ (Kometa ignores square art)
+        logo/background/squareart → plex ✓ / kometa ✓
+        Season level is narrower: background only (Kometa's asset reader skips
+        logo and square art for seasons and episodes).
 
     (Banner is intentionally unsupported: Plex has no banner upload API and
     Kometa does not read banners from asset directories — there is no path.)
 
-    An unsupported (type, apply_method) combination — squareart on the kometa
-    path — is NOT a validation error (config must stay loadable while the user
-    toggles apply_method); it is skipped with a warning during the run. Defaults
-    to the two universally supported types so users who don't tune this never
-    hit a no-op.
+    An unsupported (type, apply_method) combination is NOT a validation error
+    (config must stay loadable while the user toggles apply_method); it is
+    skipped with a warning during the run.
     """
 
     log_level: str = "info"
     dry_run: bool = False
     # Ordered source preference; first source yielding an image wins.
     sources: List[str] = Field(default_factory=lambda: ["local", "fanart"])
-    # Which non-poster asset types to process. Defaults to the two types that
-    # work on BOTH apply methods. squareart (direct only) can be added
-    # explicitly. Valid values: "logo", "background", "squareart".
-    asset_types: List[str] = Field(default_factory=lambda: ["logo", "background"])
+    # Which non-poster asset types to process. Valid values: "logo",
+    # "background", "squareart" — all three work on both apply methods.
+    asset_types: List[str] = Field(
+        default_factory=lambda: ["logo", "background", "squareart"]
+    )
     apply_method: str = "kometa"  # "plex" | "kometa" (legacy "direct" → "plex")
     action_type: str = "copy"  # copy | move | hardlink | symlink (kometa path)
     asset_folders: bool = False  # per-title folders (kometa path)

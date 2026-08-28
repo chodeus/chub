@@ -18,7 +18,11 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.util.cl2k.naming import build_poster_filename
-from backend.util.constants import asset_type_regex, season_number_regex
+from backend.util.constants import (
+    ASSET_IMAGE_EXTENSIONS,
+    parse_asset_type,
+    season_number_regex,
+)
 from backend.util.helper import extract_ids, extract_year
 from backend.util.normalization import normalize_titles, parse_asset_filename
 
@@ -77,7 +81,7 @@ def _imdb(value: Any) -> str:
     return s if s.startswith("tt") else ""
 
 
-_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+_IMAGE_EXTS = ASSET_IMAGE_EXTENSIONS
 
 
 def poster_from_filename(filename: str) -> Optional[Dict[str, Any]]:
@@ -91,14 +95,11 @@ def poster_from_filename(filename: str) -> Optional[Dict[str, Any]]:
     _, ext = os.path.splitext(filename)
     if ext.lower() not in _IMAGE_EXTS:
         return None
-    m = asset_type_regex.search(filename)
-    if m:
-        image_type = m.group(1).lower()
-        base = asset_type_regex.sub("", filename).strip(" -_")
+    image_type, base = parse_asset_type(filename)
+    if image_type != "poster":
         title = parse_asset_filename(base + ext)
         normalized_title = normalize_titles(base)
     else:
-        image_type = "poster"
         title = parse_asset_filename(filename)
         normalized_title = normalize_titles(filename)
     tmdb_id, tvdb_id, imdb_id = extract_ids(filename)

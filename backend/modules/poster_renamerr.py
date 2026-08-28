@@ -14,8 +14,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
 from backend.util.constants import (
-    asset_type_regex,
+    ASSET_IMAGE_EXTENSIONS,
     illegal_chars_regex,
+    parse_asset_type,
     season_number_regex,
 )
 from backend.util.database import ChubDB
@@ -179,16 +180,10 @@ def build_asset_record(
     folder = os.path.basename(root)
     filename, ext = os.path.splitext(fname)
 
-    m = asset_type_regex.search(filename)
-    if m:
-        image_type = m.group(1).lower()
-        # Strip the type tag, then re-attach the real extension so
-        # parse_asset_filename's own splitext targets the extension (not a dot
-        # inside a title like "8 A.M. Metro").
-        base = asset_type_regex.sub("", filename).strip(" -_")
-    else:
-        image_type = "poster"
-        base = filename
+    # base has the type tag stripped; callers re-attach the real extension so
+    # parse_asset_filename's own splitext targets the extension (not a dot
+    # inside a title like "8 A.M. Metro").
+    image_type, base = parse_asset_type(filename)
 
     # Music: a configured music_root, or an {mbid-} tag anywhere, routes to the
     # music builder.
@@ -207,7 +202,7 @@ def build_asset_record(
             search_only=search_only,
         )
 
-    if m:
+    if image_type != "poster":
         title = parse_asset_filename(base + ext)
         normalized_title = normalize_titles(base)
     else:
@@ -814,9 +809,10 @@ class PosterRenamerr(ChubModule):
                 else f"{folder}_Season{season_str}{file_extension}"
             )
         elif asset_type == "album":
-            parent = illegal_chars_regex.sub("", item.get("parent_title") or "").strip()
-            album = illegal_chars_regex.sub("", item.get("title") or "").strip()
-            album_base = f"{parent} - {album}".strip(" -") if parent else album
+            # Kometa keys an album's cover by the ALBUM title alone, inside the
+            # artist's folder (its find_item_assets uses item.title) — prefixing
+            # the artist made every album cover unfindable.
+            album_base = illegal_chars_regex.sub("", item.get("title") or "").strip()
             album_base = album_base or "album"
             new_file_name = (
                 f"{album_base}{file_extension}"
@@ -1284,6 +1280,15 @@ class PosterRenamerr(ChubModule):
             )
         return out
 
+    def _music_in_scope(self) -> bool:
+        """Whether this run's instances can yield artist/album rows at all.
+
+        Music media comes from Lidarr, so without a Lidarr instance the artist
+        and album sections can only ever print "No artists to rename".
+        """
+        lidarr = getattr(getattr(self.full_config, "instances", None), "lidarr", None)
+        return any(name in (lidarr or {}) for name in (self.config.instances or []))
+
     def handle_output(self, output: Dict[str, List[Dict[str, Any]]]):
         headers = {
             "collection": "Collection",
@@ -1292,7 +1297,13 @@ class PosterRenamerr(ChubModule):
             "artist": "Artist",
             "album": "Album",
         }
-        for asset_type in ["collection", "movie", "show", "artist", "album"]:
+        # Never hide a section that actually has rows — the scope check only
+        # suppresses the empty music headers on a Lidarr-less setup.
+        music_scope = self._music_in_scope()
+        sections = ["collection", "movie", "show"] + [
+            t for t in ("artist", "album") if music_scope or output.get(t)
+        ]
+        for asset_type in sections:
             assets = output.get(asset_type, [])
             header = f"{headers.get(asset_type, asset_type.capitalize())}s"
             self.logger.info(create_table([[header]]))
@@ -1418,7 +1429,7 @@ class PosterRenamerr(ChubModule):
             dirs.sort(key=str.lower)
             style = self._resolve_style_for_path(root, style_map)
             for fname in sorted(files, key=str.lower):
-                if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                if not fname.lower().endswith(ASSET_IMAGE_EXTENSIONS):
                     continue
                 record = build_asset_record(
                     fname,
@@ -2023,6 +2034,10 @@ class PosterRenamerr(ChubModule):
                         )
                         asset_module.set_progress_window(*tail_windows["asset"])
                         asset_output = asset_module.match_and_apply_assets(db)
+                        # Same summary a standalone run prints. Without this the
+                        # chained path emits nothing above DEBUG, so the artwork
+                        # actually applied is invisible at the default log level.
+                        asset_module.handle_output(asset_output)
                         self.logger.info("Finished running asset_renamerr")
                     # Notify under asset_renamerr so its own notification config
                     # governs (mirrors how each chained module owns its policy).

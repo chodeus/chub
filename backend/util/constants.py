@@ -1,5 +1,10 @@
 import re
-from typing import List, Pattern, Set
+from typing import List, Pattern, Set, Tuple
+
+# Image extensions Kometa reads from an asset directory (its plex.py
+# asset_image_extensions). Scanners, the orphan sweep and the gdrive sync filter
+# all key off this one tuple so they can't drift apart.
+ASSET_IMAGE_EXTENSIONS: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp", ".tbn")
 
 # Matches a season/specials *suffix* tag — "- Season 1", "_Season01", or
 # "- Specials"/"_Specials" (Specials returns season 0 via a None capture).
@@ -44,9 +49,29 @@ season_number_regex = re.compile(
 # (no Plex upload API, not read by Kometa — see asset_renamerr.ALL_ASSET_TYPES):
 # recognising "Movie (2020) - Banner.png" as a banner means it's classified and
 # ignored rather than mis-parsed as a poster titled "Movie - Banner".
+#
+# Bare "Square" is Kometa's own square-art stem, which asset_renamerr writes to
+# a Kometa destination ("Title (Year)_square.png"). Without it the orphan sweep
+# keys that file as "<title>square" and flags CHUB's own output as an orphan.
 asset_type_regex = re.compile(
-    r"(?:\s{0,8}-\s{0,8}|_)(Logo|SquareArt|Background|Banner)\b", re.IGNORECASE
+    r"(?:\s{0,8}-\s{0,8}|_)(Logo|SquareArt|Square|Background|Banner)\b", re.IGNORECASE
 )
+
+# Spelling variants -> CHUB's image_type. Kometa names the file "square"; the
+# Drazzilb-scheme source files say "SquareArt". They are one type.
+_ASSET_TYPE_ALIASES = {"square": "squareart"}
+
+
+def parse_asset_type(filename: str) -> Tuple[str, str]:
+    """(image_type, filename with any type tag stripped). Untagged files are posters."""
+    match = asset_type_regex.search(filename)
+    if not match:
+        return "poster", filename
+    image_type = match.group(1).lower()
+    return (
+        _ASSET_TYPE_ALIASES.get(image_type, image_type),
+        asset_type_regex.sub("", filename).strip(" -_"),
+    )
 
 # Matches the literal "Season " followed by 1–4 digits (e.g. "Season 1", "Season 12", up to "Season 9999"), capturing those digits as group 1
 season_regex: str = r"Season (\d{1,4})"
