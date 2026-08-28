@@ -425,9 +425,9 @@ def is_match(
     The matcher prioritizes **ID equality** (TMDB/TVDB/IMDB). When **both**
     sides provide at least one valid ID, we **only** accept an ID match; title
     similarity is *not* considered in that branch. TVDB and IMDB ids are
-    globally unique, but TMDB ids are unique only *within* a media type, so a
-    TMDB-only agreement is additionally gated by the year check below. When IDs
-    are missing on either side, we fall back to increasingly permissive title checks
+    globally unique; TMDB ids are media-type scoped, so a TMDB-only agreement
+    also needs year corroboration. When IDs are missing on either side, we fall
+    back to increasingly permissive title checks
     (exact, normalized, alternate titles, and a loose alphanumeric compare),
     gated by a year check.
 
@@ -464,9 +464,7 @@ def is_match(
 
     Caveats:
         * The first agreeing ID source wins; a later source that disagrees does
-          NOT veto it. Catalogues carry stale ids, and every conflict measured
-          against a live library was one entity with one stale tag, never two
-          entities. A shared source only blocks when NO source agrees.
+          NOT veto it — a shared source blocks only when NO source agrees.
         * If no source agrees and at least one is shared, title/year heuristics
           are skipped and the result is ``False``.
     """
@@ -540,11 +538,7 @@ def is_match(
         )
 
     def year_corroborates() -> bool:
-        """Whether the year can vouch for a namespaced (tmdb) id agreement.
-
-        Stricter than year_matches(), which passes when EITHER side's year is
-        absent: an unknown year is no tiebreak, so it corroborates nothing.
-        """
+        """Stricter than year_matches(): an unknown year corroborates nothing."""
         asset_year, present_media_years = known_years()
         return (
             asset_year is not None and bool(present_media_years) and year_matches()
