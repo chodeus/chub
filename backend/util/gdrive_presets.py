@@ -25,7 +25,7 @@ def load_presets() -> List[dict]:
 
 
 def load_moves() -> Dict[str, Optional[str]]:
-    """Retired/relocated preset ids: ``{old_id: new_id or None}``. ``None`` = retired."""
+    """Dropped preset ids: ``{old_id: new_id}``. ``None`` = no replacement known yet."""
     global _moves_cache
     if _moves_cache is None:
         with open(MOVES_PATH, "r", encoding="utf-8") as fh:
@@ -64,9 +64,13 @@ def reconcile_gdrive_list(entries: Iterable[Any], logger: Any = None) -> int:
         name = getattr(entry, "name", None) or current
         new_id = moves[current]
         if new_id is None:
+            # No replacement id known — the drive may be withdrawn, or merely
+            # moved somewhere nobody has tracked down yet. Don't tell the user
+            # to delete it; a later release can fill in "to" and heal them.
             log.warning(
-                f"GDrive preset '{name}' is retired — that Drive folder is gone. "
-                "Remove it from Settings → sync_gdrive, or point it at a live drive."
+                f"GDrive preset '{name}' ({current}) is no longer in the bundled "
+                "catalogue and syncs nothing. Check for an updated share link from "
+                "its owner, or remove it from Settings → sync_gdrive."
             )
             continue
         entry.id = new_id

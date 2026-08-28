@@ -133,6 +133,30 @@ jobs:
       - name: Run Ruff linter
         run: ruff check .
 
+  # ---- GDrive preset catalogue ----
+  gdrive-preset-moves:
+    name: GDrive Preset Moves
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # Full history: the check diffs the catalogue against the PR base.
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+
+      - name: Every dropped drive id has a move record
+        run: |
+          python3 scripts/check_gdrive_preset_moves.py \
+            --base "origin/${{ github.event.pull_request.base.ref }}"
+
   # ---- Backend Smoke Test & Tests ----
   backend-smoke:
     name: Backend Tests
