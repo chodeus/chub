@@ -13,6 +13,8 @@ matching and cache handling"), specifically:
 import os
 from types import SimpleNamespace
 
+import pytest
+
 
 from backend.modules.poster_renamerr import PosterRenamerr
 
@@ -1288,3 +1290,33 @@ def test_build_plex_notify_output_empty_and_none_are_all_empty():
     assert not any(empty.values())
     assert not any(PosterRenamerr._build_plex_notify_output(None).values())
     assert not any(PosterRenamerr._build_plex_notify_output({}).values())
+
+
+
+# --- ensure_destination_dir ---
+
+
+def test_ensure_destination_dir_reports_an_unmountable_path(tmp_path, monkeypatch):
+    """A bare OSError reads as "[Errno 13] Permission denied" with no hint that the
+    volume simply isn't mounted, and the caller logs whatever message it gets."""
+    import backend.modules.poster_renamerr as pr
+
+    m = make_module()
+    m.config = SimpleNamespace(destination_dir=str(tmp_path / "not-mounted"))
+
+    def boom(*_a, **_kw):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(pr.os, "makedirs", boom)
+    with pytest.raises(FileNotFoundError, match="volume is mounted"):
+        m.ensure_destination_dir()
+
+
+def test_ensure_destination_dir_tolerates_a_concurrent_create(tmp_path):
+    """Two passes can race between the isdir() check and makedirs()."""
+    m = make_module()
+    dest = tmp_path / "dest"
+    m.config = SimpleNamespace(destination_dir=str(dest))
+    m.ensure_destination_dir()
+    m.ensure_destination_dir()  # already there now — must not raise
+    assert dest.is_dir()
