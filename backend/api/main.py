@@ -85,6 +85,22 @@ STREAM_PATH_PREFIXES = (
 )
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Stamp baseline security headers on every response."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # setdefault, not assignment: a route that deliberately sets its own
+        # (e.g. a looser frame policy for an embed) must keep it.
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+        )
+        return response
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     """
     Require a valid JWT Bearer token on all /api/* routes
@@ -412,6 +428,7 @@ router = APIRouter()
 
 # Authentication middleware — must be added before routes
 app.add_middleware(AuthMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Frontend static directory — configurable via STATIC_DIR env var.
 # Defaults to templates/ (local dev); Docker sets STATIC_DIR=/app/public.

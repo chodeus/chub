@@ -14,7 +14,7 @@ import pytest
 # when it's not installed (e.g. minimal local environments).
 pytest.importorskip("httpx")
 
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, HTTPException, Response  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -302,6 +302,9 @@ def test_gdrive_presets_returns_bundled_catalogue(app_with_router):
     for entry in presets:
         assert {"name", "id", "style"}.issubset(entry.keys())
         assert entry["style"] in ("CL2K", "MM2K", "Artwork")
+    # A duplicated id silently shadows a curator's drive in the picker.
+    ids = [e["id"] for e in presets]
+    assert len(ids) == len(set(ids)), "duplicate drive id in the bundled catalogue"
     # Spot-check a couple of canonical entries so we'd notice if the
     # bundled JSON gets mangled in a future commit.
     by_id = {e["id"]: e for e in presets}
@@ -763,3 +766,47 @@ def test_error_body_omits_exception_text(app_with_router):
     assert body["message"] == "Error retrieving poster statistics"
     # The whole body, not just message — detail must not reach data/ either.
     assert "LEAK_MARKER" not in resp.text
+
+
+# --- Baseline security headers ---
+
+
+def test_security_headers_stamped_on_every_response():
+    """Headers must ride every response, including a route that errors."""
+    from backend.api.main import SecurityHeadersMiddleware
+
+    app = FastAPI()
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    @app.get("/fine")
+    def fine():
+        return {"ok": True}
+
+    @app.get("/boom")
+    def boom():
+        raise HTTPException(status_code=401, detail="nope")
+
+    client = TestClient(app)
+    for path, code in (("/fine", 200), ("/boom", 401)):
+        resp = client.get(path)
+        assert resp.status_code == code
+        assert resp.headers["X-Content-Type-Options"] == "nosniff"
+        assert resp.headers["X-Frame-Options"] == "SAMEORIGIN"
+        assert resp.headers["Referrer-Policy"] == "same-origin"
+        assert "camera=()" in resp.headers["Permissions-Policy"]
+
+
+def test_security_headers_do_not_override_a_route_that_sets_its_own():
+    from backend.api.main import SecurityHeadersMiddleware
+
+    app = FastAPI()
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    @app.get("/embed")
+    def embed(response: Response):
+        response.headers["X-Frame-Options"] = "ALLOWALL"
+        return {"ok": True}
+
+    resp = TestClient(app).get("/embed")
+    assert resp.headers["X-Frame-Options"] == "ALLOWALL"
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
