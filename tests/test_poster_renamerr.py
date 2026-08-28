@@ -1296,18 +1296,18 @@ def test_build_plex_notify_output_empty_and_none_are_all_empty():
 # --- ensure_destination_dir ---
 
 
-def test_ensure_destination_dir_reports_an_unmountable_path(tmp_path, monkeypatch):
-    """A bare OSError reads as "[Errno 13] Permission denied" with no hint that the
-    volume simply isn't mounted, and the caller logs whatever message it gets."""
-    import backend.modules.poster_renamerr as pr
+def test_ensure_destination_dir_reports_an_unmountable_path(tmp_path):
+    """A bare OSError reads as "[Errno 20] Not a directory" with no hint that the
+    volume simply isn't mounted, and the caller logs whatever message it gets.
+
+    A plain file standing where a parent directory should be reproduces the real
+    failure without patching os.
+    """
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a file, not a mount point")
 
     m = make_module()
-    m.config = SimpleNamespace(destination_dir=str(tmp_path / "not-mounted"))
-
-    def boom(*_a, **_kw):
-        raise PermissionError(13, "Permission denied")
-
-    monkeypatch.setattr(pr.os, "makedirs", boom)
+    m.config = SimpleNamespace(destination_dir=str(blocker / "assets"))
     with pytest.raises(FileNotFoundError, match="volume is mounted"):
         m.ensure_destination_dir()
 
