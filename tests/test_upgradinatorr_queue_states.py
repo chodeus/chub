@@ -310,3 +310,17 @@ def test_blocked_rows_are_deduplicated_by_download_title():
         out, {7: [dict(row), dict(row)]}, [{"media_id": 7, "title": "M", "year": 2024}]
     )
     assert [q["download"] for q in out["data"][0]["queue_imports"]] == ["Dupe"]
+
+
+def test_dry_run_still_reports_blocked_downloads():
+    """A dry run previews what would happen; silently omitting the items the
+    queue guard skips makes the preview lie about the run."""
+    module = make_upgradinatorr(dry_run=True)
+    app = _StaleQueueARR([[upgradinatorr_media_item([])]], added_hours_ago=5)
+
+    result = module.process_instance("radarr", _settings(queue_block_hours=72), app)
+
+    assert app.search_calls == []
+    assert [q["download"] for q in result["data"][0]["queue_imports"]] == [
+        "Movie.2024.1080p.WEB-DL"
+    ]

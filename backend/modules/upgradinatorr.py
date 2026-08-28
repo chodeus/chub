@@ -1594,9 +1594,6 @@ class Upgradinatorr(ChubModule):
                         "search_failures": failed_searches.get(item["media_id"], []),
                     }
                 )
-            # Media held back by the queue guard never reach searched_items, so
-            # report their rows here or the skipped work is invisible.
-            self._append_blocked_rows(output_dict, blocked_rows, media_dict)
             output_dict.update(search_stats)
             tagged_in_run = len(searched_items) - sum(
                 1 for v in failed_searches.values() if v
@@ -1625,6 +1622,9 @@ class Upgradinatorr(ChubModule):
                         "search_failures": [],
                     }
                 )
+        # Media held back by the queue guard never reach filtered_media_dict, so
+        # report their rows here — dry run included — or the skip is invisible.
+        self._append_blocked_rows(output_dict, blocked_rows, media_dict)
         return output_dict
 
     @staticmethod
