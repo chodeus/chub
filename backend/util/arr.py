@@ -43,7 +43,14 @@ COMMAND_TERMINAL_FAILURES = ("failed", "aborted", "cancelled", "orphaned")
 # left to report or act on. Union of the Lidarr and Sonarr enums, which differ.
 QUEUE_STATES_DONE = {"imported", "ignored"}
 # States a download will not leave without someone intervening.
-QUEUE_STATES_STUCK = {"downloadfailed", "importfailed", "importblocked", "failed"}
+QUEUE_STATES_STUCK = {
+    "downloadfailed",
+    "downloadfailedpending",
+    "failed",
+    "failedpending",
+    "importblocked",
+    "importfailed",
+}
 
 
 def classify_queue_row(record: Dict[str, Any]) -> str:

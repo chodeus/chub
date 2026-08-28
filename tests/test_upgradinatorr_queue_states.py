@@ -417,3 +417,31 @@ def test_genuine_empty_later_page_ends_pagination():
 
     records = module._fetch_queue_records(app)
     assert records is not None and len(records) == 200
+
+
+@pytest.mark.parametrize(
+    "state", ["failedPending", "downloadFailedPending"]
+)
+def test_failed_pending_states_classify_as_stuck(state):
+    """These are failures en route to Failed, not work in progress — labelling
+    them 'awaiting import' tells the user it is still progressing."""
+    row = _queue_row(trackedDownloadState=state, trackedDownloadStatus="ok",
+                     status="downloading")
+    assert classify_queue_row(row) == "stuck"
+
+
+@pytest.mark.parametrize(
+    "stored,expected",
+    [(None, 72), ("", 72), ("   ", 72), ("abc", 72), ({}, 72),
+     (0, 0), ("0", 0), (24, 24), ("24", 24)],
+)
+def test_queue_block_hours_falls_back_without_disabling_the_guard(stored, expected):
+    """Only an explicit 0 opts out. A null or blank value reaching `or 0` would
+    silently disable queue blocking."""
+    module = make_upgradinatorr(dry_run=False)
+    assert module._queue_block_hours(SimpleNamespace(queue_block_hours=stored)) == expected
+
+
+def test_queue_block_hours_defaults_when_absent():
+    module = make_upgradinatorr(dry_run=False)
+    assert module._queue_block_hours(SimpleNamespace()) == 72

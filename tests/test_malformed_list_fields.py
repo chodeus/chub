@@ -67,3 +67,22 @@ def test_connector_accepts_absent_seasons():
         [{"title": "A", "musicbrainz_id": "x", "seasons": None}], "artist"
     )
     assert len(rows) == 1 and rows[0]["title"] == "A"
+
+
+def test_webhook_template_rejected_when_a_field_entry_is_not_a_dict():
+    """desired_webhook_body calls dict(field) on every entry, so one scalar in an
+    otherwise valid fields list would abort provisioning."""
+    tmpl = {
+        "implementation": "Webhook",
+        "fields": [{"name": "url"}, {"name": "method"}, 42],
+    }
+    assert _webhook_template([tmpl]) is None
+
+
+def test_webhook_template_search_continues_past_an_invalid_entry():
+    good = {
+        "implementation": "Webhook",
+        "fields": [{"name": "url"}, {"name": "method"}],
+    }
+    bad = {"implementation": "Webhook", "fields": "nope"}
+    assert _webhook_template([bad, good]) == good

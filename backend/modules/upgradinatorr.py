@@ -52,6 +52,8 @@ QUEUE_REPORT_SECTIONS = (
 )
 # Bound on queue paging so a mispaginating *arr can't spin the run forever.
 QUEUE_MAX_PAGES = 50
+# Mirrors UpgradinatorrInstance.queue_block_hours.
+QUEUE_BLOCK_HOURS_DEFAULT = 72
 
 
 class _BufferingLogger:
@@ -156,6 +158,21 @@ class Upgradinatorr(ChubModule):
         if isinstance(settings, dict):
             return settings.get(key, default)
         return getattr(settings, key, default)
+
+    def _queue_block_hours(self, settings: Any) -> int:
+        """Hours an unresolved download suppresses re-searching. An explicit 0
+        opts out; null/blank/junk falls back to the default, never to 0."""
+        raw = self._get_setting(settings, "queue_block_hours", QUEUE_BLOCK_HOURS_DEFAULT)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return QUEUE_BLOCK_HOURS_DEFAULT
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            self.logger.warning(
+                f"Invalid queue_block_hours {raw!r}; using "
+                f"{QUEUE_BLOCK_HOURS_DEFAULT}."
+            )
+            return QUEUE_BLOCK_HOURS_DEFAULT
 
     @staticmethod
     def _tag_names(item: Dict[str, Any]) -> set:
@@ -1230,9 +1247,7 @@ class Upgradinatorr(ChubModule):
             self._get_setting(instance_settings, "count_mode", "series_artist")
             or "series_artist"
         )
-        queue_block_hours: int = int(
-            self._get_setting(instance_settings, "queue_block_hours", 72) or 0
-        )
+        queue_block_hours: int = self._queue_block_hours(instance_settings)
         # Anchors "was this grabbed by this run?" — queue rows added before it
         # are pre-existing work, not something this run caused.
         run_started = datetime.now(timezone.utc)
