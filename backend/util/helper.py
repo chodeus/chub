@@ -463,9 +463,12 @@ def is_match(
         rule matches, returns ``(False, "")``.
 
     Caveats:
-        * If both sides provide the same ID source and the values differ, the
-          function returns ``False`` immediately. If their ID sources do not
-          overlap, title/year heuristics are still allowed.
+        * The first agreeing ID source wins; a later source that disagrees does
+          NOT veto it. Catalogues carry stale ids, and every conflict measured
+          against a live library was one entity with one stale tag, never two
+          entities. A shared source only blocks when NO source agrees.
+        * If no source agrees and at least one is shared, title/year heuristics
+          are skipped and the result is ``False``.
     """
     if media.get("folder"):
         folder_base_name = os.path.basename(media["folder"])

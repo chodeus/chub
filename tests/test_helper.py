@@ -320,6 +320,29 @@ def test_is_match_imdb_id_not_gated_by_year():
     assert matched and "imdb_id" in reason
 
 
+def test_is_match_agreeing_tmdb_survives_a_stale_imdb_tag():
+    """A later disagreeing source must NOT veto an agreeing one. Real case: the
+    show "Lynley" (2025) carries tt33022310 on the poster and tt33040971 in *arr
+    — one entity, one stale tag. Rejecting on any conflict loses its poster AND
+    logo, and every such conflict measured against a live library was this shape."""
+    asset = {
+        "title": "Lynley",
+        "normalized_title": "lynley",
+        "tmdb_id": "12345",
+        "imdb_id": "tt33022310",
+        "year": 2025,
+    }
+    media = {
+        "title": "Lynley",
+        "normalized_title": "lynley",
+        "tmdb_id": "12345",
+        "imdb_id": "tt33040971",
+        "year": 2025,
+    }
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
 def test_is_match_id_mismatch_blocks_title_fallback():
     """When both have IDs and they don't match, return False (no title fallback)."""
     asset = {"tmdb_id": "1", "title": "Same Title", "year": 2020}
