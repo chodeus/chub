@@ -35,11 +35,12 @@ def load_moves() -> Dict[str, Optional[str]]:
     return _moves_cache
 
 
-def reconcile_gdrive_list(entries: Iterable[Any], logger: Any = None) -> int:
+def reconcile_gdrive_list(entries: Iterable[Any], logger: Any = None) -> Optional[int]:
     """Repoint saved gdrive_list entries by preset id; never rewrite ``location``.
 
-    Matching is by id, not name — names have been reformatted over time, so
-    name matching finds nothing on real configs.
+    Returns the number healed, or None when the move table could not be read so
+    the caller can avoid caching an unreconciled config. Matching is by id, not
+    name — names have been reformatted over time and match nothing on real configs.
     """
     log = logger or _log
     try:
@@ -49,7 +50,7 @@ def reconcile_gdrive_list(entries: Iterable[Any], logger: Any = None) -> int:
         # read failure means a broken image, not a bad user config — refusing to
         # load config at all would take the app down over a cosmetic heal.
         _log.error(f"GDrive preset move table unreadable, ids not reconciled: {exc}")
-        return 0
+        return None
 
     healed = 0
     for entry in entries or []:

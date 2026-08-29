@@ -1329,24 +1329,31 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
     except Exception as e:
         raise ConfigError(f"Unexpected configuration error in {config_path}") from e
 
-    _reconcile_gdrive_presets(config)
-
-    _cache_config(config_path, version, config)
+    # Only cache a config that was actually reconciled. The cache is keyed on
+    # the file's mtime/size, so caching after a transient failure would serve
+    # the unreconciled config until config.yml itself changed.
+    if _reconcile_gdrive_presets(config):
+        _cache_config(config_path, version, config)
     return config
 
 
-def _reconcile_gdrive_presets(config: "ChubConfig") -> None:
+def _reconcile_gdrive_presets(config: "ChubConfig") -> bool:
     """Repoint gdrive_list entries whose preset drive moved (in memory only).
 
-    Not persisted here — the healed id reaches every consumer and the UI, and
-    the user's next Settings save writes it through save_config's atomic path.
+    Returns False when reconciliation could not run, so the caller can skip
+    caching and retry on the next load. Not persisted here — the healed id
+    reaches every consumer and the UI, and the user's next Settings save writes
+    it through save_config's atomic path.
     """
     try:
         from backend.util.gdrive_presets import reconcile_gdrive_list
 
-        reconcile_gdrive_list(getattr(config.sync_gdrive, "gdrive_list", None))
+        return reconcile_gdrive_list(
+            getattr(config.sync_gdrive, "gdrive_list", None)
+        ) is not None
     except Exception as exc:  # pragma: no cover - never block a config load
         _config_log.error(f"GDrive preset reconcile skipped: {exc}")
+        return False
 
 
 def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
