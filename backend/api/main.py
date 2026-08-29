@@ -95,12 +95,18 @@ SECURITY_HEADERS = {
 }
 
 
+def _stamp_security_headers(response) -> None:
+    """Add the baseline headers, never overriding one a route already set."""
+    for header, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Stamp baseline security headers on every response."""
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        response.headers.update(SECURITY_HEADERS)
+        _stamp_security_headers(response)
         return response
 
 
@@ -489,7 +495,7 @@ async def handle_exception(request: Request, exc: Exception) -> JSONResponse:
     logger.error(f"Unhandled Exception: {exc}", exc_info=True)
     response = error("Internal server error", code="INTERNAL_ERROR", status_code=500)
     # ServerErrorMiddleware owns this path, outside SecurityHeadersMiddleware.
-    response.headers.update(SECURITY_HEADERS)
+    _stamp_security_headers(response)
     return response
 
 

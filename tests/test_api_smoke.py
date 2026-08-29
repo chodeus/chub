@@ -817,3 +817,19 @@ def test_security_headers_cover_an_unhandled_500():
     assert resp.status_code == 500
     for header, value in SECURITY_HEADERS.items():
         assert resp.headers[header] == value
+
+
+def test_security_headers_never_override_a_route_choice():
+    """A route that sets a STRICTER header must keep it — the baseline fills
+    gaps, it doesn't clobber an explicit decision."""
+    from starlette.responses import JSONResponse
+
+    from backend.api.main import SECURITY_HEADERS, _stamp_security_headers
+
+    resp = JSONResponse({"ok": True}, headers={"X-Frame-Options": "DENY"})
+    _stamp_security_headers(resp)
+    assert resp.headers["X-Frame-Options"] == "DENY"
+    # every other baseline header is still applied
+    for header, value in SECURITY_HEADERS.items():
+        if header != "X-Frame-Options":
+            assert resp.headers[header] == value
