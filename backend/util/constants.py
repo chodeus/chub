@@ -59,9 +59,47 @@ asset_type_regex = re.compile(
 # Drazzilb-scheme source files say "SquareArt". They are one type.
 _ASSET_TYPE_ALIASES = {"square": "squareart"}
 
+# Kometa's asset_folders layout names a file by BARE stem inside
+# "<Title (Year)>/", so there is no delimiter for asset_type_regex to anchor on
+# and the media identity lives on the parent folder, not the filename.
+FOLDERED_ASSET_STEMS = {
+    # poster
+    "poster": "poster",
+    "cover": "poster",
+    "default": "poster",
+    "folder": "poster",
+    "movie": "poster",
+    # background
+    "background": "background",
+    "art": "background",
+    "backdrop": "background",
+    "fanart": "background",
+    # logo
+    "logo": "logo",
+    "clearlogo": "logo",
+    # square art
+    "square": "squareart",
+    "square_art": "squareart",
+    "squareart": "squareart",
+    "backgroundsquare": "squareart",
+}
+
+# A bare "Season01" / "Season01_background" stem in a foldered layout — the show
+# identity is on the parent folder, only the season number is in the name.
+foldered_season_regex: Pattern = re.compile(
+    r"^Season\s*(\d{1,4})$", re.IGNORECASE
+)
+
 
 def parse_asset_type(filename: str) -> Tuple[str, str]:
-    """(image_type, filename with any type tag stripped). Untagged files are posters."""
+    """(image_type, filename with any type tag stripped). Untagged files are posters.
+
+    An EMPTY base means a foldered Kometa stem: the identity is on the parent
+    folder, so callers must not key on the filename.
+    """
+    foldered = FOLDERED_ASSET_STEMS.get(filename.strip().lower())
+    if foldered is not None:
+        return foldered, ""
     match = asset_type_regex.search(filename)
     if not match:
         return "poster", filename
