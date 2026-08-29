@@ -78,7 +78,9 @@ def test_missing_move_table_fails_open(monkeypatch, tmp_path):
     # failure is logged at error level rather than swallowed.
     monkeypatch.setattr(gdrive_presets, "MOVES_PATH", tmp_path / "nope.json")
     entry = _entry("1HjwMWfI6XpQVYH36VBzYiJA4UWfoqcQ9")
-    assert gdrive_presets.reconcile_gdrive_list([entry]) == 0
+    # None (not 0) so load_config can tell "nothing to heal" from "could not
+    # run" and skip caching an unreconciled config.
+    assert gdrive_presets.reconcile_gdrive_list([entry]) is None
     assert entry.id == "1HjwMWfI6XpQVYH36VBzYiJA4UWfoqcQ9"
 
 
@@ -94,3 +96,27 @@ def test_move_table_shape_is_valid_json():
         assert row.get("from"), "every row needs a 'from' id"
         assert "to" in row, "every row needs a 'to' (null = retired)"
         assert row.get("note"), "every row needs a note explaining the move"
+
+
+def test_transient_failure_is_not_cached(monkeypatch, tmp_path):
+    """A load that could not reconcile must not be cached, or the stale ids are
+    served for that file version forever — the cache key is mtime/size."""
+    import yaml
+    from backend.util.config import load_config
+
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(yaml.safe_dump({"sync_gdrive": {"gdrive_list": [
+        {"name": "MM2K IamSpartacus", "id": "1HjwMWfI6XpQVYH36VBzYiJA4UWfoqcQ9",
+         "location": "/kometa/posters/MM2K/IamSpartacus"}]}}))
+
+    real = gdrive_presets.MOVES_PATH
+    monkeypatch.setattr(gdrive_presets, "MOVES_PATH", tmp_path / "gone.json")
+    gdrive_presets._moves_cache = None
+    first = load_config(str(cfg))
+    assert first.sync_gdrive.gdrive_list[0].id == "1HjwMWfI6XpQVYH36VBzYiJA4UWfoqcQ9"
+
+    # Failure clears; the file is untouched so its cache key is identical.
+    monkeypatch.setattr(gdrive_presets, "MOVES_PATH", real)
+    gdrive_presets._moves_cache = None
+    second = load_config(str(cfg))
+    assert second.sync_gdrive.gdrive_list[0].id == "19_kDCSHFdeZypxOxmODWmEt6jtBBtOYw"
