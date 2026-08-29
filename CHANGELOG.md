@@ -2,6 +2,45 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.48.0](https://github.com/chodeus/chub/compare/v2.47.0...v2.48.0) (2026-08-29)
+
+
+### Features
+
+* **artwork:** align asset handling with Kometa's asset-naming spec ([#593](https://github.com/chodeus/chub/issues/593)) ([03a1f30](https://github.com/chodeus/chub/commit/03a1f3015ddf614f1109db84d1a7dc70a6fc73fa))
+* **cl2k:** mirror the artwork horizontally ([#579](https://github.com/chodeus/chub/issues/579)) ([712c86b](https://github.com/chodeus/chub/commit/712c86b847514b378e1f2c3cd2ae64a264af38e8))
+* **sync_gdrive:** clean up folders left behind by removed drives ([#594](https://github.com/chodeus/chub/issues/594)) ([4f32c3f](https://github.com/chodeus/chub/commit/4f32c3f57bef558710d6ba3571e817313807378d))
+* **sync_gdrive:** warn when syncs fall back to rclone's shared client_id ([#591](https://github.com/chodeus/chub/issues/591)) ([58e63e7](https://github.com/chodeus/chub/commit/58e63e7ca3b3f4ae1208d218f4df5dad8cf48fea))
+
+
+### Bug Fixes
+
+* **assets:** classify Kometa's foldered bare stems by type, not as posters ([#595](https://github.com/chodeus/chub/issues/595)) ([0e5ddd8](https://github.com/chodeus/chub/commit/0e5ddd88e87085a40de30cbaa2941997fc8cf614))
+* **cl2k:** scope season backdrop reuse to the series, not any tmdb id ([#592](https://github.com/chodeus/chub/issues/592)) ([d239a1f](https://github.com/chodeus/chub/commit/d239a1f501f708685dd6792ae516dd05455b89f6))
+* **config:** don't cache a config whose preset reconcile failed ([20cb400](https://github.com/chodeus/chub/commit/20cb400613ff2653f0113c32d6959ca738402808))
+* dead gdrive presets and tmdb movie/TV namespace collisions ([#590](https://github.com/chodeus/chub/issues/590)) ([60ecad1](https://github.com/chodeus/chub/commit/60ecad1fa96903bb6f3df00d12b4be02297766f1))
+* **deps:** update all non-major dependencies ([7c086b0](https://github.com/chodeus/chub/commit/7c086b07a86fdc50f7eb27adf994d7ca68431558))
+* **deps:** update all non-major dependencies ([5e5476a](https://github.com/chodeus/chub/commit/5e5476a09fc9edc6bbc04bcc482b347bdddd572f))
+* **deps:** update all non-major dependencies ([#585](https://github.com/chodeus/chub/issues/585)) ([5e5476a](https://github.com/chodeus/chub/commit/5e5476a09fc9edc6bbc04bcc482b347bdddd572f))
+* **deps:** update all non-major dependencies ([#600](https://github.com/chodeus/chub/issues/600)) ([7c086b0](https://github.com/chodeus/chub/commit/7c086b07a86fdc50f7eb27adf994d7ca68431558))
+* **notifications:** cap every listing at 50 items and always tally ([b854de8](https://github.com/chodeus/chub/commit/b854de88a0c426e39f8e20250e504d1a0fd13bf3))
+* **notifications:** send summaries, not the run log's debug detail ([269390d](https://github.com/chodeus/chub/commit/269390d0088519a89c199a7bb974cfd4a2aa318b))
+* report downloads stuck awaiting import, and harden *arr response handling ([#589](https://github.com/chodeus/chub/issues/589)) ([082f48c](https://github.com/chodeus/chub/commit/082f48cdd401840eee98309374de6a6cd89d199a))
+* **upgradinatorr:** drop manual-import noise from the run log ([ebf0c4e](https://github.com/chodeus/chub/commit/ebf0c4ef6d60541aa5edc45aeab2aefedfa5b744))
+* **upgradinatorr:** reduce the queue sections to a tally at info ([1968d88](https://github.com/chodeus/chub/commit/1968d884f1144e6dc5524e27aacdb5317784c04b))
+* **version:** check for updates against the published image, not commit count ([#587](https://github.com/chodeus/chub/issues/587)) ([937cc34](https://github.com/chodeus/chub/commit/937cc34e5755ef9c18c74b073321b96d4b3c16d4))
+
+
+### Refactoring
+
+* **cl2k:** bundle the six framing knobs into one Framing object ([#582](https://github.com/chodeus/chub/issues/582)) ([b74948b](https://github.com/chodeus/chub/commit/b74948b5bf46d84f52928dd9ec93aadbf6d468f5))
+
+
+### Documentation
+
+* BUILD_NUMBER is load-bearing, not decoration ([7bb617b](https://github.com/chodeus/chub/commit/7bb617bf8240e7e5c6ea1a0da60237b4bb4cee2b))
+* drop the last develop-era references ([eec28cd](https://github.com/chodeus/chub/commit/eec28cda3ffd6e0778d21bc47553052bc40223a0))
+
 ## [2.47.0](https://github.com/chodeus/chub/compare/v2.46.1...v2.47.0) (2026-08-18)
 
 
