@@ -1315,3 +1315,96 @@ def test_album_asset_flat_layout(tmp_path):
         _kometa_dest(tmp_path, album, "background", False)
         == "Pink Floyd_The Wall_background.png"
     )
+
+
+# --------------------------------------------------------------------------
+# Kometa asset_folders layout: bare stems key on the parent folder
+# --------------------------------------------------------------------------
+
+_FOLDER = "/x/The Matrix (1999) {tmdb-603}"
+
+
+@pytest.mark.parametrize(
+    "fname,image_type",
+    [
+        ("poster.jpg", "poster"),
+        ("cover.jpg", "poster"),
+        ("default.png", "poster"),
+        ("folder.tbn", "poster"),
+        ("movie.jpg", "poster"),
+        ("background.png", "background"),
+        ("art.jpg", "background"),
+        ("backdrop.png", "background"),
+        ("fanart.png", "background"),
+        ("logo.png", "logo"),
+        ("clearlogo.png", "logo"),
+        ("square.png", "squareart"),
+        ("square_art.png", "squareart"),
+        ("squareArt.png", "squareart"),
+        ("backgroundSquare.png", "squareart"),
+    ],
+)
+def test_foldered_stem_types_and_identity(fname, image_type):
+    """A bare Kometa stem carries only the TYPE — identity is the parent folder.
+
+    Previously every one of these keyed on the stem itself ("logo", "square"),
+    so a foldered tree scanned as posters titled after their asset type.
+    """
+    rec = build_asset_record(fname, _FOLDER)
+    assert rec["image_type"] == image_type
+    assert rec["title"] == "The Matrix"
+    assert rec["normalized_title"] == "thematrix"
+    assert rec["tmdb_id"] == 603
+    assert rec["year"] == 1999
+
+
+@pytest.mark.parametrize(
+    "fname,image_type,season",
+    [("Season01.jpg", "poster", 1), ("Season01_background.png", "background", 1),
+     ("Season00.jpg", "poster", 0), ("Season100.jpg", "poster", 100)],
+)
+def test_foldered_season_stems(fname, image_type, season):
+    # season_number_regex needs a delimiter, so a bare "Season01" matched nothing.
+    rec = build_asset_record(fname, _FOLDER)
+    assert rec["image_type"] == image_type
+    assert rec["season_number"] == season
+    assert rec["normalized_title"] == "thematrix"
+
+
+@pytest.mark.parametrize(
+    "fname,image_type,title",
+    [
+        ("Movie (1999) {tmdb-1} - Logo.png", "logo", "Movie"),
+        ("Movie (1999) {tmdb-1} - SquareArt.png", "squareart", "Movie"),
+        ("Movie (1999) {tmdb-1}.png", "poster", "Movie"),
+        # A real title that merely CONTAINS a stem word must not be eaten.
+        ("Open Season 2 (2008) - Logo.png", "logo", "Open Season 2"),
+        ("The Square (2017) {tmdb-2}.jpg", "poster", "The Square"),
+        ("Background Noise (2010).png", "poster", "Background Noise"),
+    ],
+)
+def test_flat_convention_is_unchanged(fname, image_type, title):
+    rec = build_asset_record(fname, "/x/src")
+    assert rec["image_type"] == image_type
+    assert rec["title"] == title
+
+
+@pytest.mark.parametrize(
+    "fname", ["Cover.jpg", "Art.jpg", "Movie.jpg", "Folder.jpg", "Square.jpg", "Logo.png"]
+)
+def test_flat_file_named_after_a_stem_keeps_its_own_title(fname):
+    """parse_asset_type can't see the layout, so a flat file literally named
+    "Cover.jpg" looked like a foldered stem and took the DRIVE folder's name —
+    collapsing every such file onto one match key."""
+    rec = build_asset_record(fname, "/kometa/posters/MM2K/Chodeus")
+    stem = os.path.splitext(fname)[0]
+    assert rec["image_type"] == "poster"
+    assert rec["title"] == stem
+    assert rec["normalized_title"] == stem.lower()
+
+
+@pytest.mark.parametrize("folder", ["Some Show (2020)", "Some Show {tmdb-42}"])
+def test_foldered_stem_needs_only_a_year_or_an_id_on_the_parent(folder):
+    rec = build_asset_record("logo.png", f"/x/{folder}")
+    assert rec["image_type"] == "logo"
+    assert rec["normalized_title"] == "someshow"

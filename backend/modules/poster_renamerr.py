@@ -15,6 +15,7 @@ from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
 from backend.util.constants import (
     ASSET_IMAGE_EXTENSIONS,
+    foldered_season_regex,
     illegal_chars_regex,
     parse_asset_type,
     season_number_regex,
@@ -201,7 +202,21 @@ def build_asset_record(
             search_only=search_only,
         )
 
-    if image_type != "poster":
+    # A bare stem only means "foldered Kometa asset" when the parent folder
+    # identifies media; in a flat drive "Cover.jpg" is just a poster.
+    foldered_season = foldered_season_regex.match(base) if base else None
+    bare_stem = not base or bool(foldered_season)
+    parent_identifies = bool(extract_year(folder) or any(extract_ids(folder)))
+    if bare_stem and parent_identifies:
+        title = parse_asset_filename(folder)
+        normalized_title = normalize_titles(folder)
+    elif not base:
+        # Flat file literally named after a stem — keep the pre-existing
+        # behaviour and let its own name be the title.
+        image_type = "poster"
+        title = parse_asset_filename(fname)
+        normalized_title = normalize_titles(filename)
+    elif image_type != "poster":
         title = parse_asset_filename(base + ext)
         normalized_title = normalize_titles(base)
     else:
@@ -223,6 +238,9 @@ def build_asset_record(
     season_number = (
         int(match.group(1)) if match and match.group(1) else (0 if match else None)
     )
+    # A bare "Season01" stem has no delimiter for season_number_regex to anchor on.
+    if season_number is None and foldered_season:
+        season_number = int(foldered_season.group(1))
 
     return {
         "title": title,
