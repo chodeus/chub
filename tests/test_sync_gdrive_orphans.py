@@ -141,3 +141,31 @@ def test_symlinked_location_does_not_disarm_a_real_sibling_root(tmp_path):
     assert removed == [str(orphan)]
     assert outside.exists()
 
+
+
+def test_symlinked_ANCESTOR_does_not_widen_the_cleanup_root(tmp_path):
+    """A symlink anywhere in the path escapes, not just the leaf.
+
+    os.path.islink() only inspects the final component, so a location like
+    /sync/linked/Drive — where 'linked' points at /shared and 'Drive' itself is
+    a real directory — still resolved into /shared and put its empty siblings
+    on the remove list.
+    """
+    shared = tmp_path / "shared"
+    (shared / "Drive").mkdir(parents=True)
+    (shared / "Drive" / "p.jpg").write_bytes(b"x")
+    precious = shared / "PreciousEmptyDir"
+    precious.mkdir()
+
+    sync = tmp_path / "sync"
+    sync.mkdir()
+    os.symlink(shared, sync / "linked")
+    loc = sync / "linked" / "Drive"
+    assert not os.path.islink(loc), "the leaf must be a real dir for this test"
+
+    m = _module(tmp_path, [])
+    m.config.gdrive_list = [SimpleNamespace(location=str(loc))]
+    removed, kept = m._prune_orphan_drive_folders()
+
+    assert removed == [], f"escaped through a symlinked ancestor: {removed}"
+    assert precious.exists()

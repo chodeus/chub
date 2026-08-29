@@ -493,13 +493,16 @@ class SyncGDrive(ChubModule):
         for loc in (getattr(e, "location", None) for e in entries):
             if not loc:
                 continue
-            # A symlinked location resolves into someone else's tree, and its
-            # parent would then become a cleanup root — putting unrelated
-            # sibling directories in scope for deletion.
-            if os.path.islink(str(loc).rstrip(os.sep)):
-                self.logger.debug(f"Orphan prune skipping symlinked drive: {loc}")
+            # A symlink ANYWHERE in the path resolves into someone else's tree,
+            # whose parent would then become a cleanup root. islink() alone only
+            # covers the leaf, so compare the whole resolved path instead.
+            normalized = os.path.normpath(str(loc)).rstrip(os.sep)
+            if os.path.realpath(normalized).rstrip(os.sep) != normalized:
+                self.logger.debug(
+                    f"Orphan prune skipping drive reached through a symlink: {loc}"
+                )
                 continue
-            configured.add(os.path.realpath(loc).rstrip(os.sep))
+            configured.add(normalized)
         removed: List[str] = []
         kept: List[Tuple[str, int]] = []
         if not configured:
