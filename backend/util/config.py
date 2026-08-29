@@ -56,6 +56,9 @@ class SyncGDriveConfig(BaseModel):
     token: Union[str, SyncGDriveToken, None] = ""
     gdrive_sa_location: Optional[str] = Field(default=None)
     gdrive_list: List[GDriveListEntry] = Field(default_factory=list)
+    # Remove a departed drive's local folder when it holds no files; a
+    # populated one is reported instead (it may still feed poster matching).
+    prune_orphan_drives: bool = True
 
 
 class InstanceDetail(BaseModel):
