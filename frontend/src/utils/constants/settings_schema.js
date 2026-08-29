@@ -57,8 +57,8 @@ const CORE_SETTINGS_SCHEMA = [
         fields: [
             // ─── Authentication ────────────────────────────────────────
             {
-                // Not a config key — read-only copy. Mirrors the startup
-                // warning in sync_gdrive.uses_shared_rclone_client_id.
+                // Not a config key — read-only copy, shown on the server's own
+                // uses_shared_rclone_client_id verdict, not the form's values.
                 key: 'shared_client_id_notice',
                 type: 'notice',
                 variant: 'warning',
@@ -66,12 +66,14 @@ const CORE_SETTINGS_SCHEMA = [
                 label: "Using rclone's shared Google Drive credentials",
                 conditional: {
                     field: 'gdrive_sa_location',
-                    condition: 'all_empty',
-                    value: ['gdrive_sa_location', 'client_id'],
+                    condition: 'api_flag',
+                    api_lookup: 'gdrive_credentials',
+                    value: 'shared_client_id',
                 },
                 description:
-                    'With neither a service account nor your own Client ID, rclone falls back ' +
-                    'to the client_id built into every rclone install. rclone is RETIRING that ' +
+                    'CHUB has no service-account keyfile it can read and no Client ID of ' +
+                    'your own, so rclone falls back to the client_id built into every rclone ' +
+                    'install. rclone is RETIRING that ' +
                     'client during 2026, after which syncs stop working — and until then it ' +
                     'shares a single 10 requests/sec Google quota with every other rclone user, ' +
                     'which throttles large syncs. A service account is the simplest fix: it ' +
@@ -113,7 +115,7 @@ const CORE_SETTINGS_SCHEMA = [
                 section: 'Authentication',
                 required: false,
                 description:
-                    'Path to a Google Drive service-account JSON keyfile. If this is set, the three OAuth fields below are ignored — choose ONE method.',
+                    'Path to a Google Drive service-account JSON keyfile. Used in preference to the three OAuth fields below when the file exists; if the path is missing, CHUB falls back to them.',
             },
             {
                 key: 'token',

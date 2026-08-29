@@ -50,7 +50,23 @@ const ModuleSettingsContent = ({ moduleKey }) => {
     // Instances config drives schema conditionals (e.g. music fields gated on a
     // configured Lidarr instance).
     const { instancesData } = useInstancesData();
-    const conditionApiData = useMemo(() => ({ instances: instancesData || {} }), [instancesData]);
+    // Only the server can stat the service-account keyfile, so the shared-client
+    // notice reads this flag instead of guessing from the form.
+    const [gdriveCreds, setGdriveCreds] = useState({});
+    const refreshGdriveCreds = useCallback(() => {
+        if (moduleKey !== 'sync_gdrive') return;
+        configAPI
+            .fetchGdriveCredentialStatus()
+            .then(res => setGdriveCreds(res?.data || {}))
+            .catch(() => setGdriveCreds({}));
+    }, [moduleKey]);
+    useEffect(() => {
+        refreshGdriveCreds();
+    }, [refreshGdriveCreds]);
+    const conditionApiData = useMemo(
+        () => ({ instances: instancesData || {}, gdrive_credentials: gdriveCreds }),
+        [instancesData, gdriveCreds]
+    );
 
     const [formData, setFormData] = useState({});
     const [lastSaved, setLastSaved] = useState('{}');
@@ -141,6 +157,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
             setSaveError(null);
             await configAPI.updateConfig(formData);
             setLastSaved(JSON.stringify(formData));
+            refreshGdriveCreds();
             toast.success('Saved');
         } catch (error) {
             console.error('Save failed:', error);
@@ -148,7 +165,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
         } finally {
             setIsSaving(false);
         }
-    }, [isDirty, isSaving, formData, toast]);
+    }, [isDirty, isSaving, formData, toast, refreshGdriveCreds]);
 
     const handleReset = useCallback(() => {
         setFormData(JSON.parse(lastSaved));

@@ -37,12 +37,9 @@ const CONDITION_TYPES = {
         selectedValue !== null &&
         selectedValue !== '' &&
         !(Array.isArray(selectedValue) && selectedValue.length === 0),
-    // `value` is a list of field keys, not one — the single-`field` form above
-    // can't express "neither auth method is configured".
-    all_empty: (_selectedValue, fieldNames, _apiData, formData) =>
-        Array.isArray(fieldNames) &&
-        fieldNames.length > 0 &&
-        fieldNames.every(name => CONDITION_TYPES.is_empty(formData?.[name])),
+    // True when the api_lookup payload's named flag is true. For state only the
+    // server can determine — e.g. whether a keyfile actually exists on disk.
+    api_flag: (_selectedValue, flagName, apiData) => apiData?.[flagName] === true,
     // True when at least one instance of the given service type is configured.
     // `apiData` is the instances dict (via api_lookup: 'instances'); `value` is
     // the service type, e.g. 'lidarr'. Used to reveal music-only options only
@@ -69,8 +66,7 @@ export const shouldShowField = (field, formData, apiData = {}) => {
 
         const evaluator = CONDITION_TYPES[condition];
         if (evaluator) {
-            // formData is 4th so the existing 3-arg evaluators are unaffected.
-            return evaluator(selectedValue, value, lookupData, formData);
+            return evaluator(selectedValue, value, lookupData);
         } else {
             console.warn('[conditionalFields] Unknown condition type:', condition);
             return true;

@@ -2,47 +2,51 @@ import { describe, expect, it } from 'vitest';
 
 import { shouldShowField } from './conditionalFields';
 
-// `all_empty` exists so a notice can depend on more than one field — the
-// single-`field` conditional form can't express "neither auth method is set".
-describe('all_empty condition', () => {
+// `api_flag` exists because only the server can stat the service-account
+// keyfile — a path that is set but missing still means the shared client.
+describe('api_flag condition', () => {
     const notice = {
         key: 'shared_client_id_notice',
         conditional: {
             field: 'gdrive_sa_location',
-            condition: 'all_empty',
-            value: ['gdrive_sa_location', 'client_id'],
+            condition: 'api_flag',
+            api_lookup: 'gdrive_credentials',
+            value: 'shared_client_id',
         },
     };
 
-    it('shows when every named field is empty', () => {
-        expect(shouldShowField(notice, { gdrive_sa_location: '', client_id: '' })).toBe(true);
+    const show = apiData => shouldShowField(notice, {}, apiData);
+
+    it('shows when the server reports the shared client is in use', () => {
+        expect(show({ gdrive_credentials: { shared_client_id: true } })).toBe(true);
     });
 
-    it('shows when the named fields are absent entirely', () => {
-        expect(shouldShowField(notice, {})).toBe(true);
+    it('hides when the server reports real credentials', () => {
+        expect(show({ gdrive_credentials: { shared_client_id: false } })).toBe(false);
     });
 
-    it('hides as soon as one named field is set', () => {
+    it('shows even when a service-account path is set, if the server says shared', () => {
         expect(
-            shouldShowField(notice, { gdrive_sa_location: '/config/sa.json', client_id: '' })
-        ).toBe(false);
-        expect(shouldShowField(notice, { gdrive_sa_location: '', client_id: 'abc' })).toBe(false);
+            shouldShowField(
+                notice,
+                { gdrive_sa_location: '/config/missing.json', client_id: '' },
+                { gdrive_credentials: { shared_client_id: true } }
+            )
+        ).toBe(true);
     });
 
-    it('hides when both are set', () => {
-        expect(shouldShowField(notice, { gdrive_sa_location: '/sa.json', client_id: 'abc' })).toBe(
-            false
-        );
+    it('hides rather than false-alarms before the flag has loaded', () => {
+        expect(show({})).toBe(false);
+        expect(show({ gdrive_credentials: {} })).toBe(false);
+        expect(shouldShowField(notice, {})).toBe(false);
     });
 
-    it('does not show for an empty or missing field list', () => {
-        const bad = { conditional: { field: 'x', condition: 'all_empty', value: [] } };
-        expect(shouldShowField(bad, {})).toBe(false);
+    it('treats a non-boolean flag as not set', () => {
+        expect(show({ gdrive_credentials: { shared_client_id: 'true' } })).toBe(false);
+        expect(show({ gdrive_credentials: { shared_client_id: 1 } })).toBe(false);
     });
 });
 
-// The 4th `formData` argument was added for all_empty; the existing 3-arg
-// evaluators must be unaffected by it.
 describe('existing conditions still evaluate', () => {
     it('is_empty reads the single dependent field', () => {
         const field = { conditional: { field: 'gdrive_sa_location', condition: 'is_empty' } };

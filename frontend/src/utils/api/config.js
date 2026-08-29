@@ -64,4 +64,17 @@ export const configAPI = {
             useCache: false,
         });
     },
+
+    /**
+     * Whether sync_gdrive falls back to rclone's shared Google Drive client_id.
+     *
+     * The backend stats the service-account keyfile, so a configured but
+     * missing path reads as no credentials — the form alone cannot tell.
+     *
+     * @returns {Promise<Object>} Response whose data.shared_client_id is a bool
+     */
+    fetchGdriveCredentialStatus: () => {
+        // Never cached: the answer changes the moment the keyfile path is saved.
+        return apiCore.get('/config/gdrive-credentials', { useCache: false });
+    },
 };
