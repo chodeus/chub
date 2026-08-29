@@ -195,3 +195,17 @@ suffixes: List[str] = [
     "Collection",
     "Saga",
 ]
+
+# (queue state, report tag, note, logger level) for the sections Upgradinatorr
+# reports. The run log and the Discord/Notifiarr embed both render from this —
+# a second copy in the formatter is how the notification kept shipping per-item
+# detail after the log stopped.
+QUEUE_REPORT_SECTIONS: Tuple[Tuple[str, str, str, str], ...] = (
+    ("pending", "AWAITING IMPORT", "already downloaded, not searched again", "info"),
+    ("stuck", "IMPORT STUCK", "manual import required", "debug"),
+)
+
+
+def queue_report_tally(download_count: int, item_count: int, note: str) -> str:
+    """The one-line queue-section summary the run log and the notification share."""
+    return f"{download_count} download(s) across {item_count} item(s) — {note}"

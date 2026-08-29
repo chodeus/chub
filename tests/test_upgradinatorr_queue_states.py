@@ -283,8 +283,13 @@ def test_notification_splits_grabbed_from_stuck():
     body = "\n".join(value for _, value in rendered)
 
     assert any("import stuck" in name for name in names)
+    # The grab is what the run changed — it stays listed.
     assert "Serum - Jupiter (2019) [single]" in body
-    assert "Album match is not close enough: 75.1% vs 80%" in body
+    # The queue row collapses to the section tally; the *arr's own rejection
+    # text is log-level detail and must not reach Discord.
+    assert "1 download(s) across 1 item(s) — manual import required" in body
+    assert "Album match is not close enough" not in body
+    assert "Serum - Jupiter [WEB] [FLAC Lossless]" not in body
 
 
 @pytest.mark.parametrize("bad", [1, "oops", {"a": 1}])

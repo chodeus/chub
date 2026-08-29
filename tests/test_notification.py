@@ -582,16 +582,40 @@ def _poster_output(n):
     }
 
 
-def test_format_for_discord_collapses_huge_run():
-    from backend.util.notification_formatting import format_for_discord
+def test_format_for_discord_caps_bulk_renames():
+    """A bulk run is capped to NOTIFICATION_ITEM_CAP items plus a tally — the
+    rest stays in the server log rather than flooding the webhook."""
+    from backend.util.notification_formatting import (
+        NOTIFICATION_ITEM_CAP,
+        format_for_discord,
+    )
 
     cfg = SimpleNamespace(module_name="poster_renamerr")
     data, ok = format_for_discord(cfg, _poster_output(400))
     assert ok
+    assert len(data) <= 2  # would have been 400 fields before capping
+    values = " ".join(f.get("value", "") for fields in data.values() for f in fields)
+    assert "400 movies renamed" in values  # the tally is always present
+    assert "Movie 0 (2001)" in values
+    assert f"Movie {NOTIFICATION_ITEM_CAP} (2001)" not in values  # past the cap
+    assert f"and {400 - NOTIFICATION_ITEM_CAP} more" in values
+    assert "see the server log" in values
+
+
+def test_format_for_discord_collapses_huge_run():
+    """The rate-limit backstop still fires for a formatter that emits many
+    sections, even though each section is individually capped."""
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="labelarr")
+    payload = [
+        {"title": f"T{i}", "year": 2001, "add_remove": {f"label{i}": "add"}}
+        for i in range(400)
+    ]
+    data, ok = format_for_discord(cfg, payload)
+    assert ok
     assert len(data) == 1  # collapsed to a single summary embed
-    field = data[1][0]
-    assert "400 items" in field["name"]
-    assert "collapsed" in field["value"].lower()
+    assert "collapsed" in data[1][0]["value"].lower()
 
 
 def test_format_for_discord_keeps_small_run_detailed():
@@ -600,8 +624,12 @@ def test_format_for_discord_keeps_small_run_detailed():
     cfg = SimpleNamespace(module_name="poster_renamerr")
     data, ok = format_for_discord(cfg, _poster_output(5))
     assert ok
+    values = " ".join(f.get("value", "") for fields in data.values() for f in fields)
+    assert "5 movies renamed" in values  # tally accompanies the detail
+    assert "Movie 0 (2001)" in values  # per-item detail preserved
+    assert "poster 0.jpg -renamed-> 0.jpg" in values
+    assert "see the server log" not in values  # nothing truncated under the cap
     names = [f.get("name", "") for fields in data.values() for f in fields]
-    assert any("Movie 0" in n for n in names)  # per-item detail preserved
     assert not any("items processed" in n for n in names)  # not summarised
 
 
@@ -652,7 +680,84 @@ def test_format_for_discord_renders_artist_and_album():
             ],
         },
     )
+    values = " ".join(f.get("value", "") for fields in data.values() for f in fields)
+    assert "Queen" in values
+    assert "Greatest Hits (1981)" in values
     names = [f.get("name", "") for fields in data.values() for f in fields]
-    assert any("Queen" in n for n in names)
-    assert any("Greatest Hits (1981)" in n for n in names)
     assert not any("No files were renamed" in n for n in names)
+
+
+# --- notifications carry summaries, not the run log's debug detail ---
+
+
+def _upgradinatorr_output():
+    return {
+        "lidarr_main": {
+            "server_name": "Lidarr (Music)",
+            "data": [
+                {
+                    "title": "Anastacia",
+                    "year": None,
+                    "download": {"Anastacia - Resurrection": 250},
+                    "queue_imports": [],
+                },
+                {
+                    "title": "Armin van Buuren",
+                    "year": None,
+                    "download": {},
+                    "queue_imports": [
+                        {
+                            "state": "pending",
+                            "download": "Armin van Buuren - Starbound [WEB] [FLAC]",
+                            "age_hours": 40.0,
+                            "messages": [
+                                "One or more tracks expected in this release "
+                                "were not imported or missing from the release",
+                                "Has unmatched tracks",
+                            ],
+                        }
+                    ],
+                },
+            ],
+        }
+    }
+
+
+def test_upgradinatorr_notification_tallies_the_queue():
+    """The *arr's own rejection text and the per-item queue rows are log-level
+    detail — the notification carries only the section tally."""
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="upgradinatorr")
+    data, ok = format_for_discord(cfg, _upgradinatorr_output())
+    assert ok
+    blob = " ".join(
+        f.get("name", "") + " " + f.get("value", "")
+        for fields in data.values()
+        for f in fields
+    )
+    # The grab is what the run changed — it stays.
+    assert "Anastacia - Resurrection" in blob
+    # The queue section collapses to the same tally the run log prints.
+    assert "1 download(s) across 1 item(s)" in blob
+    assert "already downloaded, not searched again" in blob
+    # None of the per-item queue detail may reach Discord.
+    assert "Has unmatched tracks" not in blob
+    assert "not imported or missing" not in blob
+    assert "waiting 40h" not in blob
+    assert "Starbound" not in blob
+
+
+def test_upgradinatorr_notification_matches_the_log_tally():
+    """One owner for the section policy: the notification's tally string is the
+    same helper the run log renders, so the two can't drift again."""
+    from backend.util.constants import QUEUE_REPORT_SECTIONS, queue_report_tally
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="upgradinatorr")
+    data, ok = format_for_discord(cfg, _upgradinatorr_output())
+    assert ok
+    _state, _tag, note, _level = QUEUE_REPORT_SECTIONS[0]
+    expected = queue_report_tally(1, 1, note)
+    values = " ".join(f.get("value", "") for fields in data.values() for f in fields)
+    assert expected in values
