@@ -224,11 +224,123 @@ def test_generate_title_variants_alignment():
 
 
 def test_is_match_id_tmdb():
-    asset = {"tmdb_id": "123"}
-    media = {"tmdb_id": "123"}
+    # Years included because a tmdb id is namespaced — it only reports an
+    # "ID match" reason once a year corroborates it.
+    asset = {"tmdb_id": "123", "year": 2020}
+    media = {"tmdb_id": "123", "year": 2020}
     matched, reason = is_match(asset, media)
     assert matched
     assert "tmdb_id" in reason
+
+
+def test_is_match_tmdb_namespace_collision_rejected():
+    """movie 79063 and tv 79063 are different entities. A logo-only artwork drive
+    has no season/tvdb files to type its TV entries as shows, so they reach the
+    matcher typed "movie" carrying only {tmdb-N} — the years must reject them."""
+    asset = {"title": "Cunk on Earth", "tmdb_id": "79063", "year": 2022}
+    media = {"title": "The Unkabogable Praybeyt Benjamin", "tmdb_id": "79063", "year": 2011}
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_tmdb_id_with_agreeing_year_still_matches():
+    asset = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    media = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
+def test_is_match_yearless_tmdb_collision_rejected():
+    """A yearless asset carries no tiebreak, so tmdb equality alone can't carry it.
+    3,482 rows in a live library are yearless with only a tmdb id."""
+    asset = {"title": "Cunk on Earth", "normalized_title": "cunkonearth", "tmdb_id": "79063"}
+    media = {
+        "title": "The Unkabogable Praybeyt Benjamin",
+        "normalized_title": "theunkabogablepraybeytbenjamin",
+        "tmdb_id": "79063",
+        "year": 2011,
+    }
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_tmdb_rejected_when_the_media_has_no_year():
+    """The asset knowing a year is not enough — with no media year there is
+    nothing to agree WITH, so a shared tmdb number proves nothing."""
+    asset = {
+        "title": "Cunk on Earth",
+        "normalized_title": "cunkonearth",
+        "tmdb_id": "79063",
+        "year": 2022,
+    }
+    media = {
+        "title": "The Unkabogable Praybeyt Benjamin",
+        "normalized_title": "theunkabogablepraybeytbenjamin",
+        "tmdb_id": "79063",
+    }
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_tmdb_accepts_a_secondary_year():
+    """secondary_year/folder_year count as known media years, not just `year`."""
+    asset = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    media = {"title": "Inception", "tmdb_id": "27205", "secondary_year": 2010}
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
+def test_is_match_yearless_tmdb_still_matches_when_the_title_agrees():
+    """An untrusted tmdb agreement falls through to the title checks rather than
+    rejecting outright, so a genuine yearless poster still lands."""
+    asset = {"title": "Inception", "normalized_title": "inception", "tmdb_id": "27205"}
+    media = {
+        "title": "Inception",
+        "normalized_title": "inception",
+        "tmdb_id": "27205",
+        "year": 2010,
+    }
+    matched, reason = is_match(asset, media)
+    assert matched and reason
+
+
+def test_is_match_tvdb_id_not_gated_by_year():
+    """tvdb ids are globally unique, so a year disagreement must NOT block them —
+    180 live rows match on tvdb while carrying a stale/other-namespace tmdb id."""
+    asset = {"title": "Doctor Who", "tvdb_id": "78804", "year": 1963}
+    media = {"title": "Doctor Who", "tvdb_id": "78804", "year": 2005}
+    matched, reason = is_match(asset, media)
+    assert matched and "tvdb_id" in reason
+
+
+def test_is_match_imdb_id_not_gated_by_year():
+    asset = {"title": "Doctor Who", "imdb_id": "tt0436992", "year": 1963}
+    media = {"title": "Doctor Who", "imdb_id": "tt0436992", "year": 2005}
+    matched, reason = is_match(asset, media)
+    assert matched and "imdb_id" in reason
+
+
+def test_is_match_agreeing_tmdb_survives_a_stale_imdb_tag():
+    """A later disagreeing source must NOT veto an agreeing one. Real case: the
+    show "Lynley" (2025) carries tt33022310 on the poster and tt33040971 in *arr
+    — one entity, one stale tag. Rejecting on any conflict loses its poster AND
+    logo, and every such conflict measured against a live library was this shape."""
+    asset = {
+        "title": "Lynley",
+        "normalized_title": "lynley",
+        "tmdb_id": "12345",
+        "imdb_id": "tt33022310",
+        "year": 2025,
+    }
+    media = {
+        "title": "Lynley",
+        "normalized_title": "lynley",
+        "tmdb_id": "12345",
+        "imdb_id": "tt33040971",
+        "year": 2025,
+    }
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
 
 
 def test_is_match_id_mismatch_blocks_title_fallback():

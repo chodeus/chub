@@ -285,15 +285,23 @@ class PosterRenamerr(ChubModule):
                 shutil.rmtree(staging_dir, ignore_errors=True)
 
     def ensure_destination_dir(self):
-        if not os.path.exists(self.config.destination_dir):
-            self.logger.info(
-                f"Creating destination directory: {self.config.destination_dir}"
-            )
-            os.makedirs(self.config.destination_dir)
-        else:
-            self.logger.debug(
-                f"Destination directory already exists: {self.config.destination_dir}"
-            )
+        dest = self.config.destination_dir
+        if os.path.isdir(dest):
+            self.logger.debug(f"Destination directory already exists: {dest}")
+            return
+
+        self.logger.info(f"Creating destination directory: {dest}")
+        try:
+            # exist_ok: a concurrent pass (webhook worker vs the scheduled run)
+            # can create it between the check above and here.
+            os.makedirs(dest, exist_ok=True)
+        except OSError as e:
+            # Bare OSError surfaces as "[Errno 13] Permission denied" with no
+            # hint that the volume simply isn't mounted.
+            raise FileNotFoundError(
+                f"Could not create destination directory: {dest} ({e}). "
+                "Check the path is correct and its volume is mounted."
+            ) from e
 
     # Progress slice for sync_gdrive when invoked from inside poster_renamerr.
     # The nested SyncGDrive instance reports its own 0..100 internally but
