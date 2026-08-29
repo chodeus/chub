@@ -92,10 +92,13 @@ def poster_from_filename(filename: str) -> Optional[Dict[str, Any]]:
     a local one. ``file`` is the bare name (no directory) so apply renames only
     on Drive. ``asset_type`` is left for resolve_poster to refine from the matched
     library row (a season tag ⇒ show). Returns None for a non-image file."""
-    _, ext = os.path.splitext(filename)
+    stem, ext = os.path.splitext(filename)
     if ext.lower() not in _IMAGE_EXTS:
         return None
-    image_type, base = parse_asset_type(filename)
+    # Tag-strip the STEM: passing the full name left the extension on `base`,
+    # so `base + ext` doubled it and the match key kept the extension
+    # ("marvelcinematicuniversepng") whenever no year or id followed to absorb it.
+    image_type, base = parse_asset_type(stem)
     if image_type != "poster":
         title = parse_asset_filename(base + ext)
         normalized_title = normalize_titles(base)
