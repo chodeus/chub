@@ -69,6 +69,8 @@ def uses_shared_rclone_client_id(sync_config: Any) -> bool:
     The isfile test mirrors run(), which nulls a missing SA path and uses OAuth.
     """
     sa_path = (getattr(sync_config, "gdrive_sa_location", None) or "").strip()
+    # Deliberately not resolve_confined()'d: get_allowed_roots registers
+    # gdrive_sa_location as its own root, so confining it here always passes.
     if sa_path and os.path.isfile(sa_path):
         return False
     return not (getattr(sync_config, "client_id", "") or "").strip()

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useParams } from 'react-router';
 import { configAPI } from '../../../utils/api/config.js';
 import { modulesAPI } from '../../../utils/api/modules.js';
@@ -53,12 +53,21 @@ const ModuleSettingsContent = ({ moduleKey }) => {
     // Only the server can stat the service-account keyfile, so the shared-client
     // notice reads this flag instead of guessing from the form.
     const [gdriveCreds, setGdriveCreds] = useState({});
+    // A ref, not the usual local isMounted flag — handleSave refreshes too, so
+    // the guard has to outlive the effect that first ran it.
+    const mountedRef = useRef(true);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
     const refreshGdriveCreds = useCallback(() => {
         if (moduleKey !== 'sync_gdrive') return;
         configAPI
             .fetchGdriveCredentialStatus()
-            .then(res => setGdriveCreds(res?.data || {}))
-            .catch(() => setGdriveCreds({}));
+            .then(res => mountedRef.current && setGdriveCreds(res?.data || {}))
+            .catch(() => mountedRef.current && setGdriveCreds({}));
     }, [moduleKey]);
     useEffect(() => {
         refreshGdriveCreds();
