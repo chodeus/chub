@@ -85,6 +85,31 @@ STREAM_PATH_PREFIXES = (
 )
 
 
+# Stamped here AND in handle_exception — Starlette runs an `Exception` handler
+# outside the middleware stack. Keep both sites in step.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+def _stamp_security_headers(response) -> None:
+    """Add the baseline headers, never overriding one a route already set."""
+    for header, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Stamp baseline security headers on every response."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        _stamp_security_headers(response)
+        return response
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     """
     Require a valid JWT Bearer token on all /api/* routes
@@ -412,6 +437,7 @@ router = APIRouter()
 
 # Authentication middleware — must be added before routes
 app.add_middleware(AuthMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Frontend static directory — configurable via STATIC_DIR env var.
 # Defaults to templates/ (local dev); Docker sets STATIC_DIR=/app/public.
@@ -467,9 +493,10 @@ async def handle_exception(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all exception handler with standardized payload."""
     logger = get_logger(request, "ERROR")
     logger.error(f"Unhandled Exception: {exc}", exc_info=True)
-    return error(
-        "Internal server error", code="INTERNAL_ERROR", status_code=500
-    )
+    response = error("Internal server error", code="INTERNAL_ERROR", status_code=500)
+    # ServerErrorMiddleware owns this path, outside SecurityHeadersMiddleware.
+    _stamp_security_headers(response)
+    return response
 
 
 @app.exception_handler(StarletteHTTPException)

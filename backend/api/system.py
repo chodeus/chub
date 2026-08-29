@@ -6,14 +6,13 @@ directory operations, and testing utilities.
 """
 
 import io
-import json
 import os
 import shutil
 import time
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -461,12 +460,6 @@ async def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
         )
 
 
-_GDRIVE_PRESETS_PATH = (
-    Path(__file__).resolve().parent.parent / "assets" / "gdrive_presets.json"
-)
-_gdrive_presets_cache: Optional[List[dict]] = None
-
-
 @router.get(
     "/gdrive-presets",
     summary="List bundled GDrive presets",
@@ -490,14 +483,13 @@ _gdrive_presets_cache: Optional[List[dict]] = None
 )
 async def list_gdrive_presets(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Return the bundled GDrive presets JSON (cached after first load)."""
-    global _gdrive_presets_cache
+    from backend.util.gdrive_presets import PRESETS_PATH, load_presets
+
     try:
-        if _gdrive_presets_cache is None:
-            with open(_GDRIVE_PRESETS_PATH, "r", encoding="utf-8") as fh:
-                _gdrive_presets_cache = json.load(fh)
-        return ok(f"Loaded {len(_gdrive_presets_cache)} presets", _gdrive_presets_cache)
+        presets = load_presets()
+        return ok(f"Loaded {len(presets)} presets", presets)
     except FileNotFoundError:
-        logger.error(f"GDrive presets file not found at {_GDRIVE_PRESETS_PATH}")
+        logger.error(f"GDrive presets file not found at {PRESETS_PATH}")
         return error(
             "GDrive presets file not found",
             code="GDRIVE_PRESETS_MISSING",
