@@ -202,12 +202,20 @@ def build_asset_record(
             search_only=search_only,
         )
 
-    # Foldered Kometa stem ("<Title>/logo.png", "<Show>/Season01.png"): the name
-    # carries only the type/season, so identity comes from the parent folder.
+    # A bare stem only means "foldered Kometa asset" when the parent folder
+    # identifies media; in a flat drive "Cover.jpg" is just a poster.
     foldered_season = foldered_season_regex.match(base) if base else None
-    if not base or foldered_season:
+    bare_stem = not base or bool(foldered_season)
+    parent_identifies = bool(extract_year(folder) or any(extract_ids(folder)))
+    if bare_stem and parent_identifies:
         title = parse_asset_filename(folder)
         normalized_title = normalize_titles(folder)
+    elif not base:
+        # Flat file literally named after a stem — keep the pre-existing
+        # behaviour and let its own name be the title.
+        image_type = "poster"
+        title = parse_asset_filename(fname)
+        normalized_title = normalize_titles(filename)
     elif image_type != "poster":
         title = parse_asset_filename(base + ext)
         normalized_title = normalize_titles(base)

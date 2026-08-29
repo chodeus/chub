@@ -59,9 +59,8 @@ asset_type_regex = re.compile(
 # Drazzilb-scheme source files say "SquareArt". They are one type.
 _ASSET_TYPE_ALIASES = {"square": "squareart"}
 
-# Kometa's asset_folders layout names a file by BARE stem inside
-# "<Title (Year)>/", so there is no delimiter for asset_type_regex to anchor on
-# and the media identity lives on the parent folder, not the filename.
+# Kometa asset folders name files by bare stem under "<Title (Year)>/" —
+# callers must take identity from the parent folder, not the filename.
 FOLDERED_ASSET_STEMS = {
     # poster
     "poster": "poster",

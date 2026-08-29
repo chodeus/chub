@@ -1387,3 +1387,24 @@ def test_flat_convention_is_unchanged(fname, image_type, title):
     rec = build_asset_record(fname, "/x/src")
     assert rec["image_type"] == image_type
     assert rec["title"] == title
+
+
+@pytest.mark.parametrize(
+    "fname", ["Cover.jpg", "Art.jpg", "Movie.jpg", "Folder.jpg", "Square.jpg", "Logo.png"]
+)
+def test_flat_file_named_after_a_stem_keeps_its_own_title(fname):
+    """parse_asset_type can't see the layout, so a flat file literally named
+    "Cover.jpg" looked like a foldered stem and took the DRIVE folder's name —
+    collapsing every such file onto one match key."""
+    rec = build_asset_record(fname, "/kometa/posters/MM2K/Chodeus")
+    stem = os.path.splitext(fname)[0]
+    assert rec["image_type"] == "poster"
+    assert rec["title"] == stem
+    assert rec["normalized_title"] == stem.lower()
+
+
+@pytest.mark.parametrize("folder", ["Some Show (2020)", "Some Show {tmdb-42}"])
+def test_foldered_stem_needs_only_a_year_or_an_id_on_the_parent(folder):
+    rec = build_asset_record("logo.png", f"/x/{folder}")
+    assert rec["image_type"] == "logo"
+    assert rec["normalized_title"] == "someshow"
