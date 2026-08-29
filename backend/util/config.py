@@ -1332,22 +1332,15 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
     except Exception as e:
         raise ConfigError(f"Unexpected configuration error in {config_path}") from e
 
-    # Only cache a config that was actually reconciled. The cache is keyed on
-    # the file's mtime/size, so caching after a transient failure would serve
-    # the unreconciled config until config.yml itself changed.
+    # Cache only after reconciliation succeeds — the cache key is mtime/size,
+    # so a transient failure would otherwise be served until the file changes.
     if _reconcile_gdrive_presets(config):
         _cache_config(config_path, version, config)
     return config
 
 
 def _reconcile_gdrive_presets(config: "ChubConfig") -> bool:
-    """Repoint gdrive_list entries whose preset drive moved (in memory only).
-
-    Returns False when reconciliation could not run, so the caller can skip
-    caching and retry on the next load. Not persisted here — the healed id
-    reaches every consumer and the UI, and the user's next Settings save writes
-    it through save_config's atomic path.
-    """
+    """Repoint moved-preset gdrive_list ids in memory. False = could not run."""
     try:
         from backend.util.gdrive_presets import reconcile_gdrive_list
 
