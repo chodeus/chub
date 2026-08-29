@@ -493,10 +493,9 @@ class SyncGDrive(ChubModule):
         for loc in (getattr(e, "location", None) for e in entries):
             if not loc:
                 continue
-            # A symlink ANYWHERE in the path resolves into someone else's tree,
-            # whose parent would then become a cleanup root. islink() alone only
-            # covers the leaf, so compare the whole resolved path instead.
-            normalized = os.path.normpath(str(loc)).rstrip(os.sep)
+            # Skip a path that traverses a symlink anywhere — its cleanup root
+            # would land in another tree. abspath first: location may be relative.
+            normalized = os.path.abspath(str(loc)).rstrip(os.sep)
             if os.path.realpath(normalized).rstrip(os.sep) != normalized:
                 self.logger.debug(
                     f"Orphan prune skipping drive reached through a symlink: {loc}"
@@ -896,9 +895,8 @@ class SyncGDrive(ChubModule):
                 progress_cb(100)
                 self._report_progress(100)
 
-                # Full, uncancelled runs only: a filtered sync leaves the
-                # unvisited drives looking orphaned, and a cancelled one must
-                # not take a destructive action on the way out.
+                # Full, uncancelled runs only: a filtered sync makes unvisited
+                # drives look orphaned, and a cancelled run must not delete.
                 if not only_folders and not self.is_cancelled():
                     self._report_orphan_drive_folders()
 

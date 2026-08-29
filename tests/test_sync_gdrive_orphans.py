@@ -169,3 +169,19 @@ def test_symlinked_ANCESTOR_does_not_widen_the_cleanup_root(tmp_path):
 
     assert removed == [], f"escaped through a symlinked ancestor: {removed}"
     assert precious.exists()
+
+
+def test_relative_location_still_prunes(tmp_path, monkeypatch):
+    """GDriveListEntry.location may be relative — sync_folder uses it as given.
+
+    Comparing realpath (absolute) against a relative normpath never matched, so
+    the symlink guard rejected every relative location and silently disabled
+    pruning altogether.
+    """
+    monkeypatch.chdir(tmp_path)
+    _mkdrive(tmp_path, "posters/MM2K/Live", files=1)
+    orphan = _mkdrive(tmp_path, "posters/MM2K/Gone")
+    m = _module(tmp_path, [])
+    m.config.gdrive_list = [SimpleNamespace(location="posters/MM2K/Live")]
+    removed, _ = m._prune_orphan_drive_folders()
+    assert removed == [str(orphan)], removed
