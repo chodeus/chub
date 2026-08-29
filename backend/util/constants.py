@@ -1,9 +1,8 @@
 import re
 from typing import List, Pattern, Set, Tuple
 
-# Image extensions Kometa reads from an asset directory (its plex.py
-# asset_image_extensions). Scanners, the orphan sweep and the gdrive sync filter
-# all key off this one tuple so they can't drift apart.
+# Image extensions Kometa reads from an asset directory. Scanners, the orphan
+# sweep and the gdrive sync filter all key off this tuple so they can't drift.
 ASSET_IMAGE_EXTENSIONS: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp", ".tbn")
 
 # Matches a season/specials *suffix* tag — "- Season 1", "_Season01", or
@@ -50,9 +49,8 @@ season_number_regex = re.compile(
 # recognising "Movie (2020) - Banner.png" as a banner means it's classified and
 # ignored rather than mis-parsed as a poster titled "Movie - Banner".
 #
-# Bare "Square" is Kometa's own square-art stem, which asset_renamerr writes to
-# a Kometa destination ("Title (Year)_square.png"). Without it the orphan sweep
-# keys that file as "<title>square" and flags CHUB's own output as an orphan.
+# Bare "Square" is Kometa's own stem, written to a Kometa destination; without
+# it the orphan sweep keys "<title>square" and flags CHUB's own output.
 asset_type_regex = re.compile(
     r"(?:\s{0,8}-\s{0,8}|_)(Logo|SquareArt|Square|Background|Banner)\b", re.IGNORECASE
 )

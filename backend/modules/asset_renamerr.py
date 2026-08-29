@@ -31,10 +31,8 @@ IMAGE_TYPE_TO_PLEX_METHOD = {
     "background": "upload_art",
 }
 
-# image_type -> Kometa asset-name stem. "square" is Kometa's first-choice square
-# art name (it also accepts square_art/squareArt/backgroundSquare), read since
-# Kometa 2.4.5 — earlier versions ignore the file rather than erroring.
-# Season-level assets: background only, see the carve-out in the media loop.
+# image_type -> Kometa asset-name stem. "square" is its first-choice name,
+# read since Kometa 2.4.5; seasons take background only (see the media loop).
 IMAGE_TYPE_TO_KOMETA_NAME = {
     "logo": "logo",
     "background": "background",
@@ -604,9 +602,8 @@ class AssetRenamerr(ChubModule):
         if media.get("asset_type") == "show" and season_number is not None:
             stem = f"Season{int(season_number):02d}_{stem}"
         elif media.get("asset_type") == "album":
-            # An album's assets live in its ARTIST's folder, keyed by the album
-            # title ("<Album>_background"). Without this every album in a
-            # library collapses onto the artist's own background.ext.
+            # Album assets live in the ARTIST's folder, so key them by album
+            # title — otherwise every album collides on background.ext.
             album = illegal_chars_regex.sub("", media.get("title") or "").strip()
             if not album:
                 return False, "album has no title to name its asset after"
@@ -755,9 +752,8 @@ class AssetRenamerr(ChubModule):
             self.logger.warning("No applicable asset types for this apply method.")
             return output
 
-        # Kometa's asset_folders is ONE global toggle, but CHUB carries a flag
-        # per module — a mismatch writes half the tree in a layout Kometa isn't
-        # looking for, and it fails silently as "asset not found".
+        # Kometa has ONE global asset_folders toggle; a per-module mismatch
+        # writes half the tree in a layout it never reads, and fails silently.
         if apply_method == "kometa":
             poster_cfg = getattr(self.full_config, "poster_renamerr", None)
             poster_folders = getattr(poster_cfg, "asset_folders", None)
@@ -895,10 +891,8 @@ class AssetRenamerr(ChubModule):
                 # "missing". Artist logos and album backgrounds are supported.
                 if image_type == "logo" and media.get("asset_type") == "album":
                     continue
-                # Kometa reads square art at item level only — its
-                # find_item_assets skips logo and square art for Season/Episode,
-                # so a Season##_square file would just sit there. Plex uploads
-                # season square art fine, so this is kometa-path-only.
+                # Kometa reads square art at item level only (its
+                # find_item_assets skips Season/Episode). Plex handles it fine.
                 if (
                     image_type == "squareart"
                     and apply_method == "kometa"

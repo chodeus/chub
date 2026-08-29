@@ -95,9 +95,8 @@ def poster_from_filename(filename: str) -> Optional[Dict[str, Any]]:
     stem, ext = os.path.splitext(filename)
     if ext.lower() not in _IMAGE_EXTS:
         return None
-    # Tag-strip the STEM: passing the full name left the extension on `base`,
-    # so `base + ext` doubled it and the match key kept the extension
-    # ("marvelcinematicuniversepng") whenever no year or id followed to absorb it.
+    # Tag-strip the STEM, not the full name — otherwise `base` keeps its
+    # extension and `base + ext` doubles it.
     image_type, base = parse_asset_type(stem)
     if image_type != "poster":
         title = parse_asset_filename(base + ext)

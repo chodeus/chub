@@ -180,9 +180,8 @@ def build_asset_record(
     folder = os.path.basename(root)
     filename, ext = os.path.splitext(fname)
 
-    # base has the type tag stripped; callers re-attach the real extension so
-    # parse_asset_filename's own splitext targets the extension (not a dot
-    # inside a title like "8 A.M. Metro").
+    # base has the tag stripped; re-attach the real extension so splitext
+    # targets it, not a dot inside a title like "8 A.M. Metro".
     image_type, base = parse_asset_type(filename)
 
     # Music: a configured music_root, or an {mbid-} tag anywhere, routes to the
@@ -817,9 +816,8 @@ class PosterRenamerr(ChubModule):
                 else f"{folder}_Season{season_str}{file_extension}"
             )
         elif asset_type == "album":
-            # Kometa keys an album's cover by the ALBUM title alone, inside the
-            # artist's folder (its find_item_assets uses item.title) — prefixing
-            # the artist made every album cover unfindable.
+            # Kometa keys an album's cover by the ALBUM title alone, inside
+            # the artist's folder — an artist prefix makes it unfindable.
             album_base = illegal_chars_regex.sub("", item.get("title") or "").strip()
             album_base = album_base or "album"
             new_file_name = (
@@ -2042,9 +2040,8 @@ class PosterRenamerr(ChubModule):
                         )
                         asset_module.set_progress_window(*tail_windows["asset"])
                         asset_output = asset_module.match_and_apply_assets(db)
-                        # Same summary a standalone run prints. Without this the
-                        # chained path emits nothing above DEBUG, so the artwork
-                        # actually applied is invisible at the default log level.
+                        # Same summary a standalone run prints; without it the
+                        # chained path emits nothing above DEBUG.
                         asset_module.handle_output(asset_output)
                         self.logger.info("Finished running asset_renamerr")
                     # Notify under asset_renamerr so its own notification config
