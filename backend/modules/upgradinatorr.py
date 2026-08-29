@@ -1785,16 +1785,17 @@ class Upgradinatorr(ChubModule):
                 ]
                 if not grouped:
                     continue
-                log = getattr(self.logger, level)
+                # Tally at the section's level, per-item detail always at debug —
+                # the listing is what buries the grabs and upgrades this run made.
                 total = sum(len(entries) for _it, entries in grouped)
-                log(
+                getattr(self.logger, level)(
                     f"[{tag}] {total} download(s) across {len(grouped)} item(s) "
-                    f"— {note}:"
+                    f"— {note}"
                 )
                 for item, entries in grouped:
-                    log(f"  {self._format_item_title(item)}")
+                    self.logger.debug(f"  {self._format_item_title(item)}")
                     for entry in entries:
-                        log(f"    {self._format_queue_entry(entry)}")
+                        self.logger.debug(f"    {self._format_queue_entry(entry)}")
 
             if with_failures:
                 self.logger.info(f"[FAILED] {len(with_failures)} item(s):")
