@@ -479,18 +479,22 @@ class SyncGDrive(ChubModule):
     def _prune_orphan_drive_folders(self) -> Tuple[List[str], List[Tuple[str, int]]]:
         """Drop local folders of drives that have left gdrive_list. (removed, kept).
 
-        Nothing else ever cleans these: sync only visits configured drives, and
-        poster_cleanarr's orphan pass is scoped to destination_dir. Only folders
-        with NO files are removed — a populated one may still be feeding poster
-        matching through a source_dir.
+        Only folders holding NO files are removed — a populated one may still
+        feed poster matching through a source_dir.
         """
         raw = self.config.gdrive_list
         entries = raw if isinstance(raw, list) else [raw]
-        configured = {
-            os.path.realpath(loc).rstrip(os.sep)
-            for loc in (getattr(e, "location", None) for e in entries)
-            if loc
-        }
+        configured = set()
+        for loc in (getattr(e, "location", None) for e in entries):
+            if not loc:
+                continue
+            # A symlinked location resolves into someone else's tree, and its
+            # parent would then become a cleanup root — putting unrelated
+            # sibling directories in scope for deletion.
+            if os.path.islink(str(loc).rstrip(os.sep)):
+                self.logger.debug(f"Orphan prune skipping symlinked drive: {loc}")
+                continue
+            configured.add(os.path.realpath(loc).rstrip(os.sep))
         removed: List[str] = []
         kept: List[Tuple[str, int]] = []
         if not configured:
@@ -884,9 +888,10 @@ class SyncGDrive(ChubModule):
                 progress_cb(100)
                 self._report_progress(100)
 
-                # Full runs only: on a filtered sync the unvisited drives are
-                # still configured, so everything else would look orphaned.
-                if not only_folders:
+                # Full, uncancelled runs only: a filtered sync leaves the
+                # unvisited drives looking orphaned, and a cancelled one must
+                # not take a destructive action on the way out.
+                if not only_folders and not self.is_cancelled():
                     self._report_orphan_drive_folders()
 
                 # Workers complete out of order; restore the configured

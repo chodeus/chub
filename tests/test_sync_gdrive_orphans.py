@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from backend.modules.sync_gdrive import SyncGDrive
 
 
-def _module(tmp_path, locations, dry_run=False, prune=True):
+def _module(tmp_path, locations, dry_run=False, prune=True, cancelled=False):
     m = object.__new__(SyncGDrive)
     m.logger = SimpleNamespace(
         debug=lambda *a, **k: None,
@@ -17,6 +17,8 @@ def _module(tmp_path, locations, dry_run=False, prune=True):
         dry_run=dry_run,
         prune_orphan_drives=prune,
     )
+    m._cancel_event = None
+    m.is_cancelled = lambda: cancelled
     return m
 
 
@@ -100,3 +102,42 @@ def test_no_configured_drives_is_a_noop(tmp_path):
     m = _module(tmp_path, [])
     assert m._prune_orphan_drive_folders() == ([], [])
     assert orphan.exists()
+
+
+def test_symlinked_configured_location_does_not_widen_the_cleanup_root(tmp_path):
+    """A configured location that is itself a symlink must not put the tree it
+    points into in scope. realpath() would otherwise make the TARGET's parent a
+    cleanup root, exposing unrelated sibling directories to deletion."""
+    shared = tmp_path / "shared"
+    (shared / "Live").mkdir(parents=True)
+    (shared / "Live" / "p.jpg").write_bytes(b"x")
+    precious = shared / "PreciousEmptyDir"
+    precious.mkdir()
+
+    posters = tmp_path / "posters" / "MM2K"
+    posters.mkdir(parents=True)
+    link = posters / "Live"
+    os.symlink(shared / "Live", link)
+
+    m = _module(tmp_path, [])
+    m.config.gdrive_list = [SimpleNamespace(location=str(link))]
+    removed, kept = m._prune_orphan_drive_folders()
+
+    assert removed == [], f"escaped the sync tree: {removed}"
+    assert precious.exists()
+
+
+def test_symlinked_location_does_not_disarm_a_real_sibling_root(tmp_path):
+    # The skip must not blind the sweep to genuine orphans under a real drive.
+    _mkdrive(tmp_path, "posters/MM2K/Real", files=1)
+    orphan = _mkdrive(tmp_path, "posters/MM2K/Gone")
+    outside = _mkdrive(tmp_path, "elsewhere/Target", files=1)
+    link = tmp_path / "posters/MM2K/Linked"
+    os.symlink(outside, link)
+
+    m = _module(tmp_path, ["posters/MM2K/Real"])
+    m.config.gdrive_list.append(SimpleNamespace(location=str(link)))
+    removed, _ = m._prune_orphan_drive_folders()
+    assert removed == [str(orphan)]
+    assert outside.exists()
+
