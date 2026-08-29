@@ -76,8 +76,9 @@ const CORE_SETTINGS_SCHEMA = [
                     'install. rclone is RETIRING that ' +
                     'client during 2026, after which syncs stop working — and until then it ' +
                     'shares a single 10 requests/sec Google quota with every other rclone user, ' +
-                    'which throttles large syncs. A service account is the simplest fix: it ' +
-                    'skips OAuth entirely and gets its own quota.',
+                    'which throttles large syncs. Point Service Account Location below at a ' +
+                    'readable keyfile — if it is already set, that path is what is wrong. ' +
+                    'Clearing it reveals the Client ID fields instead.',
                 link: 'https://rclone.org/drive/#making-your-own-client-id',
                 link_label: 'How to create your own client ID',
             },
@@ -93,7 +94,7 @@ const CORE_SETTINGS_SCHEMA = [
                     condition: 'is_empty',
                 },
                 description:
-                    'OAuth client ID. Only used when no service-account file is set above.',
+                    'OAuth client ID. Used only when there is no readable service-account keyfile.',
             },
             {
                 key: 'client_secret',
@@ -106,7 +107,7 @@ const CORE_SETTINGS_SCHEMA = [
                     condition: 'is_empty',
                 },
                 description:
-                    'OAuth client secret. Only used when no service-account file is set above.',
+                    'OAuth client secret. Used only when there is no readable service-account keyfile.',
             },
             {
                 key: 'gdrive_sa_location',
@@ -115,7 +116,7 @@ const CORE_SETTINGS_SCHEMA = [
                 section: 'Authentication',
                 required: false,
                 description:
-                    'Path to a Google Drive service-account JSON keyfile. Used in preference to the three OAuth fields below when the file exists; if the path is missing, CHUB falls back to them.',
+                    'Path to a Google Drive service-account JSON keyfile. Used in preference to the OAuth Client ID / Secret when the file exists; if the path is missing, CHUB falls back to them.',
             },
             {
                 key: 'token',
