@@ -114,6 +114,7 @@ const IMPLEMENTED_FIELD_TYPES = new Set([
     'textarea',
     'float',
     'hidden',
+    'notice',
     'check_box',
     'toggle',
     'dropdown',

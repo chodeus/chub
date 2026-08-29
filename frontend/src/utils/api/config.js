@@ -65,18 +65,9 @@ export const configAPI = {
         });
     },
 
-    /**
-     * Whether sync_gdrive falls back to rclone's shared Google Drive client_id.
-     *
-     * The backend stats the service-account keyfile, so a configured but
-     * missing path reads as no credentials — the form alone cannot tell.
-     *
-     * @param {AbortSignal} [signal] - Cancels a superseded or unmounted request
-     * @returns {Promise<Object>} Response whose data.shared_client_id is a bool
-     */
+    // Uncached: the server stats the keyfile, so saving a path changes the answer.
+    // `signal` cancels a superseded request. Returns data.shared_client_id.
     fetchGdriveCredentialStatus: signal => {
-        // Never cached: the answer changes the moment the keyfile path is saved.
-        // A signal also opts out of apiCore's shared-promise dedup, by design.
         return apiCore.get('/config/gdrive-credentials', { useCache: false, signal });
     },
 };
