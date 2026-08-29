@@ -251,6 +251,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     "CHUB is behind a reverse proxy or otherwise reachable off-LAN, "
                     "set a webhook_secret and add it to your *arr webhook URLs."
                 )
+            # Only nag installs that actually sync — an empty gdrive_list never
+            # invokes rclone, so the shared client can't bite them.
+            sync_cfg = getattr(startup_config, "sync_gdrive", None)
+            if log and sync_cfg and getattr(sync_cfg, "gdrive_list", None):
+                from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+                if uses_shared_rclone_client_id(sync_cfg):
+                    log.warning(
+                        "GDrive sync is using rclone's shared Google Drive client_id, "
+                        "which rclone is RETIRING during 2026 — syncs will stop "
+                        "working. It also shares one 10 requests/sec Google quota "
+                        "with every other rclone user. Set sync_gdrive."
+                        "gdrive_sa_location to a readable service-account keyfile "
+                        "(recommended), or your own sync_gdrive.client_id / "
+                        "client_secret / token."
+                    )
             handler = install_error_notify_handler(startup_config, logger=logger)
             if handler and log:
                 log.debug(

@@ -320,3 +320,27 @@ async def reveal_secret(
     # The body carries a raw secret by design; keep it out of every cache.
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+@router.get(
+    "/config/gdrive-credentials",
+    summary="Whether GDrive syncs fall back to rclone's shared client_id",
+    description=(
+        "Reports the credential sync_gdrive will actually use. The service "
+        "account keyfile is stat'd server-side, so a configured but missing "
+        "path reads as no credentials — which the settings form cannot tell."
+    ),
+)
+async def gdrive_credential_status(
+    config: ChubConfig = Depends(get_config_dep),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    """Report whether sync_gdrive falls back to rclone's shared client_id."""
+    # Imported lazily, as backend/api/main.py does — sync_gdrive pulls the
+    # module stack in and config routes must stay cheap to import.
+    from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+    sync_cfg = getattr(config, "sync_gdrive", None)
+    shared = bool(sync_cfg) and uses_shared_rclone_client_id(sync_cfg)
+    logger.debug(f"Serving GET /api/config/gdrive-credentials shared={shared}")
+    return ok("GDrive credential status", {"shared_client_id": shared})

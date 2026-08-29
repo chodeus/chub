@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useParams } from 'react-router';
 import { configAPI } from '../../../utils/api/config.js';
 import { modulesAPI } from '../../../utils/api/modules.js';
@@ -50,7 +50,34 @@ const ModuleSettingsContent = ({ moduleKey }) => {
     // Instances config drives schema conditionals (e.g. music fields gated on a
     // configured Lidarr instance).
     const { instancesData } = useInstancesData();
-    const conditionApiData = useMemo(() => ({ instances: instancesData || {} }), [instancesData]);
+    // Only the server can stat the service-account keyfile, so the shared-client
+    // notice reads this flag instead of guessing from the form.
+    const [gdriveCreds, setGdriveCreds] = useState({});
+    // One credential check in flight at a time. The ref identity is the guard:
+    // a superseded or unmounted request fails it and never sets state.
+    const gdriveReqRef = useRef(null);
+    const refreshGdriveCreds = useCallback(() => {
+        if (moduleKey !== 'sync_gdrive') return;
+        gdriveReqRef.current?.abort();
+        const ctrl = new AbortController();
+        gdriveReqRef.current = ctrl;
+        const current = () => gdriveReqRef.current === ctrl;
+        configAPI
+            .fetchGdriveCredentialStatus(ctrl.signal)
+            .then(res => current() && setGdriveCreds(res?.data || {}))
+            .catch(err => err?.name !== 'AbortError' && current() && setGdriveCreds({}));
+    }, [moduleKey]);
+    useEffect(() => {
+        refreshGdriveCreds();
+        return () => {
+            gdriveReqRef.current?.abort();
+            gdriveReqRef.current = null;
+        };
+    }, [refreshGdriveCreds]);
+    const conditionApiData = useMemo(
+        () => ({ instances: instancesData || {}, gdrive_credentials: gdriveCreds }),
+        [instancesData, gdriveCreds]
+    );
 
     const [formData, setFormData] = useState({});
     const [lastSaved, setLastSaved] = useState('{}');
@@ -141,6 +168,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
             setSaveError(null);
             await configAPI.updateConfig(formData);
             setLastSaved(JSON.stringify(formData));
+            refreshGdriveCreds();
             toast.success('Saved');
         } catch (error) {
             console.error('Save failed:', error);
@@ -148,7 +176,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
         } finally {
             setIsSaving(false);
         }
-    }, [isDirty, isSaving, formData, toast]);
+    }, [isDirty, isSaving, formData, toast, refreshGdriveCreds]);
 
     const handleReset = useCallback(() => {
         setFormData(JSON.parse(lastSaved));

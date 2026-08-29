@@ -64,4 +64,10 @@ export const configAPI = {
             useCache: false,
         });
     },
+
+    // Uncached: the server stats the keyfile, so saving a path changes the answer.
+    // `signal` cancels a superseded request. Returns data.shared_client_id.
+    fetchGdriveCredentialStatus: signal => {
+        return apiCore.get('/config/gdrive-credentials', { useCache: false, signal });
+    },
 };

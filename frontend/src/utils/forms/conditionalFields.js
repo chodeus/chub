@@ -37,6 +37,9 @@ const CONDITION_TYPES = {
         selectedValue !== null &&
         selectedValue !== '' &&
         !(Array.isArray(selectedValue) && selectedValue.length === 0),
+    // True when the api_lookup payload's named flag is true. For state only the
+    // server can determine — e.g. whether a keyfile actually exists on disk.
+    api_flag: (_selectedValue, flagName, apiData) => apiData?.[flagName] === true,
     // True when at least one instance of the given service type is configured.
     // `apiData` is the instances dict (via api_lookup: 'instances'); `value` is
     // the service type, e.g. 'lidarr'. Used to reveal music-only options only

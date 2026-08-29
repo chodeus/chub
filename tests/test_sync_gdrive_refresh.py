@@ -110,3 +110,56 @@ def test_refresh_marks_gdrive_only_folder_search_only(monkeypatch):
                 )
                 is None
             )
+
+
+def _sync_cfg(sa="", client_id=""):
+    return SimpleNamespace(gdrive_sa_location=sa, client_id=client_id)
+
+
+def test_shared_client_id_used_when_neither_auth_method_is_set():
+    from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+    assert uses_shared_rclone_client_id(_sync_cfg()) is True
+
+
+def test_service_account_bypasses_the_shared_client_id(tmp_path):
+    """An SA authenticates with its own key — no OAuth client is involved."""
+    from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+    sa = tmp_path / "sa.json"
+    sa.write_text("{}")
+    assert uses_shared_rclone_client_id(_sync_cfg(sa=str(sa))) is False
+
+
+def test_missing_sa_file_still_counts_as_the_shared_client_id(tmp_path):
+    """run() nulls a missing SA path and falls through to OAuth, so this warns."""
+    from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+    missing = str(tmp_path / "nope.json")
+    assert uses_shared_rclone_client_id(_sync_cfg(sa=missing)) is True
+    assert uses_shared_rclone_client_id(_sync_cfg(sa=missing, client_id="mine")) is False
+
+
+def test_sa_path_pointing_at_a_directory_is_not_credentials(tmp_path):
+    from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+    assert uses_shared_rclone_client_id(_sync_cfg(sa=str(tmp_path))) is True
+
+
+def test_own_client_id_bypasses_the_shared_one():
+    from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+    assert uses_shared_rclone_client_id(_sync_cfg(client_id="my-own.apps.google")) is False
+
+
+def test_whitespace_only_credentials_still_count_as_unset():
+    from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+    assert uses_shared_rclone_client_id(_sync_cfg(sa="  ", client_id="  ")) is True
+
+
+def test_missing_attributes_are_treated_as_unset():
+    """An older config object may not carry the fields at all."""
+    from backend.modules.sync_gdrive import uses_shared_rclone_client_id
+
+    assert uses_shared_rclone_client_id(SimpleNamespace()) is True

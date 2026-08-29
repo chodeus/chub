@@ -57,6 +57,32 @@ const CORE_SETTINGS_SCHEMA = [
         fields: [
             // ─── Authentication ────────────────────────────────────────
             {
+                // Not a config key — read-only copy, shown on the server's own
+                // uses_shared_rclone_client_id verdict, not the form's values.
+                key: 'shared_client_id_notice',
+                type: 'notice',
+                variant: 'warning',
+                section: 'Authentication',
+                label: "Using rclone's shared Google Drive credentials",
+                conditional: {
+                    field: 'gdrive_sa_location',
+                    condition: 'api_flag',
+                    api_lookup: 'gdrive_credentials',
+                    value: 'shared_client_id',
+                },
+                description:
+                    'CHUB has no service-account keyfile it can read and no Client ID of ' +
+                    'your own, so rclone falls back to the client_id built into every rclone ' +
+                    'install. rclone is RETIRING that ' +
+                    'client during 2026, after which syncs stop working — and until then it ' +
+                    'shares a single 10 requests/sec Google quota with every other rclone user, ' +
+                    'which throttles large syncs. Point Service Account Location below at a ' +
+                    'readable keyfile — if it is already set, that path is what is wrong. ' +
+                    'Clearing it reveals the Client ID fields instead.',
+                link: 'https://rclone.org/drive/#making-your-own-client-id',
+                link_label: 'How to create your own client ID',
+            },
+            {
                 key: 'client_id',
                 label: 'Client ID',
                 type: 'password',
@@ -68,7 +94,7 @@ const CORE_SETTINGS_SCHEMA = [
                     condition: 'is_empty',
                 },
                 description:
-                    'OAuth client ID. Only used when no service-account file is set above.',
+                    'OAuth client ID. Used only when there is no readable service-account keyfile.',
             },
             {
                 key: 'client_secret',
@@ -81,7 +107,7 @@ const CORE_SETTINGS_SCHEMA = [
                     condition: 'is_empty',
                 },
                 description:
-                    'OAuth client secret. Only used when no service-account file is set above.',
+                    'OAuth client secret. Used only when there is no readable service-account keyfile.',
             },
             {
                 key: 'gdrive_sa_location',
@@ -90,7 +116,7 @@ const CORE_SETTINGS_SCHEMA = [
                 section: 'Authentication',
                 required: false,
                 description:
-                    'Path to a Google Drive service-account JSON keyfile. If this is set, the three OAuth fields below are ignored — choose ONE method.',
+                    'Path to a Google Drive service-account JSON keyfile. Used in preference to the OAuth Client ID / Secret when the file exists; if the path is missing, CHUB falls back to them.',
             },
             {
                 key: 'token',

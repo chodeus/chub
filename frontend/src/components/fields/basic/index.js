@@ -11,3 +11,4 @@ export { NumberField } from './NumberField.jsx';
 export { TextareaField } from './TextareaField.jsx';
 export { FloatField } from './FloatField.jsx';
 export { HiddenField } from './HiddenField.jsx';
+export { NoticeField } from './NoticeField.jsx';
