@@ -53,24 +53,26 @@ const ModuleSettingsContent = ({ moduleKey }) => {
     // Only the server can stat the service-account keyfile, so the shared-client
     // notice reads this flag instead of guessing from the form.
     const [gdriveCreds, setGdriveCreds] = useState({});
-    // A ref, not the usual local isMounted flag — handleSave refreshes too, so
-    // the guard has to outlive the effect that first ran it.
-    const mountedRef = useRef(true);
-    useEffect(() => {
-        mountedRef.current = true;
-        return () => {
-            mountedRef.current = false;
-        };
-    }, []);
+    // One credential check in flight at a time. The ref identity is the guard:
+    // a superseded or unmounted request fails it and never sets state.
+    const gdriveReqRef = useRef(null);
     const refreshGdriveCreds = useCallback(() => {
         if (moduleKey !== 'sync_gdrive') return;
+        gdriveReqRef.current?.abort();
+        const ctrl = new AbortController();
+        gdriveReqRef.current = ctrl;
+        const current = () => gdriveReqRef.current === ctrl;
         configAPI
-            .fetchGdriveCredentialStatus()
-            .then(res => mountedRef.current && setGdriveCreds(res?.data || {}))
-            .catch(() => mountedRef.current && setGdriveCreds({}));
+            .fetchGdriveCredentialStatus(ctrl.signal)
+            .then(res => current() && setGdriveCreds(res?.data || {}))
+            .catch(err => err?.name !== 'AbortError' && current() && setGdriveCreds({}));
     }, [moduleKey]);
     useEffect(() => {
         refreshGdriveCreds();
+        return () => {
+            gdriveReqRef.current?.abort();
+            gdriveReqRef.current = null;
+        };
     }, [refreshGdriveCreds]);
     const conditionApiData = useMemo(
         () => ({ instances: instancesData || {}, gdrive_credentials: gdriveCreds }),

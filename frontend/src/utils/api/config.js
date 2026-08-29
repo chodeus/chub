@@ -71,10 +71,12 @@ export const configAPI = {
      * The backend stats the service-account keyfile, so a configured but
      * missing path reads as no credentials — the form alone cannot tell.
      *
+     * @param {AbortSignal} [signal] - Cancels a superseded or unmounted request
      * @returns {Promise<Object>} Response whose data.shared_client_id is a bool
      */
-    fetchGdriveCredentialStatus: () => {
+    fetchGdriveCredentialStatus: signal => {
         // Never cached: the answer changes the moment the keyfile path is saved.
-        return apiCore.get('/config/gdrive-credentials', { useCache: false });
+        // A signal also opts out of apiCore's shared-promise dedup, by design.
+        return apiCore.get('/config/gdrive-credentials', { useCache: false, signal });
     },
 };
