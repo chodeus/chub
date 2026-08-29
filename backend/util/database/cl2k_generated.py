@@ -70,10 +70,8 @@ class Cl2kGenerated(DatabaseBase):
     def get_backdrop_for(self, tmdb_id: Optional[int]) -> Optional[str]:
         """Most-recent backdrop_path generated for this SERIES tmdb_id.
 
-        Lets a new season reuse the show's existing background (DAPS: reuse the
-        same backdrop across seasons, only change the season number). Scoped to
-        show/season: tmdb ids are unique only WITHIN a media type, so an
-        unscoped lookup can hand a same-numbered movie's backdrop to a season.
+        Scoped to show/season — tmdb ids are unique only within a media type, so
+        an unscoped lookup hands a same-numbered movie's backdrop to a season.
         """
         if not tmdb_id:
             return None

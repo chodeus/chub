@@ -1,11 +1,4 @@
-"""Tests for cl2k_generated.get_backdrop_for — season backdrop reuse.
-
-A new season inherits the show's existing backdrop (DAPS: same background across
-seasons, only the season number changes). The lookup is by tmdb_id, and TMDB ids
-are unique only WITHIN a media type — movie 2122 and tv 2122 are different
-entities — so it must be scoped to the series kinds or a same-numbered movie's
-backdrop can land on a season card.
-"""
+"""Tests for cl2k_generated.get_backdrop_for — season backdrop reuse scoping."""
 
 import os
 import sys
@@ -75,9 +68,7 @@ def test_season_reuses_the_shows_backdrop(db):
 
 
 def test_a_same_numbered_movie_backdrop_is_not_reused(db):
-    """movie 2122 ("The Whole Ten Yards") and tv 2122 ("King of the Hill") share a
-    number but not an identity. The movie is recorded LAST, so an unscoped
-    most-recent lookup would return it."""
+    """movie 2122 and tv 2122 share a number, not an identity; movie recorded LAST."""
     _record(db, kind="show", tmdb_id=2122, file="/out/show.jpg", backdrop_path="/show.jpg")
     _record(db, kind="movie", tmdb_id=2122, file="/out/movie.jpg", backdrop_path="/movie.jpg")
     assert cl2k_generated_for(db).get_backdrop_for(2122) == "/show.jpg"
