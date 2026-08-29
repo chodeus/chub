@@ -263,7 +263,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         "which rclone is RETIRING during 2026 — syncs will stop "
                         "working. It also shares one 10 requests/sec Google quota "
                         "with every other rclone user. Set sync_gdrive."
-                        "gdrive_sa_location to a service-account keyfile "
+                        "gdrive_sa_location to a readable service-account keyfile "
                         "(recommended), or your own sync_gdrive.client_id / "
                         "client_secret / token."
                     )
