@@ -521,7 +521,7 @@ const CORE_SETTINGS_SCHEMA = [
                 placeholder: 'Add asset type…',
                 description: 'Which asset types to manage (logo, background, squareart).',
                 helpText:
-                    'Which additional asset types to manage. Support varies by Apply Method: logo and background work on BOTH "direct" and "kometa"; squareart works on "direct" ONLY (Kometa asset directories do not read square art, so squareart is skipped with a warning under "kometa"). Defaults to logo + background.',
+                    'Which additional asset types to manage. Logo, background and square art all work on BOTH apply methods — square art needs Kometa 2.4.5 or newer on the "kometa" path (older versions ignore the file). Seasons are narrower: Kometa reads only season backgrounds, never season logos or square art.',
             },
             // ─── Source ────────────────────────────────────────────────
             {
@@ -606,7 +606,7 @@ const CORE_SETTINGS_SCHEMA = [
                 required: true,
                 description: 'Plex uploads straight to Plex · Kometa writes to the destination.',
                 helpText:
-                    '"Plex" uploads images straight to Plex via plexapi — logo, background, and squareart — for the instances whose "Upload to this Plex instance" box is ticked below. "Kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, and Season##_logo.ext for seasons) for Kometa to apply — Kometa reads only logo and background. On the Kometa path, keep dimensional_asset_rename turned OFF in your Kometa config: it classifies unrecognised asset-folder images by aspect ratio, so a wide logo.png gets renamed to background.png.',
+                    '"Plex" uploads images straight to Plex via plexapi — logo, background, and squareart — for the instances whose "Upload to this Plex instance" box is ticked below. "Kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, square.ext, and Season##_background.ext for seasons) for Kometa to apply. Square art needs Kometa 2.4.5+. Keep this module\'s Asset Folders setting identical to Poster Renamerr\'s — Kometa has a single asset_folders toggle, so a mismatch leaves half the tree unread. On the Kometa path, keep dimensional_asset_rename turned OFF in your Kometa config: it classifies unrecognised asset-folder images by aspect ratio, so a wide logo.png gets renamed to background.png and a square one to poster.png.',
             },
             {
                 key: 'destination_dir',
