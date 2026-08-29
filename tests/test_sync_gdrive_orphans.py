@@ -1,4 +1,6 @@
 import os
+
+import pytest
 from types import SimpleNamespace
 
 from backend.modules.sync_gdrive import SyncGDrive
@@ -185,3 +187,24 @@ def test_relative_location_still_prunes(tmp_path, monkeypatch):
     m.config.gdrive_list = [SimpleNamespace(location="posters/MM2K/Live")]
     removed, _ = m._prune_orphan_drive_folders()
     assert removed == [str(orphan)], removed
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root bypasses the unreadable-dir check")
+def test_unreadable_subdir_is_never_deleted(tmp_path):
+    """os.walk swallows traversal errors, so an unreadable subdir counted as 0
+    files and the tree was deleted unread. Must fail closed instead."""
+    _mkdrive(tmp_path, "posters/MM2K/Live", files=1)
+    orphan = _mkdrive(tmp_path, "posters/MM2K/Gone")
+    locked = orphan / "locked"
+    locked.mkdir()
+    (locked / "important.jpg").write_bytes(b"x")
+    locked.chmod(0o000)
+    try:
+        # Control: the naive count really does report an empty tree.
+        assert sum(len(f) for _r, _d, f in os.walk(orphan)) == 0
+        m = _module(tmp_path, ["posters/MM2K/Live"])
+        removed, _ = m._prune_orphan_drive_folders()
+        assert removed == [], f"deleted a tree it could not read: {removed}"
+        assert orphan.exists(), "the orphan tree must survive"
+    finally:
+        locked.chmod(0o755)

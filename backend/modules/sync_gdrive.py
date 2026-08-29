@@ -523,7 +523,18 @@ class SyncGDrive(ChubModule):
                     continue
                 if real in configured:
                     continue
-                files = sum(len(f) for _, _, f in os.walk(real))
+                # os.walk swallows traversal errors by default, so an unreadable
+                # subdir would count 0 files and the tree would be deleted unread.
+                unreadable: List[OSError] = []
+                files = sum(
+                    len(f) for _, _, f in os.walk(real, onerror=unreadable.append)
+                )
+                if unreadable:
+                    self.logger.warning(
+                        f"Orphan drive folder kept — could not read {real}: "
+                        f"{unreadable[0]}"
+                    )
+                    continue
                 if files:
                     kept.append((real, files))
                     continue
