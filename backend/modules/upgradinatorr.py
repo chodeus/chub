@@ -17,6 +17,7 @@ from backend.util.arr import (
     create_arr_client,
 )
 from backend.util.base_module import ChubModule
+from backend.util.constants import QUEUE_REPORT_SECTIONS, queue_report_tally
 from backend.util.database import ChubDB
 from backend.util.database.upgradinatorr_progress import UpgradinatorrProgress
 from backend.util.helper import as_list, create_table, print_settings
@@ -44,13 +45,6 @@ SEARCH_COMMAND_NAMES = (
     "AlbumSearch",
     "ArtistSearch",
     "MissingAlbumSearch",
-)
-# (queue state, log tag, note, logger level) for the sections print_output renders.
-# Stuck rows are debug-only: they need a manual import, which is not something
-# this run did, and at info they bury what upgradinatorr actually upgraded.
-QUEUE_REPORT_SECTIONS = (
-    ("pending", "AWAITING IMPORT", "already downloaded, not searched again", "info"),
-    ("stuck", "IMPORT STUCK", "manual import required", "debug"),
 )
 # Bound on queue paging so a mispaginating *arr can't spin the run forever.
 QUEUE_MAX_PAGES = 50
@@ -1789,8 +1783,7 @@ class Upgradinatorr(ChubModule):
                 # the listing is what buries the grabs and upgrades this run made.
                 total = sum(len(entries) for _it, entries in grouped)
                 getattr(self.logger, level)(
-                    f"[{tag}] {total} download(s) across {len(grouped)} item(s) "
-                    f"— {note}"
+                    f"[{tag}] {queue_report_tally(total, len(grouped), note)}"
                 )
                 for item, entries in grouped:
                     self.logger.debug(f"  {self._format_item_title(item)}")

@@ -1,6 +1,8 @@
 import os
 from typing import Any, Dict, List, Tuple
 
+from backend.util.constants import QUEUE_REPORT_SECTIONS, queue_report_tally
+
 # When a run would fan out into more than this many Discord messages (embeds),
 # collapse the per-item detail into a single summary embed. A first-time bulk
 # poster apply of thousands of items would otherwise hammer the webhook and trip
@@ -209,70 +211,57 @@ def format_for_discord(
         return results
 
     def fmt_poster_renamerr(o: Any) -> List[Dict[str, Any]]:
+        """Format poster_renamerr output for Discord embeds.
+
+        One grouped block per category — a field per title fanned a bulk rename
+        out into hundreds of embed fields.
         """
-        Format poster_renamerr output for Discord embeds, grouped as in CLI/log output.
-        """
-        fields: List[Dict[str, Any]] = []
-        had_any = False
-
-        def add_asset_fields(assets, label):
-            nonlocal had_any
-            for asset in assets:
-                title = asset.get("title", "")
-                year = asset.get("year")
-                section_title = f"{title} ({year})" if year else title or label
-                msgs = asset.get("discord_messages") or asset.get("messages") or []
-                if msgs:
-                    had_any = True
-                    text = "\n".join([section_title] + [f"    {m}" for m in msgs])
-                    fields.append({"name": section_title, "value": f"```{text}```"})
-
-        add_asset_fields(o.get("collection", []), "Collection")
-
-        add_asset_fields(o.get("movie", []), "Movie")
-
         from collections import defaultdict
 
-        show_assets = o.get("show", [])
-        show_grouped = defaultdict(list)
-        for asset in show_assets:
-            key = (asset.get("title"), asset.get("year"))
-            show_grouped[key].extend(
-                asset.get("discord_messages") or asset.get("messages") or []
-            )
+        def lines_for(assets: Any) -> List[str]:
+            grouped: Dict[Tuple[Any, Any], List[str]] = defaultdict(list)
+            order: List[Tuple[Any, Any]] = []
+            for asset in assets or []:
+                key = (asset.get("title"), asset.get("year"))
+                if key not in grouped:
+                    order.append(key)
+                grouped[key].extend(
+                    asset.get("discord_messages") or asset.get("messages") or []
+                )
+            out: List[str] = []
+            for title, year in order:
+                msgs = grouped[(title, year)]
+                if not msgs:
+                    continue
+                out.append(f"{title} ({year})" if year else str(title or ""))
+                out.extend(f"    {m}" for m in msgs)
+            return out
 
-        for (title, year), msgs in show_grouped.items():
-            if not msgs:
-                continue
-            had_any = True
-            section_title = f"{title} ({year})" if year else title or "Show"
-            text = "\n".join([section_title] + [f"    {m}" for m in msgs])
-            fields.append({"name": section_title, "value": f"```{text}```"})
+        fields: List[Dict[str, Any]] = []
+        for label, key in (
+            ("Collections", "collection"),
+            ("Movies", "movie"),
+            ("Shows", "show"),
+            ("Artists", "artist"),
+            ("Albums", "album"),
+        ):
+            lines = lines_for(o.get(key, []))
+            if lines:
+                fields.extend(chunk_code_fields(label, "\n".join(lines)))
 
-        add_asset_fields(o.get("artist", []), "Artist")
-
-        add_asset_fields(o.get("album", []), "Album")
-
-        if not had_any:
+        if not fields:
             # empty_text lets the caller override the heartbeat line (the plex
-            # upload path sends "No posters were uploaded..." instead of the
-            # rename wording).
+            # upload path sends "No posters were uploaded..." instead).
             fields = [
-                {
-                    "name": o.get("empty_text") or "No files were renamed.",
-                    "value": "",
-                }
+                {"name": o.get("empty_text") or "No files were renamed.", "value": ""}
             ]
         return fields
 
     def fmt_renameinatorr(o: Any) -> List[Dict[str, Any]]:
         """Format renameinatorr output for Discord embeds.
 
-        Args:
-          o: Output data for renameinatorr.
-
-        Returns:
-          List of Discord embed field dicts.
+        Renames are what the run changed, so they stay listed — grouped into
+        chunked blocks rather than one embed field per title.
         """
         grouped: Dict[str, List[str]] = {}
         for inst in o.values():
@@ -282,19 +271,22 @@ def format_for_discord(
                 name = f"{title}{f' ({year})' if year else ''}"
                 lst = grouped.setdefault(name, [])
                 if np := item.get("new_path_name"):
+                    lst.append("Folder:")
                     lst.append(
-                        f"Folder:\n{item.get('path_name', '').lstrip('/')} -> {np.lstrip('/')}"
+                        f"{item.get('path_name', '').lstrip('/')} -> {np.lstrip('/')}"
                     )
                 for old, new in item.get("file_info", {}).items():
                     lst.append(old.lstrip("/"))
                     lst.append(new.lstrip("/"))
-        fields: List[Dict[str, Any]] = []
-        for name, lines in grouped.items():
-            if not lines:
+        lines: List[str] = []
+        for name, entries in grouped.items():
+            if not entries:
                 continue
-            text = "\n".join(lines)
-            fields.append({"name": name, "value": f"```{text}```"})
-        return fields
+            lines.append(name)
+            lines.extend(f"    {entry}" for entry in entries)
+        if not lines:
+            return []
+        return chunk_code_fields("Renamed", "\n".join(lines))
 
     def fmt_health_checkarr(o: Any) -> List[Dict[str, Any]]:
         """Format health_checkarr output for Discord embeds.
@@ -336,141 +328,89 @@ def format_for_discord(
         return fields
 
     def fmt_nohl(o: Any) -> List[Dict[str, Any]]:
-        """Format nohl output for Discord embeds.
+        """Format nohl output for Discord embeds — counts only.
 
-        Args:
-          o: Output data for nohl.
-
-        Returns:
-          List of Discord embed field dicts.
+        The per-title/season/episode listing is a scan finding, not a change
+        this run made; it stays in the run log.
         """
-        fields: List[Dict[str, Any]] = []
-        scanned = o.get("scanned", {})
-        for path, results in scanned.items():
-            title = f"Scanned: {os.path.basename(path).capitalize()}"
-            lines: List[str] = []
-            for item in results.get("movies", []):
-                lines.append(f"{item['title']} ({item['year']})")
-            for item in results.get("series", []):
-                lines.append(f"{item['title']} ({item['year']})")
-                for season in item.get("season_info", []):
-                    lines.append(f"\tSeason: {season['season_number']}")
-                    for episode in season.get("episodes", []):
-                        lines.append(f"\t\tEpisode: {episode}")
-            if lines:
-                fields.extend(chunk_code_fields(title, "\n".join(lines)))
-            else:
-                fields.append(
-                    {
-                        "name": "✅ All Scanned files are hardlinked!",
-                        "value": "",
-                    }
-                )
-        resolved = o.get("resolved", {})
-        for instance, data in resolved.items():
-            srv = data.get("server_name", instance)
-            inst_type = data.get("instance_type", "")
-            title = f"Resolved: {srv}"
-            sm = data.get("data", {}).get("search_media", [])
-            if not sm:
-                fields.append(
-                    {
-                        "name": f"✅ {srv} all resolve files are hardlinked!",
-                        "value": "",
-                    }
-                )
-                continue
-            lines: List[str] = []
-            for item in sm:
-                if inst_type == "radarr":
-                    lines.append(f"{item['title']} ({item['year']})")
-                else:
-                    lines.append(f"{item['title']} ({item['year']})")
-                    for season in item.get("seasons", []):
-                        lines.append(f"\tSeason {season['season_number']}")
-                        if not season.get("season_pack", False):
-                            for ep in season.get("episode_data", []):
-                                lines.append(f"\t\tEpisode {ep['episode_number']}")
-                lines.append("")
-            if lines:
-                fields.extend(chunk_code_fields(title, "\n".join(lines)))
-        summary = o.get("summary", {})
-        if not all(value == 0 for value in summary.values()):
-            title = "Summary"
-            lines = [
-                f"Total Non-Hardlinked Scanned Movies: {summary.get('total_scanned_movies', 0)}",
-                f"Total Non-Hardlinked Scanned Series: {summary.get('total_scanned_series', 0)}",
-                f"Total Non-Hardlinked Resolved Movies: {summary.get('total_resolved_movies', 0)}",
-                f"Total Non-Hardlinked Resolved Series: {summary.get('total_resolved_series', 0)}",
-            ]
-            fields.extend(chunk_code_fields(title, "\n".join(lines)))
-        return fields
+        scanned = o.get("scanned", {}) or {}
+        movie_titles = 0
+        series_titles = 0
+        for results in scanned.values():
+            movie_titles += len(results.get("movies", []) or [])
+            series_titles += len(results.get("series", []) or [])
+        summary = o.get("summary", {}) or {}
+        # These four are FILE counts, not title counts — see nohl.build_summary.
+        movie_files = summary.get("total_scanned_movies", 0)
+        episode_files = summary.get("total_scanned_series", 0)
+        searched_movies = summary.get("total_resolved_movies", 0)
+        searched_episodes = summary.get("total_resolved_series", 0)
+
+        if not any((movie_titles, series_titles, searched_movies, searched_episodes)):
+            return [{"name": "✅ All scanned files are hardlinked!", "value": ""}]
+
+        lines = [
+            f"Movies: {movie_titles} titles, {movie_files} non-hardlinked files",
+            f"Series: {series_titles} titles, {episode_files} non-hardlinked "
+            "episode files",
+            f"Searched: {searched_movies} movies, {searched_episodes} episodes",
+        ]
+        return [{"name": "Summary", "value": "```" + "\n".join(lines) + "```"}]
 
     def fmt_upgradinatorr(o: Any) -> List[Dict[str, Any]]:
         """Format upgradinatorr output for Discord embeds.
 
-        Args:
-          o: Output data for upgradinatorr.
-
-        Returns:
-          List of Discord embed field dicts.
+        Grabs are listed — they are what the run changed. The queue sections
+        are a tally off the same QUEUE_REPORT_SECTIONS the run log renders, so
+        the two can't drift; the per-item rows and the *arr's own rejection
+        text are log-level detail.
         """
         fields: List[Dict[str, Any]] = []
         for inst, data in o.items():
             srv = data.get("server_name", inst)
+            instance_data = data.get("data", []) or []
             lines: List[str] = []
-            waiting: List[str] = []
-            stuck: List[str] = []
-            for item in data.get("data", []):
+            for item in instance_data:
+                dl = item.get("download") or {}
+                if not dl:
+                    continue
                 title = item.get("title", "Unknown")
                 year = f" ({item.get('year')})" if item.get("year") else ""
-                dl = item.get("download") or {}
-                if dl:
-                    lines.append(f"{title}{year}")
-                    for t, score in dl.items():
-                        lines.append(f"\t{t}")
-                        lines.append(f"\tCF Score: {score}")
-                    lines.append("")
-                queued = item.get("queue_imports") or []
-                for state, sink in (("pending", waiting), ("stuck", stuck)):
-                    entries = [e for e in queued if e.get("state") == state]
-                    if not entries:
-                        continue
-                    sink.append(f"{title}{year}")
-                    for entry in entries:
-                        age = entry.get("age_hours")
-                        age_text = f" (waiting {age:.0f}h)" if age is not None else ""
-                        sink.append(f"\t{entry.get('download')}{age_text}")
-                        # The *arr's own rejection reason is the actionable part.
-                        for message in entry.get("messages", []):
-                            sink.append(f"\t\t{message}")
-                    sink.append("")
+                lines.append(f"{title}{year}")
+                for name, score in dl.items():
+                    lines.append(f"\t{name}")
+                    lines.append(f"\tCF Score: {score}")
+                lines.append("")
             if lines:
                 fields.extend(chunk_code_fields(srv, "\n".join(lines).strip()))
-            if waiting:
-                fields.extend(
-                    chunk_code_fields(
-                        f"{srv} — downloaded, awaiting import",
-                        "\n".join(waiting).strip(),
-                    )
-                )
-            if stuck:
-                fields.extend(
-                    chunk_code_fields(
-                        f"{srv} — downloaded, import stuck (needs attention)",
-                        "\n".join(stuck).strip(),
-                    )
+            for state, tag, note, _level in QUEUE_REPORT_SECTIONS:
+                item_count = 0
+                total = 0
+                for item in instance_data:
+                    entries = [
+                        e
+                        for e in (item.get("queue_imports") or [])
+                        if e.get("state") == state
+                    ]
+                    if not entries:
+                        continue
+                    item_count += 1
+                    total += len(entries)
+                if not item_count:
+                    continue
+                fields.append(
+                    {
+                        "name": f"{srv} — {tag.lower()}",
+                        "value": f"```{queue_report_tally(total, item_count, note)}```",
+                    }
                 )
         return fields
 
     def fmt_labelarr(o: Any) -> List[Dict[str, Any]]:
         """Format labelarr output for Discord embeds.
 
-        Args:
-          o: Output data for labelarr.
-
-        Returns:
-          List of Discord embed field dicts.
+        Label changes stay listed; chunked so a long list can't blow the
+        1024-char embed field limit.
         """
         fields: List[Dict[str, Any]] = []
         summary = f"Synced {len(o)} items across configured Plex libraries."
@@ -478,23 +418,23 @@ def format_for_discord(
         label_changes: Dict[Tuple[str, str], List[str]] = {}
         for item in o:
             for label, action in item["add_remove"].items():
-                key = (label, action)
-                label_changes.setdefault(key, []).append(
+                label_changes.setdefault((label, action), []).append(
                     f"{item['title']} ({item['year']})"
                 )
         for (label, action), items in label_changes.items():
             verb = "added to" if action == "add" else "removed from"
-            fields.append(
-                {
-                    "name": f"Label: `{label}` has been {verb}:",
-                    "value": f"```{chr(10).join(items)}```",
-                    "inline": False,
-                }
+            fields.extend(
+                chunk_code_fields(
+                    f"Label: `{label}` has been {verb}:", "\n".join(items)
+                )
             )
         return fields
 
     def fmt_nestarr(o: Any) -> List[Dict[str, Any]]:
-        """Format Nestarr scan issues for Discord embeds."""
+        """Format Nestarr scan issues for Discord embeds — counts only.
+
+        The per-issue listing is a scan finding, not a change this run made.
+        """
         issues = o.get("issues", []) if isinstance(o, dict) else (o or [])
         if not issues:
             return [
@@ -515,53 +455,24 @@ def format_for_discord(
         for issue in issues:
             grouped.setdefault(issue.get("type", "unknown"), []).append(issue)
 
-        summary_lines = [
-            f"{type_labels.get(issue_type, issue_type.replace('_', ' ').title())}: {len(items)}"
-            for issue_type, items in sorted(grouped.items())
-        ]
-        fields = [
-            {
-                "name": "Summary",
-                "value": f"```Total issues: {len(issues)}\n"
-                + "\n".join(summary_lines)
-                + "```",
-            }
-        ]
-
-        for issue_type, items in sorted(grouped.items()):
-            lines = []
-            for issue in items[:20]:
-                year = f" ({issue.get('year')})" if issue.get("year") else ""
-                instance = (
-                    issue.get("instance") or issue.get("instance_type") or "unknown"
-                )
-                title = issue.get("name") or "Unknown"
-                path = issue.get("path") or issue.get("suggested_path") or ""
-                line = f"{title}{year} [{instance}]"
-                if path:
-                    line = f"{line}\n  {path}"
-                lines.append(line)
-            if len(items) > 20:
-                lines.append(f"...and {len(items) - 20} more")
-            label = type_labels.get(issue_type, issue_type.replace("_", " ").title())
-            fields.extend(chunk_code_fields(label, "\n".join(lines)))
-        return fields
+        lines = [f"Total issues: {len(issues)}"]
+        lines.extend(
+            f"{type_labels.get(t, t.replace('_', ' ').title())}: {len(items)}"
+            for t, items in sorted(grouped.items())
+        )
+        return [{"name": "Summary", "value": "```" + "\n".join(lines) + "```"}]
 
     def fmt_jduparr(o: Any) -> List[Dict[str, Any]]:
-        """Format jduparr output for Discord flat messages.
+        """Format jduparr output for Discord flat messages — counts only.
 
-        Args:
-          o: Output data for jduparr.
-
-        Returns:
-          List of Discord message dicts (with 'content' key).
+        The per-file jdupes output is log detail; the relink counts are what
+        the run changed.
         """
         results: List[Dict[str, Any]] = []
         for item in o:
             source_dirs = item.get("source_dirs")
             source_dir = item.get("source_dir", "Unknown")
             field_message = item.get("field_message", "")
-            parsed_files = item.get("output", [])
             sub_count = item.get("sub_count", 0)
             linked_count = item.get("linked_count", 0)
             if isinstance(source_dirs, list) and source_dirs:
@@ -573,14 +484,12 @@ def format_for_discord(
                 dir_label = os.path.basename(os.path.normpath(source_dir)).capitalize()
             header = f"_\nSource Directory: '__**{dir_label}**__'\n{field_message}"
             footer = "\nPowered by: CHUB"
-            lines = [f"\t{line}" for line in parsed_files]
-            lines.append(f"\tRelink candidates in '{dir_label}': {sub_count}")
+            lines = [f"\tRelink candidates in '{dir_label}': {sub_count}"]
             if linked_count:
                 lines.append(f"\tItems re-linked in '{dir_label}': {linked_count}")
             if item.get("error"):
                 lines.append(f"\tError: {item['error']}")
-            content = "\n".join(lines)
-            results.extend(chunk_flat_content(header, content, footer))
+            results.extend(chunk_flat_content(header, "\n".join(lines), footer))
         return results
 
     def fmt_poster_cleanarr(o: Any) -> List[Dict[str, Any]]:
@@ -824,29 +733,27 @@ def format_for_discord(
         """Format asset_renamerr output for Discord embeds.
 
         Input is ``{image_type: [{title, year, source, applied, reason}, ...]}``.
-        One field per image_type (logo/background/squareart) summarising applied
-        vs skipped (e.g. squareart skipped on the kometa path).
+        Applied assets are listed — that is what changed; skipped ones collapse
+        to a count, since their per-entry reasons are log detail.
         """
         fields: List[Dict[str, Any]] = []
-        had_any = False
         for image_type, entries in (o or {}).items():
             if not entries:
                 continue
             applied = [e for e in entries if e.get("applied")]
             lines = [f"{len(applied)}/{len(entries)} applied"]
-            for e in entries:
-                title = e.get("title") or ""
-                year = e.get("year")
+            for entry in applied:
+                title = entry.get("title") or ""
+                year = entry.get("year")
                 disp = f"{title} ({year})" if year else title
-                mark = "✓" if e.get("applied") else "✗"
-                src = e.get("source")
-                suffix = f" [{src}]" if src else ""
-                lines.append(f"{mark} {disp}{suffix} — {e.get('reason', '')}")
-            had_any = True
-            text = "\n".join(lines)
-            fields.append({"name": image_type.capitalize(), "value": f"```{text}```"})
+                src = entry.get("source")
+                lines.append(f"✓ {disp}{f' [{src}]' if src else ''}")
+            skipped = len(entries) - len(applied)
+            if skipped:
+                lines.append(f"{skipped} skipped")
+            fields.extend(chunk_code_fields(image_type.capitalize(), "\n".join(lines)))
 
-        if not had_any:
+        if not fields:
             fields = [{"name": "No assets were applied.", "value": ""}]
         return fields
 
