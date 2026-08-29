@@ -5,7 +5,6 @@
     {"name": "Jpalenz77", "id": "1qBC7p9K4zur5dOCf3F6VTyUROVvHQoSb", "style": "MM2K"},
     {"name": "WenIsInMood", "id": "1Wz0S18sKOeyBURkJ1uT3RtkEmSsK1-PG", "style": "MM2K"},
     {"name": "Darkkazul", "id": "1ejgRXwX6opexs8oAX8CnpSpKQt7Hrf00", "style": "MM2K"},
-    {"name": "Reitenth", "id": "1cqDinU27cnHf5sL5rSlfO7o_T6LSxG77", "style": "MM2K"},
     {"name": "TheOtherGuy (#2)", "id": "15faKB1cDQAhjTQCvj8MvGUQb0nBORWGC", "style": "MM2K"},
     {"name": "TheOtherGuy (#1)", "id": "1TYVIGKpSwhipLyVQQn_OJHTobM6KaokB", "style": "MM2K"},
     {"name": "Dweagle79", "id": "1XXZL-TpqWqfbKBWCifN2-MRdGDbSzHTj", "style": "MM2K"},
@@ -19,7 +18,7 @@
     {"name": "Sahara", "id": "1KnwxzwBUQzQyKF1e24q_wlFqcER9xYHM", "style": "MM2K"},
     {"name": "MajorGiant (#1)", "id": "1ZfvUgN0qz4lJYkC_iMRjhH-fZ0rDN_Yu", "style": "MM2K"},
     {"name": "Lion City Gaming", "id": "1alseEnUBjH6CjXh77b5L4R-ZDGdtOMFr", "style": "MM2K"},
-    {"name": "IamSpartacus (#1)", "id": "1HjwMWfI6XpQVYH36VBzYiJA4UWfoqcQ9", "style": "MM2K"},
+    {"name": "IamSpartacus (#1)", "id": "19_kDCSHFdeZypxOxmODWmEt6jtBBtOYw", "style": "MM2K"},
     {"name": "BZ", "id": "1Xg9Huh7THDbmjeanW0KyRbEm6mGn_jm8", "style": "MM2K"},
     {"name": "Solen (#1)", "id": "1YEuS1pulJAfhKm4L8U9z5-EMtGl-d2s7", "style": "MM2K"},
     {"name": "Zarox", "id": "1wOhY88zc0wdQU-QQmhm4FzHL9QiCQnpu", "style": "MM2K"},
@@ -52,5 +51,7 @@
     {"name": "Bostafari", "id": "1zUE6LDrrxPo66ch8voZlgVyG_wi-4V7s", "style": "Artwork"},
     {"name": "Dweagle79", "id": "1IlmtsQ7aJ1RjpaGSskEtgEt9ZNmSyukL", "style": "Artwork"},
     {"name": "TokenMinal", "id": "18Yr85mO65WpEXMvtM57OXB_umusADWdF", "style": "Artwork"},
-    {"name": "Chodeus", "id": "1mLUpjOpfbGsyoLngVz4MfIvm2cMu1XSb", "style": "Artwork"}
+    {"name": "Chodeus", "id": "1mLUpjOpfbGsyoLngVz4MfIvm2cMu1XSb", "style": "Artwork"},
+    {"name": "Wenisinmood (#1 English)", "id": "14Fab3WrcKQAipliY7WNahNEQ8xUvnfkW", "style": "Artwork"},
+    {"name": "Wenisinmood (#2 Original Language)", "id": "18JY2EkF40mjEQYB_UfOFG68Ood2W0fQ9", "style": "Artwork"}
 ]

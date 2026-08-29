@@ -14,7 +14,7 @@ import pytest
 # when it's not installed (e.g. minimal local environments).
 pytest.importorskip("httpx")
 
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -302,6 +302,9 @@ def test_gdrive_presets_returns_bundled_catalogue(app_with_router):
     for entry in presets:
         assert {"name", "id", "style"}.issubset(entry.keys())
         assert entry["style"] in ("CL2K", "MM2K", "Artwork")
+    # A duplicated id silently shadows a curator's drive in the picker.
+    ids = [e["id"] for e in presets]
+    assert len(ids) == len(set(ids)), "duplicate drive id in the bundled catalogue"
     # Spot-check a couple of canonical entries so we'd notice if the
     # bundled JSON gets mangled in a future commit.
     by_id = {e["id"]: e for e in presets}
@@ -313,10 +316,12 @@ def test_gdrive_presets_returns_bundled_catalogue(app_with_router):
 
 def test_gdrive_presets_missing_file_returns_500(monkeypatch, app_with_router):
     """If the bundled JSON is missing, surface a 500 (not a silent empty list)."""
-    monkeypatch.setattr(
-        system_router, "_GDRIVE_PRESETS_PATH", system_router.Path("/nonexistent.json")
-    )
-    monkeypatch.setattr(system_router, "_gdrive_presets_cache", None)
+    from pathlib import Path
+
+    from backend.util import gdrive_presets
+
+    monkeypatch.setattr(gdrive_presets, "PRESETS_PATH", Path("/nonexistent.json"))
+    monkeypatch.setattr(gdrive_presets, "_presets_cache", None)
     app = app_with_router(system_router.router)
     client = TestClient(app)
     resp = client.get("/api/gdrive-presets")
@@ -763,3 +768,68 @@ def test_error_body_omits_exception_text(app_with_router):
     assert body["message"] == "Error retrieving poster statistics"
     # The whole body, not just message — detail must not reach data/ either.
     assert "LEAK_MARKER" not in resp.text
+
+
+# --- Baseline security headers ---
+
+from backend.api.main import SecurityHeadersMiddleware  # noqa: E402
+
+
+def test_security_headers_stamped_on_every_response():
+    """Headers must ride every response, including a route that errors."""
+    app = FastAPI()
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    @app.get("/fine")
+    def fine():
+        return {"ok": True}
+
+    @app.get("/boom")
+    def boom():
+        raise HTTPException(status_code=401, detail="nope")
+
+    client = TestClient(app)
+    for path, code in (("/fine", 200), ("/boom", 401)):
+        resp = client.get(path)
+        assert resp.status_code == code
+        assert resp.headers["X-Content-Type-Options"] == "nosniff"
+        assert resp.headers["X-Frame-Options"] == "SAMEORIGIN"
+        assert resp.headers["Referrer-Policy"] == "same-origin"
+        assert "camera=()" in resp.headers["Permissions-Policy"]
+
+
+def test_security_headers_cover_an_unhandled_500():
+    """Starlette runs an `Exception` handler OUTSIDE the middleware stack, so the
+    production handler must stamp the headers itself. Registering the real
+    handle_exception here means this fails if it ever stops doing so."""
+    from backend.api.main import SECURITY_HEADERS, handle_exception
+
+    app = FastAPI()
+    app.state.logger = StubLogger()
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_exception_handler(Exception, handle_exception)
+
+    @app.get("/boom")
+    def boom():
+        raise RuntimeError("unhandled")
+
+    resp = TestClient(app, raise_server_exceptions=False).get("/boom")
+    assert resp.status_code == 500
+    for header, value in SECURITY_HEADERS.items():
+        assert resp.headers[header] == value
+
+
+def test_security_headers_never_override_a_route_choice():
+    """A route that sets a STRICTER header must keep it — the baseline fills
+    gaps, it doesn't clobber an explicit decision."""
+    from starlette.responses import JSONResponse
+
+    from backend.api.main import SECURITY_HEADERS, _stamp_security_headers
+
+    resp = JSONResponse({"ok": True}, headers={"X-Frame-Options": "DENY"})
+    _stamp_security_headers(resp)
+    assert resp.headers["X-Frame-Options"] == "DENY"
+    # every other baseline header is still applied
+    for header, value in SECURITY_HEADERS.items():
+        if header != "X-Frame-Options":
+            assert resp.headers[header] == value
