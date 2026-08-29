@@ -46,9 +46,11 @@ SEARCH_COMMAND_NAMES = (
     "MissingAlbumSearch",
 )
 # (queue state, log tag, note, logger level) for the sections print_output renders.
+# Stuck rows are debug-only: they need a manual import, which is not something
+# this run did, and at info they bury what upgradinatorr actually upgraded.
 QUEUE_REPORT_SECTIONS = (
     ("pending", "AWAITING IMPORT", "already downloaded, not searched again", "info"),
-    ("stuck", "IMPORT STUCK", "needs attention — the *arr will not import them", "warning"),
+    ("stuck", "IMPORT STUCK", "manual import required", "debug"),
 )
 # Bound on queue paging so a mispaginating *arr can't spin the run forever.
 QUEUE_MAX_PAGES = 50
@@ -1783,18 +1785,17 @@ class Upgradinatorr(ChubModule):
                 ]
                 if not grouped:
                     continue
-                log = getattr(self.logger, level)
+                # Tally at the section's level, per-item detail always at debug —
+                # the listing is what buries the grabs and upgrades this run made.
                 total = sum(len(entries) for _it, entries in grouped)
-                log(
+                getattr(self.logger, level)(
                     f"[{tag}] {total} download(s) across {len(grouped)} item(s) "
-                    f"— {note}:"
+                    f"— {note}"
                 )
                 for item, entries in grouped:
-                    log(f"  {self._format_item_title(item)}")
+                    self.logger.debug(f"  {self._format_item_title(item)}")
                     for entry in entries:
-                        log(f"    {self._format_queue_entry(entry)}")
-                        for message in entry.get("messages", []):
-                            log(f"      ↳ {message}")
+                        self.logger.debug(f"    {self._format_queue_entry(entry)}")
 
             if with_failures:
                 self.logger.info(f"[FAILED] {len(with_failures)} item(s):")
