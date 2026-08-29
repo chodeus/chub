@@ -582,30 +582,40 @@ def _poster_output(n):
     }
 
 
-def test_format_for_discord_collapses_huge_run():
-    from backend.util.notification_formatting import format_for_discord
-
-    cfg = SimpleNamespace(module_name="poster_renamerr")
-    data, ok = format_for_discord(cfg, _poster_output(1000))
-    assert ok
-    assert len(data) == 1  # collapsed to a single summary embed
-    field = data[1][0]
-    assert "collapsed" in field["value"].lower()
-
-
-def test_format_for_discord_groups_bulk_renames():
-    """Renames are grouped into a few chunked blocks, not a field per title, so
-    a bulk run keeps its detail instead of tripping the rate-limit collapse."""
-    from backend.util.notification_formatting import format_for_discord
+def test_format_for_discord_caps_bulk_renames():
+    """A bulk run is capped to NOTIFICATION_ITEM_CAP items plus a tally — the
+    rest stays in the server log rather than flooding the webhook."""
+    from backend.util.notification_formatting import (
+        NOTIFICATION_ITEM_CAP,
+        format_for_discord,
+    )
 
     cfg = SimpleNamespace(module_name="poster_renamerr")
     data, ok = format_for_discord(cfg, _poster_output(400))
     assert ok
-    assert len(data) < 10  # would have been 400 fields before grouping
+    assert len(data) <= 2  # would have been 400 fields before capping
     values = " ".join(f.get("value", "") for fields in data.values() for f in fields)
+    assert "400 movies renamed" in values  # the tally is always present
     assert "Movie 0 (2001)" in values
-    assert "poster 399.jpg -renamed-> 399.jpg" in values
-    assert "collapsed" not in values.lower()
+    assert f"Movie {NOTIFICATION_ITEM_CAP} (2001)" not in values  # past the cap
+    assert f"and {400 - NOTIFICATION_ITEM_CAP} more" in values
+    assert "see the server log" in values
+
+
+def test_format_for_discord_collapses_huge_run():
+    """The rate-limit backstop still fires for a formatter that emits many
+    sections, even though each section is individually capped."""
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="labelarr")
+    payload = [
+        {"title": f"T{i}", "year": 2001, "add_remove": {f"label{i}": "add"}}
+        for i in range(400)
+    ]
+    data, ok = format_for_discord(cfg, payload)
+    assert ok
+    assert len(data) == 1  # collapsed to a single summary embed
+    assert "collapsed" in data[1][0]["value"].lower()
 
 
 def test_format_for_discord_keeps_small_run_detailed():
@@ -615,8 +625,10 @@ def test_format_for_discord_keeps_small_run_detailed():
     data, ok = format_for_discord(cfg, _poster_output(5))
     assert ok
     values = " ".join(f.get("value", "") for fields in data.values() for f in fields)
+    assert "5 movies renamed" in values  # tally accompanies the detail
     assert "Movie 0 (2001)" in values  # per-item detail preserved
     assert "poster 0.jpg -renamed-> 0.jpg" in values
+    assert "see the server log" not in values  # nothing truncated under the cap
     names = [f.get("name", "") for fields in data.values() for f in fields]
     assert not any("items processed" in n for n in names)  # not summarised
 

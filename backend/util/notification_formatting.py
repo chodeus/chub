@@ -10,6 +10,22 @@ from backend.util.constants import QUEUE_REPORT_SECTIONS, queue_report_tally
 # returned unchanged.
 SUMMARY_PART_THRESHOLD = 10
 
+# Discord carries at most this many item blocks per listing. Past it the section
+# keeps its tally and points at the server log, which always holds everything.
+NOTIFICATION_ITEM_CAP = 50
+
+
+def capped_lines(entries: list, tally: str) -> list:
+    """The caller's tally line, then the first NOTIFICATION_ITEM_CAP item blocks.
+    Each entry is one item's lines, so the cap counts items and never splits one."""
+    lines = [tally]
+    for block in entries[:NOTIFICATION_ITEM_CAP]:
+        lines.extend(block)
+    remainder = len(entries) - NOTIFICATION_ITEM_CAP
+    if remainder > 0:
+        lines.append(f"…and {remainder} more — see the server log")
+    return lines
+
 
 def _collapse_large_notification(
     parts: Dict[int, List[Dict[str, Any]]],
@@ -213,12 +229,12 @@ def format_for_discord(
     def fmt_poster_renamerr(o: Any) -> List[Dict[str, Any]]:
         """Format poster_renamerr output for Discord embeds.
 
-        One grouped block per category — a field per title fanned a bulk rename
-        out into hundreds of embed fields.
+        One grouped, capped block per category — a field per title fanned a bulk
+        rename out into hundreds of embed fields.
         """
         from collections import defaultdict
 
-        def lines_for(assets: Any) -> List[str]:
+        def blocks_for(assets: Any) -> List[List[str]]:
             grouped: Dict[Tuple[Any, Any], List[str]] = defaultdict(list)
             order: List[Tuple[Any, Any]] = []
             for asset in assets or []:
@@ -228,26 +244,30 @@ def format_for_discord(
                 grouped[key].extend(
                     asset.get("discord_messages") or asset.get("messages") or []
                 )
-            out: List[str] = []
+            blocks: List[List[str]] = []
             for title, year in order:
                 msgs = grouped[(title, year)]
                 if not msgs:
                     continue
-                out.append(f"{title} ({year})" if year else str(title or ""))
-                out.extend(f"    {m}" for m in msgs)
-            return out
+                head = f"{title} ({year})" if year else str(title or "")
+                blocks.append([head] + [f"    {m}" for m in msgs])
+            return blocks
 
         fields: List[Dict[str, Any]] = []
-        for label, key in (
-            ("Collections", "collection"),
-            ("Movies", "movie"),
-            ("Shows", "show"),
-            ("Artists", "artist"),
-            ("Albums", "album"),
+        for label, key, noun in (
+            ("Collections", "collection", "collections renamed"),
+            ("Movies", "movie", "movies renamed"),
+            ("Shows", "show", "shows renamed"),
+            ("Artists", "artist", "artists renamed"),
+            ("Albums", "album", "albums renamed"),
         ):
-            lines = lines_for(o.get(key, []))
-            if lines:
-                fields.extend(chunk_code_fields(label, "\n".join(lines)))
+            blocks = blocks_for(o.get(key, []))
+            if blocks:
+                fields.extend(
+                    chunk_code_fields(
+                        label, "\n".join(capped_lines(blocks, f"{len(blocks)} {noun}"))
+                    )
+                )
 
         if not fields:
             # empty_text lets the caller override the heartbeat line (the plex
@@ -260,8 +280,8 @@ def format_for_discord(
     def fmt_renameinatorr(o: Any) -> List[Dict[str, Any]]:
         """Format renameinatorr output for Discord embeds.
 
-        Renames are what the run changed, so they stay listed — grouped into
-        chunked blocks rather than one embed field per title.
+        Renames are what the run changed, so they stay listed — grouped and
+        capped rather than one embed field per title.
         """
         grouped: Dict[str, List[str]] = {}
         for inst in o.values():
@@ -278,15 +298,16 @@ def format_for_discord(
                 for old, new in item.get("file_info", {}).items():
                     lst.append(old.lstrip("/"))
                     lst.append(new.lstrip("/"))
-        lines: List[str] = []
-        for name, entries in grouped.items():
-            if not entries:
-                continue
-            lines.append(name)
-            lines.extend(f"    {entry}" for entry in entries)
-        if not lines:
+        blocks = [
+            [name] + [f"    {entry}" for entry in entries]
+            for name, entries in grouped.items()
+            if entries
+        ]
+        if not blocks:
             return []
-        return chunk_code_fields("Renamed", "\n".join(lines))
+        return chunk_code_fields(
+            "Renamed", "\n".join(capped_lines(blocks, f"{len(blocks)} items renamed"))
+        )
 
     def fmt_health_checkarr(o: Any) -> List[Dict[str, Any]]:
         """Format health_checkarr output for Discord embeds.
@@ -316,8 +337,12 @@ def format_for_discord(
             )
             grouped.setdefault(instance, []).append(f"{title}{year}\t{db_id}")
         for instance, lines in grouped.items():
-            text = "\n".join(lines)
-            fields.extend(chunk_code_fields(instance, text))
+            blocks = [[line] for line in lines]
+            fields.extend(
+                chunk_code_fields(
+                    instance, "\n".join(capped_lines(blocks, f"{len(blocks)} items"))
+                )
+            )
         if fields:
             dry_run = any(item.get("dry_run") for item in o)
             if dry_run:
@@ -369,20 +394,27 @@ def format_for_discord(
         for inst, data in o.items():
             srv = data.get("server_name", inst)
             instance_data = data.get("data", []) or []
-            lines: List[str] = []
+            blocks: List[List[str]] = []
             for item in instance_data:
                 dl = item.get("download") or {}
                 if not dl:
                     continue
                 title = item.get("title", "Unknown")
                 year = f" ({item.get('year')})" if item.get("year") else ""
-                lines.append(f"{title}{year}")
+                block = [f"{title}{year}"]
                 for name, score in dl.items():
-                    lines.append(f"\t{name}")
-                    lines.append(f"\tCF Score: {score}")
-                lines.append("")
-            if lines:
-                fields.extend(chunk_code_fields(srv, "\n".join(lines).strip()))
+                    block.append(f"\t{name}")
+                    block.append(f"\tCF Score: {score}")
+                blocks.append(block)
+            if blocks:
+                fields.extend(
+                    chunk_code_fields(
+                        srv,
+                        "\n".join(
+                            capped_lines(blocks, f"{len(blocks)} items with grabs")
+                        ),
+                    )
+                )
             for state, tag, note, _level in QUEUE_REPORT_SECTIONS:
                 item_count = 0
                 total = 0
@@ -423,9 +455,11 @@ def format_for_discord(
                 )
         for (label, action), items in label_changes.items():
             verb = "added to" if action == "add" else "removed from"
+            blocks = [[line] for line in items]
             fields.extend(
                 chunk_code_fields(
-                    f"Label: `{label}` has been {verb}:", "\n".join(items)
+                    f"Label: `{label}` has been {verb}:",
+                    "\n".join(capped_lines(blocks, f"{len(blocks)} items")),
                 )
             )
         return fields
@@ -697,8 +731,8 @@ def format_for_discord(
         # rows and inflate the truncation count.
         active = [it for it in items if any((it.get("counters") or {}).values())]
         if active:
-            lines = []
-            for it in active[:15]:
+            blocks: List[List[str]] = []
+            for it in active:
                 c = it.get("counters") or {}
                 parts = []
                 for label, key in (
@@ -709,13 +743,13 @@ def format_for_discord(
                 ):
                     if c.get(key):
                         parts.append(f"{c[key]} {label}")
-                lines.append(f"• **{it.get('owner', '?')}** — {', '.join(parts)}")
-            if len(active) > 15:
-                lines.append(f"…and {len(active) - 15} more with activity")
+                blocks.append([f"• **{it.get('owner', '?')}** — {', '.join(parts)}"])
             fields.append(
                 {
                     "name": "Activity by folder",
-                    "value": "\n".join(lines),
+                    "value": "\n".join(
+                        capped_lines(blocks, f"{len(active)} folders with activity")
+                    ),
                     "inline": False,
                 }
             )
@@ -741,13 +775,14 @@ def format_for_discord(
             if not entries:
                 continue
             applied = [e for e in entries if e.get("applied")]
-            lines = [f"{len(applied)}/{len(entries)} applied"]
+            blocks: List[List[str]] = []
             for entry in applied:
                 title = entry.get("title") or ""
                 year = entry.get("year")
                 disp = f"{title} ({year})" if year else title
                 src = entry.get("source")
-                lines.append(f"✓ {disp}{f' [{src}]' if src else ''}")
+                blocks.append([f"✓ {disp}{f' [{src}]' if src else ''}"])
+            lines = capped_lines(blocks, f"{len(applied)}/{len(entries)} applied")
             skipped = len(entries) - len(applied)
             if skipped:
                 lines.append(f"{skipped} skipped")
