@@ -411,6 +411,10 @@ def compare_strings(string1: str, string2: str) -> bool:
 # year), so a strict equality check produced false "no match" results.
 YEAR_MATCH_TOLERANCE = 1
 
+# Id sources that identify an entity on their own. tmdb is absent on purpose:
+# its ids are unique only WITHIN a media type (movie 79063 is not tv 79063).
+GLOBALLY_UNIQUE_ID_SOURCES = frozenset({"tvdb_id", "imdb_id"})
+
 
 def is_match(
     asset: Dict[str, Any],
@@ -420,8 +424,10 @@ def is_match(
 
     The matcher prioritizes **ID equality** (TMDB/TVDB/IMDB). When **both**
     sides provide at least one valid ID, we **only** accept an ID match; title
-    similarity is *not* considered in that branch. When IDs are missing on
-    either side, we fall back to a set of increasingly permissive title checks
+    similarity is *not* considered in that branch. TVDB and IMDB ids are
+    globally unique; TMDB ids are media-type scoped, so a TMDB-only agreement
+    also needs year corroboration. When IDs are missing on either side, we fall
+    back to increasingly permissive title checks
     (exact, normalized, alternate titles, and a loose alphanumeric compare),
     gated by a year check.
 
@@ -457,9 +463,10 @@ def is_match(
         rule matches, returns ``(False, "")``.
 
     Caveats:
-        * If both sides provide the same ID source and the values differ, the
-          function returns ``False`` immediately. If their ID sources do not
-          overlap, title/year heuristics are still allowed.
+        * The first agreeing ID source wins; a later source that disagrees does
+          NOT veto it — a shared source blocks only when NO source agrees.
+        * If no source agrees and at least one is shared, title/year heuristics
+          are skipped and the result is ``False``.
     """
     if media.get("folder"):
         folder_base_name = os.path.basename(media["folder"])
@@ -495,6 +502,20 @@ def is_match(
         except Exception:
             return None
 
+    def known_years() -> Tuple[Optional[int], List[int]]:
+        """(asset year, media years that are actually known) — shared by both gates."""
+        return (
+            normalized_year(asset.get("year")),
+            [
+                y
+                for y in (
+                    normalized_year(media.get(key))
+                    for key in ("year", "secondary_year", "folder_year")
+                )
+                if y is not None
+            ],
+        )
+
     def year_matches() -> bool:
         """Year gate for title-based matches.
 
@@ -506,12 +527,7 @@ def is_match(
         detection guards against a yearless poster matching two same-titled
         items.
         """
-        asset_year = normalized_year(asset.get("year"))
-        present_media_years = [
-            normalized_year(media.get(key))
-            for key in ["year", "secondary_year", "folder_year"]
-        ]
-        present_media_years = [y for y in present_media_years if y is not None]
+        asset_year, present_media_years = known_years()
         if asset_year is None or not present_media_years:
             return True
         # ±1 tolerance: Plex/TMDB/*arr routinely disagree by a year (production
@@ -519,6 +535,13 @@ def is_match(
         # 2012. An exact-equality gate dropped those as "no match".
         return any(
             abs(asset_year - y) <= YEAR_MATCH_TOLERANCE for y in present_media_years
+        )
+
+    def year_corroborates() -> bool:
+        """Stricter than year_matches(): an unknown year corroborates nothing."""
+        asset_year, present_media_years = known_years()
+        return (
+            asset_year is not None and bool(present_media_years) and year_matches()
         )
 
     def normalized_id(key: str, data: Dict[str, Any]) -> Optional[str]:
@@ -572,7 +595,11 @@ def is_match(
         if not asset_id or not media_id:
             continue
         if asset_id == media_id:
-            return True, f"ID match: {key}"
+            if key in GLOBALLY_UNIQUE_ID_SOURCES or year_corroborates():
+                return True, f"ID match: {key}"
+            # Agreement we can't trust — not evidence of a *different* entity
+            # either, so let the title checks decide instead of rejecting.
+            continue
         shared_id_sources.append(key)
 
     if shared_id_sources:

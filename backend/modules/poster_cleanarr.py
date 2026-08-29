@@ -14,7 +14,12 @@ from PIL import Image, UnidentifiedImageError
 
 from backend.util.base_module import ChubModule
 from backend.util.config import ChubConfig
-from backend.util.constants import asset_type_regex, tmdb_id_regex, tvdb_id_regex
+from backend.util.constants import (
+    ASSET_IMAGE_EXTENSIONS,
+    asset_type_regex,
+    tmdb_id_regex,
+    tvdb_id_regex,
+)
 from backend.util.database import ChubDB
 from backend.util.helper import create_table
 from backend.util.logger import Logger
@@ -82,7 +87,7 @@ def _bundle_root(path: str) -> Optional[str]:
 VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
 VALID_ORPHAN_MODES = {"report", "move", "remove"}
 VALID_STALE_MODES = {"report", "move", "remove"}
-ASSET_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+ASSET_IMAGE_EXTS = ASSET_IMAGE_EXTENSIONS
 RESTORE_DIR_NAME = "Poster Cleanarr Restore"
 ORPHAN_RESTORE_DIR_NAME = ".chub_orphan_restore"
 PLEX_DB_NAME = "com.plexapp.plugins.library.db"

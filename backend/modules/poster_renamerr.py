@@ -14,8 +14,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
 from backend.util.constants import (
-    asset_type_regex,
+    ASSET_IMAGE_EXTENSIONS,
+    foldered_season_regex,
     illegal_chars_regex,
+    parse_asset_type,
     season_number_regex,
 )
 from backend.util.database import ChubDB
@@ -179,16 +181,9 @@ def build_asset_record(
     folder = os.path.basename(root)
     filename, ext = os.path.splitext(fname)
 
-    m = asset_type_regex.search(filename)
-    if m:
-        image_type = m.group(1).lower()
-        # Strip the type tag, then re-attach the real extension so
-        # parse_asset_filename's own splitext targets the extension (not a dot
-        # inside a title like "8 A.M. Metro").
-        base = asset_type_regex.sub("", filename).strip(" -_")
-    else:
-        image_type = "poster"
-        base = filename
+    # base has the tag stripped; re-attach the real extension so splitext
+    # targets it, not a dot inside a title like "8 A.M. Metro".
+    image_type, base = parse_asset_type(filename)
 
     # Music: a configured music_root, or an {mbid-} tag anywhere, routes to the
     # music builder.
@@ -207,7 +202,21 @@ def build_asset_record(
             search_only=search_only,
         )
 
-    if m:
+    # A bare stem only means "foldered Kometa asset" when the parent folder
+    # identifies media; in a flat drive "Cover.jpg" is just a poster.
+    foldered_season = foldered_season_regex.match(base) if base else None
+    bare_stem = not base or bool(foldered_season)
+    parent_identifies = bool(extract_year(folder) or any(extract_ids(folder)))
+    if bare_stem and parent_identifies:
+        title = parse_asset_filename(folder)
+        normalized_title = normalize_titles(folder)
+    elif not base:
+        # Flat file literally named after a stem — keep the pre-existing
+        # behaviour and let its own name be the title.
+        image_type = "poster"
+        title = parse_asset_filename(fname)
+        normalized_title = normalize_titles(filename)
+    elif image_type != "poster":
         title = parse_asset_filename(base + ext)
         normalized_title = normalize_titles(base)
     else:
@@ -229,6 +238,9 @@ def build_asset_record(
     season_number = (
         int(match.group(1)) if match and match.group(1) else (0 if match else None)
     )
+    # A bare "Season01" stem has no delimiter for season_number_regex to anchor on.
+    if season_number is None and foldered_season:
+        season_number = int(foldered_season.group(1))
 
     return {
         "title": title,
@@ -290,15 +302,23 @@ class PosterRenamerr(ChubModule):
                 shutil.rmtree(staging_dir, ignore_errors=True)
 
     def ensure_destination_dir(self):
-        if not os.path.exists(self.config.destination_dir):
-            self.logger.info(
-                f"Creating destination directory: {self.config.destination_dir}"
-            )
-            os.makedirs(self.config.destination_dir)
-        else:
-            self.logger.debug(
-                f"Destination directory already exists: {self.config.destination_dir}"
-            )
+        dest = self.config.destination_dir
+        if os.path.isdir(dest):
+            self.logger.debug(f"Destination directory already exists: {dest}")
+            return
+
+        self.logger.info(f"Creating destination directory: {dest}")
+        try:
+            # exist_ok: a concurrent pass (webhook worker vs the scheduled run)
+            # can create it between the check above and here.
+            os.makedirs(dest, exist_ok=True)
+        except OSError as e:
+            # Bare OSError surfaces as "[Errno 13] Permission denied" with no
+            # hint that the volume simply isn't mounted.
+            raise FileNotFoundError(
+                f"Could not create destination directory: {dest} ({e}). "
+                "Check the path is correct and its volume is mounted."
+            ) from e
 
     # Progress slice for sync_gdrive when invoked from inside poster_renamerr.
     # The nested SyncGDrive instance reports its own 0..100 internally but
@@ -814,9 +834,9 @@ class PosterRenamerr(ChubModule):
                 else f"{folder}_Season{season_str}{file_extension}"
             )
         elif asset_type == "album":
-            parent = illegal_chars_regex.sub("", item.get("parent_title") or "").strip()
-            album = illegal_chars_regex.sub("", item.get("title") or "").strip()
-            album_base = f"{parent} - {album}".strip(" -") if parent else album
+            # Kometa keys an album's cover by the ALBUM title alone, inside
+            # the artist's folder — an artist prefix makes it unfindable.
+            album_base = illegal_chars_regex.sub("", item.get("title") or "").strip()
             album_base = album_base or "album"
             new_file_name = (
                 f"{album_base}{file_extension}"
@@ -1284,6 +1304,15 @@ class PosterRenamerr(ChubModule):
             )
         return out
 
+    def _music_in_scope(self) -> bool:
+        """Whether this run's instances can yield artist/album rows at all.
+
+        Music media comes from Lidarr, so without a Lidarr instance the artist
+        and album sections can only ever print "No artists to rename".
+        """
+        lidarr = getattr(getattr(self.full_config, "instances", None), "lidarr", None)
+        return any(name in (lidarr or {}) for name in (self.config.instances or []))
+
     def handle_output(self, output: Dict[str, List[Dict[str, Any]]]):
         headers = {
             "collection": "Collection",
@@ -1292,7 +1321,13 @@ class PosterRenamerr(ChubModule):
             "artist": "Artist",
             "album": "Album",
         }
-        for asset_type in ["collection", "movie", "show", "artist", "album"]:
+        # Never hide a section that actually has rows — the scope check only
+        # suppresses the empty music headers on a Lidarr-less setup.
+        music_scope = self._music_in_scope()
+        sections = ["collection", "movie", "show"] + [
+            t for t in ("artist", "album") if music_scope or output.get(t)
+        ]
+        for asset_type in sections:
             assets = output.get(asset_type, [])
             header = f"{headers.get(asset_type, asset_type.capitalize())}s"
             self.logger.info(create_table([[header]]))
@@ -1418,7 +1453,7 @@ class PosterRenamerr(ChubModule):
             dirs.sort(key=str.lower)
             style = self._resolve_style_for_path(root, style_map)
             for fname in sorted(files, key=str.lower):
-                if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                if not fname.lower().endswith(ASSET_IMAGE_EXTENSIONS):
                     continue
                 record = build_asset_record(
                     fname,
@@ -2023,6 +2058,9 @@ class PosterRenamerr(ChubModule):
                         )
                         asset_module.set_progress_window(*tail_windows["asset"])
                         asset_output = asset_module.match_and_apply_assets(db)
+                        # Same summary a standalone run prints; without it the
+                        # chained path emits nothing above DEBUG.
+                        asset_module.handle_output(asset_output)
                         self.logger.info("Finished running asset_renamerr")
                     # Notify under asset_renamerr so its own notification config
                     # governs (mirrors how each chained module owns its policy).

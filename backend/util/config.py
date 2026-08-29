@@ -56,6 +56,9 @@ class SyncGDriveConfig(BaseModel):
     token: Union[str, SyncGDriveToken, None] = ""
     gdrive_sa_location: Optional[str] = Field(default=None)
     gdrive_list: List[GDriveListEntry] = Field(default_factory=list)
+    # Remove a departed drive's local folder when it holds no files; a
+    # populated one is reported instead (it may still feed poster matching).
+    prune_orphan_drives: bool = True
 
 
 class InstanceDetail(BaseModel):
@@ -273,33 +276,32 @@ class AssetRenamerrConfig(BaseModel):
           background (uploadArt), squareart (uploadSquareArt). plexapi has NO
           banner endpoint.
         - "kometa": rename/copy the file into destination_dir using Kometa's
-          asset names for Kometa to apply. Per Kometa, asset directories read
-          only logo (logo.ext) and background (background.ext) — NOT squareart
-          or banner.
+          asset names for Kometa to apply — logo.ext, background.ext and
+          square.ext. Square art needs Kometa 2.4.5+; older versions ignore
+          the file rather than erroring. Banner is not read at all.
 
     Net capability matrix:
-        logo       → plex ✓ / kometa ✓
-        background → plex ✓ / kometa ✓
-        squareart  → plex ✓ / kometa ✗ (Kometa ignores square art)
+        logo/background/squareart → plex ✓ / kometa ✓
+        Season level is narrower: background only (Kometa's asset reader skips
+        logo and square art for seasons and episodes).
 
     (Banner is intentionally unsupported: Plex has no banner upload API and
     Kometa does not read banners from asset directories — there is no path.)
 
-    An unsupported (type, apply_method) combination — squareart on the kometa
-    path — is NOT a validation error (config must stay loadable while the user
-    toggles apply_method); it is skipped with a warning during the run. Defaults
-    to the two universally supported types so users who don't tune this never
-    hit a no-op.
+    An unsupported (type, apply_method) combination is NOT a validation error
+    (config must stay loadable while the user toggles apply_method); it is
+    skipped with a warning during the run.
     """
 
     log_level: str = "info"
     dry_run: bool = False
     # Ordered source preference; first source yielding an image wins.
     sources: List[str] = Field(default_factory=lambda: ["local", "fanart"])
-    # Which non-poster asset types to process. Defaults to the two types that
-    # work on BOTH apply methods. squareart (direct only) can be added
-    # explicitly. Valid values: "logo", "background", "squareart".
-    asset_types: List[str] = Field(default_factory=lambda: ["logo", "background"])
+    # Which non-poster asset types to process. Valid values: "logo",
+    # "background", "squareart" — all three work on both apply methods.
+    asset_types: List[str] = Field(
+        default_factory=lambda: ["logo", "background", "squareart"]
+    )
     apply_method: str = "kometa"  # "plex" | "kometa" (legacy "direct" → "plex")
     action_type: str = "copy"  # copy | move | hardlink | symlink (kometa path)
     asset_folders: bool = False  # per-title folders (kometa path)
@@ -1330,8 +1332,24 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
     except Exception as e:
         raise ConfigError(f"Unexpected configuration error in {config_path}") from e
 
-    _cache_config(config_path, version, config)
+    # Cache only after reconciliation succeeds — the cache key is mtime/size,
+    # so a transient failure would otherwise be served until the file changes.
+    if _reconcile_gdrive_presets(config):
+        _cache_config(config_path, version, config)
     return config
+
+
+def _reconcile_gdrive_presets(config: "ChubConfig") -> bool:
+    """Repoint moved-preset gdrive_list ids in memory. False = could not run."""
+    try:
+        from backend.util.gdrive_presets import reconcile_gdrive_list
+
+        return reconcile_gdrive_list(
+            getattr(config.sync_gdrive, "gdrive_list", None)
+        ) is not None
+    except Exception as exc:  # pragma: no cover - never block a config load
+        _config_log.error(f"GDrive preset reconcile skipped: {exc}")
+        return False
 
 
 def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
