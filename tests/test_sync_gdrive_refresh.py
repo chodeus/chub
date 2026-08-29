@@ -112,9 +112,6 @@ def test_refresh_marks_gdrive_only_folder_search_only(monkeypatch):
             )
 
 
-# --- uses_shared_rclone_client_id ---
-
-
 def _sync_cfg(sa="", client_id=""):
     return SimpleNamespace(gdrive_sa_location=sa, client_id=client_id)
 

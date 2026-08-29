@@ -57,9 +57,8 @@ const CORE_SETTINGS_SCHEMA = [
         fields: [
             // ─── Authentication ────────────────────────────────────────
             {
-                // Not a config key — read-only copy, shown only while neither
-                // auth method is set. Mirrors the startup warning in
-                // sync_gdrive.uses_shared_rclone_client_id.
+                // Not a config key — read-only copy. Mirrors the startup
+                // warning in sync_gdrive.uses_shared_rclone_client_id.
                 key: 'shared_client_id_notice',
                 type: 'notice',
                 variant: 'warning',

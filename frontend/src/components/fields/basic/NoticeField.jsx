@@ -1,8 +1,4 @@
-/**
- * Read-only inline notice. Renders schema copy rather than an input, so a
- * settings page can explain a misconfiguration next to the fields that cause
- * it. Carries no value and never calls onChange.
- */
+/** Read-only schema copy, not an input — carries no value, never calls onChange. */
 export const NoticeField = ({ field }) => {
     const variant = field.variant === 'error' ? 'error' : 'warning';
     const tone =

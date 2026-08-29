@@ -37,8 +37,7 @@ const CONDITION_TYPES = {
         selectedValue !== null &&
         selectedValue !== '' &&
         !(Array.isArray(selectedValue) && selectedValue.length === 0),
-    // True when EVERY named field is empty. `value` is a list of field keys, so
-    // a notice can depend on more than one field — the single-`field` form above
+    // `value` is a list of field keys, not one — the single-`field` form above
     // can't express "neither auth method is configured".
     all_empty: (_selectedValue, fieldNames, _apiData, formData) =>
         Array.isArray(fieldNames) &&

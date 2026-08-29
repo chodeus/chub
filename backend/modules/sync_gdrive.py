@@ -66,8 +66,7 @@ _RCLONE_ACTION_PATTERN = re.compile(r": (Copied|Deleted|Updated|Renamed|Removed)
 def uses_shared_rclone_client_id(sync_config: Any) -> bool:
     """Whether syncs will fall back to rclone's built-in Google Drive client_id.
 
-    The isfile test mirrors run(), which nulls a missing gdrive_sa_location and
-    drops through to OAuth — a path that doesn't exist is not credentials.
+    The isfile test mirrors run(), which nulls a missing SA path and uses OAuth.
     """
     sa_path = (getattr(sync_config, "gdrive_sa_location", None) or "").strip()
     if sa_path and os.path.isfile(sa_path):
