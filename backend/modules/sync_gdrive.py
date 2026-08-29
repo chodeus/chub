@@ -8,10 +8,11 @@ import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from shutil import which
+from shutil import rmtree, which
 from typing import Any, List, Optional, Tuple
 
 from backend.util.base_module import ChubModule
+from backend.util.constants import ASSET_IMAGE_EXTENSIONS
 from backend.util.database import ChubDB
 from backend.util.helper import print_settings
 from backend.util.logger import Logger
@@ -25,6 +26,10 @@ except ImportError:
     # python-dotenv is optional; running without it just means env vars
     # aren't auto-populated from a .env file.
     pass
+
+# rclone regex alternation built from the scanner's extension set, so an
+# extension can't be synced-but-unscanned (or scanned-but-unsynced).
+_SYNC_EXT_ALTERNATION = "|".join(e.lstrip(".") for e in ASSET_IMAGE_EXTENSIONS)
 
 
 # rclone stdout progress/stats lines — pure repetitive noise. Always
@@ -352,7 +357,7 @@ class SyncGDrive(ChubModule):
             # Case-insensitive ({{...}} = regex); extensions match what the
             # poster scanner recognises (poster_renamerr). PSDs are browsed on
             # demand, never synced here.
-            "--include={{(?i).*\\.(jpg|jpeg|png|webp)$}}",
+            f"--include={{{{(?i).*\\.({_SYNC_EXT_ALTERNATION})$}}}}",
             # Disk-fill protection: skip pathologically large files. Posters are
             # ~1-5MB; 250M sits far above any real poster yet stops one stray
             # huge file from filling the cache volume.
@@ -475,6 +480,87 @@ class SyncGDrive(ChubModule):
             self.logger.error(f"Exception occurred while running rclone: {e}")
             progress_cb(100)
             return False, counters
+
+    def _prune_orphan_drive_folders(self) -> Tuple[List[str], List[Tuple[str, int]]]:
+        """Drop local folders of drives that have left gdrive_list. (removed, kept).
+
+        Only folders holding NO files are removed — a populated one may still
+        feed poster matching through a source_dir.
+        """
+        raw = self.config.gdrive_list
+        entries = raw if isinstance(raw, list) else [raw]
+        configured = set()
+        for loc in (getattr(e, "location", None) for e in entries):
+            if not loc:
+                continue
+            # Skip a path that traverses a symlink anywhere — its cleanup root
+            # would land in another tree. abspath first: location may be relative.
+            normalized = os.path.abspath(str(loc)).rstrip(os.sep)
+            if os.path.realpath(normalized).rstrip(os.sep) != normalized:
+                self.logger.debug(
+                    f"Orphan prune skipping drive reached through a symlink: {loc}"
+                )
+                continue
+            configured.add(normalized)
+        removed: List[str] = []
+        kept: List[Tuple[str, int]] = []
+        if not configured:
+            return removed, kept
+
+        # Only ever look inside directories that already hold a configured
+        # drive, so this can't wander outside the sync tree.
+        for parent in sorted({os.path.dirname(p) for p in configured}):
+            real_parent = os.path.realpath(parent).rstrip(os.sep)
+            if not os.path.isdir(real_parent):
+                continue
+            for name in sorted(os.listdir(real_parent)):
+                full = os.path.join(real_parent, name)
+                if os.path.islink(full) or not os.path.isdir(full):
+                    continue
+                real = os.path.realpath(full).rstrip(os.sep)
+                # Re-confine after resolving, before any delete.
+                if not real.startswith(real_parent + os.sep):
+                    continue
+                if real in configured:
+                    continue
+                # os.walk swallows traversal errors by default, so an unreadable
+                # subdir would count 0 files and the tree would be deleted unread.
+                unreadable: List[OSError] = []
+                files = sum(
+                    len(f) for _, _, f in os.walk(real, onerror=unreadable.append)
+                )
+                if unreadable:
+                    self.logger.warning(
+                        f"Orphan drive folder kept — could not read {real}: "
+                        f"{unreadable[0]}"
+                    )
+                    continue
+                if files:
+                    kept.append((real, files))
+                    continue
+                if self.config.dry_run:
+                    removed.append(real)
+                    continue
+                try:
+                    rmtree(real)
+                    removed.append(real)
+                except OSError as e:
+                    self.logger.error(f"Could not remove orphan folder '{real}': {e}")
+        return removed, kept
+
+    def _report_orphan_drive_folders(self) -> None:
+        """Run the orphan-folder prune and log what it did."""
+        if not getattr(self.config, "prune_orphan_drives", True):
+            return
+        removed, kept = self._prune_orphan_drive_folders()
+        verb = "Would remove" if self.config.dry_run else "Removed"
+        for path in removed:
+            self.logger.info(f"{verb} empty orphan drive folder: {path}")
+        for path, files in kept:
+            self.logger.warning(
+                f"Orphan drive folder kept ({files} files, not in gdrive_list): "
+                f"{path} — delete it manually if you no longer want those posters."
+            )
 
     def _refresh_poster_cache_for_folder(self, sync_location: str) -> None:
         """Re-index a single source-dir's slice of poster_cache after rclone.
@@ -819,6 +905,11 @@ class SyncGDrive(ChubModule):
 
                 progress_cb(100)
                 self._report_progress(100)
+
+                # Full, uncancelled runs only: a filtered sync makes unvisited
+                # drives look orphaned, and a cancelled run must not delete.
+                if not only_folders and not self.is_cancelled():
+                    self._report_orphan_drive_folders()
 
                 # Workers complete out of order; restore the configured
                 # gdrive_list order for the notification's per-folder listing.

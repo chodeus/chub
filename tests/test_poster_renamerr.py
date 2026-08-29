@@ -13,6 +13,8 @@ matching and cache handling"), specifically:
 import os
 from types import SimpleNamespace
 
+import pytest
+
 
 from backend.modules.poster_renamerr import PosterRenamerr
 
@@ -1288,3 +1290,75 @@ def test_build_plex_notify_output_empty_and_none_are_all_empty():
     assert not any(empty.values())
     assert not any(PosterRenamerr._build_plex_notify_output(None).values())
     assert not any(PosterRenamerr._build_plex_notify_output({}).values())
+
+
+# --- handle_output: music sections only when Lidarr is in scope ---
+
+
+def _capture_module(instances, lidarr_names):
+    m = make_module()
+    lines = []
+    m.logger = SimpleNamespace(
+        debug=lambda *a, **kw: None,
+        info=lambda msg="", *a, **kw: lines.append(str(msg)),
+        warning=lambda *a, **kw: None,
+        error=lambda *a, **kw: None,
+    )
+    m.config = SimpleNamespace(instances=instances)
+    m.full_config = SimpleNamespace(
+        instances=SimpleNamespace(lidarr={n: object() for n in lidarr_names})
+    )
+    return m, lines
+
+
+def test_handle_output_hides_music_sections_without_lidarr():
+    m, lines = _capture_module(["Radarr", "Sonarr"], [])
+    m.handle_output({"movie": [], "show": [], "collection": []})
+    body = "\n".join(lines)
+    assert "Artists" not in body and "Albums" not in body
+    assert "Movies" in body  # non-music sections still render
+
+
+def test_handle_output_shows_music_sections_with_lidarr():
+    m, lines = _capture_module(["Radarr", "LidarrMain"], ["LidarrMain"])
+    m.handle_output({"movie": [], "show": [], "collection": []})
+    body = "\n".join(lines)
+    assert "Artists" in body and "Albums" in body
+
+
+def test_handle_output_never_hides_music_rows_that_exist():
+    # Fail-safe: rows present but no Lidarr configured must still be shown.
+    m, lines = _capture_module(["Radarr"], [])
+    m.handle_output(
+        {"movie": [], "album": [{"title": "The Wall", "year": 1979, "messages": ["x"]}]}
+    )
+    body = "\n".join(lines)
+    assert "Albums" in body and "The Wall" in body
+
+# --- ensure_destination_dir ---
+
+
+def test_ensure_destination_dir_reports_an_unmountable_path(tmp_path):
+    """A bare OSError reads as "[Errno 20] Not a directory" with no hint that the
+    volume simply isn't mounted, and the caller logs whatever message it gets.
+
+    A plain file standing where a parent directory should be reproduces the real
+    failure without patching os.
+    """
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a file, not a mount point")
+
+    m = make_module()
+    m.config = SimpleNamespace(destination_dir=str(blocker / "assets"))
+    with pytest.raises(FileNotFoundError, match="volume is mounted"):
+        m.ensure_destination_dir()
+
+
+def test_ensure_destination_dir_tolerates_a_concurrent_create(tmp_path):
+    """Two passes can race between the isdir() check and makedirs()."""
+    m = make_module()
+    dest = tmp_path / "dest"
+    m.config = SimpleNamespace(destination_dir=str(dest))
+    m.ensure_destination_dir()
+    m.ensure_destination_dir()  # already there now — must not raise
+    assert dest.is_dir()

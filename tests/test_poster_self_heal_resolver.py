@@ -610,3 +610,27 @@ def test_apply_absolute_missing_local_still_notes():
         _NullLog(),
     )
     assert "missing" in note
+
+
+def test_tagged_asset_key_is_not_poisoned_by_the_extension():
+    """A tagged asset with no year/id must still key on its bare title.
+
+    The stem has to be split BEFORE the tag strip; passing the full filename
+    left the extension on `base`, so the match key became
+    "marvelcinematicuniversepng" and self-heal could never match the media.
+    """
+    from backend.util.normalization import normalize_titles
+
+    for fname, expected in [
+        ("Marvel Cinematic Universe - Logo.png", "marvelcinematicuniverse"),
+        ("Marvel Cinematic Universe - SquareArt.png", "marvelcinematicuniverse"),
+        ("Movie - Logo.jpg", "movie"),
+    ]:
+        parsed = poster_from_filename(fname)
+        assert parsed is not None, fname
+        assert parsed["normalized_title"] == expected, fname
+        assert "png" not in parsed["title"].lower()
+        assert "jpg" not in parsed["title"].lower()
+    # control: a yeared/id'd asset was already fine and must stay fine
+    yeared = poster_from_filename("Movie (1999) {tmdb-1} - Logo.png")
+    assert yeared["normalized_title"] == normalize_titles("Movie")
