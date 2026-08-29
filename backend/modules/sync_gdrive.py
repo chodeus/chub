@@ -12,6 +12,7 @@ from shutil import rmtree, which
 from typing import Any, List, Optional, Tuple
 
 from backend.util.base_module import ChubModule
+from backend.util.constants import ASSET_IMAGE_EXTENSIONS
 from backend.util.database import ChubDB
 from backend.util.helper import print_settings
 from backend.util.logger import Logger
@@ -25,6 +26,10 @@ except ImportError:
     # python-dotenv is optional; running without it just means env vars
     # aren't auto-populated from a .env file.
     pass
+
+# rclone regex alternation built from the scanner's extension set, so an
+# extension can't be synced-but-unscanned (or scanned-but-unsynced).
+_SYNC_EXT_ALTERNATION = "|".join(e.lstrip(".") for e in ASSET_IMAGE_EXTENSIONS)
 
 
 # rclone stdout progress/stats lines — pure repetitive noise. Always
@@ -352,7 +357,7 @@ class SyncGDrive(ChubModule):
             # Case-insensitive ({{...}} = regex); extensions match what the
             # poster scanner recognises (poster_renamerr). PSDs are browsed on
             # demand, never synced here.
-            "--include={{(?i).*\\.(jpg|jpeg|png|webp)$}}",
+            f"--include={{{{(?i).*\\.({_SYNC_EXT_ALTERNATION})$}}}}",
             # Disk-fill protection: skip pathologically large files. Posters are
             # ~1-5MB; 250M sits far above any real poster yet stops one stray
             # huge file from filling the cache volume.

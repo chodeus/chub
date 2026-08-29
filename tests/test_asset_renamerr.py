@@ -551,7 +551,7 @@ def test_kometa_season_logo_flat_naming(tmp_path):
         ("background", "plex", True),
         ("background", "kometa", True),
         ("squareart", "plex", True),
-        ("squareart", "kometa", False),  # Kometa asset dirs ignore square art
+        ("squareart", "kometa", True),  # Kometa 2.4.5+ reads square art
         ("banner", "plex", False),  # no plexapi banner
         ("banner", "kometa", False),  # not read by Kometa
     ],
@@ -1261,3 +1261,57 @@ def test_purge_season_logos_removes_only_season_logo_rows(db):
     }
     # Idempotent: nothing left to purge on a second pass.
     assert m.purge_season_logos() == 0
+
+
+# --------------------------------------------------------------------------
+# Kometa square art (2.4.5+) and album asset naming
+# --------------------------------------------------------------------------
+
+
+def _kometa_dest(tmp_path, media, image_type, asset_folders):
+    m = make_module(
+        apply_method="kometa",
+        destination_dir=str(tmp_path),
+        asset_folders=asset_folders,
+        dry_run=True,
+    )
+    ok, dest = m._apply_kometa(media, image_type, "local", "/src/art.png", None)
+    assert ok, dest
+    return os.path.relpath(dest, str(tmp_path))
+
+
+def test_squareart_writes_kometas_square_name(tmp_path):
+    # Kometa's first-choice stem is a bare "square" in both layouts.
+    media = _media(folder="The Matrix (1999) {tmdb-603}")
+    assert (
+        _kometa_dest(tmp_path, media, "squareart", True)
+        == "The Matrix (1999) {tmdb-603}/square.png"
+    )
+    assert (
+        _kometa_dest(tmp_path, media, "squareart", False)
+        == "The Matrix (1999) {tmdb-603}_square.png"
+    )
+
+
+def test_album_asset_does_not_collide_with_its_artist(tmp_path):
+    # Every album used to write <Artist folder>/background.png, overwriting the
+    # artist's own art and each sibling album's.
+    artist = _media(asset_type="artist", title="Pink Floyd", folder="Pink Floyd")
+    album = _media(asset_type="album", title="The Wall", folder="Pink Floyd")
+    other = _media(asset_type="album", title="Animals", folder="Pink Floyd")
+    paths = {
+        _kometa_dest(tmp_path, artist, "background", True),
+        _kometa_dest(tmp_path, album, "background", True),
+        _kometa_dest(tmp_path, other, "background", True),
+    }
+    assert len(paths) == 3, f"collision: {paths}"
+    assert "Pink Floyd/The Wall_background.png" in paths
+    assert "Pink Floyd/background.png" in paths
+
+
+def test_album_asset_flat_layout(tmp_path):
+    album = _media(asset_type="album", title="The Wall", folder="Pink Floyd")
+    assert (
+        _kometa_dest(tmp_path, album, "background", False)
+        == "Pink Floyd_The Wall_background.png"
+    )

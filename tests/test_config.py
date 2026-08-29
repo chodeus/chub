@@ -45,8 +45,8 @@ def test_asset_renamerr_defaults():
     config = ChubConfig()
     ar = config.asset_renamerr
     assert ar.sources == ["local", "fanart"]
-    # defaults to the two types that work on BOTH apply methods
-    assert ar.asset_types == ["logo", "background"]
+    # all three work on both apply methods since Kometa 2.4.5 reads square art
+    assert ar.asset_types == ["logo", "background", "squareart"]
     assert ar.apply_method == "kometa"
     assert config.poster_renamerr.run_asset_renamerr is False
     # notifications now default to an empty destinations list
