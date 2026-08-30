@@ -2,16 +2,25 @@ name: "Dependency Audit"
 
 # Live OSV scan of the dependencies the release actually ships. Renovate keeps
 # versions fresh but never checks advisories; this is the vulnerability gate.
-# Weekly + on any PR that changes the audited manifests. Findings land in the
-# Security tab (SARIF) and fail the run.
+# Weekly + on every change to an audited manifest, however it lands. Findings
+# land in the Security tab (SARIF) and fail the run.
 
+# No Dockerfile in the paths below: this job scans lockfiles, not container base
+# images, so triggering on it would imply base-image coverage it lacks.
+# Actions has no YAML anchors, so the path list is repeated verbatim.
 on:
   workflow_dispatch:
   schedule:
     - cron: "43 2 * * 1"
   pull_request:
-    # No Dockerfile here: this job scans lockfiles (below), not container base
-    # images, so triggering on it would imply base-image coverage it lacks.
+    paths:
+      - "requirements.txt"
+      - "requirements-cl2k.txt"
+      - "frontend/package-lock.json"
+      - ".github/workflows/dep-audit.yml"
+  # main has required_pr=false, so a manifest can land without ever seeing a PR.
+  push:
+    branches: [main]
     paths:
       - "requirements.txt"
       - "requirements-cl2k.txt"
