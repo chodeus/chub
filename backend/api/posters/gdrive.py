@@ -46,7 +46,7 @@ from backend.util.database import ChubDB
         }
     },
 )
-async def get_gdrive_stats(
+def get_gdrive_stats(
     logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> JSONResponse:
     """
@@ -107,7 +107,7 @@ async def get_gdrive_stats(
         400: {"description": "No GDrive folder names provided"},
     },
 )
-async def sync_gdrive_folders(
+def sync_gdrive_folders(
     gdrive_names: List[str] = Query(
         ..., description="Names of the GDrive folders to sync"
     ),

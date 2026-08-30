@@ -45,7 +45,7 @@ from backend.util.database.poster_cache import ARTWORK_IMAGE_TYPES
         }
     },
 )
-async def get_matched_poster_stats(
+def get_matched_poster_stats(
     logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> JSONResponse:
     """
@@ -101,7 +101,7 @@ async def get_matched_poster_stats(
         }
     },
 )
-async def get_unmatched_assets_stats(logger: Any = Depends(get_logger)) -> JSONResponse:
+def get_unmatched_assets_stats(logger: Any = Depends(get_logger)) -> JSONResponse:
     """
     Retrieve statistics for unmatched poster assets.
 
@@ -138,7 +138,7 @@ async def get_unmatched_assets_stats(logger: Any = Depends(get_logger)) -> JSONR
     summary="Get detailed unmatched assets list",
     description="Retrieve per-item unmatched assets with external IDs for poster lookup.",
 )
-async def get_unmatched_assets_details(
+def get_unmatched_assets_details(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     """Return the full unmatched items list with summary and external IDs."""
@@ -175,7 +175,7 @@ async def get_unmatched_assets_details(
     description="Per-image-type coverage + per-item lists for the Unmatched "
     "page's 'Additional artwork' view, derived from media_asset_matches.",
 )
-async def get_unmatched_artwork(
+def get_unmatched_artwork(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     """Return per-type artwork stats (applied/missing/needs_review/ignored) and
@@ -207,7 +207,7 @@ async def get_unmatched_artwork(
     description="Mark one (media, image_type) pair as not-needed so it stops "
     "appearing in the Additional-artwork view — independent of other types.",
 )
-async def ignore_artwork(
+def ignore_artwork(
     media_id: int,
     image_type: str,
     kind: str = Query("media", pattern="^(media|collection)$"),
@@ -249,7 +249,7 @@ async def ignore_artwork(
     "media row, each annotated with whether it would match — powering the manual "
     "artwork picker (the artwork counterpart of the poster candidates endpoint).",
 )
-async def get_artwork_candidates(
+def get_artwork_candidates(
     media_id: int,
     image_type: str,
     kind: str = Query("media", pattern="^(media|collection)$"),
@@ -402,7 +402,7 @@ def apply_artwork(
     "next asset run is free to auto-resolve it again. The artwork counterpart of "
     "the poster unlock endpoint.",
 )
-async def unlock_artwork(
+def unlock_artwork(
     media_id: int,
     image_type: str,
     kind: str = Query("media", pattern="^(media|collection)$"),
@@ -443,7 +443,7 @@ async def unlock_artwork(
     description="Mark a media or collection row as ignored so it stops "
     "appearing in the Unmatched/Needs-Review tabs.",
 )
-async def ignore_match(
+def ignore_match(
     media_id: int,
     kind: str = Query("media", pattern="^(media|collection)$"),
     ignored: bool = Query(True),
@@ -457,11 +457,9 @@ async def ignore_match(
             f"(kind={kind}, ignored={ignored})"
         )
         iface = db.collection if kind == "collection" else db.media
+        # set_ignored also releases the manual-pick lock when ignoring, in the
+        # same statement, so the matcher is free to re-evaluate the row.
         iface.set_ignored(media_id, ignored)
-        # Ignoring releases any manual-pick lock so the matcher is free to
-        # re-evaluate the row (it's hidden from review while ignored anyway).
-        if ignored:
-            iface.set_user_confirmed(media_id, False)
         verb = "ignored" if ignored else "restored"
         return ok(f"Row {verb}", {"id": media_id, "ignored": bool(ignored)})
     except Exception as e:
@@ -480,7 +478,7 @@ async def ignore_match(
     "the 'matched' state and clearing any conflict flags.",
     responses={500: {"description": "Failed to approve the match"}},
 )
-async def approve_match(
+def approve_match(
     media_id: int,
     kind: str = Query("media", pattern="^(media|collection)$"),
     logger: Any = Depends(get_logger),
@@ -492,9 +490,9 @@ async def approve_match(
             f"Serving POST /api/posters/match/{media_id}/approve (kind={kind})"
         )
         iface = db.collection if kind == "collection" else db.media
+        # approve_match locks the confirmed match in the same statement so a
+        # future re-scan can't revert it (Fix B).
         iface.approve_match(media_id)
-        # Lock the confirmed match so a future re-scan can't revert it (Fix B).
-        iface.set_user_confirmed(media_id, True)
         return ok("Match approved", {"id": media_id, "match_status": "matched"})
     except Exception as e:
         logger.error(f"Error approving match for {media_id}: {e}")
@@ -513,7 +511,7 @@ async def approve_match(
     "user can re-pick) on the next run.",
     responses={500: {"description": "Failed to unlock the match"}},
 )
-async def unlock_match(
+def unlock_match(
     media_id: int,
     kind: str = Query("media", pattern="^(media|collection)$"),
     logger: Any = Depends(get_logger),
@@ -523,9 +521,9 @@ async def unlock_match(
     try:
         logger.debug(f"Serving POST /api/posters/match/{media_id}/unlock (kind={kind})")
         iface = db.collection if kind == "collection" else db.media
+        # reopen_for_review drops the lock in the same statement, so the next
+        # scheduled run is free to recompute the match.
         iface.reopen_for_review(media_id)
-        # Drop the lock so the next scheduled run is free to recompute the match.
-        iface.set_user_confirmed(media_id, False)
         return ok(
             "Match unlocked",
             {"id": media_id, "match_status": "needs_review"},
@@ -546,7 +544,7 @@ async def unlock_match(
     "a media/collection row, each annotated with whether it would match and "
     "why — powering both the manual poster picker and match diagnostics.",
 )
-async def get_match_candidates(
+def get_match_candidates(
     media_id: int,
     kind: str = Query("media", pattern="^(media|collection)$"),
     limit: int = Query(24, ge=1, le=100),

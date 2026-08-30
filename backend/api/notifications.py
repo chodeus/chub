@@ -157,7 +157,7 @@ def _normalize_modules(modules: List[str]) -> List[str]:
     summary="List notification destinations",
     description="Retrieve all configured notification destinations (secrets redacted).",
 )
-async def get_all_notifications(
+def get_all_notifications(
     config: ChubConfig = Depends(get_config), logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     try:
@@ -181,6 +181,8 @@ async def get_all_notifications(
     summary="Create a notification destination",
     description="Append a new destination and persist it.",
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def create_destination(
     payload: DestinationPayload, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
@@ -233,6 +235,8 @@ async def create_destination(
     description="Update an existing destination. Secrets sent back as the "
     "redacted placeholder are preserved (not overwritten).",
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def update_destination(
     destination_id: str,
     payload: DestinationPayload,
@@ -301,6 +305,8 @@ async def update_destination(
     summary="Delete a notification destination",
     description="Remove a destination by id.",
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def delete_destination(
     destination_id: str, logger: Any = Depends(get_logger)
 ) -> JSONResponse:

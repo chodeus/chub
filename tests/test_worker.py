@@ -88,3 +88,38 @@ def test_cleanup_deletes_only_old_finished_jobs(db):
 
     remaining = db.worker.execute_query("SELECT status FROM jobs", fetch_all=True)
     assert sorted(r["status"] for r in remaining) == ["pending", "pending"]
+
+
+def test_retry_wins_once_and_reports_invalid_state_on_the_second(db):
+    """Two retries of the same errored job: one resets it, the other is refused."""
+    jid = _enqueue(db, "module_run")
+    db.worker.execute_query("UPDATE jobs SET status='error' WHERE id=?", (jid,))
+
+    assert db.worker.reset_job_to_pending("jobs", jid) is True
+    assert db.worker.reset_job_to_pending("jobs", jid) is False
+
+
+def test_retry_does_not_resurrect_a_job_claimed_mid_transaction(db, monkeypatch):
+    """A retry that loses the race must not reset a job a worker already claimed."""
+    jid = _enqueue(db, "module_run")
+    db.worker.execute_query("UPDATE jobs SET status='error' WHERE id=?", (jid,))
+
+    real = db.worker.execute_query
+
+    def racing(query, *args, **kwargs):
+        result = real(query, *args, **kwargs)
+        if query.lstrip().upper().startswith("SELECT * FROM JOBS"):
+            # Between our status check and our UPDATE, another retry lands and a
+            # worker claims the row — exactly what concurrent handlers can do.
+            real("UPDATE jobs SET status='running', attempts=1 WHERE id=?", (jid,))
+        return result
+
+    monkeypatch.setattr(db.worker, "execute_query", racing)
+    assert db.worker.reset_job_to_pending("jobs", jid) is False
+    monkeypatch.undo()
+
+    row = db.worker.execute_query(
+        "SELECT status, attempts FROM jobs WHERE id=?", (jid,), fetch_one=True
+    )
+    assert row["status"] == "running", "a running job was reset out from under a worker"
+    assert row["attempts"] == 1

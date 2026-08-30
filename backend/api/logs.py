@@ -38,7 +38,7 @@ router = APIRouter(
 
 
 @router.get("/logs")
-async def list_logs(logger: Any = Depends(get_logger)) -> Dict[str, Any]:
+def list_logs(logger: Any = Depends(get_logger)) -> Dict[str, Any]:
     """
     List all available log modules.
 
@@ -76,7 +76,7 @@ async def list_logs(logger: Any = Depends(get_logger)) -> Dict[str, Any]:
 
 
 @router.get("/logs/{module_name}")
-async def list_logs_for_module(
+def list_logs_for_module(
     module_name: str, logger: Any = Depends(get_logger)
 ) -> Dict[str, Any]:
     """

@@ -187,7 +187,7 @@ async def add_to_collection(
         500: {"description": "Failed to remove the poster from the collection"},
     },
 )
-async def remove_from_collection(
+def remove_from_collection(
     collection_id: int,
     poster_id: int,
     logger: Any = Depends(get_logger),
@@ -244,7 +244,7 @@ async def remove_from_collection(
         500: {"description": "Failed to delete the collection"},
     },
 )
-async def delete_poster_collection(
+def delete_poster_collection(
     collection_id: int,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),

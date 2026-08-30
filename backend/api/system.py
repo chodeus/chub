@@ -85,7 +85,7 @@ class FolderCreationRequest(BaseModel):
         }
     },
 )
-async def get_version_endpoint(logger: Any = Depends(get_logger)) -> JSONResponse:
+def get_version_endpoint(logger: Any = Depends(get_logger)) -> JSONResponse:
     """
     Get the current application version.
 
@@ -154,7 +154,7 @@ async def check_version_endpoint(logger: Any = Depends(get_logger)) -> JSONRespo
         }
     },
 )
-async def health_check(request: Request) -> JSONResponse:
+def health_check(request: Request) -> JSONResponse:
     """
     Application-level health check.
 
@@ -223,7 +223,7 @@ async def health_check(request: Request) -> JSONResponse:
         "Used by the dashboard for at-a-glance health."
     ),
 )
-async def system_disk() -> JSONResponse:
+def system_disk() -> JSONResponse:
     """Return disk usage for the standard CHUB mount points.
 
     Any mount that doesn't exist (i.e. not bind-mounted by the user) is
@@ -282,7 +282,7 @@ async def system_disk() -> JSONResponse:
         400: {"description": "Invalid path or path does not exist"},
     },
 )
-async def list_directory(
+def list_directory(
     path: str = "/", logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
@@ -365,7 +365,7 @@ async def list_directory(
         400: {"description": "Invalid path or directory already exists"},
     },
 )
-async def create_directory(
+def create_directory(
     request_data: FolderCreationRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
@@ -436,7 +436,7 @@ async def create_directory(
         },
     },
 )
-async def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
+def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Return the configured allowed roots for the directory picker."""
     try:
         # A malformed config must surface as CONFIG_INVALID, not an empty
@@ -481,7 +481,7 @@ async def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
         },
     },
 )
-async def list_gdrive_presets(logger: Any = Depends(get_logger)) -> JSONResponse:
+def list_gdrive_presets(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Return the bundled GDrive presets JSON (cached after first load)."""
     from backend.util.gdrive_presets import PRESETS_PATH, load_presets
 
@@ -524,7 +524,7 @@ async def list_gdrive_presets(logger: Any = Depends(get_logger)) -> JSONResponse
         400: {"description": "Invalid request data"},
     },
 )
-async def test(
+def test(
     request_data: TestEndpointRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
@@ -600,7 +600,7 @@ def create_backup(
     summary="List backups",
     description="List available backup files.",
 )
-async def list_backups(logger: Any = Depends(get_logger)) -> JSONResponse:
+def list_backups(logger: Any = Depends(get_logger)) -> JSONResponse:
     """List backup files in the backups directory."""
     try:
         backup_dir = get_backup_dir()
@@ -760,7 +760,7 @@ async def restore_backup(
     description="Return the most recent periodic health probes written by the "
     "scheduler. For a live probe use /api/instances/health.",
 )
-async def get_health_snapshots(
+def get_health_snapshots(
     limit: int = 50,
     instance: str = None,
     logger: Any = Depends(get_logger),
@@ -787,7 +787,7 @@ async def get_health_snapshots(
     "success/failure counts, module run states, and latest instance health. "
     "Defaults to the last 7 days; override with ?days=N (1–90).",
 )
-async def get_system_digest(
+def get_system_digest(
     days: int = 7,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -849,7 +849,7 @@ async def get_system_digest(
     description="Surface items worth cleaning up: old errored jobs, stale "
     "scan cache entries, unmatched media/collections counts. Read-only — no mutations.",
 )
-async def get_cleanup_candidates(
+def get_cleanup_candidates(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -878,7 +878,7 @@ async def get_cleanup_candidates(
     description="Per-table row counts plus SQLite page/freelist info and the "
     "schema_migrations log. Read-only.",
 )
-async def get_db_stats(
+def get_db_stats(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -969,7 +969,7 @@ def vacuum_database(
     "Use when a code change has affected how posters are parsed or matched "
     "and orphan rows might be lingering.",
 )
-async def clear_poster_cache(
+def clear_poster_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -1009,7 +1009,7 @@ async def clear_poster_cache(
     "rows a pre-fix dry-run wrongly recorded as 'applied'. Does not touch "
     "posters or media_cache.",
 )
-async def clear_artwork_matches(
+def clear_artwork_matches(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -1043,7 +1043,7 @@ async def clear_artwork_matches(
     "Does not touch posters on disk or media_asset_matches (additional "
     "artwork).",
 )
-async def reset_poster_matches(
+def reset_poster_matches(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -1084,7 +1084,7 @@ async def reset_poster_matches(
     "artwork-matches/clear, this PRESERVES the per-type 'not needed' (ignored) "
     "flags the user set.",
 )
-async def reset_artwork_matches(
+def reset_artwork_matches(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
