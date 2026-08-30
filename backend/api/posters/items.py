@@ -50,7 +50,7 @@ from backend.util.poster_images import (
         404: {"description": "Poster not found"},
     },
 )
-async def get_poster(
+def get_poster(
     poster_id: int,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),

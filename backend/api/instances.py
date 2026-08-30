@@ -239,7 +239,7 @@ def get_config() -> ChubConfig:
         }
     },
 )
-async def get_instance_types(
+def get_instance_types(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     """
@@ -305,7 +305,7 @@ async def get_instance_types(
         404: {"description": "Unknown instance type"},
     },
 )
-async def get_instance_type_schema(
+def get_instance_type_schema(
     instance_type: str,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
@@ -556,7 +556,7 @@ def check_all_health(
         }
     },
 )
-async def get_instances(
+def get_instances(
     type: Optional[str] = None,
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
@@ -838,6 +838,8 @@ class UpdateLibrariesRequest(BaseModel):
         404: {"description": "Plex instance not found in configuration"},
     },
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def update_instance_libraries(
     instance: str,
     data: UpdateLibrariesRequest,
@@ -1087,6 +1089,8 @@ def test_instance(
         500: {"description": "Configuration save failed"},
     },
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def create_instance(
     data: CreateInstanceRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
@@ -1197,6 +1201,8 @@ async def create_instance(
         500: {"description": "Configuration save failed"},
     },
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def update_instance(
     instance_id: str,
     data: UpdateInstanceRequest,
@@ -1362,6 +1368,8 @@ async def update_instance(
         500: {"description": "Configuration save failed"},
     },
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def delete_instance(
     instance_id: str, service: str, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
@@ -1466,7 +1474,7 @@ def _find_instance(config: ChubConfig, instance_id: str):
         404: {"description": "Instance not found"},
     },
 )
-async def get_single_instance(
+def get_single_instance(
     instance_id: str,
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
@@ -1627,7 +1635,7 @@ def test_existing_instance(
         }
     },
 )
-async def get_instance_stats(
+def get_instance_stats(
     instance_id: str,
     service_type: str = Query(
         default=None, description="Service type: radarr, sonarr, lidarr, or plex"
@@ -1740,7 +1748,7 @@ def _build_instance_payload(instance_id: str, config: ChubConfig) -> Optional[di
         }
     },
 )
-async def refresh_instance(
+def refresh_instance(
     instance_id: str,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -1800,7 +1808,7 @@ async def refresh_instance(
         }
     },
 )
-async def sync_instance(
+def sync_instance(
     instance_id: str,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -1861,6 +1869,8 @@ async def sync_instance(
         }
     },
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def toggle_instance(
     instance_id: str,
     body: dict = None,

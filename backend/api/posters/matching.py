@@ -45,7 +45,7 @@ from backend.util.database.poster_cache import ARTWORK_IMAGE_TYPES
         }
     },
 )
-async def get_matched_poster_stats(
+def get_matched_poster_stats(
     logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> JSONResponse:
     """
@@ -101,7 +101,7 @@ async def get_matched_poster_stats(
         }
     },
 )
-async def get_unmatched_assets_stats(logger: Any = Depends(get_logger)) -> JSONResponse:
+def get_unmatched_assets_stats(logger: Any = Depends(get_logger)) -> JSONResponse:
     """
     Retrieve statistics for unmatched poster assets.
 
@@ -138,7 +138,7 @@ async def get_unmatched_assets_stats(logger: Any = Depends(get_logger)) -> JSONR
     summary="Get detailed unmatched assets list",
     description="Retrieve per-item unmatched assets with external IDs for poster lookup.",
 )
-async def get_unmatched_assets_details(
+def get_unmatched_assets_details(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     """Return the full unmatched items list with summary and external IDs."""
@@ -175,7 +175,7 @@ async def get_unmatched_assets_details(
     description="Per-image-type coverage + per-item lists for the Unmatched "
     "page's 'Additional artwork' view, derived from media_asset_matches.",
 )
-async def get_unmatched_artwork(
+def get_unmatched_artwork(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     """Return per-type artwork stats (applied/missing/needs_review/ignored) and
@@ -207,7 +207,7 @@ async def get_unmatched_artwork(
     description="Mark one (media, image_type) pair as not-needed so it stops "
     "appearing in the Additional-artwork view — independent of other types.",
 )
-async def ignore_artwork(
+def ignore_artwork(
     media_id: int,
     image_type: str,
     kind: str = Query("media", pattern="^(media|collection)$"),
@@ -249,7 +249,7 @@ async def ignore_artwork(
     "media row, each annotated with whether it would match — powering the manual "
     "artwork picker (the artwork counterpart of the poster candidates endpoint).",
 )
-async def get_artwork_candidates(
+def get_artwork_candidates(
     media_id: int,
     image_type: str,
     kind: str = Query("media", pattern="^(media|collection)$"),
@@ -402,7 +402,7 @@ def apply_artwork(
     "next asset run is free to auto-resolve it again. The artwork counterpart of "
     "the poster unlock endpoint.",
 )
-async def unlock_artwork(
+def unlock_artwork(
     media_id: int,
     image_type: str,
     kind: str = Query("media", pattern="^(media|collection)$"),
@@ -443,7 +443,7 @@ async def unlock_artwork(
     description="Mark a media or collection row as ignored so it stops "
     "appearing in the Unmatched/Needs-Review tabs.",
 )
-async def ignore_match(
+def ignore_match(
     media_id: int,
     kind: str = Query("media", pattern="^(media|collection)$"),
     ignored: bool = Query(True),
@@ -478,7 +478,7 @@ async def ignore_match(
     "the 'matched' state and clearing any conflict flags.",
     responses={500: {"description": "Failed to approve the match"}},
 )
-async def approve_match(
+def approve_match(
     media_id: int,
     kind: str = Query("media", pattern="^(media|collection)$"),
     logger: Any = Depends(get_logger),
@@ -511,7 +511,7 @@ async def approve_match(
     "user can re-pick) on the next run.",
     responses={500: {"description": "Failed to unlock the match"}},
 )
-async def unlock_match(
+def unlock_match(
     media_id: int,
     kind: str = Query("media", pattern="^(media|collection)$"),
     logger: Any = Depends(get_logger),
@@ -544,7 +544,7 @@ async def unlock_match(
     "a media/collection row, each annotated with whether it would match and "
     "why — powering both the manual poster picker and match diagnostics.",
 )
-async def get_match_candidates(
+def get_match_candidates(
     media_id: int,
     kind: str = Query("media", pattern="^(media|collection)$"),
     limit: int = Query(24, ge=1, le=100),

@@ -47,7 +47,7 @@ from backend.util.database import ChubDB
         }
     },
 )
-async def search_posters(
+def search_posters(
     query: Optional[str] = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -107,7 +107,7 @@ async def search_posters(
         }
     },
 )
-async def get_poster_stats(
+def get_poster_stats(
     groupBy: Optional[str] = Query(
         None, description="Group statistics by field (type, source)"
     ),
@@ -195,7 +195,7 @@ async def get_poster_stats(
         500: {"description": "Failed to read the poster collections"},
     },
 )
-async def get_poster_collections(
+def get_poster_collections(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -261,7 +261,7 @@ async def get_poster_collections(
         }
     },
 )
-async def search_gdrive_sources(
+def search_gdrive_sources(
     query: Optional[str] = None,
     folder: Optional[str] = Query(
         None, description="Filter by folder name or folder ID"

@@ -33,7 +33,7 @@ def _is_setup_completed() -> bool:
     summary="Setup status",
     description="Whether the first-run setup wizard has been completed.",
 )
-async def setup_status(logger: Any = Depends(get_logger)) -> JSONResponse:
+def setup_status(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Return the setup-completed flag. Used by the frontend to decide whether
     to route a first-run install into the wizard."""
     return ok("Setup status retrieved", {"completed": _is_setup_completed()})
@@ -44,6 +44,8 @@ async def setup_status(logger: Any = Depends(get_logger)) -> JSONResponse:
     summary="Mark setup complete",
     description="Flip general.setup_completed True so the wizard no longer shows.",
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def complete_setup(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Persist setup completion. Idempotent — safe to call again."""
     try:

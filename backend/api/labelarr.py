@@ -73,7 +73,7 @@ def get_config() -> ChubConfig:
         404: {"description": "ARR or Plex instance not found in configuration"},
     },
 )
-async def sync_tags_to_plex(
+def sync_tags_to_plex(
     request_data: SyncTagsRequest,
     request: Request,
     config: ChubConfig = Depends(get_config),
@@ -223,7 +223,7 @@ class BulkTagRequest(BaseModel):
     "Mirrors /labelarr/sync payload but takes `media_cache_ids: [int]` "
     "and sends one aggregate Discord summary at the end.",
 )
-async def bulk_sync_tags(
+def bulk_sync_tags(
     request_data: BulkTagRequest,
     request: Request,
     config: ChubConfig = Depends(get_config),
