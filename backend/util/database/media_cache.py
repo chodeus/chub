@@ -425,10 +425,13 @@ class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, Databa
         )
 
     def set_ignored(self, id: int, ignored: bool) -> None:
-        """Toggle the user-dismissal flag for one media row."""
+        """Toggle the user-dismissal flag for one media row; ignoring drops the lock."""
+        # One statement, not two: a concurrent approve/unlock must not interleave
+        # between the flag and the lock and leave the row in a mixed state.
         self.execute_query(
-            "UPDATE media_cache SET ignored=? WHERE id=?",
-            (int(bool(ignored)), id),
+            "UPDATE media_cache SET ignored=?, "
+            "user_confirmed=CASE WHEN ? THEN 0 ELSE user_confirmed END WHERE id=?",
+            (int(bool(ignored)), int(bool(ignored)), id),
         )
 
     def get_user_confirmed(self) -> list:
@@ -450,17 +453,19 @@ class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, Databa
         )
 
     def approve_match(self, id: int) -> None:
-        """Promote one reviewed media row to a full-confidence match."""
+        """Promote one reviewed media row to a full-confidence, user-locked match."""
+        # Locking here rather than in a second statement — see set_ignored.
         self.execute_query(
             "UPDATE media_cache SET match_status='matched', match_confidence=1.0, "
-            "conflict_ids='[]' WHERE id=?",
+            "conflict_ids='[]', user_confirmed=1 WHERE id=?",
             (id,),
         )
 
     def reopen_for_review(self, id: int) -> None:
-        """Send one media row back to the needs-review queue."""
+        """Send one media row back to needs-review and release its manual lock."""
         self.execute_query(
-            "UPDATE media_cache SET match_status='needs_review' WHERE id=?",
+            "UPDATE media_cache SET match_status='needs_review', user_confirmed=0 "
+            "WHERE id=?",
             (id,),
         )
 
