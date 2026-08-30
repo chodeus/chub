@@ -587,8 +587,10 @@ class Upgradinatorr(ChubModule):
 
     def _collect_completed_upgrades(
         self, app: BaseARRClient, grabs_db: UpgradinatorrGrabs
-    ) -> List[Dict[str, Any]]:
-        """Grabs from earlier runs whose download imported AND replaced a file.
+    ) -> Tuple[List[Dict[str, Any]], Set[str]]:
+        """(upgrades, resolved download ids) for grabs whose download imported.
+
+        An upgrade is an import that also REPLACED a file.
 
         A run ends at the search, so this is the only place an upgrade can be
         confirmed. Fails closed — an unreadable history leaves grabs pending for
@@ -597,7 +599,7 @@ class Upgradinatorr(ChubModule):
         grabs_db.prune(app.instance_name, GRAB_RETENTION_DAYS)
         pending = grabs_db.pending(app.instance_name)
         if not pending:
-            return []
+            return [], set()
         pair_field = getattr(app, "upgrade_pair_field", None)
         import_event = getattr(app, "history_import_event", None)
         delete_event = getattr(app, "history_upgrade_delete_event", None)
@@ -606,7 +608,7 @@ class Upgradinatorr(ChubModule):
                 f"{app.instance_name} maps no history events; skipping the "
                 "completed-upgrade report."
             )
-            return []
+            return [], set()
         since = self._history_lookback(pending)
         imports = app.get_history_since(since, import_event)
         deletes = app.get_history_since(since, delete_event)
@@ -615,7 +617,7 @@ class Upgradinatorr(ChubModule):
                 f"Could not read {app.instance_name} history since {since}; "
                 f"{len(pending)} grab(s) stay pending for the next run."
             )
-            return []
+            return [], set()
 
         # A file deleted "for Upgrade" is what separates an upgrade from a first
         # acquisition — missing-mode backfill replaces nothing, so it drops out
@@ -662,12 +664,11 @@ class Upgradinatorr(ChubModule):
                 "quality": self._quality_name(record),
                 "previous_quality": self._quality_name(deleted),
             }
-        # Every grab that imported has a known outcome now, upgrade or not.
-        grabs_db.clear(
-            app.instance_name,
-            {str(record.get("downloadId")) for record in ours},
-        )
-        return list(upgrades_by_download.values())
+        # Resolved, but deliberately NOT cleared here: an *arr call later in the
+        # run can still abort it and discard this report, and a cleared grab can
+        # never be reported again. The caller settles them on a path that returns.
+        resolved = {str(record.get("downloadId")) for record in ours}
+        return list(upgrades_by_download.values()), resolved
 
     @staticmethod
     def _quality_name(record: Dict[str, Any]) -> Optional[str]:
@@ -1401,18 +1402,36 @@ class Upgradinatorr(ChubModule):
             "upgrades": upgrades,
         }
 
+    def _settle_grabs(self, app: BaseARRClient, resolved: Set[str]) -> None:
+        """Forget grabs this run has accounted for.
+
+        Only ever reached on a path that RETURNS a result, so a run that aborts
+        between the reconcile and here retries them instead of losing the report.
+        A failed clear re-reports next run, which beats never reporting.
+        """
+        if not resolved or self.config.dry_run:
+            return
+        try:
+            with ChubDB(logger=self.logger) as grabs_ctx:
+                grabs_ctx.upgradinatorr_grabs.clear(app.instance_name, resolved)
+        except Exception as e:
+            self.logger.warning(
+                f"Could not clear settled grabs for {app.instance_name} ({e}); "
+                "they are reconciled again next run."
+            )
+
     def _upgrades_only(
-        self, server_name: str, upgrades: List[Dict[str, Any]]
+        self, app: BaseARRClient, upgrades: List[Dict[str, Any]], resolved: Set[str]
     ) -> Optional[Dict[str, Any]]:
-        """Result for a run with nothing to search. Upgrades are already cleared
-        from the grab table by the time this is reached, so dropping them here
-        would lose them for good."""
+        """Result for a run with nothing left to search, carrying any upgrade the
+        reconcile confirmed — returning None here would drop it."""
+        self._settle_grabs(app, resolved)
         if not upgrades:
             return None
         self.logger.info(
-            f"{len(upgrades)} completed upgrade(s) to report for {server_name}."
+            f"{len(upgrades)} completed upgrade(s) to report for {app.instance_name}."
         )
-        return self._new_output(server_name, upgrades)
+        return self._new_output(app.instance_name, upgrades)
 
     def process_instance(
         self,
@@ -1477,13 +1496,17 @@ class Upgradinatorr(ChubModule):
         # these grabs are from earlier runs, so whether this run has anything
         # left to search says nothing about whether one finished importing.
         completed_upgrades: List[Dict[str, Any]] = []
+        resolved_grabs: Set[str] = set()
         if not self.config.dry_run:
             # Reporting is not worth losing a run over: this now sits upstream of
             # the searches, so a history or DB error must degrade to "nothing to
             # report" rather than skipping the instance entirely.
             try:
                 with ChubDB(logger=self.logger) as grabs_ctx:
-                    completed_upgrades = self._collect_completed_upgrades(
+                    (
+                        completed_upgrades,
+                        resolved_grabs,
+                    ) = self._collect_completed_upgrades(
                         app, grabs_ctx.upgradinatorr_grabs
                     )
             except Exception as e:
@@ -1501,7 +1524,7 @@ class Upgradinatorr(ChubModule):
         if search_mode in ("missing", "cutoff"):
             wanted_records = self._get_all_wanted(app, search_mode)
             if wanted_records is None:
-                return self._upgrades_only(app.instance_name, completed_upgrades)
+                return self._upgrades_only(app, completed_upgrades, resolved_grabs)
             wanted_count = len(wanted_records)
             media_dict = self._convert_wanted_to_media_dict(
                 wanted_records, instance_type, app
@@ -1569,7 +1592,7 @@ class Upgradinatorr(ChubModule):
             if search_mode in ("missing", "cutoff"):
                 wanted_records = self._get_all_wanted(app, search_mode)
                 if wanted_records is None:
-                    return self._upgrades_only(app.instance_name, completed_upgrades)
+                    return self._upgrades_only(app, completed_upgrades, resolved_grabs)
                 media_dict = self._convert_wanted_to_media_dict(
                     wanted_records, instance_type, app
                 )
@@ -1594,7 +1617,7 @@ class Upgradinatorr(ChubModule):
             self.logger.warning(
                 f"No media found for {app.instance_name}. Reason: nothing left to tag."
             )
-            return self._upgrades_only(app.instance_name, completed_upgrades)
+            return self._upgrades_only(app, completed_upgrades, resolved_grabs)
 
         if wanted_count is not None:
             self.logger.info(
@@ -1887,6 +1910,7 @@ class Upgradinatorr(ChubModule):
         # Media held back by the queue guard never reach filtered_media_dict, so
         # report their rows here — dry run included — or the skip is invisible.
         self._append_blocked_rows(output_dict, blocked_rows, media_dict)
+        self._settle_grabs(app, resolved_grabs)
         return output_dict
 
     @staticmethod

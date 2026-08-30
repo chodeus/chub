@@ -72,6 +72,12 @@ class _HistoryARR(FakeARR):
         return self._by_event.get(event_type)
 
 
+def _collect(module, app, grabs):
+    """The collector returns (upgrades, resolved ids); most tests want the first."""
+    upgrades, _resolved = module._collect_completed_upgrades(app, grabs)
+    return upgrades
+
+
 def _grab(download_id="dl-1", **overrides):
     row = {
         "download_id": download_id,
@@ -123,8 +129,9 @@ def test_import_that_replaced_a_file_is_reported_with_both_scores():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], [_delete()])
 
-    upgrades = module._collect_completed_upgrades(app, grabs)
+    upgrades, resolved = module._collect_completed_upgrades(app, grabs)
 
+    assert resolved == {"dl-1"}
     assert upgrades == [
         {
             "media_id": 7,
@@ -137,7 +144,6 @@ def test_import_that_replaced_a_file_is_reported_with_both_scores():
             "previous_quality": "WEBDL-1080p",
         }
     ]
-    assert grabs.cleared == ["dl-1"]
 
 
 def test_import_that_replaced_nothing_is_not_an_upgrade():
@@ -147,9 +153,11 @@ def test_import_that_replaced_nothing_is_not_an_upgrade():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], [])
 
-    assert module._collect_completed_upgrades(app, grabs) == []
-    # The outcome IS known — it just wasn't an upgrade — so the grab is done.
-    assert grabs.cleared == ["dl-1"]
+    upgrades, resolved = module._collect_completed_upgrades(app, grabs)
+
+    assert upgrades == []
+    # The outcome IS known — it just wasn't an upgrade — so the grab is settled.
+    assert resolved == {"dl-1"}
 
 
 def test_delete_for_another_reason_is_not_an_upgrade():
@@ -157,7 +165,7 @@ def test_delete_for_another_reason_is_not_an_upgrade():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], [_delete(reason="Manual")])
 
-    assert module._collect_completed_upgrades(app, grabs) == []
+    assert _collect(module, app, grabs) == []
 
 
 def test_upgrade_of_a_different_item_does_not_credit_our_grab():
@@ -166,7 +174,7 @@ def test_upgrade_of_a_different_item_does_not_credit_our_grab():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import(movie_id=7)], [_delete(movie_id=99)])
 
-    assert module._collect_completed_upgrades(app, grabs) == []
+    assert _collect(module, app, grabs) == []
 
 
 def test_an_unrelated_import_is_ignored():
@@ -176,8 +184,10 @@ def test_an_unrelated_import_is_ignored():
     grabs = _FakeGrabs([_grab(download_id="ours")])
     app = _HistoryARR([_import(download_id="someone-elses")], [_delete()])
 
-    assert module._collect_completed_upgrades(app, grabs) == []
-    assert grabs.cleared == []
+    upgrades, resolved = module._collect_completed_upgrades(app, grabs)
+
+    assert upgrades == []
+    assert resolved == set()
 
 
 def test_season_pack_reports_once_not_once_per_episode():
@@ -189,7 +199,7 @@ def test_season_pack_reports_once_not_once_per_episode():
         [_delete()],
     )
 
-    upgrades = module._collect_completed_upgrades(app, grabs)
+    upgrades = _collect(module, app, grabs)
 
     assert len(upgrades) == 1
 
@@ -201,8 +211,10 @@ def test_unreadable_history_fails_closed_and_keeps_the_grab_pending():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR(None, [_delete()])
 
-    assert module._collect_completed_upgrades(app, grabs) == []
-    assert grabs.cleared == []
+    upgrades, resolved = module._collect_completed_upgrades(app, grabs)
+
+    assert upgrades == []
+    assert resolved == set()
 
 
 def test_no_pending_grabs_makes_no_history_call():
@@ -210,7 +222,7 @@ def test_no_pending_grabs_makes_no_history_call():
     grabs = _FakeGrabs([])
     app = _HistoryARR([_import()], [_delete()])
 
-    assert module._collect_completed_upgrades(app, grabs) == []
+    assert _collect(module, app, grabs) == []
     assert app.since_calls == []
 
 
@@ -224,7 +236,7 @@ def test_lookback_starts_at_the_oldest_pending_grab():
     )
     app = _HistoryARR([], [])
 
-    module._collect_completed_upgrades(app, grabs)
+    _collect(module, app, grabs)
 
     assert [date for date, _event in app.since_calls] == [
         "2026-08-24T01:30:00Z",
@@ -237,7 +249,7 @@ def test_client_without_an_event_mapping_reports_nothing():
     grabs = _FakeGrabs([_grab()])
     app = SimpleNamespace(instance_name="radarr")
 
-    assert module._collect_completed_upgrades(app, grabs) == []
+    assert _collect(module, app, grabs) == []
 
 
 def test_pending_grabs_survive_a_round_trip(tmp_path):
@@ -416,12 +428,12 @@ def test_an_import_that_was_itself_replaced_later_is_not_an_upgrade():
         [_delete(score=3525, date="2026-08-29T11:20:30Z")],
     )
 
-    upgrades = module._collect_completed_upgrades(app, grabs)
+    upgrades, resolved = module._collect_completed_upgrades(app, grabs)
 
     assert [upgrade["score"] for upgrade in upgrades] == [3575]
     assert upgrades[0]["previous_score"] == 3525
     # Both imports resolved — one as an upgrade, one as a plain import.
-    assert sorted(grabs.cleared) == ["ntb", "playweb"]
+    assert resolved == {"ntb", "playweb"}
 
 
 def test_a_delete_outside_the_pairing_window_is_not_this_import():
@@ -432,7 +444,7 @@ def test_a_delete_outside_the_pairing_window_is_not_this_import():
         [_delete(date="2026-08-29T14:00:00Z")],
     )
 
-    assert module._collect_completed_upgrades(app, grabs) == []
+    assert _collect(module, app, grabs) == []
 
 
 def test_the_closest_import_claims_the_delete_not_the_earliest():
@@ -449,7 +461,7 @@ def test_the_closest_import_claims_the_delete_not_the_earliest():
         [_delete(score=4825, date="2026-08-28T04:33:01Z")],
     )
 
-    upgrades = module._collect_completed_upgrades(app, grabs)
+    upgrades = _collect(module, app, grabs)
 
     assert [upgrade["score"] for upgrade in upgrades] == [4876]
     assert upgrades[0]["previous_score"] == 4825
@@ -470,7 +482,7 @@ def test_a_quality_gain_is_shown_when_the_cf_score_fell():
         [_delete(score=5570, quality="WEBDL-1080p")],
     )
 
-    upgrades = module._collect_completed_upgrades(app, grabs)
+    upgrades = _collect(module, app, grabs)
     assert upgrades[0]["quality"] == "Remux-1080p"
     assert upgrades[0]["previous_quality"] == "WEBDL-1080p"
 
@@ -498,7 +510,7 @@ def test_no_quality_line_when_the_quality_did_not_move():
             "radarr": {
                 "server_name": "Radarr",
                 "data": [],
-                "upgrades": module._collect_completed_upgrades(app, grabs),
+                "upgrades": _collect(module, app, grabs),
             }
         },
     )
@@ -587,3 +599,37 @@ def test_a_broken_history_read_does_not_stop_the_searches(isolated_db):
     assert app.search_calls == [7], "a reporting failure skipped the searches"
     assert result is not None
     assert result["upgrades"] == []
+
+
+def test_a_run_that_aborts_after_the_reconcile_keeps_the_grab(isolated_db):
+    """The reconcile runs before get_all_media(). If that throws, the worker
+    discards the instance result — so clearing the grab at reconcile time lost
+    the upgrade for good instead of retrying it next run."""
+
+    class _FailsAfterReconcileARR(_HistoryARR):
+        def get_all_media(self, *args, **kwargs):
+            raise RuntimeError("arr went away")
+
+    db = UpgradinatorrGrabs(StubLogger(), db_path=isolated_db)
+    db.record("radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00")
+    module = make_upgradinatorr(dry_run=False)
+    app = _FailsAfterReconcileARR([_import()], [_delete()])
+
+    with pytest.raises(RuntimeError):
+        module.process_instance("radarr", _upgrade_settings(), app)
+
+    assert [row["download_id"] for row in db.pending("radarr")] == ["dl-1"], (
+        "an aborted run must leave the grab for the next one"
+    )
+
+
+def test_a_completed_run_settles_the_grab(isolated_db):
+    db = UpgradinatorrGrabs(StubLogger(), db_path=isolated_db)
+    db.record("radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00")
+    module = make_upgradinatorr(dry_run=False)
+    app = _HistoryARR([_import()], [_delete()], media=[])
+
+    result = module.process_instance("radarr", _upgrade_settings(unattended=False), app)
+
+    assert result["upgrades"][0]["download"] == "Movie.2024.REMUX-GRP"
+    assert db.pending("radarr") == []
