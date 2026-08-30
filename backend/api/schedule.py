@@ -88,7 +88,7 @@ def get_config() -> ChubConfig:
         }
     },
 )
-async def get_all_schedules(
+def get_all_schedules(
     config: ChubConfig = Depends(get_config), logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
@@ -213,7 +213,7 @@ async def get_all_schedules(
         404: {"description": "Module schedule not found"},
     },
 )
-async def get_module_schedule(
+def get_module_schedule(
     module_id: str,
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
@@ -274,6 +274,8 @@ async def get_module_schedule(
         500: {"description": "Configuration save failed"},
     },
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def update_module_schedule(
     data: ScheduleUpdateRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
@@ -352,6 +354,8 @@ async def update_module_schedule(
         "one module can e.g. report daily and remove weekly."
     ),
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def update_module_schedule_blocks(
     data: ScheduleBlocksUpdateRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
@@ -438,6 +442,8 @@ async def update_module_schedule_blocks(
         500: {"description": "Configuration save failed"},
     },
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def delete_module_schedule(
     module_id: str, logger: Any = Depends(get_logger)
 ) -> JSONResponse:

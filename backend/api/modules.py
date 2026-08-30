@@ -103,7 +103,7 @@ def get_module_orchestrator(request: Request) -> Any:
         }
     },
 )
-async def list_modules(
+def list_modules(
     request: Request,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -197,7 +197,7 @@ async def list_modules(
         }
     },
 )
-async def get_modules_history(
+def get_modules_history(
     module: Optional[str] = Query(None, description="Filter by module name"),
     status: Optional[str] = Query(None, description="Filter by job status"),
     limit: int = Query(50, ge=1, le=200),
@@ -294,7 +294,7 @@ async def get_modules_history(
         }
     },
 )
-async def get_modules_stats(
+def get_modules_stats(
     module: Optional[str] = Query(None, description="Filter by module name"),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -361,7 +361,7 @@ async def get_modules_stats(
         }
     },
 )
-async def get_all_run_states(
+def get_all_run_states(
     request: Request,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -548,7 +548,7 @@ async def module_events(request: Request):
         }
     },
 )
-async def module_status(
+def module_status(
     request: Request,
     module: str,
     logger: Any = Depends(get_logger),
@@ -612,7 +612,7 @@ async def module_status(
         404: {"description": "Module not found"},
     },
 )
-async def get_module(
+def get_module(
     name: str,
     request: Request,
     logger: Any = Depends(get_logger),
@@ -697,7 +697,7 @@ async def get_module(
         404: {"description": "Module not found"},
     },
 )
-async def execute_module_by_name(
+def execute_module_by_name(
     name: str,
     request: Request,
     logger: Any = Depends(get_logger),
@@ -778,7 +778,7 @@ async def execute_module_by_name(
         404: {"description": "Job not found"},
     },
 )
-async def get_module_job_status(
+def get_module_job_status(
     name: str,
     job_id: int,
     logger: Any = Depends(get_logger),
@@ -837,7 +837,7 @@ async def get_module_job_status(
         404: {"description": "No config schema found for module"},
     },
 )
-async def get_module_schema(
+def get_module_schema(
     name: str,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
@@ -1105,7 +1105,7 @@ async def toggle_module(
         }
     },
 )
-async def get_module_history(
+def get_module_history(
     name: str,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0, description="Number of entries to skip"),
@@ -1184,7 +1184,7 @@ async def get_module_history(
         }
     },
 )
-async def get_module_specific_stats(
+def get_module_specific_stats(
     name: str,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -1245,7 +1245,7 @@ async def get_module_specific_stats(
         }
     },
 )
-async def cancel_module_execution(
+def cancel_module_execution(
     name: str,
     job_id: int,
     logger: Any = Depends(get_logger),
@@ -1521,7 +1521,7 @@ def test_module(
         400: {"description": "Module already running or invalid module name"},
     },
 )
-async def run_module(
+def run_module(
     request: Request,
     data: RunRequest,
     logger: Any = Depends(get_logger),

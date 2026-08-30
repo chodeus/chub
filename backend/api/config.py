@@ -85,7 +85,7 @@ router = APIRouter(
         404: {"description": "Configuration section not found"},
     },
 )
-async def get_config(
+def get_config(
     config: ChubConfig = Depends(get_config_dep),
     logger: Any = Depends(get_logger),
     section: Optional[str] = Query(
@@ -279,7 +279,7 @@ async def update_config(
         "a known secret can be revealed, and never password_hash / jwt_secret."
     ),
 )
-async def reveal_secret(
+def reveal_secret(
     path: str = Query(..., description="Dotted config path, e.g. 'tmdb.apikey'"),
     config: ChubConfig = Depends(get_config_dep),
     logger: Any = Depends(get_logger),
@@ -331,7 +331,7 @@ async def reveal_secret(
         "path reads as no credentials — which the settings form cannot tell."
     ),
 )
-async def gdrive_credential_status(
+def gdrive_credential_status(
     config: ChubConfig = Depends(get_config_dep),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:

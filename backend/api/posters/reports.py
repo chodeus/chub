@@ -22,7 +22,7 @@ from backend.util.database import ChubDB
     description="Return poster_cache rows where recorded width is below "
     "`min_width`. Run /backfill-dimensions first to populate unset rows.",
 )
-async def list_low_resolution_posters(
+def list_low_resolution_posters(
     min_width: int = 1000,
     limit: int = 200,
     logger: Any = Depends(get_logger),
@@ -52,7 +52,7 @@ async def list_low_resolution_posters(
     "ISO-8601 cutoff. Enables `period=30d`-style frontend filters. A cutoff "
     "that isn't ISO-8601 is rejected with 400.",
 )
-async def list_posters_added_since(
+def list_posters_added_since(
     cutoff: str,
     limit: int = 500,
     logger: Any = Depends(get_logger),
@@ -89,7 +89,7 @@ async def list_posters_added_since(
     "recently matched by poster_renamerr, newest first. Reflects what CHUB "
     "actually applied to your library, not cache insertion order.",
 )
-async def list_recently_matched(
+def list_recently_matched(
     limit: int = 50,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -113,7 +113,7 @@ async def list_recently_matched(
     "(e.g. CL2K, MM2K), optionally filtered by asset type. Lets a user drill "
     "into a variant to request the other one.",
 )
-async def list_applied_media_by_style(
+def list_applied_media_by_style(
     style: str,
     type: Optional[str] = Query(
         None, description="Filter by asset type: movie, show, season"

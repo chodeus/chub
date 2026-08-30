@@ -575,7 +575,7 @@ app.include_router(router)
 
 
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request) -> HTMLResponse:
+def root(request: Request) -> HTMLResponse:
     """Serves the main index.html page."""
     html_path = STATIC_DIR / "index.html"
     try:
@@ -590,7 +590,7 @@ async def root(request: Request) -> HTMLResponse:
 
 
 @app.get("/{full_path:path}", response_class=HTMLResponse)
-async def serve_spa(full_path: str) -> FileResponse:
+def serve_spa(full_path: str) -> FileResponse:
     """Serve index.html for all non-API, non-assets routes (for SPA)"""
     # Exclude API and static asset paths
     if (

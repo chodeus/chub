@@ -1,6 +1,5 @@
 """Focused tests for Nestarr scanner and API safety behavior."""
 
-import asyncio
 import json
 from types import SimpleNamespace
 
@@ -168,7 +167,7 @@ def test_cached_results_clear_stale_config_cache(monkeypatch, stub_logger):
     monkeypatch.setattr("backend.api.nestarr.load_config", lambda: current_config)
     monkeypatch.setattr("backend.api.nestarr.get_module_logger", lambda *_: stub_logger)
 
-    response = asyncio.run(get_cached_scan_results(SimpleNamespace(), db))
+    response = get_cached_scan_results(SimpleNamespace(), db)
     payload = _response_payload(response)
 
     assert payload["data"] == {

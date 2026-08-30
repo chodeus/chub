@@ -306,7 +306,7 @@ def _render_composite(
         "can preview any configured holiday's palette."
     ),
 )
-async def preview_options(
+def preview_options(
     config: ChubConfig = Depends(_get_config),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
@@ -468,7 +468,7 @@ def generate_preview(
         404: {"description": "Preview not found (token expired or unknown)"},
     },
 )
-async def preview_file(token: str, logger: Any = Depends(get_logger)):
+def preview_file(token: str, logger: Any = Depends(get_logger)):
     # Token is uuid4 hex so anything else is rejected upfront — keeps the
     # endpoint from doubling as a generic /tmp peeker.
     if not token or len(token) != 32 or not all(c in "0123456789abcdef" for c in token):
@@ -543,7 +543,7 @@ def _list_variants_in(directory: Path) -> List[str]:
         "colors) so the frontend doesn't have to keep a parallel copy."
     ),
 )
-async def list_presets() -> JSONResponse:
+def list_presets() -> JSONResponse:
     return ok("Holiday presets retrieved", {"presets": _HOLIDAY_PRESETS})
 
 
@@ -557,7 +557,7 @@ async def list_presets() -> JSONResponse:
         "a thumbnail via /borders/{holiday}/{source}/{name}.png."
     ),
 )
-async def list_borders(holiday: str) -> JSONResponse:
+def list_borders(holiday: str) -> JSONResponse:
     folder = _safe_holiday_folder(holiday)
     if not folder:
         return ok(
