@@ -110,29 +110,36 @@ RUN apt-get update && \
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
 
 # Copy built frontend assets
-COPY --from=builder /app/frontend/dist ./frontend/dist
+COPY --from=builder --chown=100:99 /app/frontend/dist ./frontend/dist
 
 # Copy app source from the builder. .dockerignore only filters the host context,
 # not --from=builder, so drop the builder's npm-ci node_modules to stay lean.
-COPY --from=builder /app .
+# --chown here, not a later `chown -R`: rewriting every inode in a separate layer
+# forces a copy-up of the whole tree and duplicated /app (45 MB) in the image.
+COPY --from=builder --chown=100:99 /app .
 RUN rm -rf /app/frontend/node_modules
 
-# Copy frontend build output into /app/public (served via STATIC_DIR env var)
+# Copy frontend build output into /app/public (served via STATIC_DIR env var).
+# This RUN creates the files, so it owns them too — chown inside this layer,
+# where the bytes already live, rather than in a later one that duplicates them.
 RUN mkdir -p /app/public && \
     cp frontend/dist/index.html /app/public/index.html && \
     cp -r frontend/dist/assets /app/public/assets && \
     if [ -d frontend/dist/icons ]; then cp -r frontend/dist/icons /app/public/icons; fi && \
     if [ -d frontend/dist/img ]; then cp -r frontend/dist/img /app/public/img; fi && \
-    if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi
+    if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi && \
+    chown -R 100:99 /app/public
 
 # Create user/group for PUID/PGID support via start.sh.
-# Also make /app world-readable + traversable so the container can be run
+# /app must stay world-readable + traversable so the container can be run
 # rootless via `docker run --user uid:gid` with any uid — start.sh's chown
-# only runs when started as root (the PUID/PGID path).
+# only runs when started as root (the PUID/PGID path). The COPYs above already
+# land those modes, so assert it here instead of a tree-wide chmod: the assert
+# is free, a `chmod -R` would re-materialise every file in this layer.
 RUN groupadd -g 99 dockeruser && \
     useradd -u 100 -g 99 dockeruser && \
-    chown -R 100:99 /app && \
-    chmod -R a+rX /app
+    unreadable="$(find /app \( -type f ! -perm -o=r \) -o \( -type d ! -perm -o=x \) | head -20)"; \
+    if [ -n "$unreadable" ]; then echo "not world-readable:"; echo "$unreadable"; exit 1; fi
 
 EXPOSE 8000
 
