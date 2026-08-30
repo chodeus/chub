@@ -1384,7 +1384,9 @@ class Upgradinatorr(ChubModule):
         return []
 
     @staticmethod
-    def _new_output(server_name: str, upgrades: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _new_output(
+        server_name: str, upgrades: List[Dict[str, Any]], resolved: Set[str]
+    ) -> Dict[str, Any]:
         """The per-instance result shape. One definition so a bail-out and a full
         run can't drift apart."""
         return {
@@ -1400,24 +1402,39 @@ class Upgradinatorr(ChubModule):
             # Grabs from EARLIER runs whose import completed and replaced a
             # file. This run's own grabs haven't downloaded yet.
             "upgrades": upgrades,
+            # Grabs this result accounts for. run() pops it once print_output
+            # has written the report, so it never reaches a notification.
+            "resolved_grabs": sorted(resolved),
         }
 
-    def _settle_grabs(self, app: BaseARRClient, resolved: Set[str]) -> None:
-        """Forget grabs this run has accounted for.
+    def _settle_grabs(self, instance_name: str, resolved: Any) -> None:
+        """Forget grabs whose report has been written.
 
-        Only ever reached on a path that RETURNS a result, so a run that aborts
-        between the reconcile and here retries them instead of losing the report.
         A failed clear re-reports next run, which beats never reporting.
         """
         if not resolved or self.config.dry_run:
             return
         try:
             with ChubDB(logger=self.logger) as grabs_ctx:
-                grabs_ctx.upgradinatorr_grabs.clear(app.instance_name, resolved)
+                grabs_ctx.upgradinatorr_grabs.clear(instance_name, resolved)
         except Exception as e:
             self.logger.warning(
-                f"Could not clear settled grabs for {app.instance_name} ({e}); "
+                f"Could not clear settled grabs for {instance_name} ({e}); "
                 "they are reconciled again next run."
+            )
+
+    def _settle_reported_grabs(self, output: Dict[str, Any]) -> None:
+        """Settle only AFTER print_output has written the report.
+
+        The run log is this module's durable handoff, and it is written well
+        after process_instance returns — settling any earlier can drop an
+        upgrade that was never reported anywhere.
+        """
+        for run_data in output.values():
+            if not isinstance(run_data, dict):
+                continue
+            self._settle_grabs(
+                run_data.get("server_name", ""), run_data.pop("resolved_grabs", None)
             )
 
     def _upgrades_only(
@@ -1425,13 +1442,14 @@ class Upgradinatorr(ChubModule):
     ) -> Optional[Dict[str, Any]]:
         """Result for a run with nothing left to search, carrying any upgrade the
         reconcile confirmed — returning None here would drop it."""
-        self._settle_grabs(app, resolved)
         if not upgrades:
+            # Nothing to report, so nothing to lose by settling now.
+            self._settle_grabs(app.instance_name, resolved)
             return None
         self.logger.info(
             f"{len(upgrades)} completed upgrade(s) to report for {app.instance_name}."
         )
-        return self._new_output(app.instance_name, upgrades)
+        return self._new_output(app.instance_name, upgrades, resolved)
 
     def process_instance(
         self,
@@ -1638,7 +1656,7 @@ class Upgradinatorr(ChubModule):
                     untagged_count += 1
 
         output_dict: Dict[str, Any] = self._new_output(
-            app.instance_name, completed_upgrades
+            app.instance_name, completed_upgrades, resolved_grabs
         )
         output_dict["tagged_count"] = tagged_count
         output_dict["untagged_count"] = untagged_count
@@ -1910,7 +1928,6 @@ class Upgradinatorr(ChubModule):
         # Media held back by the queue guard never reach filtered_media_dict, so
         # report their rows here — dry run included — or the skip is invisible.
         self._append_blocked_rows(output_dict, blocked_rows, media_dict)
-        self._settle_grabs(app, resolved_grabs)
         return output_dict
 
     @staticmethod
@@ -2188,6 +2205,7 @@ class Upgradinatorr(ChubModule):
             self.logger.debug(f"Processed instances: {list(output.keys())}")
             if output:
                 self.print_output(output)
+                self._settle_reported_grabs(output)
                 manager = NotificationManager(
                     self.full_config, self.logger, module_name="upgradinatorr"
                 )

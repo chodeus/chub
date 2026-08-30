@@ -165,7 +165,9 @@ def test_delete_for_another_reason_is_not_an_upgrade():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], [_delete(reason="Manual")])
 
-    assert _collect(module, app, grabs) == []
+    upgrades = _collect(module, app, grabs)
+
+    assert upgrades == []
 
 
 def test_upgrade_of_a_different_item_does_not_credit_our_grab():
@@ -174,7 +176,9 @@ def test_upgrade_of_a_different_item_does_not_credit_our_grab():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import(movie_id=7)], [_delete(movie_id=99)])
 
-    assert _collect(module, app, grabs) == []
+    upgrades = _collect(module, app, grabs)
+
+    assert upgrades == []
 
 
 def test_an_unrelated_import_is_ignored():
@@ -222,7 +226,9 @@ def test_no_pending_grabs_makes_no_history_call():
     grabs = _FakeGrabs([])
     app = _HistoryARR([_import()], [_delete()])
 
-    assert _collect(module, app, grabs) == []
+    upgrades = _collect(module, app, grabs)
+
+    assert upgrades == []
     assert app.since_calls == []
 
 
@@ -249,7 +255,9 @@ def test_client_without_an_event_mapping_reports_nothing():
     grabs = _FakeGrabs([_grab()])
     app = SimpleNamespace(instance_name="radarr")
 
-    assert _collect(module, app, grabs) == []
+    upgrades = _collect(module, app, grabs)
+
+    assert upgrades == []
 
 
 def test_pending_grabs_survive_a_round_trip(tmp_path):
@@ -263,10 +271,12 @@ def test_pending_grabs_survive_a_round_trip(tmp_path):
     assert rows[0]["download_id"] == "dl-1"
     assert rows[0]["release_title"] == "Movie.2024.REMUX-GRP"
     assert rows[0]["grabbed_at"] == "2026-08-29T09:00:00+00:00"
-    assert db.oldest_pending("radarr") == "2026-08-29T09:00:00+00:00"
+    oldest = db.oldest_pending("radarr")
+    assert oldest == "2026-08-29T09:00:00+00:00"
 
     db.clear("radarr", ["dl-1"])
-    assert db.pending("radarr") == []
+    pending = db.pending("radarr")
+    assert pending == []
 
 
 def test_prune_drops_grabs_past_the_retention_window(tmp_path):
@@ -278,7 +288,8 @@ def test_prune_drops_grabs_past_the_retention_window(tmp_path):
 
     db.prune("radarr", upgradinatorr_module.GRAB_RETENTION_DAYS)
 
-    assert [row["download_id"] for row in db.pending("radarr")] == ["fresh"]
+    remaining = db.pending("radarr")
+    assert [row["download_id"] for row in remaining] == ["fresh"]
 
 
 def test_grabs_are_scoped_per_instance(tmp_path):
@@ -286,9 +297,11 @@ def test_grabs_are_scoped_per_instance(tmp_path):
     db.record("radarr", [_grab()])
     db.record("radarr4k", [_grab()])
 
-    assert len(db.pending("radarr")) == 1
+    radarr_rows = db.pending("radarr")
+    assert len(radarr_rows) == 1
     db.clear("radarr", ["dl-1"])
-    assert len(db.pending("radarr4k")) == 1
+    radarr4k_rows = db.pending("radarr4k")
+    assert len(radarr4k_rows) == 1
 
 
 class _DedupeARR(FakeARR):
@@ -444,7 +457,9 @@ def test_a_delete_outside_the_pairing_window_is_not_this_import():
         [_delete(date="2026-08-29T14:00:00Z")],
     )
 
-    assert _collect(module, app, grabs) == []
+    upgrades = _collect(module, app, grabs)
+
+    assert upgrades == []
 
 
 def test_the_closest_import_claims_the_delete_not_the_earliest():
@@ -618,12 +633,16 @@ def test_a_run_that_aborts_after_the_reconcile_keeps_the_grab(isolated_db):
     with pytest.raises(RuntimeError):
         module.process_instance("radarr", _upgrade_settings(), app)
 
-    assert [row["download_id"] for row in db.pending("radarr")] == ["dl-1"], (
+    pending = db.pending("radarr")
+    assert [row["download_id"] for row in pending] == ["dl-1"], (
         "an aborted run must leave the grab for the next one"
     )
 
 
-def test_a_completed_run_settles_the_grab(isolated_db):
+def test_the_report_is_settled_only_once_it_has_been_written(isolated_db):
+    """print_output writes the run log — this module's durable handoff — well
+    after process_instance returns. Settling before that can drop an upgrade
+    that was never reported anywhere, so the result carries the ids instead."""
     db = UpgradinatorrGrabs(StubLogger(), db_path=isolated_db)
     db.record("radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00")
     module = make_upgradinatorr(dry_run=False)
@@ -632,4 +651,14 @@ def test_a_completed_run_settles_the_grab(isolated_db):
     result = module.process_instance("radarr", _upgrade_settings(unattended=False), app)
 
     assert result["upgrades"][0]["download"] == "Movie.2024.REMUX-GRP"
-    assert db.pending("radarr") == []
+    assert result["resolved_grabs"] == ["dl-1"]
+    still_pending = db.pending("radarr")
+    assert still_pending, "settled before the report was written"
+
+    module.print_output({"radarr": result})
+    module._settle_reported_grabs({"radarr": result})
+
+    settled = db.pending("radarr")
+    assert settled == []
+    # Popped on the way out, so it can never reach a notification payload.
+    assert "resolved_grabs" not in result
