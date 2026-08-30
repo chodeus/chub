@@ -112,16 +112,13 @@ COPY --from=builder /usr/bin/rclone /usr/bin/rclone
 # Copy built frontend assets
 COPY --from=builder --chown=100:99 /app/frontend/dist ./frontend/dist
 
-# Copy app source from the builder. .dockerignore only filters the host context,
-# not --from=builder, so drop the builder's npm-ci node_modules to stay lean.
-# --chown here, not a later `chown -R`: rewriting every inode in a separate layer
-# forces a copy-up of the whole tree and duplicated /app (45 MB) in the image.
+# .dockerignore only filters the host context, not --from=builder, so drop the
+# builder's node_modules. --chown here: a later `chown -R` duplicates /app (45MB).
 COPY --from=builder --chown=100:99 /app .
 RUN rm -rf /app/frontend/node_modules
 
-# Copy frontend build output into /app/public (served via STATIC_DIR env var).
-# This RUN creates the files, so it owns them too — chown inside this layer,
-# where the bytes already live, rather than in a later one that duplicates them.
+# Frontend build output into /app/public (served via STATIC_DIR). This RUN creates
+# the files, so it chowns them here — a later layer would duplicate the bytes.
 RUN mkdir -p /app/public && \
     cp frontend/dist/index.html /app/public/index.html && \
     cp -r frontend/dist/assets /app/public/assets && \
@@ -130,14 +127,11 @@ RUN mkdir -p /app/public && \
     if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi && \
     chown -R 100:99 /app/public
 
-# Create user/group for PUID/PGID support via start.sh.
-# /app must stay world-readable + traversable so the container can be run
-# rootless via `docker run --user uid:gid` with any uid — start.sh's chown
-# only runs when started as root (the PUID/PGID path). The COPYs above already
-# land those modes, so assert it here instead of a tree-wide chmod: the assert
-# is free, a `chmod -R` would re-materialise every file in this layer.
+# `chown 100:99 /app` is not redundant with COPY --chown, which skips /app itself:
+# start.sh stats it alone, and root-owned re-runs its 10-30s sweep every restart.
 RUN groupadd -g 99 dockeruser && \
     useradd -u 100 -g 99 dockeruser && \
+    chown 100:99 /app && \
     unreadable="$(find /app \( -type f ! -perm -o=r \) -o \( -type d ! -perm -o=x \) | head -20)"; \
     if [ -n "$unreadable" ]; then echo "not world-readable:"; echo "$unreadable"; exit 1; fi
 
