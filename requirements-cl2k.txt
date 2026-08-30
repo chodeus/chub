@@ -2,10 +2,9 @@
 # extension). Kept out of requirements.txt so that file stays identical to
 # main; installed by the CL2K block in deploy/docker/Dockerfile and needed
 # locally to run the cl2k tests.
-psd-tools[composite]==1.18.0
-# psd-tools[composite]'s transitive scipy, pinned explicitly: its own floor
-# (1.9.3) trips PYSEC-2023-102 in the dependency audit. cp314 wheels exist.
-scipy==1.18.1
+# Plain, not [composite]: that extra drags in scipy + scikit-image (107 MB in
+# the image) only for PSDImage.composite(), which psd_live deliberately bypasses.
+psd-tools==1.18.0
 Wand==0.7.2
 # CPU ONNX runtime for the PP-OCRv4 DBNet text detector (models/ppocr_v4_det.onnx)
 # — powers the polarity-agnostic "tighten to letters" anchor. Fail-soft: if the
