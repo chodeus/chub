@@ -1382,6 +1382,38 @@ class Upgradinatorr(ChubModule):
 
         return []
 
+    @staticmethod
+    def _new_output(server_name: str, upgrades: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """The per-instance result shape. One definition so a bail-out and a full
+        run can't drift apart."""
+        return {
+            "server_name": server_name,
+            "tagged_count": 0,
+            "untagged_count": 0,
+            "total_count": 0,
+            "searches_attempted": 0,
+            "searches_succeeded": 0,
+            "searches_failed": 0,
+            "searches_deferred": 0,
+            "data": [],
+            # Grabs from EARLIER runs whose import completed and replaced a
+            # file. This run's own grabs haven't downloaded yet.
+            "upgrades": upgrades,
+        }
+
+    def _upgrades_only(
+        self, server_name: str, upgrades: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """Result for a run with nothing to search. Upgrades are already cleared
+        from the grab table by the time this is reached, so dropping them here
+        would lose them for good."""
+        if not upgrades:
+            return None
+        self.logger.info(
+            f"{len(upgrades)} completed upgrade(s) to report for {server_name}."
+        )
+        return self._new_output(server_name, upgrades)
+
     def process_instance(
         self,
         instance_type: str,
@@ -1441,6 +1473,25 @@ class Upgradinatorr(ChubModule):
             "lidarr",
         )
 
+        # Resolved BEFORE the media gathering and every early return below it:
+        # these grabs are from earlier runs, so whether this run has anything
+        # left to search says nothing about whether one finished importing.
+        completed_upgrades: List[Dict[str, Any]] = []
+        if not self.config.dry_run:
+            # Reporting is not worth losing a run over: this now sits upstream of
+            # the searches, so a history or DB error must degrade to "nothing to
+            # report" rather than skipping the instance entirely.
+            try:
+                with ChubDB(logger=self.logger) as grabs_ctx:
+                    completed_upgrades = self._collect_completed_upgrades(
+                        app, grabs_ctx.upgradinatorr_grabs
+                    )
+            except Exception as e:
+                self.logger.warning(
+                    f"Could not reconcile pending grabs for {app.instance_name} "
+                    f"({e}); searching anyway."
+                )
+
         self.logger.info(
             f"Gathering media from {app.instance_name} ({instance_type}) "
             f"[mode: {search_mode}]"
@@ -1450,7 +1501,7 @@ class Upgradinatorr(ChubModule):
         if search_mode in ("missing", "cutoff"):
             wanted_records = self._get_all_wanted(app, search_mode)
             if wanted_records is None:
-                return None
+                return self._upgrades_only(app.instance_name, completed_upgrades)
             wanted_count = len(wanted_records)
             media_dict = self._convert_wanted_to_media_dict(
                 wanted_records, instance_type, app
@@ -1518,7 +1569,7 @@ class Upgradinatorr(ChubModule):
             if search_mode in ("missing", "cutoff"):
                 wanted_records = self._get_all_wanted(app, search_mode)
                 if wanted_records is None:
-                    return None
+                    return self._upgrades_only(app.instance_name, completed_upgrades)
                 media_dict = self._convert_wanted_to_media_dict(
                     wanted_records, instance_type, app
                 )
@@ -1543,7 +1594,7 @@ class Upgradinatorr(ChubModule):
             self.logger.warning(
                 f"No media found for {app.instance_name}. Reason: nothing left to tag."
             )
-            return None
+            return self._upgrades_only(app.instance_name, completed_upgrades)
 
         if wanted_count is not None:
             self.logger.info(
@@ -1563,20 +1614,12 @@ class Upgradinatorr(ChubModule):
                 else:
                     untagged_count += 1
 
-        output_dict: Dict[str, Any] = {
-            "server_name": app.instance_name,
-            "tagged_count": tagged_count,
-            "untagged_count": untagged_count,
-            "total_count": total_count,
-            "searches_attempted": 0,
-            "searches_succeeded": 0,
-            "searches_failed": 0,
-            "searches_deferred": 0,
-            "data": [],
-            # Grabs from EARLIER runs whose import completed and replaced a
-            # file. This run's own grabs haven't downloaded yet.
-            "upgrades": [],
-        }
+        output_dict: Dict[str, Any] = self._new_output(
+            app.instance_name, completed_upgrades
+        )
+        output_dict["tagged_count"] = tagged_count
+        output_dict["untagged_count"] = untagged_count
+        output_dict["total_count"] = total_count
 
         if not self.config.dry_run:
             search_count: int = 0
@@ -1826,13 +1869,7 @@ class Upgradinatorr(ChubModule):
             # Opened after the search loop's db_ctx has closed — the searches
             # can run for minutes and nothing here needs a connection held open.
             with ChubDB(logger=self.logger) as grabs_ctx:
-                grabs_db = grabs_ctx.upgradinatorr_grabs
-                # Read outcomes BEFORE recording this run's grabs, so a grab
-                # can't resolve against history in the run that made it.
-                output_dict["upgrades"] = self._collect_completed_upgrades(
-                    app, grabs_db
-                )
-                grabs_db.record(
+                grabs_ctx.upgradinatorr_grabs.record(
                     app.instance_name, run_grabs, grabbed_at=run_started.isoformat()
                 )
         else:

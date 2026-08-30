@@ -12,7 +12,6 @@ from types import SimpleNamespace
 import pytest
 
 import backend.modules.upgradinatorr as upgradinatorr_module
-from backend.modules.upgradinatorr import GRAB_RETENTION_DAYS
 from backend.util.database.upgradinatorr_grabs import UpgradinatorrGrabs
 
 from tests.test_config import (
@@ -63,8 +62,8 @@ class _HistoryARR(FakeARR):
     history_upgrade_delete_event = 6
     upgrade_pair_field = "movieId"
 
-    def __init__(self, imports, deletes):
-        super().__init__([[upgradinatorr_media_item([])]])
+    def __init__(self, imports, deletes, media=None):
+        super().__init__([[upgradinatorr_media_item([])] if media is None else media])
         self._by_event = {3: imports, 6: deletes}
         self.since_calls = []
 
@@ -265,7 +264,7 @@ def test_prune_drops_grabs_past_the_retention_window(tmp_path):
     )
     db.record("radarr", [_grab(download_id="fresh")])
 
-    db.prune("radarr", GRAB_RETENTION_DAYS)
+    db.prune("radarr", upgradinatorr_module.GRAB_RETENTION_DAYS)
 
     assert [row["download_id"] for row in db.pending("radarr")] == ["fresh"]
 
@@ -376,7 +375,8 @@ def test_synthetic_download_ids_are_never_stored(isolated_db):
     assert [g["download"] for g in result["data"][0]["grabs"]] == [
         "Movie.2024.REMUX-GRP"
     ]
-    assert UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).pending("radarr") == []
+    stored = UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).pending("radarr")
+    assert stored == []
 
 
 def test_a_real_download_id_is_stored_for_the_next_run(isolated_db):
@@ -539,3 +539,51 @@ def test_two_downloads_sharing_a_release_title_both_count(isolated_db):
     # What the log counts and what the next run can resolve must agree.
     stored = UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).pending("radarr")
     assert len(stored) == len(grabs)
+
+
+def test_upgrades_survive_the_nothing_left_to_search_bail_out(isolated_db):
+    """process_instance bails out early when there is no media to search. The
+    collector has already cleared those grabs from the table, so returning None
+    there loses a completed upgrade permanently rather than deferring it."""
+    module = make_upgradinatorr(dry_run=False)
+    UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).record(
+        "radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00"
+    )
+    app = _HistoryARR([_import()], [_delete()], media=[])
+
+    result = module.process_instance("radarr", _upgrade_settings(unattended=False), app)
+
+    assert result is not None, "the bail-out dropped a completed upgrade"
+    assert [upgrade["download"] for upgrade in result["upgrades"]] == [
+        "Movie.2024.REMUX-GRP"
+    ]
+
+
+def test_nothing_to_search_and_no_upgrades_still_reports_nothing(isolated_db):
+    module = make_upgradinatorr(dry_run=False)
+    app = _HistoryARR([], [], media=[])
+
+    result = module.process_instance("radarr", _upgrade_settings(unattended=False), app)
+
+    assert result is None
+
+
+def test_a_broken_history_read_does_not_stop_the_searches(isolated_db):
+    """The reconcile now runs upstream of the searches, so an *arr that throws
+    on /history must not cost the run its whole search budget."""
+
+    class _ExplodingARR(_HistoryARR):
+        def get_history_since(self, date, event_type):
+            raise RuntimeError("boom")
+
+    module = make_upgradinatorr(dry_run=False)
+    UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).record(
+        "radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00"
+    )
+    app = _ExplodingARR([], [])
+
+    result = module.process_instance("radarr", _upgrade_settings(), app)
+
+    assert app.search_calls == [7], "a reporting failure skipped the searches"
+    assert result is not None
+    assert result["upgrades"] == []
