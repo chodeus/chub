@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.48.1](https://github.com/chodeus/chub/compare/v2.48.0...v2.48.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* **version:** stamp BUILD_NUMBER into release-built images ([bc3bc1a](https://github.com/chodeus/chub/commit/bc3bc1afeea0cf8b55960621aa68bf0e3350f799))
+
 ## [2.48.0](https://github.com/chodeus/chub/compare/v2.47.0...v2.48.0) (2026-08-29)
 
 
