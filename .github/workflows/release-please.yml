@@ -42,6 +42,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
+      # Without this the release build stamps an empty BUILD_NUMBER, and
+      # version.py's update check reads it from :latest/:full — see codeql-lint.yml.
+      - name: Set build number
+        run: |
+          count=$(git rev-list --count HEAD)
+          # Bare `echo "X=$(...)"` exits 0 on a failed substitution, which would
+          # silently re-ship the unversioned image this step exists to prevent.
+          [ -n "$count" ] || { echo "::error::empty commit count at ${{ needs.release.outputs.tag_name }}"; exit 1; }
+          echo "BUILD_NUMBER=$count" >> "$GITHUB_ENV"
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
@@ -60,6 +70,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             BRANCH=main
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.tag_name }}
@@ -75,6 +86,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             BRANCH=main
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.tag_name }}-full
