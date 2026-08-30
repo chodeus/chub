@@ -171,7 +171,7 @@ def test_stale_queue_row_is_not_reported_as_a_grab():
     result = module.process_instance("radarr", _settings(), app)
 
     item = result["data"][0]
-    assert item["download"] == {}, "a 30h-old queue row is not a grab from this run"
+    assert item["grabs"] == [], "a 30h-old queue row is not a grab from this run"
     stuck = [e for e in item["queue_imports"] if e["state"] == "stuck"]
     assert [e["download"] for e in stuck] == ["Movie.2024.1080p.WEB-DL"]
     assert stuck[0]["age_hours"] == pytest.approx(30, abs=0.1)
@@ -185,7 +185,9 @@ def test_queue_row_added_during_the_run_still_counts_as_a_grab():
 
     result = module.process_instance("radarr", _settings(), app)
 
-    assert result["data"][0]["download"] == {"Movie.2024.1080p.WEB-DL": 7777}
+    assert [(g["download"], g["score"]) for g in result["data"][0]["grabs"]] == [
+        ("Movie.2024.1080p.WEB-DL", 7777)
+    ]
     assert result["data"][0]["queue_imports"] == []
 
 
@@ -200,7 +202,7 @@ def test_queue_block_skips_the_search_but_still_reports_the_download():
     assert app.search_calls == [], "already downloaded — must not grab a second copy"
     assert result is not None, "a blocked-only run still has something to report"
     entry = result["data"][0]
-    assert entry["download"] == {}
+    assert entry["grabs"] == []
     assert [q["download"] for q in entry["queue_imports"]] == [
         "Movie.2024.1080p.WEB-DL"
     ]
@@ -251,15 +253,31 @@ def test_queue_block_expires_so_a_dead_row_cannot_block_forever():
     assert app.search_calls == [7]
 
 
-def test_notification_splits_grabbed_from_stuck():
+def test_notification_splits_upgraded_from_stuck():
     output = {
         "radarr": {
             "server_name": "Radarr",
+            "upgrades": [
+                {
+                    "media_id": 7,
+                    "title": "Serum",
+                    "year": None,
+                    "download": "Serum - Jupiter (2019) [single]",
+                    "score": 50,
+                    "previous_score": 25,
+                }
+            ],
             "data": [
                 {
                     "title": "Serum",
                     "year": None,
-                    "download": {"Serum - Jupiter (2019) [single]": 50},
+                    "grabs": [
+                        {
+                            "download_id": "dl-1",
+                            "download": "Serum - Jupiter (2019) [single]",
+                            "score": 50,
+                        }
+                    ],
                     "queue_imports": [
                         {
                             "state": "stuck",
@@ -283,8 +301,11 @@ def test_notification_splits_grabbed_from_stuck():
     body = "\n".join(value for _, value in rendered)
 
     assert any("import stuck" in name for name in names)
-    # The grab is what the run changed — it stays listed.
+    # A completed upgrade is what the run has to show for itself — it stays.
+    assert any("upgraded" in name for name in names)
     assert "Serum - Jupiter (2019) [single]" in body
+    assert "CF Score: 50 (was 25)" in body
+    assert "1 upgrade(s) across 1 item(s)" in body
     # The queue row collapses to the section tally; the *arr's own rejection
     # text is log-level detail and must not reach Discord.
     assert "1 download(s) across 1 item(s) — manual import required" in body

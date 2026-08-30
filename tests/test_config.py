@@ -1233,7 +1233,9 @@ def test_upgradinatorr_queue_fallback_still_reports_downloads():
     )
 
     assert app.add_calls == [(7, 1)]
-    assert result["data"][0]["download"] == {"Movie.2024.1080p.WEB-DL": 7777}
+    assert [(g["download"], g["score"]) for g in result["data"][0]["grabs"]] == [
+        ("Movie.2024.1080p.WEB-DL", 7777)
+    ]
 
 
 def test_upgradinatorr_run_skips_disabled_profiles(monkeypatch):

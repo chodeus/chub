@@ -182,6 +182,14 @@ class BaseARRClient:
 
     api_version = "v3"  # Override in subclasses (e.g. LidarrClient uses "v1")
 
+    # History event ids the completed-upgrade report reads. The same int means
+    # different events per *arr, so subclasses MUST override all three. Ints
+    # only: Lidarr rejects the string event names Radarr/Sonarr accept.
+    history_import_event: Optional[int] = None
+    history_upgrade_delete_event: Optional[int] = None
+    # Record field pairing an import to the delete it replaced.
+    upgrade_pair_field: Optional[str] = None
+
     def __init__(self, url: str, api: str, logger: Any) -> None:
         self.logger = logger
         self.url = url.rstrip("/")
@@ -811,9 +819,22 @@ class BaseARRClient:
         )
         return bool(resp is not None and getattr(resp, "status_code", 500) < 300)
 
+    def get_history_since(self, date: str, event_type: int) -> Any:
+        """Every history record of one event type since ``date`` (ISO-8601 UTC).
+
+        Returns a bare list, not the paged envelope ``/history`` returns.
+        """
+        endpoint = f"{self.api_base}/history/since"
+        params = {"date": date, "eventType": event_type}
+        return self.make_get_request(endpoint, headers=self.headers, params=params)
+
 
 class RadarrClient(BaseARRClient):
     """Client for interacting with Radarr API."""
+
+    history_import_event = 3  # downloadFolderImported
+    history_upgrade_delete_event = 6  # movieFileDeleted
+    upgrade_pair_field = "movieId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:
         """
@@ -1060,18 +1081,6 @@ class RadarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/history/{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
-    def get_import_history(self, media_id: int) -> Any:
-        """
-        Get import history for a movie.
-        Args:
-            media_id (int): Movie ID.
-        Returns:
-            Any: API response.
-        """
-        url_addon = f"movie?movieId={media_id}&eventType=downloadFolderImported&includeMovie=false"
-        endpoint = f"{self.api_base}/history/{url_addon}"
-        return self.make_get_request(endpoint, headers=self.headers)
-
     def get_queue(self, page: int = 1, page_size: int = 200) -> Any:
         """One page of the current queue from Radarr. Callers must paginate —
         the queue routinely exceeds a single page on a busy instance."""
@@ -1152,6 +1161,10 @@ class RadarrClient(BaseARRClient):
 
 class SonarrClient(BaseARRClient):
     """Client for interacting with Sonarr API."""
+
+    history_import_event = 3  # downloadFolderImported
+    history_upgrade_delete_event = 5  # episodeFileDeleted
+    upgrade_pair_field = "episodeId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:
         """
@@ -1477,18 +1490,6 @@ class SonarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/history/{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
-    def get_import_history(self, media_id: int) -> Any:
-        """
-        Get import history for a series.
-        Args:
-            media_id (int): Series ID.
-        Returns:
-            Any: API response.
-        """
-        url_addon = f"series?seriesId={media_id}&eventType=downloadFolderImported&includeSeries=false&includeEpisode=false"
-        endpoint = f"{self.api_base}/history/{url_addon}"
-        return self.make_get_request(endpoint, headers=self.headers)
-
     def get_season_grab_history(self, media_id: int, season: int) -> Any:
         """
         Get grab history for a specific season of a series.
@@ -1499,19 +1500,6 @@ class SonarrClient(BaseARRClient):
             Any: API response.
         """
         url_addon = f"series?seriesId={media_id}&seasonNumber={season}&eventType=grabbed&includeSeries=false&includeEpisode=false"
-        endpoint = f"{self.api_base}/history/{url_addon}"
-        return self.make_get_request(endpoint, headers=self.headers)
-
-    def get_season_import_history(self, media_id: int, season: int) -> Any:
-        """
-        Get import history for a specific season of a series.
-        Args:
-            media_id (int): Series ID.
-            season (int): Season number.
-        Returns:
-            Any: API response.
-        """
-        url_addon = f"series?seriesId={media_id}&seasonNumber={season}&eventType=downloadFolderImported&includeSeries=false&includeEpisode=false"
         endpoint = f"{self.api_base}/history/{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
@@ -1680,6 +1668,11 @@ class LidarrClient(BaseARRClient):
     """Client for interacting with Lidarr API (uses API v1)."""
 
     api_version = "v1"
+    # 8 is the album-level import; 3 is trackFileImported, which fires per
+    # track and would report one album as a dozen upgrades.
+    history_import_event = 8  # downloadImported
+    history_upgrade_delete_event = 5  # trackFileDeleted
+    upgrade_pair_field = "albumId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:
         super().__init__(url, api, logger)

@@ -1,7 +1,13 @@
 import os
 from typing import Any, Dict, List, Tuple
 
-from backend.util.constants import QUEUE_REPORT_SECTIONS, queue_report_tally
+from backend.util.constants import (
+    QUEUE_REPORT_SECTIONS,
+    queue_report_tally,
+    upgrade_quality_text,
+    upgrade_report_tally,
+    upgrade_score_text,
+)
 
 # When a run would fan out into more than this many Discord messages (embeds),
 # collapse the per-item detail into a single summary embed. A first-time bulk
@@ -385,33 +391,45 @@ def format_for_discord(
     def fmt_upgradinatorr(o: Any) -> List[Dict[str, Any]]:
         """Format upgradinatorr output for Discord embeds.
 
-        Grabs are listed — they are what the run changed. The queue sections
-        are a tally off the same QUEUE_REPORT_SECTIONS the run log renders, so
-        the two can't drift; the per-item rows and the *arr's own rejection
-        text are log-level detail.
+        Completed upgrades are listed — a file that actually got replaced is
+        what the run has to show for itself. Grabs are not: at run end they are
+        still downloading and may never import, so they stay in the log. The
+        queue sections are a tally off the same QUEUE_REPORT_SECTIONS the run
+        log renders, so the two can't drift.
         """
         fields: List[Dict[str, Any]] = []
         for inst, data in o.items():
             srv = data.get("server_name", inst)
             instance_data = data.get("data", []) or []
+            upgrades = data.get("upgrades") or []
             blocks: List[List[str]] = []
-            for item in instance_data:
-                dl = item.get("download") or {}
-                if not dl:
-                    continue
-                title = item.get("title", "Unknown")
-                year = f" ({item.get('year')})" if item.get("year") else ""
-                block = [f"{title}{year}"]
-                for name, score in dl.items():
-                    block.append(f"\t{name}")
-                    block.append(f"\tCF Score: {score}")
+            for upgrade in upgrades:
+                title = upgrade.get("title", "Unknown")
+                year = f" ({upgrade.get('year')})" if upgrade.get("year") else ""
+                block = [f"{title}{year}", f"\t{upgrade.get('download')}"]
+                quality = upgrade_quality_text(
+                    upgrade.get("quality"), upgrade.get("previous_quality")
+                )
+                # Only when it moved — a quality gain outranks custom formats,
+                # so it is what explains a CF score that went down.
+                if quality:
+                    block.append(f"\tQuality: {quality}")
+                block.append(
+                    "\tCF Score: "
+                    + upgrade_score_text(
+                        upgrade.get("score"), upgrade.get("previous_score")
+                    )
+                )
                 blocks.append(block)
             if blocks:
+                items = {upgrade.get("media_id") for upgrade in upgrades}
                 fields.extend(
                     chunk_code_fields(
-                        srv,
+                        f"{srv} — upgraded",
                         "\n".join(
-                            capped_lines(blocks, f"{len(blocks)} items with grabs")
+                            capped_lines(
+                                blocks, upgrade_report_tally(len(blocks), len(items))
+                            )
                         ),
                     )
                 )

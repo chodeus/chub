@@ -4,7 +4,7 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.util.arr import (
@@ -17,8 +17,15 @@ from backend.util.arr import (
     create_arr_client,
 )
 from backend.util.base_module import ChubModule
-from backend.util.constants import QUEUE_REPORT_SECTIONS, queue_report_tally
+from backend.util.constants import (
+    QUEUE_REPORT_SECTIONS,
+    queue_report_tally,
+    upgrade_quality_text,
+    upgrade_report_tally,
+    upgrade_score_text,
+)
 from backend.util.database import ChubDB
+from backend.util.database.upgradinatorr_grabs import UpgradinatorrGrabs
 from backend.util.database.upgradinatorr_progress import UpgradinatorrProgress
 from backend.util.helper import as_list, create_table, print_settings
 from backend.util.logger import Logger
@@ -50,6 +57,15 @@ SEARCH_COMMAND_NAMES = (
 QUEUE_MAX_PAGES = 50
 # Mirrors UpgradinatorrInstance.queue_block_hours.
 QUEUE_BLOCK_HOURS_DEFAULT = 72
+# How long a grab stays pending an import outcome. Also bounds the history
+# lookback: the window starts at the oldest grab still held.
+GRAB_RETENTION_DAYS = 7
+# Synthetic ids _history_record_to_download mints when an *arr reports no
+# downloadId. They can never match an import record, so they're never stored.
+SYNTHETIC_DOWNLOAD_ID_PREFIX = "history:"
+# How far an Upgrade delete may sit from the import that caused it. Measured
+# across a live Radarr/Sonarr history: 24/24 pairs landed within 1 second.
+UPGRADE_PAIR_WINDOW_SECONDS = 300
 
 
 class _BufferingLogger:
@@ -559,6 +575,141 @@ class Upgradinatorr(ChubModule):
                 continue
             grabbed_downloads.setdefault(media_id, []).append(download)
             existing_keys.add(key)
+
+    @staticmethod
+    def _history_lookback(pending: List[Dict[str, Any]]) -> str:
+        """Oldest pending grab, as a UTC stamp every *arr parses."""
+        stamps = [row.get("grabbed_at") for row in pending if row.get("grabbed_at")]
+        oldest = Upgradinatorr._parse_arr_datetime(min(stamps)) if stamps else None
+        if oldest is None:
+            oldest = datetime.now(timezone.utc) - timedelta(days=GRAB_RETENTION_DAYS)
+        return oldest.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def _collect_completed_upgrades(
+        self, app: BaseARRClient, grabs_db: UpgradinatorrGrabs
+    ) -> List[Dict[str, Any]]:
+        """Grabs from earlier runs whose download imported AND replaced a file.
+
+        A run ends at the search, so this is the only place an upgrade can be
+        confirmed. Fails closed — an unreadable history leaves grabs pending for
+        the next run rather than resolving them as "nothing was upgraded".
+        """
+        grabs_db.prune(app.instance_name, GRAB_RETENTION_DAYS)
+        pending = grabs_db.pending(app.instance_name)
+        if not pending:
+            return []
+        pair_field = getattr(app, "upgrade_pair_field", None)
+        import_event = getattr(app, "history_import_event", None)
+        delete_event = getattr(app, "history_upgrade_delete_event", None)
+        if not pair_field or import_event is None or delete_event is None:
+            self.logger.debug(
+                f"{app.instance_name} maps no history events; skipping the "
+                "completed-upgrade report."
+            )
+            return []
+        since = self._history_lookback(pending)
+        imports = app.get_history_since(since, import_event)
+        deletes = app.get_history_since(since, delete_event)
+        if not isinstance(imports, list) or not isinstance(deletes, list):
+            self.logger.warning(
+                f"Could not read {app.instance_name} history since {since}; "
+                f"{len(pending)} grab(s) stay pending for the next run."
+            )
+            return []
+
+        # A file deleted "for Upgrade" is what separates an upgrade from a first
+        # acquisition — missing-mode backfill replaces nothing, so it drops out
+        # here without the run needing to know its search_mode.
+        replaced: Dict[Any, List[Tuple[datetime, Dict[str, Any]]]] = {}
+        for record in deletes:
+            if not isinstance(record, dict):
+                continue
+            reason = str((record.get("data") or {}).get("reason") or "").strip().lower()
+            key = record.get(pair_field)
+            when = self._parse_arr_datetime(record.get("date"))
+            if reason == "upgrade" and key is not None and when is not None:
+                replaced.setdefault(key, []).append((when, record))
+
+        by_download_id = {str(row["download_id"]): row for row in pending}
+        ours = [
+            record
+            for record in imports
+            if isinstance(record, dict)
+            and str(record.get("downloadId") or "") in by_download_id
+        ]
+        ours.sort(key=lambda record: str(record.get("date") or ""))
+        paired = self._pair_upgrades(ours, pair_field, replaced)
+
+        # A grab imports as several records (a Sonarr season pack lands one per
+        # episode), so key by download id and report the release once.
+        upgrades_by_download: Dict[str, Dict[str, Any]] = {}
+        for index, record in enumerate(ours):
+            if index not in paired:
+                continue
+            download_id = str(record.get("downloadId"))
+            if download_id in upgrades_by_download:
+                continue
+            grab = by_download_id[download_id]
+            score = record.get("customFormatScore")
+            deleted = paired[index]
+            upgrades_by_download[download_id] = {
+                "media_id": grab.get("media_id"),
+                "title": grab.get("title"),
+                "year": grab.get("year"),
+                "download": grab.get("release_title"),
+                "score": grab.get("score") if score is None else score,
+                "previous_score": deleted.get("customFormatScore"),
+                "quality": self._quality_name(record),
+                "previous_quality": self._quality_name(deleted),
+            }
+        # Every grab that imported has a known outcome now, upgrade or not.
+        grabs_db.clear(
+            app.instance_name,
+            {str(record.get("downloadId")) for record in ours},
+        )
+        return list(upgrades_by_download.values())
+
+    @staticmethod
+    def _quality_name(record: Dict[str, Any]) -> Optional[str]:
+        """The *arr's quality name for a history record, e.g. ``Remux-1080p``."""
+        quality = (record.get("quality") or {}).get("quality") or {}
+        return quality.get("name")
+
+    @classmethod
+    def _pair_upgrades(
+        cls,
+        records: List[Dict[str, Any]],
+        pair_field: str,
+        replaced: Dict[Any, List[Tuple[datetime, Dict[str, Any]]]],
+    ) -> Dict[int, Dict[str, Any]]:
+        """Import index -> the delete record it replaced, for imports that upgraded.
+
+        An *arr deletes the outgoing file as it imports the replacement; across
+        a live Radarr/Sonarr history every pair landed within 1s. The closest
+        pair wins OUTRIGHT rather than first-come — two releases of one episode
+        can import a second apart against a single delete, and awarding it by
+        time order credits the release that was itself the one replaced. Each
+        delete is claimed once, so no file counts as replaced twice.
+        """
+        candidates: List[Tuple[float, int, Any, int]] = []
+        for index, record in enumerate(records):
+            when = cls._parse_arr_datetime(record.get("date"))
+            key = record.get(pair_field)
+            if when is None or key is None:
+                continue
+            for slot, (deleted_at, _deleted) in enumerate(replaced.get(key) or []):
+                delta = abs((deleted_at - when).total_seconds())
+                if delta <= UPGRADE_PAIR_WINDOW_SECONDS:
+                    candidates.append((delta, index, key, slot))
+        candidates.sort(key=lambda candidate: (candidate[0], candidate[1]))
+        paired: Dict[int, Dict[str, Any]] = {}
+        taken: Set[Tuple[Any, int]] = set()
+        for _delta, index, key, slot in candidates:
+            if index in paired or (key, slot) in taken:
+                continue
+            taken.add((key, slot))
+            paired[index] = replaced[key][slot][1]
+        return paired
 
     def _process_sonarr_item(
         self,
@@ -1422,6 +1573,9 @@ class Upgradinatorr(ChubModule):
             "searches_failed": 0,
             "searches_deferred": 0,
             "data": [],
+            # Grabs from EARLIER runs whose import completed and replaced a
+            # file. This run's own grabs haven't downloaded yet.
+            "upgrades": [],
         }
 
         if not self.config.dry_run:
@@ -1593,21 +1747,29 @@ class Upgradinatorr(ChubModule):
             for q in queue_dict:
                 queue_map.setdefault(q["media_id"], []).append(q)
 
+            run_grabs: List[Dict[str, Any]] = []
             for item in searched_items:
-                downloads = {}
+                # Keyed by download id, not title: Lidarr's queue rewrites a
+                # release title (drops the year, reorders tags), so a title
+                # compare never matches its own grab history and lists it twice.
+                by_download_id: Dict[str, Dict[str, Any]] = {}
                 for q in grabbed_downloads.get(item["media_id"], []):
-                    downloads[q["download"]] = q["torrent_custom_format_score"]
+                    by_download_id[str(q["download_id"])] = {
+                        "download": q["download"],
+                        "score": q["torrent_custom_format_score"],
+                    }
                 queue_imports: List[Dict[str, Any]] = []
                 for q in queue_map.get(item["media_id"], []):
-                    if q["state"] == "done" or q["download"] in downloads:
+                    if q["state"] == "done" or str(q["download_id"]) in by_download_id:
                         continue
                     added = self._parse_arr_datetime(q.get("added"))
                     if added is None or added >= run_started:
                         # Undated rows report as grabs: that arm is the only grab
                         # signal for *arrs with unscoped grab history.
-                        downloads.setdefault(
-                            q["download"], q["torrent_custom_format_score"]
-                        )
+                        by_download_id[str(q["download_id"])] = {
+                            "download": q["download"],
+                            "score": q["torrent_custom_format_score"],
+                        }
                         continue
                     queue_imports.append(
                         {
@@ -1620,12 +1782,28 @@ class Upgradinatorr(ChubModule):
                             "messages": q.get("messages") or [],
                         }
                     )
+                grabs = [
+                    {"download_id": download_id, **grab}
+                    for download_id, grab in by_download_id.items()
+                ]
+                run_grabs.extend(
+                    {
+                        "download_id": grab["download_id"],
+                        "media_id": item["media_id"],
+                        "title": item["title"],
+                        "year": item["year"],
+                        "release_title": grab["download"],
+                        "score": grab["score"],
+                    }
+                    for grab in grabs
+                    if not grab["download_id"].startswith(SYNTHETIC_DOWNLOAD_ID_PREFIX)
+                )
                 output_dict["data"].append(
                     {
                         "media_id": item["media_id"],
                         "title": item["title"],
                         "year": item["year"],
-                        "download": downloads,
+                        "grabs": grabs,
                         "queue_imports": queue_imports,
                         "search_failures": failed_searches.get(item["media_id"], []),
                     }
@@ -1645,6 +1823,18 @@ class Upgradinatorr(ChubModule):
             if deferred:
                 summary += f", {deferred} staged for the next run"
             self.logger.info(summary)
+            # Opened after the search loop's db_ctx has closed — the searches
+            # can run for minutes and nothing here needs a connection held open.
+            with ChubDB(logger=self.logger) as grabs_ctx:
+                grabs_db = grabs_ctx.upgradinatorr_grabs
+                # Read outcomes BEFORE recording this run's grabs, so a grab
+                # can't resolve against history in the run that made it.
+                output_dict["upgrades"] = self._collect_completed_upgrades(
+                    app, grabs_db
+                )
+                grabs_db.record(
+                    app.instance_name, run_grabs, grabbed_at=run_started.isoformat()
+                )
         else:
             for item in filtered_media_dict:
                 output_dict["data"].append(
@@ -1652,8 +1842,7 @@ class Upgradinatorr(ChubModule):
                         "media_id": item["media_id"],
                         "title": item["title"],
                         "year": item["year"],
-                        "download": None,
-                        "torrent_custom_format_score": None,
+                        "grabs": [],
                         "queue_imports": [],
                         "search_failures": [],
                     }
@@ -1683,7 +1872,7 @@ class Upgradinatorr(ChubModule):
                     "media_id": media_id,
                     "title": source.get("title", f"ID {media_id}"),
                     "year": source.get("year"),
-                    "download": {},
+                    "grabs": [],
                     "queue_imports": [],
                     "search_failures": [],
                 }
@@ -1725,8 +1914,11 @@ class Upgradinatorr(ChubModule):
         for instance, run_data in output_dict.items():
             if not run_data:
                 continue
-            instance_data = run_data.get("data", None)
-            if not instance_data:
+            instance_data = run_data.get("data") or []
+            upgrades = run_data.get("upgrades") or []
+            # Upgrades come from EARLIER runs' grabs, so they must print even
+            # when this run searched nothing.
+            if not instance_data and not upgrades:
                 self.logger.info(f"No items found for {instance}.")
                 continue
 
@@ -1749,25 +1941,44 @@ class Upgradinatorr(ChubModule):
                     "the next run resumes the untagged work. Not a failure."
                 )
 
-            with_grabs = [it for it in instance_data if it.get("download")]
+            with_grabs = [it for it in instance_data if it.get("grabs")]
             with_failures = [it for it in instance_data if it.get("search_failures")]
             no_grabs = [
                 it
                 for it in instance_data
-                if not it.get("download")
+                if not it.get("grabs")
                 and not it.get("search_failures")
                 and not it.get("queue_imports")
             ]
 
+            if upgrades:
+                items = {upgrade.get("media_id") for upgrade in upgrades}
+                self.logger.info(
+                    f"[UPGRADED] {upgrade_report_tally(len(upgrades), len(items))}:"
+                )
+                for upgrade in upgrades:
+                    self.logger.info(f"  {self._format_item_title(upgrade)}")
+                    quality = upgrade_quality_text(
+                        upgrade.get("quality"), upgrade.get("previous_quality")
+                    )
+                    self.logger.info(
+                        f"    Score "
+                        f"{upgrade_score_text(upgrade.get('score'), upgrade.get('previous_score'))}"
+                        + (f", {quality}" if quality else "")
+                        + f" — {upgrade.get('download')}"
+                    )
+
             if with_grabs:
-                grab_total = sum(len(it["download"]) for it in with_grabs)
+                grab_total = sum(len(it["grabs"]) for it in with_grabs)
                 self.logger.info(
                     f"[GRABBED] {grab_total} download(s) across {len(with_grabs)} item(s):"
                 )
                 for item in with_grabs:
                     self.logger.info(f"  {self._format_item_title(item)}")
-                    for download, format_score in item["download"].items():
-                        self.logger.info(f"    Score {format_score} — {download}")
+                    for grab in item["grabs"]:
+                        self.logger.info(
+                            f"    Score {grab['score']} — {grab['download']}"
+                        )
 
             for state, tag, note, level in QUEUE_REPORT_SECTIONS:
                 grouped = [

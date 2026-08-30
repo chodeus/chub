@@ -31,6 +31,7 @@ from .tmdb_id_cache import TmdbIdCache
 from .tmdb_details_cache import TmdbDetailsCache
 from .tmdb_images_cache import TmdbImagesCache
 from .fanart_images_cache import FanartImagesCache
+from .upgradinatorr_grabs import UpgradinatorrGrabs
 from .upgradinatorr_progress import UpgradinatorrProgress
 from .webhook_cache import WebhookCache
 from .worker import DBWorker
@@ -249,6 +250,11 @@ class ChubDB:
         return self._get_interface("upgradinatorr_progress", UpgradinatorrProgress)
 
     @property
+    def upgradinatorr_grabs(self) -> UpgradinatorrGrabs:
+        """Access to Upgradinatorr grabs awaiting an import outcome."""
+        return self._get_interface("upgradinatorr_grabs", UpgradinatorrGrabs)
+
+    @property
     def tmdb_id_cache(self) -> TmdbIdCache:
         """Access to TMDB external-ID lookup cache."""
         return self._get_interface("tmdb_id_cache", TmdbIdCache)
@@ -348,11 +354,15 @@ class ChubDB:
             ("plex_media_cache", None),
             ("collections_cache", None),
             ("upgradinatorr_progress", None),
+            ("upgradinatorr_grabs", None),
         ]
+        # Upgradinatorr runs against all three *arrs — omitting one here orphans
+        # its rows under the old instance name on rename.
         single_service = {
             "plex_media_cache": {"plex"},
             "collections_cache": {"plex"},
-            "upgradinatorr_progress": {"radarr", "sonarr"},
+            "upgradinatorr_progress": {"radarr", "sonarr", "lidarr"},
+            "upgradinatorr_grabs": {"radarr", "sonarr", "lidarr"},
         }
 
         total = 0
