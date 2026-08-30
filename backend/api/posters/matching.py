@@ -457,11 +457,9 @@ def ignore_match(
             f"(kind={kind}, ignored={ignored})"
         )
         iface = db.collection if kind == "collection" else db.media
+        # set_ignored also releases the manual-pick lock when ignoring, in the
+        # same statement, so the matcher is free to re-evaluate the row.
         iface.set_ignored(media_id, ignored)
-        # Ignoring releases any manual-pick lock so the matcher is free to
-        # re-evaluate the row (it's hidden from review while ignored anyway).
-        if ignored:
-            iface.set_user_confirmed(media_id, False)
         verb = "ignored" if ignored else "restored"
         return ok(f"Row {verb}", {"id": media_id, "ignored": bool(ignored)})
     except Exception as e:
@@ -492,9 +490,9 @@ def approve_match(
             f"Serving POST /api/posters/match/{media_id}/approve (kind={kind})"
         )
         iface = db.collection if kind == "collection" else db.media
+        # approve_match locks the confirmed match in the same statement so a
+        # future re-scan can't revert it (Fix B).
         iface.approve_match(media_id)
-        # Lock the confirmed match so a future re-scan can't revert it (Fix B).
-        iface.set_user_confirmed(media_id, True)
         return ok("Match approved", {"id": media_id, "match_status": "matched"})
     except Exception as e:
         logger.error(f"Error approving match for {media_id}: {e}")
@@ -523,9 +521,9 @@ def unlock_match(
     try:
         logger.debug(f"Serving POST /api/posters/match/{media_id}/unlock (kind={kind})")
         iface = db.collection if kind == "collection" else db.media
+        # reopen_for_review drops the lock in the same statement, so the next
+        # scheduled run is free to recompute the match.
         iface.reopen_for_review(media_id)
-        # Drop the lock so the next scheduled run is free to recompute the match.
-        iface.set_user_confirmed(media_id, False)
         return ok(
             "Match unlocked",
             {"id": media_id, "match_status": "needs_review"},
