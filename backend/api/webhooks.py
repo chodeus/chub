@@ -407,7 +407,7 @@ def _is_test_event(data: Dict[str, Any]) -> bool:
         }
     },
 )
-async def get_webhook_wiring(
+def get_webhook_wiring(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     """Return the inbound webhook path and secret for the UI's paste-ready URLs."""
@@ -654,7 +654,7 @@ async def remove_webhooks(
         }
     },
 )
-async def get_unmatched_webhook_status(
+def get_unmatched_webhook_status(
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     """
@@ -707,7 +707,7 @@ async def get_unmatched_webhook_status(
         401: {"description": "Invalid webhook secret"},
     },
 )
-async def process_unmatched_webhook(
+def process_unmatched_webhook(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
     _secret: None = Depends(verify_webhook_secret),

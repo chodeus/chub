@@ -83,7 +83,7 @@ router = APIRouter(
         }
     },
 )
-async def search_media(
+def search_media(
     query: Optional[str] = None,
     type: Optional[str] = Query(
         None, description="Filter by asset type: movie, show, all"
@@ -198,7 +198,7 @@ async def search_media(
         }
     },
 )
-async def get_media_stats(
+def get_media_stats(
     type: Optional[str] = Query(None, description="Filter by asset type"),
     period: Optional[str] = Query(
         None,
@@ -252,7 +252,7 @@ async def get_media_stats(
     description="Retrieve extended statistics with breakdowns by instance, status, "
     "language, rating, studio, decade, genre, runtime, and monitored status.",
 )
-async def get_media_stats_detailed(
+def get_media_stats_detailed(
     type: Optional[str] = Query(None, description="Filter by asset type"),
     period: Optional[str] = Query(
         None,
@@ -318,7 +318,7 @@ async def get_media_stats_detailed(
         }
     },
 )
-async def get_genres(
+def get_genres(
     type: Optional[str] = Query(None, description="Filter by asset type"),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -378,7 +378,7 @@ async def get_genres(
         }
     },
 )
-async def get_collections(
+def get_collections(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -447,7 +447,7 @@ async def get_collections(
         }
     },
 )
-async def get_duplicates(
+def get_duplicates(
     type: Optional[str] = Query(None, description="Filter by asset type"),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -703,7 +703,7 @@ async def export_media(
         404: {"description": "Collection not found"},
     },
 )
-async def delete_collection(
+def delete_collection(
     collection_id: int,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -1166,7 +1166,7 @@ def _bulk_delete_sync(db, logger, ids, delete_files, add_exclusion) -> JSONRespo
 
 
 @router.get("/low-rated", summary="List media below a rating threshold")
-async def get_low_rated(
+def get_low_rated(
     max_rating: float = 5.0,
     limit: int = 100,
     offset: int = 0,
@@ -1199,7 +1199,7 @@ async def get_low_rated(
     summary="List media with missing key metadata",
     responses={400: {"description": "No valid fields requested"}},
 )
-async def get_incomplete_metadata(
+def get_incomplete_metadata(
     fields: str = "rating,studio,language,genre",
     limit: int = 200,
     offset: int = 0,
@@ -1524,7 +1524,7 @@ def get_duplicate_members(
     summary="Delete orphaned cache rows by id",
     responses={400: {"description": "No ids provided"}},
 )
-async def purge_orphaned_cache(
+def purge_orphaned_cache(
     body: OrphanedPurgeRequest,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -1581,7 +1581,7 @@ async def purge_orphaned_cache(
         404: {"description": "Media item not found"},
     },
 )
-async def get_media_item(
+def get_media_item(
     media_id: int,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -2031,7 +2031,7 @@ async def generate_collection_from_tag(
     summary="Media edit history",
     description="Return audit trail of metadata edits for a media item.",
 )
-async def get_media_history(
+def get_media_history(
     media_id: int,
     limit: int = 100,
     logger: Any = Depends(get_logger),

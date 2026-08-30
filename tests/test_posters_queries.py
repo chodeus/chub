@@ -290,6 +290,68 @@ def test_collection_approve_and_reopen_round_trip(db):
     assert db.collection.get_by_id(cid)["match_status"] == "needs_review"
 
 
+def test_approve_and_reopen_move_the_lock_in_the_same_statement(db):
+    """Each transition writes match_status and user_confirmed together, not in two."""
+    mid = _seed_media(db, "Dune")
+
+    calls = []
+    real = db.media.execute_query
+    db.media.execute_query = lambda q, *a, **k: (calls.append(q), real(q, *a, **k))[1]
+    try:
+        db.media.approve_match(mid)
+        approve_writes = [q for q in calls if q.strip().upper().startswith("UPDATE")]
+        calls.clear()
+        db.media.reopen_for_review(mid)
+        reopen_writes = [q for q in calls if q.strip().upper().startswith("UPDATE")]
+    finally:
+        db.media.execute_query = real
+
+    assert len(approve_writes) == 1, "approve must not split state and lock"
+    assert len(reopen_writes) == 1, "reopen must not split state and lock"
+
+
+def test_approve_locks_the_row_and_reopen_releases_it(db):
+    """Approval sets user_confirmed; reopening clears it."""
+    mid = _seed_media(db, "Dune")
+
+    db.media.approve_match(mid)
+    assert db.media.get_by_id(mid)["user_confirmed"] == 1
+
+    db.media.reopen_for_review(mid)
+    assert db.media.get_by_id(mid)["user_confirmed"] == 0
+
+
+def test_ignoring_releases_the_lock_but_restoring_leaves_it_alone(db):
+    """set_ignored(True) drops the lock; set_ignored(False) must not re-grant it."""
+    mid = _seed_media(db, "Dune")
+    db.media.approve_match(mid)
+
+    db.media.set_ignored(mid, True)
+    row = db.media.get_by_id(mid)
+    assert row["ignored"] == 1 and row["user_confirmed"] == 0
+
+    db.media.approve_match(mid)  # re-lock, then restore from ignored
+    db.media.set_ignored(mid, False)
+    row = db.media.get_by_id(mid)
+    assert row["ignored"] == 0
+    assert row["user_confirmed"] == 1, "restoring must not clear an existing lock"
+
+
+def test_collection_transitions_carry_the_lock_too(db):
+    """CollectionCache mirrors the media behaviour against collections_cache."""
+    db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+    cid = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")["id"]
+
+    db.collection.approve_match(cid)
+    assert db.collection.get_by_id(cid)["user_confirmed"] == 1
+
+    db.collection.set_ignored(cid, True)
+    assert db.collection.get_by_id(cid)["user_confirmed"] == 0
+
+    db.collection.reopen_for_review(cid)
+    assert db.collection.get_by_id(cid)["user_confirmed"] == 0
+
+
 # --- MediaCache.find_by_original_file_basename -----------------------------
 
 

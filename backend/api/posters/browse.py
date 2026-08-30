@@ -37,7 +37,7 @@ from backend.util.database import ChubDB
         }
     },
 )
-async def auto_match_posters(
+def auto_match_posters(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -94,7 +94,7 @@ async def auto_match_posters(
         }
     },
 )
-async def browse_posters(
+def browse_posters(
     owner: Optional[str] = Query(None, description="Filter by GDrive owner name"),
     type: Optional[str] = Query(
         None, description="Filter by asset type: movie, show, season, collection"

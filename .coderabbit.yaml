@@ -1,6 +1,6 @@
 # .coderabbit.yaml — CHUB (Chodeus' Media Script Hub)
 # FastAPI + SQLite Python backend (main.py, backend/) + React 19 / Vite / Tailwind v4 frontend (frontend/).
-# Shared infra: keep this file byte-identical on main and develop (add on main, then merge main -> develop).
+# One branch: main. Everything PRs into it (#577 retired develop).
 language: "en-US"
 
 reviews:
@@ -9,10 +9,8 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
-    # main is the default branch and is always auto-reviewed; develop is the
-    # active dev branch that feature branches are cut from and PR into.
-    base_branches:
-      - "^develop$"   # anchored — base_branches are regex; unanchored could match feature/develop etc.
+    # No base_branches: main is the default branch and is always auto-reviewed.
+    # The old "^develop$" entry matched nothing once #577 retired that branch.
 
   path_filters:
     - "!**/*.db"
@@ -62,7 +60,7 @@ reviews:
         - Redaction must run at the formatter on the FULLY RENDERED line (msg, args AND the exc_info traceback), on every handler — HTTP-client exceptions embed secret-bearing URLs in the traceback.
         - Cover URL PATH-SEGMENT secrets, not just query params: e.g. ?X-Plex-Token=, ?apikey=, /passthrough/<key>, bearer tokens. A regex that only masks query strings misses path-embedded secrets.
         - Mask by sensitive key name structurally so new secret fields are redacted automatically.
-    - path: "backend/api/posters.py"
+    - path: "backend/api/posters/**/*.py"
       instructions: |-
         Poster / GDrive endpoints — high-stakes local-delete path:
         - /gdrive/delete-local must authorize by gdrive_list MEMBERSHIP (realpath-match against a currently-configured gdrive_list entry), NOT is_path_allowed — is_path_allowed keys off roots that exist on disk and would wrongly refuse (and skip the row purge for) a drive whose folder was already deleted. Do NOT add an is_path_allowed gate to this handler.
@@ -76,6 +74,30 @@ reviews:
         - useEffect/useMemo/useCallback deps: follow exhaustive-deps — include EVERY reactive value the effect/callback reads. To control excess re-runs, memoize the object/callback at its source (useMemo/useCallback) or depend on a stable identity field (e.g. item.id) ONLY when that field fully determines the work; never drop a value the body reads just to silence a re-run (that is a stale-closure bug). A non-memoized object/callback gets a new identity every parent render so `[obj]`/`[onDone]` re-runs then — a memoized one does not.
         - Clean up on unmount: clear timers/intervals, abort fetches, close EventSource/WebSocket and stop polling loops in the effect's cleanup return.
         - Never embed the full session JWT in an <img>/EventSource/link URL — use the short-lived stream token (useStreamToken) for URL-embedded auth.
+
+    - path: "deploy/docker/**"
+      instructions: |-
+        Container build — every layer ships in the published image:
+        - A recursive `chown -R` / `chmod -R` over a tree a previous COPY wrote re-materialises EVERY file in a new layer, duplicating the tree in the image (45MB of /app here). Set ownership with `COPY --chown=uid:gid`; when a later RUN creates files, it must chown them inside that same RUN, never in a fresh layer. Prefer a build-time assertion over a tree-wide chmod.
+        - Pin base images by digest (FROM image:tag@sha256:...) and pin apt/pip/npm versions — an unpinned tag silently changes the runtime between builds.
+        - Never bake a secret into ARG/ENV or into a RUN's argv: both persist in image history, and /proc/<pid>/cmdline is world-readable in-container. Pass credentials as runtime env instead.
+        - Don't pipe a remote script into a shell (curl ... | sh). Fetch it, verify against a published checksum, then run it.
+        - Multi-stage: the runtime stage must not inherit compilers, headers or -dev packages from the builder. Copy artefacts, not toolchains.
+        - A path added or renamed here must stay in step with the paths filters in .github/workflows/* — otherwise the image silently stops being built and validated on PRs that touch it.
+    - path: "requirements*.txt"
+      instructions: |-
+        Python dependency manifest:
+        - An extra ([composite], [all], [security]) pulls that extra's whole transitive set. Confirm the code path needing it still EXISTS: deleting a feature leaves its dependency behind. psd-tools[composite] carried scipy + scikit-image (107MB) for a PSD-flatten path that was removed three days after the extra was added, and survived 2.5 months.
+        - A pin whose comment says it exists only to lift a transitive floor out of a CVE is a smell — check whether the consumer is still reachable at all, and drop the dependency rather than maintain the pin.
+        - Removing a feature must remove its dependency in the same change: flag a PR deleting a module, route or config field that touches no manifest.
+        - Runtime vs dev: a test-only or build-only package must not land in the manifest the runtime image installs.
+    - path: "tests/**/*.py"
+      instructions: |-
+        Test suite:
+        - No side-effecting call inside an assert — python -O strips assert statements, taking the call with them. Bind to a local first, then assert on the local.
+        - A guard that cannot fail is worse than no guard. If an assertion is reachable only when some list is non-empty, or keys off a symbol that may be renamed, it passes vacuously. Pair it with a control that fails when the defect is injected.
+        - A static/AST check over source must resolve helper calls, not only direct ones: keying on a direct call name misses a handler that reaches the behaviour through a helper, which is exactly the case such a check exists to catch.
+        - Assert the observable contract (resulting state), not incidental ordering or a mock's call count, unless the call count IS the invariant.
 
   tools:
     # ruff + eslint intentionally left to CI (codeql-lint.yml already runs Ruff,

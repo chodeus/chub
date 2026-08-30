@@ -31,7 +31,7 @@ def _empty_results():
 
 
 @router.get("/results")
-async def get_cached_scan_results(request: Request, db: ChubDB = Depends(get_database)):
+def get_cached_scan_results(request: Request, db: ChubDB = Depends(get_database)):
     """Return the most recent cached scan results, or empty if no scan has been run."""
     logger = get_module_logger(request, "nestarr")
     config = load_config()

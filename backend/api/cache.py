@@ -66,7 +66,7 @@ def _page(rows: list, limit: Optional[int], offset: int) -> list:
         }
     },
 )
-async def get_media_cache(
+def get_media_cache(
     limit: Optional[int] = Query(None, ge=1, le=500),
     offset: int = Query(0, ge=0),
     logger: Any = Depends(get_logger),
@@ -120,7 +120,7 @@ async def get_media_cache(
         }
     },
 )
-async def get_collection_cache(
+def get_collection_cache(
     limit: Optional[int] = Query(None, ge=1, le=500),
     offset: int = Query(0, ge=0),
     logger: Any = Depends(get_logger),
@@ -175,7 +175,7 @@ async def get_collection_cache(
         }
     },
 )
-async def get_plex_cache(
+def get_plex_cache(
     limit: Optional[int] = Query(None, ge=1, le=500),
     offset: int = Query(0, ge=0),
     logger: Any = Depends(get_logger),
@@ -290,7 +290,7 @@ async def refresh_cache(
         404: {"description": "Media cache item not found"},
     },
 )
-async def delete_media_cache_item(
+def delete_media_cache_item(
     item_id: int, logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> JSONResponse:
     """Delete one media cache row; 404 when the id is unknown. Not undoable."""
@@ -341,7 +341,7 @@ async def delete_media_cache_item(
         404: {"description": "Collection cache item not found"},
     },
 )
-async def delete_collection_cache_item(
+def delete_collection_cache_item(
     item_id: int, logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> JSONResponse:
     """Delete one collection cache row; 404 when the id is unknown. Not undoable."""

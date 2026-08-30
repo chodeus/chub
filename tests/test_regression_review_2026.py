@@ -614,7 +614,6 @@ def test_poster_preview_denies_a_symlink_escaping_the_roots(tmp_path, monkeypatc
         lambda p, cfg: str(p).startswith(str(root)),
     )
 
-    import asyncio
 
     class _Log:
         """Quiet logger stub."""
@@ -623,9 +622,7 @@ def test_poster_preview_denies_a_symlink_escaping_the_roots(tmp_path, monkeypatc
             """Return a no-op for any log method."""
             return lambda *a, **k: None
 
-    resp = asyncio.run(
-        posters_files.preview_poster_file(
-            location=str(root), path=str(link), logger=_Log()
-        )
+    resp = posters_files.preview_poster_file(
+        location=str(root), path=str(link), logger=_Log()
     )
     assert getattr(resp, "status_code", 200) == 403, "symlink escape was served"

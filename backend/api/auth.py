@@ -57,7 +57,7 @@ def _is_auth_configured() -> bool:
     summary="Auth status",
     description="Check whether authentication is configured and required.",
 )
-async def auth_status(logger: Any = Depends(get_logger)) -> JSONResponse:
+def auth_status(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Return whether auth is set up. Used by frontend to decide login vs setup."""
     configured = _is_auth_configured()
     return ok(
@@ -71,7 +71,7 @@ async def auth_status(logger: Any = Depends(get_logger)) -> JSONResponse:
     summary="Current authenticated user",
     description="Return the username from the validated JWT session.",
 )
-async def current_user(request: Request) -> JSONResponse:
+def current_user(request: Request) -> JSONResponse:
     """Return the authenticated user attached by AuthMiddleware."""
     username = getattr(request.state, "user", "")
     if not username:
@@ -88,7 +88,7 @@ async def current_user(request: Request) -> JSONResponse:
     summary="Logout",
     description="Stateless JWT logout acknowledgement for frontend session cleanup.",
 )
-async def logout() -> JSONResponse:
+def logout() -> JSONResponse:
     """Acknowledge logout. Token removal happens client-side."""
     return ok("Logout successful")
 
@@ -99,7 +99,7 @@ async def logout() -> JSONResponse:
     description="Scope-limited token for URL-embedded auth on image/SSE routes, "
     "so the full session token never rides in a URL.",
 )
-async def stream_token(request: Request) -> JSONResponse:
+def stream_token(request: Request) -> JSONResponse:
     """Return a short-lived (scope=stream) token. Requires a full session token
     (enforced by AuthMiddleware); the stream token itself can't mint another."""
     username = getattr(request.state, "user", "") or ""
@@ -123,6 +123,8 @@ async def stream_token(request: Request) -> JSONResponse:
     summary="First-run auth setup",
     description="Set initial admin credentials. Only works when no credentials are configured.",
 )
+# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
+# these concurrently and drops config updates. See test_route_concurrency_invariants.
 async def setup_auth(
     request_data: SetupRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
@@ -186,7 +188,7 @@ async def setup_auth(
     description="Authenticate with username and password to receive a JWT token.",
     dependencies=[Depends(login_limiter)],
 )
-async def login(
+def login(
     request_data: LoginRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """Validate credentials and return a JWT access token."""
