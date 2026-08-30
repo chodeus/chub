@@ -42,7 +42,7 @@ from backend.util.database import ChubDB
         400: {"description": "Invalid location or location parameter missing"},
     },
 )
-async def analyze_poster_directory(
+def analyze_poster_directory(
     location: str = None, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
@@ -162,7 +162,7 @@ async def analyze_poster_directory(
         415: {"description": "Unsupported file type"},
     },
 )
-async def preview_poster_file(
+def preview_poster_file(
     location: str = "", path: str = "", logger: Any = Depends(get_logger)
 ) -> FileResponse:
     """

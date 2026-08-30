@@ -26,7 +26,7 @@ from backend.api.posters._shared import get_cleanarr_logger, router
 
 
 @router.get("/plex-metadata/by-media")
-async def list_plex_metadata_by_media(
+def list_plex_metadata_by_media(
     request: Request,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -161,7 +161,7 @@ async def list_plex_metadata_by_media(
 
 
 @router.get("/plex-metadata/bloat")
-async def list_plex_metadata_bloat(
+def list_plex_metadata_bloat(
     request: Request,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -412,7 +412,7 @@ async def set_plex_metadata_active(
 
 
 @router.get("/plex-metadata/variant-thumbnail")
-async def get_plex_variant_thumbnail(
+def get_plex_variant_thumbnail(
     request: Request,
     path: str = Query(...),
 ):
@@ -435,7 +435,7 @@ async def get_plex_variant_thumbnail(
 
 
 @router.get("/plex-metadata/kometa-assets-scan")
-async def scan_kometa_assets(
+def scan_kometa_assets(
     logger: Any = Depends(get_cleanarr_logger),
 ):
     """Return the cached Kometa stale-duplicate + orphan scan. Read-only and
@@ -467,7 +467,7 @@ async def scan_kometa_assets(
 
 
 @router.post("/plex-metadata/scan")
-async def enqueue_plex_metadata_scan(
+def enqueue_plex_metadata_scan(
     request: Request,
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cleanarr_logger),
@@ -500,7 +500,7 @@ async def enqueue_plex_metadata_scan(
 
 
 @router.post("/plex-metadata/kometa-scan")
-async def enqueue_kometa_assets_scan(
+def enqueue_kometa_assets_scan(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cleanarr_logger),
 ):

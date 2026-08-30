@@ -263,11 +263,13 @@ class DBWorker(DatabaseBase):
             return None
         if row["status"] not in ("error", "success"):
             return False
-        self.execute_query(
-            f"UPDATE {table_name} SET status='pending', attempts=0, scheduled_at=NULL, error=NULL, result=NULL, started_at=NULL, completed_at=NULL WHERE id=?",
+        # Compare-and-swap, like claim_next_job and cancel_running_job: without it
+        # two concurrent retries both pass the check and the loser reruns a claimed job.
+        updated = self.execute_query(
+            f"UPDATE {table_name} SET status='pending', attempts=0, scheduled_at=NULL, error=NULL, result=NULL, started_at=NULL, completed_at=NULL WHERE id=? AND status IN ('error','success')",
             (job_id,),
         )
-        return True
+        return updated == 1
 
     def claim_next_job(self, table_name: str, job_type_filter: str = None):
         """Claim the next available job"""

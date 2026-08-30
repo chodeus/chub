@@ -56,7 +56,7 @@ router = APIRouter(
 
 
 @router.get("/jobs/stats")
-async def get_job_stats(
+def get_job_stats(
     logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> Dict[str, Any]:
     """Retrieve job statistics."""
@@ -81,7 +81,7 @@ async def get_job_stats(
 
 
 @router.get("/jobs")
-async def list_jobs(
+def list_jobs(
     status: Optional[str] = None,
     job_type: Optional[str] = None,
     module: Optional[str] = None,
@@ -133,7 +133,7 @@ async def list_jobs(
 
 
 @router.get("/jobs/webhook-origins")
-async def list_webhook_origins(
+def list_webhook_origins(
     days: int = 7,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -200,7 +200,7 @@ async def list_webhook_origins(
 
 
 @router.delete("/jobs/old")
-async def delete_old_jobs(
+def delete_old_jobs(
     days: int = 30,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -225,7 +225,7 @@ async def delete_old_jobs(
 
 
 @router.get("/jobs/{job_id}")
-async def get_job_detail(
+def get_job_detail(
     job_id: int, logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> Dict[str, Any]:
     """Retrieve job details by ID."""
@@ -248,7 +248,7 @@ async def get_job_detail(
 
 
 @router.get("/jobs/{job_id}/log-tail")
-async def get_job_log_tail(
+def get_job_log_tail(
     job_id: int,
     offset: int = 0,
     max_bytes: int = 65536,
@@ -336,7 +336,7 @@ async def get_job_log_tail(
 
 
 @router.post("/jobs/{job_id}/retry")
-async def retry_job(
+def retry_job(
     job_id: int, logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> Dict[str, Any]:
     """Retry a failed job by resetting it to pending status."""

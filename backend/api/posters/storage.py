@@ -139,7 +139,7 @@ async def optimize_posters(
         }
     },
 )
-async def list_poster_files(logger: Any = Depends(get_logger)) -> JSONResponse:
+def list_poster_files(logger: Any = Depends(get_logger)) -> JSONResponse:
     """
     List available poster files from the static posters directory.
 
