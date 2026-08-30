@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from backend.api.utils import error, ok
 from backend.modules import MODULES
 from backend.util.config import (
+    config_write,
     ALL_MODULES_SENTINEL,
     ChubConfig,
     ConfigError,
@@ -181,9 +182,8 @@ def get_all_notifications(
     summary="Create a notification destination",
     description="Append a new destination and persist it.",
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def create_destination(
+@config_write
+def create_destination(
     payload: DestinationPayload, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """Add one notification destination to the saved config."""
@@ -235,9 +235,8 @@ async def create_destination(
     description="Update an existing destination. Secrets sent back as the "
     "redacted placeholder are preserved (not overwritten).",
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def update_destination(
+@config_write
+def update_destination(
     destination_id: str,
     payload: DestinationPayload,
     logger: Any = Depends(get_logger),
@@ -305,9 +304,8 @@ async def update_destination(
     summary="Delete a notification destination",
     description="Remove a destination by id.",
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def delete_destination(
+@config_write
+def delete_destination(
     destination_id: str, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """Remove one saved notification destination by id."""

@@ -22,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.backup import get_backup_dir, save_backup
 from backend.util.config import (
+    config_write_lock,
     ConfigError,
     ChubConfig,
     get_config_path,
@@ -717,17 +718,20 @@ async def restore_backup(
                         status_code=400,
                     )
 
-                # Safety: backup current state first
-                config_path = get_config_path()
-                if os.path.exists(config_path):
-                    safety_path = config_path + ".pre-restore"
-                    with open(config_path, "rb") as src:
-                        with open(safety_path, "wb") as dst:
-                            dst.write(src.read())
+                # Held across the safety copy too, so a concurrent writer cannot
+                # save between the snapshot and the restore that replaces it.
+                with config_write_lock():
+                    # Safety: backup current state first
+                    config_path = get_config_path()
+                    if os.path.exists(config_path):
+                        safety_path = config_path + ".pre-restore"
+                        with open(config_path, "rb") as src:
+                            with open(safety_path, "wb") as dst:
+                                dst.write(src.read())
 
-                # Restore config.yml (atomic write)
-                restored_config = ChubConfig.model_validate(parsed)
-                save_config(restored_config)
+                    # Restore config.yml (atomic write)
+                    restored_config = ChubConfig.model_validate(parsed)
+                    save_config(restored_config)
                 restored_items = ["config.yml"]
 
                 # If DB dump is included, save it for reference

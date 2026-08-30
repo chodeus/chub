@@ -21,6 +21,7 @@ from backend.util.auth import (
     verify_password,
 )
 from backend.util.config import (
+    config_write,
     ConfigError,
     load_config,
     save_config,
@@ -123,9 +124,8 @@ def stream_token(request: Request) -> JSONResponse:
     summary="First-run auth setup",
     description="Set initial admin credentials. Only works when no credentials are configured.",
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def setup_auth(
+@config_write
+def setup_auth(
     request_data: SetupRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """

@@ -17,6 +17,7 @@ from pydantic import BaseModel, model_validator
 
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.config import (
+    config_write,
     REDACTED_PLACEHOLDER,
     ChubConfig,
     ConfigError,
@@ -838,9 +839,8 @@ class UpdateLibrariesRequest(BaseModel):
         404: {"description": "Plex instance not found in configuration"},
     },
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def update_instance_libraries(
+@config_write
+def update_instance_libraries(
     instance: str,
     data: UpdateLibrariesRequest,
     config: ChubConfig = Depends(get_config),
@@ -1089,9 +1089,8 @@ def test_instance(
         500: {"description": "Configuration save failed"},
     },
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def create_instance(
+@config_write
+def create_instance(
     data: CreateInstanceRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
@@ -1201,9 +1200,8 @@ async def create_instance(
         500: {"description": "Configuration save failed"},
     },
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def update_instance(
+@config_write
+def update_instance(
     instance_id: str,
     data: UpdateInstanceRequest,
     logger: Any = Depends(get_logger),
@@ -1368,9 +1366,8 @@ async def update_instance(
         500: {"description": "Configuration save failed"},
     },
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def delete_instance(
+@config_write
+def delete_instance(
     instance_id: str, service: str, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
@@ -1869,9 +1866,8 @@ def sync_instance(
         }
     },
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def toggle_instance(
+@config_write
+def toggle_instance(
     instance_id: str,
     body: dict = None,
     logger: Any = Depends(get_logger),
