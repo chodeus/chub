@@ -26,8 +26,8 @@ Module Settings form)
         in /tmp/chub_border_thumbs/.
 """
 
-import shutil
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from typing import Any, List, Optional
@@ -60,11 +60,25 @@ router = APIRouter(
 )
 
 
-# Single shared preview directory. Wiped at the start of each POST so the
-# token-→file mapping never accumulates stale entries across runs. /tmp is
-# fine — previews are throwaway by design and the user only looks at them
-# right after triggering a refresh from the UI.
+# Single shared preview directory, pruned by AGE rather than wiped: wiping at
+# the start of each POST deleted a concurrently-running refresh's composites,
+# 404ing the other client on every token it had just been handed.
 PREVIEW_DIR = Path(tempfile.gettempdir()) / "chub_border_preview"
+# Generous vs the UI, which fetches each token seconds after the POST returns.
+PREVIEW_TTL_SECONDS = 30 * 60
+
+
+def _prune_previews() -> None:
+    """Delete preview files past the TTL, leaving a concurrent run's alone."""
+    cutoff = time.time() - PREVIEW_TTL_SECONDS
+    for stale in PREVIEW_DIR.glob("*.jpg"):
+        try:
+            if stale.stat().st_mtime < cutoff:
+                stale.unlink()
+        except OSError:
+            # Another run may have removed it, or it may be locked; either way
+            # the next prune retries and /tmp clears on container restart.
+            pass
 
 
 # Holiday presets — the canonical catalogue. The frontend used to maintain
@@ -290,10 +304,8 @@ def _render_composite(
             try:
                 bordered_tmp.unlink()
             except OSError:
-                # Best-effort cleanup of the per-asset scratch file. A failure
-                # here (locked file, race with another preview run) is not
-                # worth surfacing — the next /preview POST wipes PREVIEW_DIR
-                # wholesale anyway.
+                # Best-effort cleanup of the per-asset scratch file; a leftover
+                # is swept by _prune_previews once it passes the TTL.
                 pass
 
 
@@ -364,17 +376,9 @@ def generate_preview(
         )
     border_width = int(cfg.border_width or 26)
 
-    # Wipe previous previews so /tmp doesn't grow unboundedly across refreshes.
-    if PREVIEW_DIR.exists():
-        try:
-            shutil.rmtree(PREVIEW_DIR)
-        except OSError:
-            # If wipe fails (permissions, race with another worker), continue
-            # — mkdir+exist_ok=True below will reuse the directory and the
-            # new previews will land alongside any leftovers. /tmp gets wiped
-            # on container restart so worst case is a few stale files.
-            pass
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    # Bounds /tmp without touching a concurrent refresh's freshly-written files.
+    _prune_previews()
 
     try:
         assets = _sample_assets(db, count)

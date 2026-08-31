@@ -725,3 +725,42 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
     with open(by_id[1]["original_file"], "rb") as f:
         src_bytes = f.read()
     assert dest.read_bytes() == src_bytes
+
+
+# --- preview directory lifetime (concurrent refreshes must not collide) -----
+
+
+def test_a_second_refresh_does_not_delete_the_first_runs_previews(tmp_path, monkeypatch):
+    """Two concurrent /preview POSTs: neither may remove the other's composites."""
+    from backend.api import border_replacerr as api
+
+    monkeypatch.setattr(api, "PREVIEW_DIR", tmp_path)
+    first_run = tmp_path / "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.jpg"
+    first_run.write_bytes(b"composite")
+
+    # Run B starts while run A's client still holds its tokens.
+    api._prune_previews()
+
+    assert first_run.exists(), "a concurrent refresh deleted the other run's preview"
+
+
+def test_stale_previews_are_still_pruned(tmp_path, monkeypatch):
+    """Pruning must still bound the directory, or /tmp grows without limit."""
+    import os
+    import time
+
+    from backend.api import border_replacerr as api
+
+    monkeypatch.setattr(api, "PREVIEW_DIR", tmp_path)
+    stale = tmp_path / "ffffffffffffffffffffffffffffffff.jpg"
+    stale.write_bytes(b"old")
+    old = time.time() - api.PREVIEW_TTL_SECONDS - 60
+    os.utime(stale, (old, old))
+
+    fresh = tmp_path / "00000000000000000000000000000000.jpg"
+    fresh.write_bytes(b"new")
+
+    api._prune_previews()
+
+    assert not stale.exists(), "a preview past the TTL was not pruned"
+    assert fresh.exists(), "a fresh preview was pruned"
