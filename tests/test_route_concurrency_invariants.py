@@ -57,11 +57,12 @@ def _called_names(node):
     return out - {None}
 
 
-def _writes_config(node, module_funcs, _seen=None):
-    """True if the handler reaches save_config, directly or via a same-module helper."""
-    # notifications.py routes save through _save_destinations; a direct-call check
-    # misses those and lets an unserialised writer through.
-    if _calls_named(node, "save_config"):
+def _reaches(node, module_funcs, targets, _seen=None):
+    """True if node calls any of `targets`, directly or via a same-module helper."""
+    # One traversal for all three questions below. A direct-call check misses
+    # notifications.py saving through _save_destinations, and misses a Depends
+    # wrapper like _get_config / get_config_dep that loads config for you.
+    if _called_names(node) & targets:
         return True
     seen = _seen if _seen is not None else set()
     for name in _called_names(node):
@@ -69,9 +70,14 @@ def _writes_config(node, module_funcs, _seen=None):
         if helper is None or name in seen:
             continue
         seen.add(name)
-        if _writes_config(helper, module_funcs, seen):
+        if _reaches(helper, module_funcs, targets, seen):
             return True
     return False
+
+
+def _writes_config(node, module_funcs):
+    """True if the handler reaches save_config, directly or via a same-module helper."""
+    return _reaches(node, module_funcs, {"save_config"})
 
 
 def _serialised(node, module_funcs):
@@ -89,10 +95,25 @@ def _serialised(node, module_funcs):
     return False
 
 
-def _reads_config_via_dependency(node):
+CONFIG_READS = {"load_config", "get_config"}
+
+
+def _reads_config_via_dependency(node, module_funcs):
     """True if config arrives as a Depends — resolved BEFORE any lock is taken."""
     defaults = list(node.args.defaults) + [d for d in node.args.kw_defaults if d]
-    return any("get_config" in ast.unparse(d) for d in defaults)
+    for default in defaults:
+        if not isinstance(default, ast.Call):
+            continue
+        if (getattr(default.func, "id", None) or "") != "Depends" or not default.args:
+            continue
+        target = ast.unparse(default.args[0])
+        if target in CONFIG_READS:
+            return True
+        # A wrapper such as _get_config / get_config_dep reads config for you.
+        helper = module_funcs.get(target)
+        if helper is not None and _reaches(helper, module_funcs, CONFIG_READS):
+            return True
+    return False
 
 
 def _label(path, node):
@@ -118,7 +139,7 @@ def test_config_writers_read_inside_the_lock():
     offenders = [
         _label(path, node)
         for path, node, funcs in _routes()
-        if _writes_config(node, funcs) and _reads_config_via_dependency(node)
+        if _writes_config(node, funcs) and _reads_config_via_dependency(node, funcs)
     ]
     assert not offenders, (
         "FastAPI resolves Depends BEFORE the handler runs, so a Depends-supplied "
@@ -139,6 +160,32 @@ def test_no_event_loop_blocking_handlers():
         "loop and stall every other request. Declare them `def` instead:\n  "
         + "\n  ".join(offenders)
     )
+
+
+DEPENDENCY_CASES = [
+    ("direct", "config: C = Depends(get_config)", True),
+    ("wrapper", "config: C = Depends(resolve_settings)", True),
+    ("unrelated", "logger: Any = Depends(get_logger)", False),
+]
+
+
+@pytest.mark.parametrize(
+    "label, param, expected", DEPENDENCY_CASES, ids=[c[0] for c in DEPENDENCY_CASES]
+)
+def test_dependency_detection_resolves_wrappers(label, param, expected):
+    """A Depends wrapper that loads config counts as reading outside the lock."""
+    module = ast.parse(
+        "def get_config():\n"
+        "    return load_config()\n"
+        "def resolve_settings():\n"
+        "    return load_config()\n"
+        "def get_logger():\n"
+        "    return None\n"
+        f"def handler({param}):\n"
+        "    save_config(config)\n"
+    )
+    funcs = _module_functions(module)
+    assert _reads_config_via_dependency(funcs["handler"], funcs) is expected
 
 
 @pytest.mark.parametrize("name", ["load_config", "save_config", "config_write", "config_write_lock"])
