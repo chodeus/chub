@@ -24,7 +24,7 @@ from backend.api.utils import (
     ok,
     read_request_json,
 )
-from backend.util.config import ConfigError
+from backend.util.config import ConfigError, config_write_lock
 from backend.util.database import ChubDB
 
 
@@ -955,16 +955,17 @@ async def update_module_config(
                 status_code=403,
             )
 
-        config = load_config()
-        config_dict = config.model_dump(mode="python")
-        # Keep real secrets when the UI echoes the redacted placeholder.
-        if isinstance(payload, dict) and isinstance(config_dict.get(name), dict):
-            config_dict[name] = strip_redacted_placeholders(payload, config_dict[name])
-        else:
-            config_dict[name] = payload
+        with config_write_lock():
+            config = load_config()
+            config_dict = config.model_dump(mode="python")
+            # Keep real secrets when the UI echoes the redacted placeholder.
+            if isinstance(payload, dict) and isinstance(config_dict.get(name), dict):
+                config_dict[name] = strip_redacted_placeholders(payload, config_dict[name])
+            else:
+                config_dict[name] = payload
 
-        updated = ChubConfig.model_validate(config_dict)
-        save_config(updated)
+            updated = ChubConfig.model_validate(config_dict)
+            save_config(updated)
 
         return ok(f"Configuration for '{name}' updated", {"module": name})
     except ValueError as e:
@@ -1043,21 +1044,22 @@ async def toggle_module(
         logger.debug(f"Serving PATCH /api/modules/{name} enabled={enabled}")
         from backend.util.config import load_config, save_config
 
-        config = load_config()
-        config_dict = config.model_dump(mode="python")
-        schedule = config_dict.get("schedule", {})
+        with config_write_lock():
+            config = load_config()
+            config_dict = config.model_dump(mode="python")
+            schedule = config_dict.get("schedule", {})
 
-        if not enabled:
-            schedule[name] = None
-        # When enabling, an existing schedule string is preserved as-is; if
-        # none is set there is nothing to persist (the model has no separate
-        # enabled flag), so the module remains unscheduled.
+            if not enabled:
+                schedule[name] = None
+            # When enabling, an existing schedule string is preserved as-is; if
+            # none is set there is nothing to persist (the model has no separate
+            # enabled flag), so the module remains unscheduled.
 
-        config_dict["schedule"] = schedule
-        from backend.util.config import ChubConfig
+            config_dict["schedule"] = schedule
+            from backend.util.config import ChubConfig
 
-        updated = ChubConfig.model_validate(config_dict)
-        save_config(updated)
+            updated = ChubConfig.model_validate(config_dict)
+            save_config(updated)
 
         # Report the actual persisted state rather than the requested one: a
         # module is enabled only if it ended up with a non-empty schedule.

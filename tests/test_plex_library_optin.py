@@ -241,7 +241,7 @@ def test_patch_libraries_sets_prunes_and_purges(monkeypatch):
     from fastapi.testclient import TestClient
 
     from backend.api import instances as inst_mod
-    from backend.api.instances import get_config, router
+    from backend.api.instances import router
     from backend.util.config import PlexScope
 
     cfg = ChubConfig(
@@ -283,7 +283,8 @@ def test_patch_libraries_sets_prunes_and_purges(monkeypatch):
     app.state.logger = _StubLogger()
     app.state.db = None
     app.include_router(router)
-    app.dependency_overrides[get_config] = lambda: cfg
+    # Handler loads inside the write lock now, so patch the module function.
+    monkeypatch.setattr(inst_mod, "load_config", lambda *a, **k: cfg)
 
     client = TestClient(app)
     resp = client.patch(
@@ -355,14 +356,16 @@ def test_patch_libraries_unknown_instance_404(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from backend.api.instances import get_config, router
+    from backend.api import instances as inst_mod
+    from backend.api.instances import router
 
     cfg = ChubConfig()
     app = FastAPI()
     app.state.logger = _StubLogger()
     app.state.db = None
     app.include_router(router)
-    app.dependency_overrides[get_config] = lambda: cfg
+    # Handler loads inside the write lock now, so patch the module function.
+    monkeypatch.setattr(inst_mod, "load_config", lambda *a, **k: cfg)
 
     client = TestClient(app)
     resp = client.patch("/api/plex/nope/libraries", json={"enabled_libraries": []})

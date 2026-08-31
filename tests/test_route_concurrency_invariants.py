@@ -24,6 +24,14 @@ def _routes():
                 yield path, node, funcs
 
 
+def _module_functions(tree):
+    return {
+        n.name: n
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
 def _awaits(node):
     return [
         n.lineno
@@ -49,19 +57,12 @@ def _called_names(node):
     return out - {None}
 
 
-def _module_functions(tree):
-    return {
-        n.name: n
-        for n in ast.walk(tree)
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-
-
-def _writes_config(node, module_funcs, _seen=None):
-    """True if the handler reaches save_config, directly or via a same-module helper."""
-    # notifications.py routes save through _save_destinations; a direct-call check
-    # misses those, converts them, and reintroduces the lost update this guards.
-    if _calls_named(node, "save_config"):
+def _reaches(node, module_funcs, targets, _seen=None):
+    """True if node calls any of `targets`, directly or via a same-module helper."""
+    # One traversal for all three questions below. A direct-call check misses
+    # notifications.py saving through _save_destinations, and misses a Depends
+    # wrapper like _get_config / get_config_dep that loads config for you.
+    if _called_names(node) & targets:
         return True
     seen = _seen if _seen is not None else set()
     for name in _called_names(node):
@@ -69,83 +70,90 @@ def _writes_config(node, module_funcs, _seen=None):
         if helper is None or name in seen:
             continue
         seen.add(name)
-        if _writes_config(helper, module_funcs, seen):
+        if _reaches(helper, module_funcs, targets, seen):
             return True
     return False
 
 
-def _load_positions(node):
-    """Lines where this handler's config read happens, earliest-first."""
-    direct = _calls_named(node, "load_config")
-    if direct:
-        return direct
-    # Config arriving as `Depends(get_config)` is read before the body runs, so
-    # the whole body is inside the span. No read at all = a full overwrite.
-    args = node.args
-    for default in list(args.defaults) + list(args.kw_defaults):
-        if default is not None and "get_config" in ast.unparse(default):
-            return [node.lineno]
-    return []
+def _writes_config(node, module_funcs):
+    """True if the handler reaches save_config, directly or via a same-module helper."""
+    return _reaches(node, module_funcs, {"save_config"})
 
 
-def _save_positions(node, module_funcs):
-    """Lines in this handler where a config save happens — the helper call counts."""
-    # A helper-mediated writer has no direct save_config line, so the span check
-    # would compare against an empty list; the call to the helper is the save point.
-    lines = list(_calls_named(node, "save_config"))
-    for call in ast.walk(node):
-        if not isinstance(call, ast.Call):
+def _serialised(node, module_funcs):
+    """True if the handler holds the config write lock, by decorator or `with`."""
+    if any("config_write" in ast.unparse(d) for d in node.decorator_list):
+        return True
+    for n in ast.walk(node):
+        if isinstance(n, ast.With) and any(
+            "config_write_lock" in ast.unparse(item.context_expr) for item in n.items
+        ):
+            # Resolve helpers here too, or a lock body that saves via a helper
+            # reads as unserialised.
+            if any(_writes_config(stmt, module_funcs) for stmt in n.body):
+                return True
+    return False
+
+
+CONFIG_READS = {"load_config", "get_config"}
+
+
+def _reads_config_via_dependency(node, module_funcs):
+    """True if config arrives as a Depends — resolved BEFORE any lock is taken."""
+    defaults = list(node.args.defaults) + [d for d in node.args.kw_defaults if d]
+    for default in defaults:
+        if not isinstance(default, ast.Call):
             continue
-        name = getattr(call.func, "id", None) or getattr(call.func, "attr", None)
-        helper = module_funcs.get(name)
-        if helper is not None and helper is not node and _writes_config(helper, module_funcs):
-            lines.append(call.lineno)
-    return sorted(lines)
+        if (getattr(default.func, "id", None) or "") != "Depends" or not default.args:
+            continue
+        target = ast.unparse(default.args[0])
+        if target in CONFIG_READS:
+            return True
+        # A wrapper such as _get_config / get_config_dep reads config for you.
+        helper = module_funcs.get(target)
+        if helper is not None and _reaches(helper, module_funcs, CONFIG_READS):
+            return True
+    return False
 
 
 def _label(path, node):
     return f"{path.relative_to(API_DIR.parent.parent)}:{node.lineno} {node.name}"
 
 
-def test_config_writers_are_async_and_never_await_mid_transaction():
-    """Config writers stay async with an unbroken load→save span, so saves can't interleave."""
-    offenders = []
-    for path, node, funcs in _routes():
-        if not _writes_config(node, funcs):
-            continue
-        if isinstance(node, ast.FunctionDef):
-            offenders.append(f"{_label(path, node)} — is `def`, must be `async def`")
-            continue
-        saves = _save_positions(node, funcs)
-        if not saves:
-            offenders.append(
-                f"{_label(path, node)} — reaches save_config but no save position "
-                f"was located, so the span below cannot be checked"
-            )
-            continue
-        loads = _load_positions(node)
-        if not loads:
-            continue  # writes a whole new config; no read to interleave with
-        mid = [a for a in _awaits(node) if min(loads) < a < max(saves)]
-        if mid:
-            offenders.append(
-                f"{_label(path, node)} — awaits at {mid} between load_config "
-                f"(line {min(loads)}) and save_config (line {max(saves)})"
-            )
-    assert not offenders, (
-        "Config read-modify-write must not be interruptible:\n  "
-        + "\n  ".join(offenders)
-    )
-
-
-def test_no_new_event_loop_blocking_handlers():
-    """Only config writers may be `async def` without an await; the rest go to the threadpool."""
+def test_every_config_writer_is_serialised():
+    """A handler that reaches save_config must hold the config write lock."""
     offenders = [
         _label(path, node)
         for path, node, funcs in _routes()
-        if isinstance(node, ast.AsyncFunctionDef)
-        and not _awaits(node)
-        and not _writes_config(node, funcs)
+        if _writes_config(node, funcs) and not _serialised(node, funcs)
+    ]
+    assert not offenders, (
+        "Config load-modify-save must be serialised, or two concurrent writers "
+        "lose one side's edit. Add @config_write, or wrap the span in "
+        "`with config_write_lock():`\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_config_writers_read_inside_the_lock():
+    """A writer must load config in its own body, not via Depends."""
+    offenders = [
+        _label(path, node)
+        for path, node, funcs in _routes()
+        if _writes_config(node, funcs) and _reads_config_via_dependency(node, funcs)
+    ]
+    assert not offenders, (
+        "FastAPI resolves Depends BEFORE the handler runs, so a Depends-supplied "
+        "config is read outside the lock and two writers still lose an edit. "
+        "Call load_config() in the body instead:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_no_event_loop_blocking_handlers():
+    """No handler may be `async def` without an await; those belong on the threadpool."""
+    offenders = [
+        _label(path, node)
+        for path, node, _funcs in _routes()
+        if isinstance(node, ast.AsyncFunctionDef) and not _awaits(node)
     ]
     assert not offenders, (
         "These handlers are `async def` but never await, so they block the event "
@@ -154,7 +162,33 @@ def test_no_new_event_loop_blocking_handlers():
     )
 
 
-@pytest.mark.parametrize("name", ["load_config", "save_config"])
+DEPENDENCY_CASES = [
+    ("direct", "config: C = Depends(get_config)", True),
+    ("wrapper", "config: C = Depends(resolve_settings)", True),
+    ("unrelated", "logger: Any = Depends(get_logger)", False),
+]
+
+
+@pytest.mark.parametrize(
+    "label, param, expected", DEPENDENCY_CASES, ids=[c[0] for c in DEPENDENCY_CASES]
+)
+def test_dependency_detection_resolves_wrappers(label, param, expected):
+    """A Depends wrapper that loads config counts as reading outside the lock."""
+    module = ast.parse(
+        "def get_config():\n"
+        "    return load_config()\n"
+        "def resolve_settings():\n"
+        "    return load_config()\n"
+        "def get_logger():\n"
+        "    return None\n"
+        f"def handler({param}):\n"
+        "    save_config(config)\n"
+    )
+    funcs = _module_functions(module)
+    assert _reads_config_via_dependency(funcs["handler"], funcs) is expected
+
+
+@pytest.mark.parametrize("name", ["load_config", "save_config", "config_write", "config_write_lock"])
 def test_helpers_the_guards_key_on_still_exist(name):
     """Known-answer control: the guards are vacuous if these helpers get renamed."""
     from backend.util import config

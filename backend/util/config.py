@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import pathlib
@@ -1132,6 +1133,26 @@ def get_config_path() -> str:
 _config_cache: Dict[str, tuple] = {}
 _config_cache_lock = threading.Lock()
 _CONFIG_CACHE_MAX = 8
+
+# save_config serialises the WHOLE config, so two concurrent load-modify-save
+# spans lose one side's edit entirely — not just the section it touched.
+_config_write_lock = threading.RLock()
+
+
+def config_write_lock():
+    """The lock every config load-modify-save span must hold. Use with `with`."""
+    return _config_write_lock
+
+
+def config_write(fn):
+    """Decorator: serialise a route handler's config load-modify-save."""
+    # Reentrant, so a decorated handler may still take the lock internally.
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with _config_write_lock:
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _config_file_version(path: str) -> Optional[tuple]:

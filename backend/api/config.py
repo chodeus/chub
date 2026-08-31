@@ -19,6 +19,7 @@ from backend.api.utils import (
     read_request_json,
 )
 from backend.util.config import (
+    config_write_lock,
     ConfigError,
     ChubConfig,
     REDACTED_PLACEHOLDER,
@@ -191,54 +192,55 @@ async def update_config(
             )
         logger.debug("Serving POST /api/config")
 
-        current_config = load_config()
-        config_dict = current_config.model_dump(mode="python")
+        with config_write_lock():
+            current_config = load_config()
+            config_dict = current_config.model_dump(mode="python")
 
-        # The auth section (username / password_hash / jwt_secret) must never
-        # be mutated through the generic config-save path: an authenticated
-        # caller could otherwise blank the credentials (reopening the no-auth
-        # first-run state) or overwrite the password hash. Credential changes
-        # go through the dedicated auth endpoints only, so strip it here.
-        if isinstance(incoming, dict) and "auth" in incoming:
-            incoming.pop("auth", None)
-            logger.warning(
-                "Ignored 'auth' section in POST /api/config — credentials are "
-                "managed only via the dedicated auth endpoints."
-            )
+            # The auth section (username / password_hash / jwt_secret) must never
+            # be mutated through the generic config-save path: an authenticated
+            # caller could otherwise blank the credentials (reopening the no-auth
+            # first-run state) or overwrite the password hash. Credential changes
+            # go through the dedicated auth endpoints only, so strip it here.
+            if isinstance(incoming, dict) and "auth" in incoming:
+                incoming.pop("auth", None)
+                logger.warning(
+                    "Ignored 'auth' section in POST /api/config — credentials are "
+                    "managed only via the dedicated auth endpoints."
+                )
 
-        # Merge incoming over current, but preserve real secrets when
-        # the frontend sends back the redacted placeholder.
-        for k, v in incoming.items():
-            if isinstance(v, dict) and isinstance(config_dict.get(k), dict):
-                config_dict[k] = strip_redacted_placeholders(v, config_dict[k])
-            elif v == REDACTED_PLACEHOLDER and isinstance(config_dict.get(k), str):
-                pass  # keep existing value
-            else:
-                config_dict[k] = v
+            # Merge incoming over current, but preserve real secrets when
+            # the frontend sends back the redacted placeholder.
+            for k, v in incoming.items():
+                if isinstance(v, dict) and isinstance(config_dict.get(k), dict):
+                    config_dict[k] = strip_redacted_placeholders(v, config_dict[k])
+                elif v == REDACTED_PLACEHOLDER and isinstance(config_dict.get(k), str):
+                    pass  # keep existing value
+                else:
+                    config_dict[k] = v
 
-        old_config = current_config.model_dump(mode="python")
-        new_config = config_dict
+            old_config = current_config.model_dump(mode="python")
+            new_config = config_dict
 
-        weak_secret_msg = _reject_weak_webhook_secret(old_config, new_config)
-        if weak_secret_msg:
-            return error(
-                weak_secret_msg,
-                "CONFIG_VALIDATION_ERROR",
-                status_code=400,
-            )
+            weak_secret_msg = _reject_weak_webhook_secret(old_config, new_config)
+            if weak_secret_msg:
+                return error(
+                    weak_secret_msg,
+                    "CONFIG_VALIDATION_ERROR",
+                    status_code=400,
+                )
 
-        diffs = dict_diff(old_config, new_config)
-        config_logger = logger.get_adapter("CONFIG_UPDATE")
-        for path, old, new in diffs:
-            # Structured secret-safe logging: redact values for sensitive fields
-            field_name = path.rsplit(".", 1)[-1] if "." in path else path
-            if field_name in SENSITIVE_FIELD_NAMES:
-                config_logger.debug(f"Updated: {path} | [redacted]")
-            else:
-                config_logger.debug(f"Updated: {path} | old={old!r} | new={new!r}")
+            diffs = dict_diff(old_config, new_config)
+            config_logger = logger.get_adapter("CONFIG_UPDATE")
+            for path, old, new in diffs:
+                # Structured secret-safe logging: redact values for sensitive fields
+                field_name = path.rsplit(".", 1)[-1] if "." in path else path
+                if field_name in SENSITIVE_FIELD_NAMES:
+                    config_logger.debug(f"Updated: {path} | [redacted]")
+                else:
+                    config_logger.debug(f"Updated: {path} | old={old!r} | new={new!r}")
 
-        updated_config = ChubConfig.model_validate(config_dict)
-        save_config(updated_config)
+            updated_config = ChubConfig.model_validate(config_dict)
+            save_config(updated_config)
 
         logger.info("Configuration updated successfully")
         return ok(

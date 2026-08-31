@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from backend.api.utils import error, get_logger, ok
-from backend.util.config import ConfigError, load_config, save_config
+from backend.util.config import config_write, ConfigError, load_config, save_config
 
 router = APIRouter(
     prefix="/api/setup",
@@ -44,9 +44,8 @@ def setup_status(logger: Any = Depends(get_logger)) -> JSONResponse:
     summary="Mark setup complete",
     description="Flip general.setup_completed True so the wizard no longer shows.",
 )
-# Must stay `async def`: no await keeps the load→save span atomic — `def` runs
-# these concurrently and drops config updates. See test_route_concurrency_invariants.
-async def complete_setup(logger: Any = Depends(get_logger)) -> JSONResponse:
+@config_write
+def complete_setup(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Persist setup completion. Idempotent — safe to call again."""
     try:
         config = load_config()
