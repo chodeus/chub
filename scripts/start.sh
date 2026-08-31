@@ -51,12 +51,12 @@ if [ "$(id -u)" = "0" ]; then
   echo "Dropping privileges to dockeruser (PUID=${PUID}, PGID=${PGID})"
   groupmod -o -g "$PGID" dockeruser
   usermod -o -u "$PUID" dockeruser
-  chown -R "${PUID}:${PGID}" "${CONFIG_DIR}"
-  # Only recursive-chown /app when ownership doesn't match (avoids 10-30s delay on every restart)
-  # The Dockerfile already sets ownership; this only runs if PUID/PGID changed
-  if [ "$(stat -c '%u:%g' /app 2>/dev/null)" != "${PUID}:${PGID}" ]; then
-    chown -R "${PUID}:${PGID}" /app
-  fi
+  # Chown only what is actually wrong; an already-correct tree costs a stat pass
+  # instead of a full rewrite of every inode.
+  find "${CONFIG_DIR}" \( ! -user "${PUID}" -o ! -group "${PGID}" \) \
+    -exec chown "${PUID}:${PGID}" {} + 2>/dev/null || true
+  # /app is deliberately NOT chowned: it only needs to be readable, and the image
+  # bakes the bytecode so nothing writes there. See PYTHONDONTWRITEBYTECODE.
   # CONFIG_DIR is private to this container (owned by PUID:PGID above), so it
   # does not need world-writable 777. Cross-container sharing (e.g. Kometa
   # reading the assets mount) happens on OTHER mounts and works via umask 002

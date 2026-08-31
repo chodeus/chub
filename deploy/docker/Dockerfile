@@ -129,6 +129,10 @@ RUN mkdir -p /app/public && \
 
 # uid 99 / gid 100 matches PUID/PGID, so start.sh's stat check skips its sweep.
 # -o is required on both: gid 100 is already `users` in the base image.
+# Bytecode is baked here and PYTHONDONTWRITEBYTECODE stops runtime .pyc writes,
+# so /app never needs to be writable and start.sh can skip chowning it.
+RUN python3 -m compileall -q /app/backend /app/main.py >/dev/null 2>&1 || true
+
 RUN groupadd -o -g 100 dockeruser && \
     useradd -o -u 99 -g 100 dockeruser && \
     chown 99:100 /app && \
@@ -165,6 +169,12 @@ ENV DOCKER_ENV=true
 # ordered — without this, print() block-buffers to the pipe and interleaves
 # out of order with the per-record-flushed logging handlers.
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+# platformdirs-based libraries otherwise write app state to a home dir that is
+# not on a volume; keep it in /config alongside everything else.
+ENV XDG_CONFIG_HOME=/config/.config
+ENV XDG_CACHE_HOME=/config/.cache
+ENV XDG_DATA_HOME=/config/.local/share
 
 ENTRYPOINT ["bash", "scripts/start.sh"]
 
