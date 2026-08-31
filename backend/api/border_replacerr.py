@@ -26,6 +26,8 @@ Module Settings form)
         in /tmp/chub_border_thumbs/.
 """
 
+import os
+import stat
 import tempfile
 import time
 import uuid
@@ -69,25 +71,26 @@ PREVIEW_TTL_SECONDS = 30 * 60
 
 def _prune_previews() -> None:
     """Delete preview files past the TTL, leaving a concurrent run's alone."""
-    # One resolve compared against the constant path, not check-then-resolve:
-    # a swap between the two would hand the deletes an attacker's directory.
+    # Everything runs through a NOFOLLOW directory fd, so swapping the path for a
+    # symlink after validation cannot redirect the unlinks.
     try:
-        root = PREVIEW_DIR.resolve(strict=True)
+        dir_fd = os.open(PREVIEW_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError:
         return
-    if root != PREVIEW_DIR or not root.is_dir():
-        return
-    cutoff = time.time() - PREVIEW_TTL_SECONDS
-    for stale in root.glob("*.jpg"):
-        try:
-            # Defence in depth; unlink on a symlink drops the link, not its target.
-            if stale.is_symlink() or stale.resolve(strict=True).parent != root:
+    try:
+        cutoff = time.time() - PREVIEW_TTL_SECONDS
+        for name in os.listdir(dir_fd):
+            if not name.endswith(".jpg"):
                 continue
-            if stale.stat().st_mtime < cutoff:
-                stale.unlink()
-        except OSError:
-            # Removed by another run, or locked; the next prune retries.
-            pass
+            try:
+                info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+                if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff:
+                    os.unlink(name, dir_fd=dir_fd)
+            except OSError:
+                # Removed by another run, or locked; the next prune retries.
+                pass
+    finally:
+        os.close(dir_fd)
 
 
 # Holiday presets — the canonical catalogue. The frontend used to maintain

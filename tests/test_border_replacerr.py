@@ -727,8 +727,6 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
     assert dest.read_bytes() == src_bytes
 
 
-# --- preview directory lifetime (concurrent refreshes must not collide) -----
-
 
 def test_a_second_refresh_does_not_delete_the_first_runs_previews(tmp_path, monkeypatch):
     """Two concurrent /preview POSTs: neither may remove the other's composites."""
@@ -787,3 +785,40 @@ def test_prune_refuses_a_symlinked_preview_dir(tmp_path, monkeypatch):
     api._prune_previews()
 
     assert victim.exists(), "a symlinked PREVIEW_DIR let the prune delete outside it"
+
+
+def test_prune_survives_a_directory_swap_after_validation(tmp_path, monkeypatch):
+    """Swapping PREVIEW_DIR mid-prune must not redirect the unlinks."""
+    import os
+    import time
+
+    from backend.api import border_replacerr as api
+
+    real_dir = tmp_path / "previews"
+    real_dir.mkdir()
+    stale = real_dir / "cccccccccccccccccccccccccccccccc.jpg"
+    stale.write_bytes(b"old")
+    old = time.time() - api.PREVIEW_TTL_SECONDS - 60
+    os.utime(stale, (old, old))
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "cccccccccccccccccccccccccccccccc.jpg"
+    victim.write_bytes(b"do not delete")
+    os.utime(victim, (old, old))
+
+    monkeypatch.setattr(api, "PREVIEW_DIR", real_dir)
+    real_listdir = os.listdir
+
+    def swapping(target):
+        names = real_listdir(target)
+        # The fd is already open; repoint the path underneath it.
+        real_dir.rename(tmp_path / "moved")
+        real_dir.symlink_to(outside, target_is_directory=True)
+        return names
+
+    monkeypatch.setattr(os, "listdir", swapping)
+    api._prune_previews()
+    monkeypatch.undo()
+
+    assert victim.exists(), "a post-validation swap redirected the unlink outside the dir"
