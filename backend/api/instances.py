@@ -843,7 +843,6 @@ class UpdateLibrariesRequest(BaseModel):
 def update_instance_libraries(
     instance: str,
     data: UpdateLibrariesRequest,
-    config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     """Set the opt-in allow-list for a Plex instance.
@@ -853,6 +852,9 @@ def update_instance_libraries(
     plex_media_cache / collections_cache rows for de-selected libraries so they
     stop surfacing in stats/search/matching.
     """
+    # Read inside the lock: FastAPI resolves Depends BEFORE config_write acquires
+    # it, so a Depends-supplied config is a snapshot taken outside the span.
+    config = load_config()
     plex_instances = config.instances.plex
     detail = plex_instances.get(instance)
     if not detail:

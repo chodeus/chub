@@ -46,11 +46,10 @@ class SetupRequest(BaseModel):
 
 def _is_auth_configured() -> bool:
     """Check if authentication has been set up."""
-    try:
-        config = load_config()
-        return bool(config.auth.username and config.auth.password_hash)
-    except ConfigError:
-        return False
+    # ConfigError propagates to the CONFIG_INVALID handler (503). Swallowing it as
+    # False let unauthenticated /setup treat an unreadable config as "no account".
+    config = load_config()
+    return bool(config.auth.username and config.auth.password_hash)
 
 
 @router.get(

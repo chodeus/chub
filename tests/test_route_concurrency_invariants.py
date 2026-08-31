@@ -74,7 +74,7 @@ def _writes_config(node, module_funcs, _seen=None):
     return False
 
 
-def _serialised(node):
+def _serialised(node, module_funcs):
     """True if the handler holds the config write lock, by decorator or `with`."""
     if any("config_write" in ast.unparse(d) for d in node.decorator_list):
         return True
@@ -82,14 +82,17 @@ def _serialised(node):
         if isinstance(n, ast.With) and any(
             "config_write_lock" in ast.unparse(item.context_expr) for item in n.items
         ):
-            saves = [
-                ln
-                for body in n.body
-                for ln in _calls_named(body, "save_config")
-            ]
-            if saves:
+            # Resolve helpers here too, or a lock body that saves via a helper
+            # reads as unserialised.
+            if any(_writes_config(stmt, module_funcs) for stmt in n.body):
                 return True
     return False
+
+
+def _reads_config_via_dependency(node):
+    """True if config arrives as a Depends — resolved BEFORE any lock is taken."""
+    defaults = list(node.args.defaults) + [d for d in node.args.kw_defaults if d]
+    return any("get_config" in ast.unparse(d) for d in defaults)
 
 
 def _label(path, node):
@@ -101,12 +104,26 @@ def test_every_config_writer_is_serialised():
     offenders = [
         _label(path, node)
         for path, node, funcs in _routes()
-        if _writes_config(node, funcs) and not _serialised(node)
+        if _writes_config(node, funcs) and not _serialised(node, funcs)
     ]
     assert not offenders, (
         "Config load-modify-save must be serialised, or two concurrent writers "
         "lose one side's edit. Add @config_write, or wrap the span in "
         "`with config_write_lock():`\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_config_writers_read_inside_the_lock():
+    """A writer must load config in its own body, not via Depends."""
+    offenders = [
+        _label(path, node)
+        for path, node, funcs in _routes()
+        if _writes_config(node, funcs) and _reads_config_via_dependency(node)
+    ]
+    assert not offenders, (
+        "FastAPI resolves Depends BEFORE the handler runs, so a Depends-supplied "
+        "config is read outside the lock and two writers still lose an edit. "
+        "Call load_config() in the body instead:\n  " + "\n  ".join(offenders)
     )
 
 
