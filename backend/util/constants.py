@@ -1,5 +1,5 @@
 import re
-from typing import List, Pattern, Set, Tuple
+from typing import List, Optional, Pattern, Set, Tuple
 
 # Image extensions Kometa reads from an asset directory. Scanners, the orphan
 # sweep and the gdrive sync filter all key off this tuple so they can't drift.
@@ -209,3 +209,31 @@ QUEUE_REPORT_SECTIONS: Tuple[Tuple[str, str, str, str], ...] = (
 def queue_report_tally(download_count: int, item_count: int, note: str) -> str:
     """The one-line queue-section summary the run log and the notification share."""
     return f"{download_count} download(s) across {item_count} item(s) — {note}"
+
+
+def upgrade_report_tally(upgrade_count: int, item_count: int) -> str:
+    """The one-line upgrade-section summary the run log and the notification share.
+
+    Counts grabbed releases, not parents — a tally naming a different noun from
+    the lines beneath it is what made "1 items with grabs" sit above seven rows.
+    """
+    return f"{upgrade_count} upgrade(s) across {item_count} item(s)"
+
+
+def upgrade_score_text(score: object, previous: object) -> str:
+    """``7007 (was 4851)`` — the score change the run log and notification share."""
+    if previous is None:
+        return f"{score}"
+    return f"{score} (was {previous})"
+
+
+def upgrade_quality_text(quality: object, previous: object) -> Optional[str]:
+    """``WEBDL-1080p → Remux-1080p``, or None when the quality did not move.
+
+    Worth a line only when it changed: quality outranks custom formats in an
+    *arr profile, so it is what explains a genuine upgrade whose CF score FELL
+    (measured on a live library: every CF-lower upgrade was a quality gain).
+    """
+    if not quality or not previous or quality == previous:
+        return None
+    return f"{previous} → {quality}"
