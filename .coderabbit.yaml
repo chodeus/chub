@@ -98,6 +98,16 @@ reviews:
         - A guard that cannot fail is worse than no guard. If an assertion is reachable only when some list is non-empty, or keys off a symbol that may be renamed, it passes vacuously. Pair it with a control that fails when the defect is injected.
         - A static/AST check over source must resolve helper calls, not only direct ones: keying on a direct call name misses a handler that reaches the behaviour through a helper, which is exactly the case such a check exists to catch.
         - Assert the observable contract (resulting state), not incidental ordering or a mock's call count, unless the call count IS the invariant.
+    - path: "**"
+      instructions: |-
+        Applies to every file, whatever the language:
+        - Comments are navigational or instructional only and capped at 1-2 lines:
+          what a non-obvious block does, or the gotcha it guards. No why/history
+          essays, no before/after narrative, no restating the code, no section
+          banners. Docstrings: one line unless the signature genuinely cannot
+          carry it.
+        - The 1-2 line cap wins even inside an already heavily-commented file —
+          matching local density is not licence to exceed it.
 
   tools:
     # ruff + eslint intentionally left to CI (codeql-lint.yml already runs Ruff,
