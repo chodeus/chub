@@ -62,21 +62,20 @@ router = APIRouter(
 
 # Shared across callers, so it is pruned by age — wiping it would delete a
 # concurrent refresh's composites.
-PREVIEW_DIR = Path(tempfile.gettempdir()) / "chub_border_preview"
+_TMP_ROOT = Path(tempfile.gettempdir()).resolve()
+PREVIEW_DIR = _TMP_ROOT / "chub_border_preview"
 PREVIEW_TTL_SECONDS = 30 * 60
 
 
 def _prune_previews() -> None:
     """Delete preview files past the TTL, leaving a concurrent run's alone."""
-    # Re-confine the resolved target before unlinking: a symlinked PREVIEW_DIR
-    # would otherwise send these deletes anywhere on disk.
-    if PREVIEW_DIR.is_symlink():
-        return
+    # One resolve compared against the constant path, not check-then-resolve:
+    # a swap between the two would hand the deletes an attacker's directory.
     try:
         root = PREVIEW_DIR.resolve(strict=True)
     except OSError:
         return
-    if not root.is_dir():
+    if root != PREVIEW_DIR or not root.is_dir():
         return
     cutoff = time.time() - PREVIEW_TTL_SECONDS
     for stale in root.glob("*.jpg"):

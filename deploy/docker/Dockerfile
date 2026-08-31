@@ -131,7 +131,7 @@ RUN mkdir -p /app/public && \
 # -o is required on both: gid 100 is already `users` in the base image.
 # Bytecode is baked here and PYTHONDONTWRITEBYTECODE stops runtime .pyc writes,
 # so /app never needs to be writable and start.sh can skip chowning it.
-RUN python3 -m compileall -q /app/backend /app/main.py >/dev/null 2>&1 || true
+RUN python3 -m compileall -q /app/backend /app/main.py
 
 RUN groupadd -o -g 100 dockeruser && \
     useradd -o -u 99 -g 100 dockeruser && \

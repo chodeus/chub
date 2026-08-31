@@ -54,7 +54,7 @@ if [ "$(id -u)" = "0" ]; then
   # Chown only what is actually wrong; an already-correct tree costs a stat pass
   # instead of a full rewrite of every inode.
   find "${CONFIG_DIR}" \( ! -user "${PUID}" -o ! -group "${PGID}" \) \
-    -exec chown "${PUID}:${PGID}" {} + 2>/dev/null || true
+    -exec chown -h "${PUID}:${PGID}" {} + 2>/dev/null || true
   # /app is deliberately NOT chowned: it only needs to be readable, and the image
   # bakes the bytecode so nothing writes there. See PYTHONDONTWRITEBYTECODE.
   # CONFIG_DIR is private to this container (owned by PUID:PGID above), so it
