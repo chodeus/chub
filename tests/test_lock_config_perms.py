@@ -18,8 +18,8 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-# Fixtures use 0o640, never 0o644: world-readable trips CodeQL
-# py/overly-permissive-file, and the world bit is not what these assert.
+# Fixtures start at 0o400, stricter than every mode the locker sets: any
+# looser start mode trips CodeQL py/overly-permissive-file.
 def _mode(path):
     return stat.S_IMODE(os.stat(path).st_mode)
 
@@ -30,7 +30,7 @@ def config_dir(tmp_path):
     cfg.mkdir()
     for name in ("config.yml", "config.yml.legacy-2026", "chub.db", "unrelated.txt"):
         (cfg / name).write_text("x")
-        os.chmod(cfg / name, 0o640)
+        os.chmod(cfg / name, 0o400)
     return cfg
 
 
@@ -39,7 +39,7 @@ def test_locks_secrets_and_leaves_other_files_alone(config_dir):
     assert _mode(config_dir / "config.yml") == 0o600
     assert _mode(config_dir / "config.yml.legacy-2026") == 0o600
     assert _mode(config_dir / "chub.db") == 0o660
-    assert _mode(config_dir / "unrelated.txt") == 0o640
+    assert _mode(config_dir / "unrelated.txt") == 0o400
 
 
 def test_symlinked_subdir_cannot_redirect_the_chmod(config_dir, tmp_path):
@@ -47,21 +47,21 @@ def test_symlinked_subdir_cannot_redirect_the_chmod(config_dir, tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "rclone.conf").write_text("secret")
-    os.chmod(outside / "rclone.conf", 0o640)
+    os.chmod(outside / "rclone.conf", 0o400)
     (config_dir / "rclone").symlink_to(outside, target_is_directory=True)
 
     assert lock_config_perms.main(str(config_dir)) == 1
-    assert _mode(outside / "rclone.conf") == 0o640
+    assert _mode(outside / "rclone.conf") == 0o400
 
 
 def test_symlinked_match_cannot_redirect_the_chmod(config_dir, tmp_path):
     outside = tmp_path / "secret.txt"
     outside.write_text("secret")
-    os.chmod(outside, 0o640)
+    os.chmod(outside, 0o400)
     (config_dir / "creds.json").symlink_to(outside)
 
     assert lock_config_perms.main(str(config_dir)) == 1
-    assert _mode(outside) == 0o640
+    assert _mode(outside) == 0o400
 
 
 def test_a_fifo_does_not_block_startup(config_dir):
