@@ -35,7 +35,8 @@ def config_dir(tmp_path):
 
 
 def test_locks_secrets_and_leaves_other_files_alone(config_dir):
-    assert lock_config_perms.main(str(config_dir)) == 0
+    rc = lock_config_perms.main(str(config_dir))
+    assert rc == 0
     assert _mode(config_dir / "config.yml") == 0o600
     assert _mode(config_dir / "config.yml.legacy-2026") == 0o600
     assert _mode(config_dir / "chub.db") == 0o660
@@ -50,7 +51,8 @@ def test_symlinked_subdir_cannot_redirect_the_chmod(config_dir, tmp_path):
     os.chmod(outside / "rclone.conf", 0o400)
     (config_dir / "rclone").symlink_to(outside, target_is_directory=True)
 
-    assert lock_config_perms.main(str(config_dir)) == 1
+    rc = lock_config_perms.main(str(config_dir))
+    assert rc == 1
     assert _mode(outside / "rclone.conf") == 0o400
 
 
@@ -60,7 +62,8 @@ def test_symlinked_match_cannot_redirect_the_chmod(config_dir, tmp_path):
     os.chmod(outside, 0o400)
     (config_dir / "creds.json").symlink_to(outside)
 
-    assert lock_config_perms.main(str(config_dir)) == 1
+    rc = lock_config_perms.main(str(config_dir))
+    assert rc == 1
     assert _mode(outside) == 0o400
 
 
@@ -81,4 +84,5 @@ def test_a_fifo_does_not_block_startup(config_dir):
 
 
 def test_missing_config_dir_reports_failure(tmp_path):
-    assert lock_config_perms.main(str(tmp_path / "nope")) == 1
+    rc = lock_config_perms.main(str(tmp_path / "nope"))
+    assert rc == 1
