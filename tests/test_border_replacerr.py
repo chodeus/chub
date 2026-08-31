@@ -764,3 +764,26 @@ def test_stale_previews_are_still_pruned(tmp_path, monkeypatch):
 
     assert not stale.exists(), "a preview past the TTL was not pruned"
     assert fresh.exists(), "a fresh preview was pruned"
+
+
+def test_prune_refuses_a_symlinked_preview_dir(tmp_path, monkeypatch):
+    """A symlinked PREVIEW_DIR must not send the deletes outside it."""
+    from backend.api import border_replacerr as api
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+    victim.write_bytes(b"do not delete")
+    import os
+    import time
+
+    old = time.time() - api.PREVIEW_TTL_SECONDS - 60
+    os.utime(victim, (old, old))
+
+    link = tmp_path / "preview_link"
+    link.symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(api, "PREVIEW_DIR", link)
+
+    api._prune_previews()
+
+    assert victim.exists(), "a symlinked PREVIEW_DIR let the prune delete outside it"

@@ -60,24 +60,34 @@ router = APIRouter(
 )
 
 
-# Single shared preview directory, pruned by AGE rather than wiped: wiping at
-# the start of each POST deleted a concurrently-running refresh's composites,
-# 404ing the other client on every token it had just been handed.
+# Shared across callers, so it is pruned by age — wiping it would delete a
+# concurrent refresh's composites.
 PREVIEW_DIR = Path(tempfile.gettempdir()) / "chub_border_preview"
-# Generous vs the UI, which fetches each token seconds after the POST returns.
 PREVIEW_TTL_SECONDS = 30 * 60
 
 
 def _prune_previews() -> None:
     """Delete preview files past the TTL, leaving a concurrent run's alone."""
+    # Re-confine the resolved target before unlinking: a symlinked PREVIEW_DIR
+    # would otherwise send these deletes anywhere on disk.
+    if PREVIEW_DIR.is_symlink():
+        return
+    try:
+        root = PREVIEW_DIR.resolve(strict=True)
+    except OSError:
+        return
+    if not root.is_dir():
+        return
     cutoff = time.time() - PREVIEW_TTL_SECONDS
-    for stale in PREVIEW_DIR.glob("*.jpg"):
+    for stale in root.glob("*.jpg"):
         try:
+            # Defence in depth; unlink on a symlink drops the link, not its target.
+            if stale.is_symlink() or stale.resolve(strict=True).parent != root:
+                continue
             if stale.stat().st_mtime < cutoff:
                 stale.unlink()
         except OSError:
-            # Another run may have removed it, or it may be locked; either way
-            # the next prune retries and /tmp clears on container restart.
+            # Removed by another run, or locked; the next prune retries.
             pass
 
 

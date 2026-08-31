@@ -127,9 +127,8 @@ RUN mkdir -p /app/public && \
     if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi && \
     chown -R 99:100 /app/public
 
-# uid 99 / gid 100 matches Unraid's PUID/PGID, so start.sh's stat check skips its
-# 10-30s sweep. -o on both: gid 100 is the base image's `users`, and start.sh
-# groupmods a group that must be named dockeruser.
+# uid 99 / gid 100 matches PUID/PGID, so start.sh's stat check skips its sweep.
+# -o is required on both: gid 100 is already `users` in the base image.
 RUN groupadd -o -g 100 dockeruser && \
     useradd -o -u 99 -g 100 dockeruser && \
     chown 99:100 /app && \
