@@ -74,10 +74,14 @@ if [ "$(id -u)" = "0" ]; then
   if [ "${CHUB_LEGACY_CHMOD:-0}" = "1" ]; then
     chmod -R 777 "${CONFIG_DIR}"
   fi
-  chmod 600 "${CONFIG_DIR}"/config.yml "${CONFIG_DIR}"/config.yml.legacy-* 2>/dev/null || true
-  chmod 600 "${CONFIG_DIR}"/*.json 2>/dev/null || true
-  chmod 660 "${CONFIG_DIR}"/chub.db "${CONFIG_DIR}"/rclone/rclone.conf \
-    "${CONFIG_DIR}"/rclone.conf 2>/dev/null || true
+  # -type f skips symlinks: chmod follows them and would re-mode the target,
+  # the same way an unguarded chown does.
+  find "${CONFIG_DIR}" -maxdepth 1 -type f \
+    \( -name 'config.yml' -o -name 'config.yml.legacy-*' -o -name '*.json' \) \
+    -exec chmod 600 {} + 2>/dev/null || true
+  find "${CONFIG_DIR}" "${CONFIG_DIR}"/rclone -maxdepth 1 -type f \
+    \( -name 'chub.db' -o -name 'rclone.conf' \) \
+    -exec chmod 660 {} + 2>/dev/null || true
   # runuser instead of su: skips PAM, so the cap set documented in the
   # README (CHOWN/SETUID/SETGID/FOWNER) is sufficient — no need to grant
   # AUDIT_WRITE or DAC_OVERRIDE just for the user switch.
