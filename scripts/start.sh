@@ -57,11 +57,13 @@ if [ "$(id -u)" = "0" ]; then
     -exec chown -h "${PUID}:${PGID}" {} + 2>/dev/null || true
   # Fail closed on the outcome, not the chown: a per-file error can be benign
   # (foreign uids on a network mount), an unwritable CONFIG_DIR cannot.
-  if ! runuser -u dockeruser -- test -w "${CONFIG_DIR}"; then
+  probe="${CONFIG_DIR}/.chub-write-probe.$$"
+  if ! runuser -u dockeruser -- touch "${probe}" 2>/dev/null; then
     echo "FATAL: ${CONFIG_DIR} is not writable by ${PUID}:${PGID} after ownership correction."
     echo "Pre-chown it on the host: sudo chown -R ${PUID}:${PGID} /path/to/config"
     exit 1
   fi
+  runuser -u dockeruser -- rm -f "${probe}"
   # /app is deliberately NOT chowned: it only needs to be readable, and the image
   # bakes the bytecode so nothing writes there. See PYTHONDONTWRITEBYTECODE.
   # CONFIG_DIR is private to this container (owned by PUID:PGID above), so it
@@ -74,14 +76,9 @@ if [ "$(id -u)" = "0" ]; then
   if [ "${CHUB_LEGACY_CHMOD:-0}" = "1" ]; then
     chmod -R 777 "${CONFIG_DIR}"
   fi
-  # -type f skips symlinks: chmod follows them and would re-mode the target,
-  # the same way an unguarded chown does.
-  find "${CONFIG_DIR}" -maxdepth 1 -type f \
-    \( -name 'config.yml' -o -name 'config.yml.legacy-*' -o -name '*.json' \) \
-    -exec chmod 600 {} + || locked=0
-  find "${CONFIG_DIR}" "${CONFIG_DIR}"/rclone -maxdepth 1 -type f \
-    \( -name 'chub.db' -o -name 'rclone.conf' \) \
-    -exec chmod 660 {} + || locked=0
+  # fchmod on an O_NOFOLLOW descriptor: a path-based chmod follows a symlink
+  # swapped in after the match.
+  python3 scripts/lock_config_perms.py "${CONFIG_DIR}" || locked=0
   if [ "${locked:-1}" != "1" ]; then
     echo "WARNING: could not restrict permissions on one or more files in ${CONFIG_DIR}."
     echo "Secrets there may be readable by other users on the host."
