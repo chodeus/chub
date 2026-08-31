@@ -136,7 +136,7 @@ RUN python3 -m compileall -q /app/backend /app/main.py
 RUN groupadd -o -g 100 dockeruser && \
     useradd -o -u 99 -g 100 dockeruser && \
     chown 99:100 /app && \
-    unreadable="$(find /app \( -type f ! -perm -o=r \) -o \( -type d ! -perm -o=x \) | head -20)"; \
+    unreadable="$(find /app \( -type f ! -perm -0004 \) -o \( -type d ! -perm -0005 \) | head -20)"; \
     if [ -n "$unreadable" ]; then echo "not world-readable:"; echo "$unreadable"; exit 1; fi
 
 EXPOSE 8000
