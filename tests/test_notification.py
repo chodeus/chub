@@ -698,13 +698,19 @@ def _upgradinatorr_output():
                 {
                     "title": "Anastacia",
                     "year": None,
-                    "download": {"Anastacia - Resurrection": 250},
+                    "grabs": [
+                        {
+                            "download_id": "dl-1",
+                            "download": "Anastacia - Resurrection",
+                            "score": 250,
+                        }
+                    ],
                     "queue_imports": [],
                 },
                 {
                     "title": "Armin van Buuren",
                     "year": None,
-                    "download": {},
+                    "grabs": [],
                     "queue_imports": [
                         {
                             "state": "pending",
@@ -736,8 +742,8 @@ def test_upgradinatorr_notification_tallies_the_queue():
         for fields in data.values()
         for f in fields
     )
-    # The grab is what the run changed — it stays.
-    assert "Anastacia - Resurrection" in blob
+    # A grab is still downloading at run end — it never reaches Discord.
+    assert "Anastacia - Resurrection" not in blob
     # The queue section collapses to the same tally the run log prints.
     assert "1 download(s) across 1 item(s)" in blob
     assert "already downloaded, not searched again" in blob

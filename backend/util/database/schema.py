@@ -701,6 +701,29 @@ class SchemaManager:
         )
         self._add_table(upgradinatorr_progress)
 
+        # Upgradinatorr grabs awaiting an import outcome — a run ends at the
+        # search, so whether a grab upgraded a file is only knowable on a LATER
+        # run reading the *arr's history. Pruned once the outcome is read.
+        upgradinatorr_grabs = TableDefinition(
+            name="upgradinatorr_grabs",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("instance_name", "TEXT", nullable=False),
+                ColumnDefinition("download_id", "TEXT", nullable=False),
+                ColumnDefinition("media_id", "INTEGER"),
+                ColumnDefinition("title", "TEXT"),
+                ColumnDefinition("year", "INTEGER"),
+                ColumnDefinition("release_title", "TEXT"),
+                ColumnDefinition("score", "INTEGER"),
+                ColumnDefinition("grabbed_at", "TEXT"),
+            ],
+            indexes=[
+                "CREATE UNIQUE INDEX IF NOT EXISTS upgradinatorr_grabs_unique_idx ON upgradinatorr_grabs (instance_name, download_id)",
+                "CREATE INDEX IF NOT EXISTS upgradinatorr_grabs_age_idx ON upgradinatorr_grabs (instance_name, grabbed_at)",
+            ],
+        )
+        self._add_table(upgradinatorr_grabs)
+
         # TMDB external-ID lookup cache — maps (tvdb_id|imdb_id, media_type)
         # → tmdb_id resolved via TMDB's /3/find endpoint. Negative-cache rows
         # (tmdb_id NULL) prevent re-querying known-missing IDs. Expiration is
