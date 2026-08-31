@@ -3,8 +3,8 @@
 set -euo pipefail
 
 # Default UID/GID if not passed via environment
-PUID=${PUID:-100}
-PGID=${PGID:-99}
+PUID=${PUID:-99}
+PGID=${PGID:-100}
 UMASK=${UMASK:-002}
 BRANCH=${BRANCH:-master}
 
