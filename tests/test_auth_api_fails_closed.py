@@ -26,7 +26,7 @@ def client(monkeypatch):
         )
 
     # Override, don't monkeypatch: Depends bound the original at import time.
-    app.dependency_overrides[auth_api.get_logger] = lambda: _StubLogger()
+    app.dependency_overrides[auth_api.get_logger] = _StubLogger
     return TestClient(app, raise_server_exceptions=False)
 
 
