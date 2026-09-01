@@ -18,34 +18,25 @@ _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 
 def _chown_tree(root_fd: int, uid: int, gid: int) -> None:
-    """Chown entries whose owner differs, descending only through NOFOLLOW dir fds."""
-    # (fd, close_it) — root_fd belongs to the caller. Each fd is closed as soon as
-    # its listing is done, so only the frontier stays open on a deep tree.
-    stack = [(root_fd, False)]
-    while stack:
-        dir_fd, close_it = stack.pop()
-        try:
-            for name in os.listdir(dir_fd):
-                try:
-                    info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
-                except OSError:
-                    continue  # vanished mid-walk
-                if info.st_uid != uid or info.st_gid != gid:
-                    try:
-                        os.chown(name, uid, gid, dir_fd=dir_fd, follow_symlinks=False)
-                    except OSError:
-                        # Benign on a mount with foreign uids; start.sh's write
-                        # probe is what fails closed.
-                        pass
-                if stat.S_ISDIR(info.st_mode):
-                    try:
-                        sub = os.open(name, _DIR_FLAGS, dir_fd=dir_fd)
-                    except OSError:
-                        continue  # not a real directory any more
-                    stack.append((sub, True))
-        finally:
-            if close_it:
-                os.close(dir_fd)
+    """Chown entries whose owner differs, without descending through symlinks."""
+    # fwalk owns the directory fds and defaults to follow_symlinks=False, so a
+    # subdirectory swapped for a symlink is never descended.
+    for _, dirnames, filenames, dir_fd in os.fwalk(
+        ".", dir_fd=root_fd, follow_symlinks=False
+    ):
+        for name in dirnames + filenames:
+            try:
+                info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+            except OSError:
+                continue  # vanished mid-walk
+            if info.st_uid == uid and info.st_gid == gid:
+                continue
+            try:
+                os.chown(name, uid, gid, dir_fd=dir_fd, follow_symlinks=False)
+            except OSError:
+                # Benign on a mount with foreign uids; start.sh's write probe
+                # is what fails closed.
+                pass
 
 
 def _lock_dir(dir_fd: int, globs: tuple, mode: int) -> int:
