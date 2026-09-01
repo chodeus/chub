@@ -64,9 +64,7 @@ def test_resolve_border_paths_drops_missing(tmp_path, monkeypatch):
     resolved = br._resolve_border_paths("🎄 Christmas", ["does-not-exist"])
     assert resolved == []
     # A warning should have been logged so the user can debug.
-    assert any(
-        "does-not-exist" in msg for msg in br.logger.messages["warning"]
-    )
+    assert any("does-not-exist" in msg for msg in br.logger.messages["warning"])
 
 
 def test_resolve_border_paths_handles_unknown_holiday(monkeypatch, tmp_path):
@@ -292,7 +290,10 @@ def test_collect_matched_assets_includes_moved_and_collections(tmp_path):
     assets = br._collect_matched_assets(_StubDB(media, collections))
 
     titles = {a["title"] for a in assets}
-    assert titles == {"Moved Movie", "My Collection"}  # moved + collection in; unmatched out
+    assert titles == {
+        "Moved Movie",
+        "My Collection",
+    }  # moved + collection in; unmatched out
 
 
 def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
@@ -301,9 +302,7 @@ def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
         {"title": "ByTitle", "folder": "okdir", "matched": 1},
         {"title": "ByFolder", "folder": "skipdir", "matched": 1},
     ]
-    br = _make_br_with_config(
-        exclusion_list=["ByTitle"], ignore_folders=["skipdir"]
-    )
+    br = _make_br_with_config(exclusion_list=["ByTitle"], ignore_folders=["skipdir"])
     assets = br._collect_matched_assets(_StubDB(media, []))
     assert {a["title"] for a in assets} == {"Keep"}
 
@@ -315,9 +314,9 @@ def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
     "manifest,process_all,reset_all,expected",
     [
         ({"media_cache": [1]}, False, False, False),  # webhook/adhoc subset
-        ({"media_cache": [1]}, True, False, True),    # renamerr full run
-        ({"media_cache": [1]}, False, True, True),    # holiday transition
-        (None, False, False, True),                   # standalone run (no manifest)
+        ({"media_cache": [1]}, True, False, True),  # renamerr full run
+        ({"media_cache": [1]}, False, True, True),  # holiday transition
+        (None, False, False, True),  # standalone run (no manifest)
     ],
 )
 def test_should_process_all(manifest, process_all, reset_all, expected):
@@ -612,8 +611,8 @@ def test_subset_pass_only_borders_manifest_items(tmp_path, monkeypatch):
     manifest = {"media_cache": [1], "collections_cache": []}
     br.run(manifest, process_all=False)
 
-    assert (dest_dir / "inman.jpg").exists()        # manifest item bordered
-    assert not (dest_dir / "outman.jpg").exists()   # non-manifest item untouched
+    assert (dest_dir / "inman.jpg").exists()  # manifest item bordered
+    assert not (dest_dir / "outman.jpg").exists()  # non-manifest item untouched
 
 
 def _subset_harness(tmp_path, monkeypatch, exclusion_list=None):
@@ -704,8 +703,8 @@ def test_manifest_only_overrides_full_library_triggers(tmp_path, monkeypatch):
     manifest = {"media_cache": [1], "collections_cache": []}
     br.run(manifest, process_all=True, manifest_only=True)
 
-    assert (dest_dir / "inman.jpg").exists()        # manifest item bordered
-    assert not (dest_dir / "outman.jpg").exists()   # full sweep suppressed
+    assert (dest_dir / "inman.jpg").exists()  # manifest item bordered
+    assert not (dest_dir / "outman.jpg").exists()  # full sweep suppressed
 
 
 def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
@@ -725,3 +724,106 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
     with open(by_id[1]["original_file"], "rb") as f:
         src_bytes = f.read()
     assert dest.read_bytes() == src_bytes
+
+
+def test_a_second_refresh_does_not_delete_the_first_runs_previews(
+    tmp_path, monkeypatch
+):
+    """Two concurrent /preview POSTs: neither may remove the other's composites."""
+    from backend.api import border_replacerr as api
+
+    monkeypatch.setattr(api, "PREVIEW_DIR", tmp_path)
+    first_run = tmp_path / "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.jpg"
+    first_run.write_bytes(b"composite")
+
+    # Run B starts while run A's client still holds its tokens.
+    api._prune_previews()
+
+    assert first_run.exists(), "a concurrent refresh deleted the other run's preview"
+
+
+def test_stale_previews_are_still_pruned(tmp_path, monkeypatch):
+    """Pruning must still bound the directory, or /tmp grows without limit."""
+    import os
+    import time
+
+    from backend.api import border_replacerr as api
+
+    monkeypatch.setattr(api, "PREVIEW_DIR", tmp_path)
+    stale = tmp_path / "ffffffffffffffffffffffffffffffff.jpg"
+    stale.write_bytes(b"old")
+    old = time.time() - api.PREVIEW_TTL_SECONDS - 60
+    os.utime(stale, (old, old))
+
+    fresh = tmp_path / "00000000000000000000000000000000.jpg"
+    fresh.write_bytes(b"new")
+
+    api._prune_previews()
+
+    assert not stale.exists(), "a preview past the TTL was not pruned"
+    assert fresh.exists(), "a fresh preview was pruned"
+
+
+def test_prune_refuses_a_symlinked_preview_dir(tmp_path, monkeypatch):
+    """A symlinked PREVIEW_DIR must not send the deletes outside it."""
+    from backend.api import border_replacerr as api
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+    victim.write_bytes(b"do not delete")
+    import os
+    import time
+
+    old = time.time() - api.PREVIEW_TTL_SECONDS - 60
+    os.utime(victim, (old, old))
+
+    link = tmp_path / "preview_link"
+    link.symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(api, "PREVIEW_DIR", link)
+
+    api._prune_previews()
+
+    assert victim.exists(), "a symlinked PREVIEW_DIR let the prune delete outside it"
+
+
+def test_prune_survives_a_directory_swap_after_validation(tmp_path, monkeypatch):
+    """Swapping PREVIEW_DIR mid-prune must not redirect the unlinks."""
+    import os
+    import time
+
+    from backend.api import border_replacerr as api
+
+    real_dir = tmp_path / "previews"
+    real_dir.mkdir()
+    stale = real_dir / "cccccccccccccccccccccccccccccccc.jpg"
+    stale.write_bytes(b"old")
+    old = time.time() - api.PREVIEW_TTL_SECONDS - 60
+    os.utime(stale, (old, old))
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "cccccccccccccccccccccccccccccccc.jpg"
+    victim.write_bytes(b"do not delete")
+    os.utime(victim, (old, old))
+
+    monkeypatch.setattr(api, "PREVIEW_DIR", real_dir)
+    real_listdir = os.listdir
+
+    def swapping(target):
+        names = real_listdir(target)
+        # The fd is already open; repoint the path underneath it.
+        real_dir.rename(tmp_path / "moved")
+        real_dir.symlink_to(outside, target_is_directory=True)
+        return names
+
+    monkeypatch.setattr(os, "listdir", swapping)
+    api._prune_previews()
+    monkeypatch.undo()
+
+    moved_dir = tmp_path / "moved"
+    assert moved_dir.exists(), "the swap never ran, so this proves nothing"
+    assert not (moved_dir / stale.name).exists(), "the stale preview was not pruned"
+    assert victim.exists(), (
+        "a post-validation swap redirected the unlink outside the dir"
+    )

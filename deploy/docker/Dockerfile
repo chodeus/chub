@@ -109,31 +109,30 @@ RUN apt-get update && \
 # Copy rclone binary (installed to /usr/bin by rclone install script)
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
 
-# Copy built frontend assets
-COPY --from=builder --chown=100:99 /app/frontend/dist ./frontend/dist
+# Includes frontend/dist. --chown=0:0 states the ownership invariant the
+# assertion below enforces.
+COPY --from=builder --chown=0:0 /app .
 
-# .dockerignore only filters the host context, not --from=builder, so drop the
-# builder's node_modules. --chown here: a later `chown -R` duplicates /app (45MB).
-COPY --from=builder --chown=100:99 /app .
-RUN rm -rf /app/frontend/node_modules
-
-# Frontend build output into /app/public (served via STATIC_DIR). This RUN creates
-# the files, so it chowns them here — a later layer would duplicate the bytes.
+# Frontend build output into /app/public, served read-only via STATIC_DIR.
 RUN mkdir -p /app/public && \
     cp frontend/dist/index.html /app/public/index.html && \
     cp -r frontend/dist/assets /app/public/assets && \
     if [ -d frontend/dist/icons ]; then cp -r frontend/dist/icons /app/public/icons; fi && \
     if [ -d frontend/dist/img ]; then cp -r frontend/dist/img /app/public/img; fi && \
-    if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi && \
-    chown -R 100:99 /app/public
+    if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi
 
-# `chown 100:99 /app` is not redundant with COPY --chown, which skips /app itself:
-# start.sh stats it alone, and root-owned re-runs its 10-30s sweep every restart.
-RUN groupadd -g 99 dockeruser && \
-    useradd -u 100 -g 99 dockeruser && \
-    chown 100:99 /app && \
-    unreadable="$(find /app \( -type f ! -perm -o=r \) -o \( -type d ! -perm -o=x \) | head -20)"; \
-    if [ -n "$unreadable" ]; then echo "not world-readable:"; echo "$unreadable"; exit 1; fi
+# Bytecode baked here; PYTHONDONTWRITEBYTECODE keeps /app read-only at runtime.
+RUN python3 -m compileall -q /app/backend /app/main.py
+
+# start.sh remaps this user to PUID/PGID at runtime; -o is required on both
+# because gid 100 is already `users` in the base image.
+RUN set -e; \
+    groupadd -o -g 100 dockeruser; \
+    useradd -o -u 99 -g 100 dockeruser; \
+    unreadable="$(find /app \( -type f ! -perm -0004 \) -o \( -type d ! -perm -0005 \) | head -20)"; \
+    if [ -n "$unreadable" ]; then echo "not world-readable:"; echo "$unreadable"; exit 1; fi; \
+    writable="$(find /app -xdev \( -perm /022 -o ! -user root \) -print -quit)"; \
+    if [ -n "$writable" ]; then echo "writable by non-root below /app:"; echo "$writable"; exit 1; fi
 
 EXPOSE 8000
 
@@ -165,6 +164,12 @@ ENV DOCKER_ENV=true
 # ordered — without this, print() block-buffers to the pipe and interleaves
 # out of order with the per-record-flushed logging handlers.
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+# platformdirs-based libraries otherwise write app state to a home dir that is
+# not on a volume; keep it in /config alongside everything else.
+ENV XDG_CONFIG_HOME=/config/.config
+ENV XDG_CACHE_HOME=/config/.cache
+ENV XDG_DATA_HOME=/config/.local/share
 
 ENTRYPOINT ["bash", "scripts/start.sh"]
 
