@@ -51,10 +51,9 @@ if [ "$(id -u)" = "0" ]; then
   echo "Dropping privileges to dockeruser (PUID=${PUID}, PGID=${PGID})"
   groupmod -o -g "$PGID" dockeruser
   usermod -o -u "$PUID" dockeruser
-  # Chown only what is actually wrong; an already-correct tree costs a stat pass
-  # instead of a full rewrite of every inode.
-  find "${CONFIG_DIR}" \( ! -user "${PUID}" -o ! -group "${PGID}" \) \
-    -exec chown -h "${PUID}:${PGID}" {} + 2>/dev/null || true
+  # Chowns only what is actually wrong, through NOFOLLOW directory fds: a
+  # path-based chown follows an intermediate dir swapped for a symlink.
+  python3 scripts/config_perms.py chown "${CONFIG_DIR}" "${PUID}" "${PGID}" || true
   # Fail closed on the outcome, not the chown: a per-file error can be benign
   # (foreign uids on a network mount), an unwritable CONFIG_DIR cannot.
   probe="${CONFIG_DIR}/.chub-write-probe.$$"
@@ -78,8 +77,7 @@ if [ "$(id -u)" = "0" ]; then
   fi
   # fchmod on an O_NOFOLLOW descriptor: a path-based chmod follows a symlink
   # swapped in after the match.
-  python3 scripts/lock_config_perms.py "${CONFIG_DIR}" || locked=0
-  if [ "${locked:-1}" != "1" ]; then
+  if ! python3 scripts/config_perms.py lock "${CONFIG_DIR}"; then
     echo "WARNING: could not restrict permissions on one or more files in ${CONFIG_DIR}."
     echo "Secrets there may be readable by other users on the host."
   fi

@@ -7,11 +7,11 @@ import stat
 import pytest
 
 _SPEC = importlib.util.spec_from_file_location(
-    "lock_config_perms",
-    pathlib.Path(__file__).parent.parent / "scripts" / "lock_config_perms.py",
+    "config_perms",
+    pathlib.Path(__file__).parent.parent / "scripts" / "config_perms.py",
 )
-lock_config_perms = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(lock_config_perms)
+config_perms = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(config_perms)
 
 pytestmark = pytest.mark.skipif(
     os.open not in os.supports_dir_fd, reason="needs openat()"
@@ -35,7 +35,7 @@ def config_dir(tmp_path):
 
 
 def test_locks_secrets_and_leaves_other_files_alone(config_dir):
-    rc = lock_config_perms.main(str(config_dir))
+    rc = config_perms.main(["lock", str(config_dir)])
     assert rc == 0
     assert _mode(config_dir / "config.yml") == 0o600
     assert _mode(config_dir / "config.yml.legacy-2026") == 0o600
@@ -51,7 +51,7 @@ def test_symlinked_subdir_cannot_redirect_the_chmod(config_dir, tmp_path):
     os.chmod(outside / "rclone.conf", 0o400)
     (config_dir / "rclone").symlink_to(outside, target_is_directory=True)
 
-    rc = lock_config_perms.main(str(config_dir))
+    rc = config_perms.main(["lock", str(config_dir)])
     assert rc == 1
     assert _mode(outside / "rclone.conf") == 0o400
 
@@ -62,7 +62,7 @@ def test_symlinked_match_cannot_redirect_the_chmod(config_dir, tmp_path):
     os.chmod(outside, 0o400)
     (config_dir / "creds.json").symlink_to(outside)
 
-    rc = lock_config_perms.main(str(config_dir))
+    rc = config_perms.main(["lock", str(config_dir)])
     assert rc == 1
     assert _mode(outside) == 0o400
 
@@ -72,17 +72,17 @@ def test_a_fifo_does_not_block_startup(config_dir):
     os.mkfifo(config_dir / "pipe.json")
 
     def _timeout(signum, frame):
-        raise AssertionError("lock_config_perms blocked on a FIFO")
+        raise AssertionError("config_perms blocked on a FIFO")
 
     signal.signal(signal.SIGALRM, _timeout)
     signal.alarm(10)
     try:
-        lock_config_perms.main(str(config_dir))
+        config_perms.main(["lock", str(config_dir)])
     finally:
         signal.alarm(0)
     assert _mode(config_dir / "config.yml") == 0o600
 
 
 def test_missing_config_dir_reports_failure(tmp_path):
-    rc = lock_config_perms.main(str(tmp_path / "nope"))
+    rc = config_perms.main(["lock", str(tmp_path / "nope")])
     assert rc == 1
