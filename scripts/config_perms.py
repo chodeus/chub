@@ -96,7 +96,7 @@ def main(argv: list) -> int:
                 try:
                     os.fchown(root_fd, uid, gid)
                 except OSError:
-                    # Same as below: an unchownable root is caught by the probe.
+                    # An unchownable root is caught by start.sh's write probe.
                     pass
             _chown_tree(root_fd, uid, gid)
             return 0

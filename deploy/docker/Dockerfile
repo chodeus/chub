@@ -109,8 +109,8 @@ RUN apt-get update && \
 # Copy rclone binary (installed to /usr/bin by rclone install script)
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
 
-# Brings frontend/dist with it — copying that separately shipped it twice.
-# --chown=0:0 states the invariant the assertion below enforces.
+# Includes frontend/dist. --chown=0:0 states the ownership invariant the
+# assertion below enforces.
 COPY --from=builder --chown=0:0 /app .
 
 # Frontend build output into /app/public, served read-only via STATIC_DIR.
