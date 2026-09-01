@@ -110,34 +110,33 @@ RUN apt-get update && \
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
 
 # Copy built frontend assets
-COPY --from=builder --chown=99:100 /app/frontend/dist ./frontend/dist
+COPY --from=builder /app/frontend/dist ./frontend/dist
 
 # .dockerignore only filters the host context, not --from=builder, so drop the
-# builder's node_modules. --chown here: a later `chown -R` duplicates /app (45MB).
-COPY --from=builder --chown=99:100 /app .
+# builder's node_modules below.
+COPY --from=builder /app .
 RUN rm -rf /app/frontend/node_modules
 
-# Frontend build output into /app/public (served via STATIC_DIR). This RUN creates
-# the files, so it chowns them here — a later layer would duplicate the bytes.
+# Frontend build output into /app/public, served read-only via STATIC_DIR.
 RUN mkdir -p /app/public && \
     cp frontend/dist/index.html /app/public/index.html && \
     cp -r frontend/dist/assets /app/public/assets && \
     if [ -d frontend/dist/icons ]; then cp -r frontend/dist/icons /app/public/icons; fi && \
     if [ -d frontend/dist/img ]; then cp -r frontend/dist/img /app/public/img; fi && \
-    if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi && \
-    chown -R 99:100 /app/public
+    if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi
 
 # Bytecode baked here; PYTHONDONTWRITEBYTECODE keeps /app read-only at runtime.
 RUN python3 -m compileall -q /app/backend /app/main.py
 
-# uid 99 / gid 100 matches PUID/PGID, so start.sh's stat check skips its sweep.
-# -o is required on both: gid 100 is already `users` in the base image.
+# start.sh remaps this user to PUID/PGID at runtime; -o is required on both
+# because gid 100 is already `users` in the base image.
 RUN set -e; \
     groupadd -o -g 100 dockeruser; \
     useradd -o -u 99 -g 100 dockeruser; \
-    chown 99:100 /app; \
     unreadable="$(find /app \( -type f ! -perm -0004 \) -o \( -type d ! -perm -0005 \) | head -20)"; \
-    if [ -n "$unreadable" ]; then echo "not world-readable:"; echo "$unreadable"; exit 1; fi
+    if [ -n "$unreadable" ]; then echo "not world-readable:"; echo "$unreadable"; exit 1; fi; \
+    writable="$(find /app -xdev -perm /022 -print -quit)"; \
+    if [ -n "$writable" ]; then echo "writable below /app:"; echo "$writable"; exit 1; fi
 
 EXPOSE 8000
 
