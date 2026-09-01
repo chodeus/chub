@@ -109,13 +109,9 @@ RUN apt-get update && \
 # Copy rclone binary (installed to /usr/bin by rclone install script)
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
 
-# Copy built frontend assets
-COPY --from=builder /app/frontend/dist ./frontend/dist
-
-# .dockerignore only filters the host context, not --from=builder, so drop the
-# builder's node_modules below.
-COPY --from=builder /app .
-RUN rm -rf /app/frontend/node_modules
+# Brings frontend/dist with it — copying that separately shipped it twice.
+# --chown=0:0 states the invariant the assertion below enforces.
+COPY --from=builder --chown=0:0 /app .
 
 # Frontend build output into /app/public, served read-only via STATIC_DIR.
 RUN mkdir -p /app/public && \
@@ -135,8 +131,8 @@ RUN set -e; \
     useradd -o -u 99 -g 100 dockeruser; \
     unreadable="$(find /app \( -type f ! -perm -0004 \) -o \( -type d ! -perm -0005 \) | head -20)"; \
     if [ -n "$unreadable" ]; then echo "not world-readable:"; echo "$unreadable"; exit 1; fi; \
-    writable="$(find /app -xdev -perm /022 -print -quit)"; \
-    if [ -n "$writable" ]; then echo "writable below /app:"; echo "$writable"; exit 1; fi
+    writable="$(find /app -xdev \( -perm /022 -o ! -user root \) -print -quit)"; \
+    if [ -n "$writable" ]; then echo "writable by non-root below /app:"; echo "$writable"; exit 1; fi
 
 EXPOSE 8000
 
