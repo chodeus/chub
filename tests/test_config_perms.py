@@ -86,3 +86,22 @@ def test_a_fifo_does_not_block_startup(config_dir):
 def test_missing_config_dir_reports_failure(tmp_path):
     rc = config_perms.main(["lock", str(tmp_path / "nope")])
     assert rc == 1
+
+
+def test_chown_descends_into_subdirectories(config_dir, monkeypatch):
+    """Every entry with the wrong owner is reached, at any depth."""
+    deep = config_dir / "a" / "b"
+    deep.mkdir(parents=True)
+    (deep / "nested.txt").write_text("x")
+
+    seen = []
+
+    def record(name, uid, gid, *, dir_fd=None, follow_symlinks=True):
+        seen.append(name)
+
+    monkeypatch.setattr(os, "chown", record)
+    # A uid nothing owns, so every entry is considered wrong and gets visited.
+    config_perms.main(["chown", str(config_dir), "424242", "424242"])
+
+    assert "nested.txt" in seen
+    assert "b" in seen
