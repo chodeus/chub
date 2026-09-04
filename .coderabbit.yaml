@@ -4,8 +4,22 @@
 language: "en-US"
 
 reviews:
-  profile: "chill"
+  # assertive: chill passed a diff clean that assertive flagged with two Major findings (2026-09-03); the "**" rule keeps style nits out
+  profile: "assertive"
   request_changes_workflow: false
+  pre_merge_checks:
+    # off: the 80% docstring-coverage warning contradicts the one-line-docstring rule under "**"
+    docstrings:
+      mode: "off"
+    title:
+      mode: warning
+      requirements: |-
+        Conventional Commits, `type(scope)?: subject`. release-please reads the
+        squash-merge title to pick the next version: feat bumps minor, fix bumps
+        patch, a `!` after the type or a BREAKING CHANGE footer bumps major, and
+        chore/ci/test/build are hidden from the changelog and never release on
+        their own. Flag a title whose type understates the diff (a behaviour
+        change labelled chore or ci ships unversioned) or overstates it.
   auto_review:
     enabled: true
     drafts: false
@@ -98,6 +112,44 @@ reviews:
         - A guard that cannot fail is worse than no guard. If an assertion is reachable only when some list is non-empty, or keys off a symbol that may be renamed, it passes vacuously. Pair it with a control that fails when the defect is injected.
         - A static/AST check over source must resolve helper calls, not only direct ones: keying on a direct call name misses a handler that reaches the behaviour through a helper, which is exactly the case such a check exists to catch.
         - Assert the observable contract (resulting state), not incidental ordering or a mock's call count, unless the call count IS the invariant.
+    - path: ".github/workflows/**"
+      instructions: |-
+        CI, CodeQL, dep-audit and the GHCR publish:
+        - A gate that stops blocking (a lint/CVE/test step made non-blocking or
+          continue-on-error) must have every downstream step that relied on it
+          audited in the same change. dep-audit runs with fail-on-vuln: true —
+          flag anything that softens that.
+        - A job listed in `needs:` that FAILS makes the dependent job SKIP, and
+          GitHub reports a skipped required check as success — that is why
+          frontend-tests is deliberately not in docker-validate's needs. Flag a
+          `needs:` edit that reintroduces the trap.
+        - Enumerate allowed states positively (== 'success' || == 'skipped'),
+          never by negation — a third state slips through `!= 'failure'`.
+        - Untrusted input (base SHA, PR title, branch name) reaches `run:` only
+          via `env:`, never `${{ }}` interpolation — the gdrive-preset-moves job
+          is the pattern.
+        - The push trigger must not be self-referential, or a workflow edit
+          republishes :latest. Pin third-party actions by commit SHA.
+    - path: "{scripts/start.sh,build_frontend.sh}"
+      instructions: |-
+        Container entrypoint and frontend staging:
+        - start.sh fails closed on the OUTCOME: the runuser write probe on
+          CONFIG_DIR must stay a hard exit 1, /app is never chowned, and the
+          chmod -R 777 path stays behind CHUB_LEGACY_CHMOD=1. Flag a change that
+          makes the probe advisory or chowns /app again.
+        - Rootless (id -u != 0) overrides PUID/PGID from the real uid/gid; keep
+          that, never pretend.
+        - build_frontend.sh rm -rf's templates/{assets,icons,img,posters} before
+          copying — a missing posters dir must stay a hard exit 1, and the copy
+          targets must remain inside templates/.
+        - Quote every path expansion; never echo a secret, including under set -x.
+    - path: "deploy/unraid/chub.xml"
+      instructions: |-
+        Published Unraid CA template: <Network> stays bridge (the personal
+        network belongs only in the user's my-*.xml), the port stays 8000, and
+        every <Config> (PUID/PGID/UMASK/TZ, /config, /kometa, /media, /data,
+        /plex) must match scripts/start.sh, the Dockerfile and README. Flag a
+        Mask="true" omission on any new credential-shaped variable.
     - path: "**"
       instructions: |-
         Applies to every file, whatever the language:
@@ -105,13 +157,24 @@ reviews:
           what a non-obvious block does, or the gotcha it guards. No why/history
           essays, no before/after narrative, no restating the code, no section
           banners. Docstrings: one line unless the signature genuinely cannot
-          carry it.
+          carry it. Never ask for a docstring to be added; a missing docstring
+          is not a finding.
         - The 1-2 line cap wins even inside an already heavily-commented file —
           matching local density is not licence to exceed it.
+        - A comment, docstring, help text, column header, log message or UI label
+          that disagrees with what the code does is a correctness finding, not a
+          stale-comment nit: report it and say which side is wrong.
+        - Do not flag stylistic preferences that are consistent across the file
+          (naming, quoting, import order, formatting, line length). Report
+          correctness, security, data-loss and the classes named above.
 
   tools:
-    # ruff + eslint intentionally left to CI (codeql-lint.yml already runs Ruff,
-    # ESLint, stylelint, prettier, CodeQL) — CodeRabbit adds gitleaks (net-new
-    # secret scanning) plus AI review + the path_instructions above.
+    # ruff + eslint left to CI (codeql-lint.yml runs Ruff, ESLint, stylelint,
+    # prettier, CodeQL). Every CodeRabbit tool defaults ON, so they must be
+    # switched off explicitly or they run here too and double-post CI findings.
+    ruff:
+      enabled: false
+    eslint:
+      enabled: false
     gitleaks:
       enabled: true
