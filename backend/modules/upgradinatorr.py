@@ -19,10 +19,11 @@ from backend.util.arr import (
 from backend.util.base_module import ChubModule
 from backend.util.constants import (
     QUEUE_REPORT_SECTIONS,
+    import_quality_text,
+    import_report_sections,
+    import_report_tally,
+    import_score_text,
     queue_report_tally,
-    upgrade_quality_text,
-    upgrade_report_tally,
-    upgrade_score_text,
 )
 from backend.util.database import ChubDB
 from backend.util.database.upgradinatorr_grabs import UpgradinatorrGrabs
@@ -585,17 +586,12 @@ class Upgradinatorr(ChubModule):
             oldest = datetime.now(timezone.utc) - timedelta(days=GRAB_RETENTION_DAYS)
         return oldest.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def _collect_completed_upgrades(
+    def _collect_completed_imports(
         self, app: BaseARRClient, grabs_db: UpgradinatorrGrabs
     ) -> Tuple[List[Dict[str, Any]], Set[str]]:
-        """(upgrades, resolved download ids) for grabs whose download imported.
-
-        An upgrade is an import that also REPLACED a file.
-
-        A run ends at the search, so this is the only place an upgrade can be
-        confirmed. Fails closed — an unreadable history leaves grabs pending for
-        the next run rather than resolving them as "nothing was upgraded".
-        """
+        """(completed imports, resolved download ids) for grabs that imported."""
+        # Each entry carries ``replaced``. Fails closed: an unreadable history
+        # leaves grabs pending rather than resolving them as "nothing imported".
         grabs_db.prune(app.instance_name, GRAB_RETENTION_DAYS)
         pending = grabs_db.pending(app.instance_name)
         if not pending:
@@ -619,9 +615,8 @@ class Upgradinatorr(ChubModule):
             )
             return [], set()
 
-        # A file deleted "for Upgrade" is what separates an upgrade from a first
-        # acquisition — missing-mode backfill replaces nothing, so it drops out
-        # here without the run needing to know its search_mode.
+        # A file deleted "for Upgrade" separates an upgrade from a first
+        # acquisition. Both are reported, so search_mode never matters here.
         replaced: Dict[Any, List[Tuple[datetime, Dict[str, Any]]]] = {}
         for record in deletes:
             if not isinstance(record, dict):
@@ -643,32 +638,34 @@ class Upgradinatorr(ChubModule):
         paired = self._pair_upgrades(ours, pair_field, replaced)
 
         # A grab imports as several records (a Sonarr season pack lands one per
-        # episode), so key by download id and report the release once.
-        upgrades_by_download: Dict[str, Dict[str, Any]] = {}
-        for index, record in enumerate(ours):
-            if index not in paired:
-                continue
+        # episode), so key by download id and report the release once. Paired
+        # first — a pack replacing even one file upgraded, whatever imported first.
+        order = sorted(range(len(ours)), key=lambda index: (index not in paired, index))
+        completed_by_download: Dict[str, Dict[str, Any]] = {}
+        for index in order:
+            record = ours[index]
             download_id = str(record.get("downloadId"))
-            if download_id in upgrades_by_download:
+            if download_id in completed_by_download:
                 continue
             grab = by_download_id[download_id]
             score = record.get("customFormatScore")
-            deleted = paired[index]
-            upgrades_by_download[download_id] = {
+            deleted = paired.get(index)
+            completed_by_download[download_id] = {
                 "media_id": grab.get("media_id"),
                 "title": grab.get("title"),
                 "year": grab.get("year"),
                 "download": grab.get("release_title"),
                 "score": grab.get("score") if score is None else score,
-                "previous_score": deleted.get("customFormatScore"),
+                "previous_score": (deleted or {}).get("customFormatScore"),
                 "quality": self._quality_name(record),
-                "previous_quality": self._quality_name(deleted),
+                "previous_quality": self._quality_name(deleted or {}),
+                "replaced": deleted is not None,
             }
         # Resolved, but deliberately NOT cleared here: an *arr call later in the
         # run can still abort it and discard this report, and a cleared grab can
         # never be reported again. The caller settles them on a path that returns.
         resolved = {str(record.get("downloadId")) for record in ours}
-        return list(upgrades_by_download.values()), resolved
+        return list(completed_by_download.values()), resolved
 
     @staticmethod
     def _quality_name(record: Dict[str, Any]) -> Optional[str]:
@@ -1385,7 +1382,7 @@ class Upgradinatorr(ChubModule):
 
     @staticmethod
     def _new_output(
-        server_name: str, upgrades: List[Dict[str, Any]], resolved: Set[str]
+        server_name: str, completed: List[Dict[str, Any]], resolved: Set[str]
     ) -> Dict[str, Any]:
         """The per-instance result shape. One definition so a bail-out and a full
         run can't drift apart."""
@@ -1399,9 +1396,9 @@ class Upgradinatorr(ChubModule):
             "searches_failed": 0,
             "searches_deferred": 0,
             "data": [],
-            # Grabs from EARLIER runs whose import completed and replaced a
-            # file. This run's own grabs haven't downloaded yet.
-            "upgrades": upgrades,
+            # Grabs from EARLIER runs whose download imported, upgrade or
+            # first acquisition. This run's own grabs haven't downloaded yet.
+            "completed": completed,
             # Grabs this result accounts for. run() pops it once print_output
             # has written the report, so it never reaches a notification.
             "resolved_grabs": sorted(resolved),
@@ -1428,7 +1425,7 @@ class Upgradinatorr(ChubModule):
 
         The run log is this module's durable handoff, and it is written well
         after process_instance returns — settling any earlier can drop an
-        upgrade that was never reported anywhere.
+        import that was never reported anywhere.
         """
         for run_data in output.values():
             if not isinstance(run_data, dict):
@@ -1437,19 +1434,19 @@ class Upgradinatorr(ChubModule):
                 run_data.get("server_name", ""), run_data.pop("resolved_grabs", None)
             )
 
-    def _upgrades_only(
-        self, app: BaseARRClient, upgrades: List[Dict[str, Any]], resolved: Set[str]
+    def _completed_only(
+        self, app: BaseARRClient, completed: List[Dict[str, Any]], resolved: Set[str]
     ) -> Optional[Dict[str, Any]]:
-        """Result for a run with nothing left to search, carrying any upgrade the
+        """Result for a run with nothing left to search, carrying any import the
         reconcile confirmed — returning None here would drop it."""
-        if not upgrades:
+        if not completed:
             # Nothing to report, so nothing to lose by settling now.
             self._settle_grabs(app.instance_name, resolved)
             return None
         self.logger.info(
-            f"{len(upgrades)} completed upgrade(s) to report for {app.instance_name}."
+            f"{len(completed)} completed import(s) to report for {app.instance_name}."
         )
-        return self._new_output(app.instance_name, upgrades, resolved)
+        return self._new_output(app.instance_name, completed, resolved)
 
     def process_instance(
         self,
@@ -1513,7 +1510,7 @@ class Upgradinatorr(ChubModule):
         # Resolved BEFORE the media gathering and every early return below it:
         # these grabs are from earlier runs, so whether this run has anything
         # left to search says nothing about whether one finished importing.
-        completed_upgrades: List[Dict[str, Any]] = []
+        completed_imports: List[Dict[str, Any]] = []
         resolved_grabs: Set[str] = set()
         if not self.config.dry_run:
             # Reporting is not worth losing a run over: this now sits upstream of
@@ -1522,9 +1519,9 @@ class Upgradinatorr(ChubModule):
             try:
                 with ChubDB(logger=self.logger) as grabs_ctx:
                     (
-                        completed_upgrades,
+                        completed_imports,
                         resolved_grabs,
-                    ) = self._collect_completed_upgrades(
+                    ) = self._collect_completed_imports(
                         app, grabs_ctx.upgradinatorr_grabs
                     )
             except Exception as e:
@@ -1542,7 +1539,7 @@ class Upgradinatorr(ChubModule):
         if search_mode in ("missing", "cutoff"):
             wanted_records = self._get_all_wanted(app, search_mode)
             if wanted_records is None:
-                return self._upgrades_only(app, completed_upgrades, resolved_grabs)
+                return self._completed_only(app, completed_imports, resolved_grabs)
             wanted_count = len(wanted_records)
             media_dict = self._convert_wanted_to_media_dict(
                 wanted_records, instance_type, app
@@ -1610,7 +1607,7 @@ class Upgradinatorr(ChubModule):
             if search_mode in ("missing", "cutoff"):
                 wanted_records = self._get_all_wanted(app, search_mode)
                 if wanted_records is None:
-                    return self._upgrades_only(app, completed_upgrades, resolved_grabs)
+                    return self._completed_only(app, completed_imports, resolved_grabs)
                 media_dict = self._convert_wanted_to_media_dict(
                     wanted_records, instance_type, app
                 )
@@ -1635,7 +1632,7 @@ class Upgradinatorr(ChubModule):
             self.logger.warning(
                 f"No media found for {app.instance_name}. Reason: nothing left to tag."
             )
-            return self._upgrades_only(app, completed_upgrades, resolved_grabs)
+            return self._completed_only(app, completed_imports, resolved_grabs)
 
         if wanted_count is not None:
             self.logger.info(
@@ -1656,7 +1653,7 @@ class Upgradinatorr(ChubModule):
                     untagged_count += 1
 
         output_dict: Dict[str, Any] = self._new_output(
-            app.instance_name, completed_upgrades, resolved_grabs
+            app.instance_name, completed_imports, resolved_grabs
         )
         output_dict["tagged_count"] = tagged_count
         output_dict["untagged_count"] = untagged_count
@@ -1973,13 +1970,24 @@ class Upgradinatorr(ChubModule):
         ]
 
     @staticmethod
+    def _detail_prefix(
+        score: object, previous: object = None, quality: Optional[str] = None
+    ) -> str:
+        """``Score 7007 (was 4851), FLAC — ``, empty when neither is known."""
+        parts = []
+        score_text = import_score_text(score, previous)
+        if score_text:
+            parts.append(f"Score {score_text}")
+        if quality:
+            parts.append(quality)
+        return f"{', '.join(parts)} — " if parts else ""
+
+    @staticmethod
     def _format_queue_entry(entry: Dict[str, Any]) -> str:
         age = entry.get("age_hours")
         age_text = f", waiting {age:.0f}h" if age is not None else ""
-        return (
-            f"Score {entry.get('torrent_custom_format_score')} — "
-            f"{entry.get('download')}{age_text}"
-        )
+        prefix = Upgradinatorr._detail_prefix(entry.get("torrent_custom_format_score"))
+        return f"{prefix}{entry.get('download')}{age_text}"
 
     @staticmethod
     def _format_item_title(item: Dict[str, Any]) -> str:
@@ -1993,10 +2001,10 @@ class Upgradinatorr(ChubModule):
             if not run_data:
                 continue
             instance_data = run_data.get("data") or []
-            upgrades = run_data.get("upgrades") or []
-            # Upgrades come from EARLIER runs' grabs, so they must print even
-            # when this run searched nothing.
-            if not instance_data and not upgrades:
+            completed = run_data.get("completed") or []
+            # Completed imports come from EARLIER runs' grabs, so they must
+            # print even when this run searched nothing.
+            if not instance_data and not completed:
                 self.logger.info(f"No items found for {instance}.")
                 continue
 
@@ -2029,22 +2037,21 @@ class Upgradinatorr(ChubModule):
                 and not it.get("queue_imports")
             ]
 
-            if upgrades:
-                items = {upgrade.get("media_id") for upgrade in upgrades}
+            for tag, noun, section in import_report_sections(completed):
+                items = {it.get("media_id") for it in section}
                 self.logger.info(
-                    f"[UPGRADED] {upgrade_report_tally(len(upgrades), len(items))}:"
+                    f"[{tag}] {import_report_tally(len(section), len(items), noun)}:"
                 )
-                for upgrade in upgrades:
-                    self.logger.info(f"  {self._format_item_title(upgrade)}")
-                    quality = upgrade_quality_text(
-                        upgrade.get("quality"), upgrade.get("previous_quality")
+                for entry in section:
+                    self.logger.info(f"  {self._format_item_title(entry)}")
+                    prefix = self._detail_prefix(
+                        entry.get("score"),
+                        entry.get("previous_score"),
+                        import_quality_text(
+                            entry.get("quality"), entry.get("previous_quality")
+                        ),
                     )
-                    self.logger.info(
-                        f"    Score "
-                        f"{upgrade_score_text(upgrade.get('score'), upgrade.get('previous_score'))}"
-                        + (f", {quality}" if quality else "")
-                        + f" — {upgrade.get('download')}"
-                    )
+                    self.logger.info(f"    {prefix}{entry.get('download')}")
 
             if with_grabs:
                 grab_total = sum(len(it["grabs"]) for it in with_grabs)
@@ -2054,9 +2061,8 @@ class Upgradinatorr(ChubModule):
                 for item in with_grabs:
                     self.logger.info(f"  {self._format_item_title(item)}")
                     for grab in item["grabs"]:
-                        self.logger.info(
-                            f"    Score {grab['score']} — {grab['download']}"
-                        )
+                        prefix = self._detail_prefix(grab["score"])
+                        self.logger.info(f"    {prefix}{grab['download']}")
 
             for state, tag, note, level in QUEUE_REPORT_SECTIONS:
                 grouped = [

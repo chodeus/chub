@@ -253,11 +253,11 @@ def test_queue_block_expires_so_a_dead_row_cannot_block_forever():
     assert app.search_calls == [7]
 
 
-def test_notification_splits_upgraded_from_stuck():
+def test_notification_splits_upgraded_and_acquired_from_stuck():
     output = {
         "radarr": {
             "server_name": "Radarr",
-            "upgrades": [
+            "completed": [
                 {
                     "media_id": 7,
                     "title": "Serum",
@@ -265,7 +265,19 @@ def test_notification_splits_upgraded_from_stuck():
                     "download": "Serum - Jupiter (2019) [single]",
                     "score": 50,
                     "previous_score": 25,
-                }
+                    "replaced": True,
+                },
+                {
+                    "media_id": 9,
+                    "title": "ShockOne",
+                    "year": 2016,
+                    "download": "ShockOne - In This Light EP (2016) [FLAC] [WEB]",
+                    "score": 50,
+                    "previous_score": None,
+                    "quality": "FLAC",
+                    "previous_quality": None,
+                    "replaced": False,
+                },
             ],
             "data": [
                 {
@@ -301,11 +313,19 @@ def test_notification_splits_upgraded_from_stuck():
     body = "\n".join(value for _, value in rendered)
 
     assert any("import stuck" in name for name in names)
-    # A completed upgrade is what the run has to show for itself — it stays.
+    # A completed import is what the run has to show for itself — it stays,
+    # whether it replaced a file or filled an empty slot.
     assert any("upgraded" in name for name in names)
+    assert any("acquired" in name for name in names)
     assert "Serum - Jupiter (2019) [single]" in body
     assert "CF Score: 50 (was 25)" in body
     assert "1 upgrade(s) across 1 item(s)" in body
+    # A first acquisition replaced nothing: no outgoing score, and the quality
+    # it got rather than a transition.
+    assert "ShockOne (2016)" in body
+    assert "1 acquisition(s) across 1 item(s)" in body
+    assert "Quality: FLAC" in body
+    assert "was None" not in body
     # The queue row collapses to the section tally; the *arr's own rejection
     # text is log-level detail and must not reach Discord.
     assert "1 download(s) across 1 item(s) — manual import required" in body

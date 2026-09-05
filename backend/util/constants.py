@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional, Pattern, Set, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Pattern, Set, Tuple
 
 # Image extensions Kometa reads from an asset directory. Scanners, the orphan
 # sweep and the gdrive sync filter all key off this tuple so they can't drift.
@@ -211,29 +211,48 @@ def queue_report_tally(download_count: int, item_count: int, note: str) -> str:
     return f"{download_count} download(s) across {item_count} item(s) — {note}"
 
 
-def upgrade_report_tally(upgrade_count: int, item_count: int) -> str:
-    """The one-line upgrade-section summary the run log and the notification share.
+# (replaced, report tag, noun) — an import that deleted a file "for Upgrade"
+# replaced something; one that did not is a first acquisition.
+IMPORT_REPORT_SECTIONS: Tuple[Tuple[bool, str, str], ...] = (
+    (True, "UPGRADED", "upgrade"),
+    (False, "ACQUIRED", "acquisition"),
+)
 
-    Counts grabbed releases, not parents — a tally naming a different noun from
-    the lines beneath it is what made "1 items with grabs" sit above seven rows.
-    """
-    return f"{upgrade_count} upgrade(s) across {item_count} item(s)"
+
+def import_report_sections(
+    completed: List[Dict[str, Any]],
+) -> Iterator[Tuple[str, str, List[Dict[str, Any]]]]:
+    """(tag, noun, rows) per non-empty import section, for log and notification."""
+    for replaced, tag, noun in IMPORT_REPORT_SECTIONS:
+        rows = [row for row in completed if bool(row.get("replaced")) is replaced]
+        if rows:
+            yield tag, noun, rows
 
 
-def upgrade_score_text(score: object, previous: object) -> str:
-    """``7007 (was 4851)`` — the score change the run log and notification share."""
+def import_report_tally(count: int, item_count: int, noun: str) -> str:
+    """The one-line import-section summary the run log and the notification share."""
+    # Counts imported releases, not parents — a tally naming a different noun
+    # from the lines beneath it put "1 items with grabs" above seven rows.
+    return f"{count} {noun}(s) across {item_count} item(s)"
+
+
+def import_score_text(score: object, previous: object) -> Optional[str]:
+    """``7007 (was 4851)``, or None when the *arr reported no score at all."""
+    # None means unknown, not zero — printing it rendered a literal "Score None".
+    if score is None:
+        return None
     if previous is None:
         return f"{score}"
     return f"{score} (was {previous})"
 
 
-def upgrade_quality_text(quality: object, previous: object) -> Optional[str]:
-    """``WEBDL-1080p → Remux-1080p``, or None when the quality did not move.
-
-    Worth a line only when it changed: quality outranks custom formats in an
-    *arr profile, so it is what explains a genuine upgrade whose CF score FELL
-    (measured on a live library: every CF-lower upgrade was a quality gain).
-    """
-    if not quality or not previous or quality == previous:
+def import_quality_text(quality: object, previous: object) -> Optional[str]:
+    """``WEBDL-1080p → Remux-1080p``, the quality alone when it replaced nothing."""
+    # A transition is worth a line only when it moved: quality outranks custom
+    # formats, so it explains a genuine upgrade whose CF score FELL. An
+    # acquisition has nothing to compare against, so it names what it got.
+    if not quality:
         return None
-    return f"{previous} → {quality}"
+    if not previous:
+        return f"{quality}"
+    return None if quality == previous else f"{previous} → {quality}"
