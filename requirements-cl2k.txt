@@ -4,7 +4,7 @@
 # locally to run the cl2k tests.
 # Plain, not [composite]: that extra drags in scipy + scikit-image (107 MB in
 # the image) only for PSDImage.composite(), which psd_live deliberately bypasses.
-psd-tools==1.18.0
+psd-tools==1.19.0
 Wand==0.7.2
 # CPU ONNX runtime for the PP-OCRv4 DBNet text detector (models/ppocr_v4_det.onnx)
 # — powers the polarity-agnostic "tighten to letters" anchor. Fail-soft: if the
