@@ -8,6 +8,7 @@ Missing-mode backfill produces the second almost every time, and reporting only
 the first is what left a Lidarr album announced nowhere but the run log.
 """
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -77,6 +78,15 @@ def _collect(module, app, grabs):
     """The collector returns (completed, resolved ids); most tests want the first."""
     completed, _resolved = module._collect_completed_imports(app, grabs)
     return completed
+
+
+def _pending_since(hours: float = 1.0) -> str:
+    """A grab stamp inside GRAB_RETENTION_DAYS.
+
+    Must stay relative: a fixed date aged out of the window on its own, and the
+    reconcile's prune() then emptied the table before the assertion ran.
+    """
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
 
 def _grab(download_id="dl-1", **overrides):
@@ -349,6 +359,17 @@ def test_prune_drops_grabs_past_the_retention_window(tmp_path):
 
     remaining = db.pending("radarr")
     assert [row["download_id"] for row in remaining] == ["fresh"]
+
+
+def test_a_fixture_grab_survives_the_retention_prune(tmp_path):
+    """Every isolated_db test reconciles through prune() first, so a grab stamp
+    that ages out of GRAB_RETENTION_DAYS empties the table before the assertion."""
+    db = UpgradinatorrGrabs(StubLogger(), db_path=str(tmp_path / "grabs.db"))
+    db.record("radarr", [_grab()], grabbed_at=_pending_since())
+
+    db.prune("radarr", upgradinatorr_module.GRAB_RETENTION_DAYS)
+
+    assert [row["download_id"] for row in db.pending("radarr")] == ["dl-1"]
 
 
 def test_grabs_are_scoped_per_instance(tmp_path):
@@ -704,7 +725,7 @@ def test_upgrades_survive_the_nothing_left_to_search_bail_out(isolated_db):
     there loses a completed upgrade permanently rather than deferring it."""
     module = make_upgradinatorr(dry_run=False)
     UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).record(
-        "radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00"
+        "radarr", [_grab()], grabbed_at=_pending_since()
     )
     app = _HistoryARR([_import()], [_delete()], media=[])
 
@@ -733,7 +754,7 @@ def test_a_broken_history_read_does_not_stop_the_searches(isolated_db):
 
     module = make_upgradinatorr(dry_run=False)
     UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).record(
-        "radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00"
+        "radarr", [_grab()], grabbed_at=_pending_since()
     )
     app = _ExplodingARR([], [])
 
@@ -754,7 +775,7 @@ def test_a_run_that_aborts_after_the_reconcile_keeps_the_grab(isolated_db):
             raise RuntimeError("arr went away")
 
     db = UpgradinatorrGrabs(StubLogger(), db_path=isolated_db)
-    db.record("radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00")
+    db.record("radarr", [_grab()], grabbed_at=_pending_since())
     module = make_upgradinatorr(dry_run=False)
     app = _FailsAfterReconcileARR([_import()], [_delete()])
 
@@ -772,7 +793,7 @@ def test_the_report_is_settled_only_once_it_has_been_written(isolated_db):
     after process_instance returns. Settling before that can drop an upgrade
     that was never reported anywhere, so the result carries the ids instead."""
     db = UpgradinatorrGrabs(StubLogger(), db_path=isolated_db)
-    db.record("radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00")
+    db.record("radarr", [_grab()], grabbed_at=_pending_since())
     module = make_upgradinatorr(dry_run=False)
     app = _HistoryARR([_import()], [_delete()], media=[])
 
