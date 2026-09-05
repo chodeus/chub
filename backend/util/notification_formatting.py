@@ -3,10 +3,11 @@ from typing import Any, Dict, List, Tuple
 
 from backend.util.constants import (
     QUEUE_REPORT_SECTIONS,
+    import_quality_text,
+    import_report_sections,
+    import_report_tally,
+    import_score_text,
     queue_report_tally,
-    upgrade_quality_text,
-    upgrade_report_tally,
-    upgrade_score_text,
 )
 
 # When a run would fan out into more than this many Discord messages (embeds),
@@ -391,44 +392,39 @@ def format_for_discord(
     def fmt_upgradinatorr(o: Any) -> List[Dict[str, Any]]:
         """Format upgradinatorr output for Discord embeds.
 
-        Completed upgrades are listed — a file that actually got replaced is
-        what the run has to show for itself. Grabs are not: at run end they are
-        still downloading and may never import, so they stay in the log. The
-        queue sections are a tally off the same QUEUE_REPORT_SECTIONS the run
-        log renders, so the two can't drift.
+        Completed imports are listed, grabs are not — at run end a grab is still
+        downloading and may never import. Section tables are shared with the log.
         """
         fields: List[Dict[str, Any]] = []
         for inst, data in o.items():
             srv = data.get("server_name", inst)
             instance_data = data.get("data", []) or []
-            upgrades = data.get("upgrades") or []
-            blocks: List[List[str]] = []
-            for upgrade in upgrades:
-                title = upgrade.get("title", "Unknown")
-                year = f" ({upgrade.get('year')})" if upgrade.get("year") else ""
-                block = [f"{title}{year}", f"\t{upgrade.get('download')}"]
-                quality = upgrade_quality_text(
-                    upgrade.get("quality"), upgrade.get("previous_quality")
-                )
-                # Only when it moved — a quality gain outranks custom formats,
-                # so it is what explains a CF score that went down.
-                if quality:
-                    block.append(f"\tQuality: {quality}")
-                block.append(
-                    "\tCF Score: "
-                    + upgrade_score_text(
-                        upgrade.get("score"), upgrade.get("previous_score")
+            completed = data.get("completed") or []
+            for tag, noun, section in import_report_sections(completed):
+                blocks: List[List[str]] = []
+                for entry in section:
+                    title = entry.get("title", "Unknown")
+                    year = f" ({entry.get('year')})" if entry.get("year") else ""
+                    block = [f"{title}{year}", f"\t{entry.get('download')}"]
+                    quality = import_quality_text(
+                        entry.get("quality"), entry.get("previous_quality")
                     )
-                )
-                blocks.append(block)
-            if blocks:
-                items = {upgrade.get("media_id") for upgrade in upgrades}
+                    if quality:
+                        block.append(f"\tQuality: {quality}")
+                    score = import_score_text(
+                        entry.get("score"), entry.get("previous_score")
+                    )
+                    if score:
+                        block.append(f"\tCF Score: {score}")
+                    blocks.append(block)
+                items = {entry.get("media_id") for entry in section}
                 fields.extend(
                     chunk_code_fields(
-                        f"{srv} — upgraded",
+                        f"{srv} — {tag.lower()}",
                         "\n".join(
                             capped_lines(
-                                blocks, upgrade_report_tally(len(blocks), len(items))
+                                blocks,
+                                import_report_tally(len(blocks), len(items), noun),
                             )
                         ),
                     )
