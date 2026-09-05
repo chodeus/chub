@@ -247,10 +247,9 @@ def import_score_text(score: object, previous: object) -> Optional[str]:
 
 
 def import_quality_text(quality: object, previous: object) -> Optional[str]:
-    """``WEBDL-1080p → Remux-1080p``, the quality alone when it replaced nothing."""
-    # A transition is worth a line only when it moved: quality outranks custom
-    # formats, so it explains a genuine upgrade whose CF score FELL. An
-    # acquisition has nothing to compare against, so it names what it got.
+    """``WEBDL-1080p → Remux-1080p``, or the quality alone when no previous is known."""
+    # Worth a line only when it moved: quality outranks custom formats, so it
+    # explains a genuine upgrade whose CF score FELL.
     if not quality:
         return None
     if not previous:

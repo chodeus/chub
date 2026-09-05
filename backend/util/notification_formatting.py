@@ -392,11 +392,8 @@ def format_for_discord(
     def fmt_upgradinatorr(o: Any) -> List[Dict[str, Any]]:
         """Format upgradinatorr output for Discord embeds.
 
-        Completed imports are listed — a download that actually landed is what
-        the run has to show for itself, whether it replaced a file (upgraded)
-        or filled an empty slot (acquired). Grabs are not: at run end they are
-        still downloading and may never import, so they stay in the log. Both
-        section tables are shared with the run log so the two can't drift.
+        Completed imports are listed, grabs are not — at run end a grab is still
+        downloading and may never import. Section tables are shared with the log.
         """
         fields: List[Dict[str, Any]] = []
         for inst, data in o.items():

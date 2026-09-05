@@ -1,12 +1,5 @@
-"""Pins the completed-import report.
-
-A run ends at the search, so a grab is still downloading when the notification
-is built — announcing it as an upgrade was announcing an intention. An import is
-confirmed on a LATER run, and splits on whether a file was deleted "for Upgrade":
-one that replaced something upgraded, one that did not is a first acquisition.
-Missing-mode backfill produces the second almost every time, and reporting only
-the first is what left a Lidarr album announced nowhere but the run log.
-"""
+"""Pins the completed-import report: an import that deleted a file "for Upgrade"
+is an upgrade, one that replaced nothing is a first acquisition. Both report."""
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -81,11 +74,9 @@ def _collect(module, app, grabs):
 
 
 def _pending_since(hours: float = 1.0) -> str:
-    """A grab stamp inside GRAB_RETENTION_DAYS.
-
-    Must stay relative: a fixed date aged out of the window on its own, and the
-    reconcile's prune() then emptied the table before the assertion ran.
-    """
+    """A grab stamp inside GRAB_RETENTION_DAYS."""
+    # Must stay relative — a fixed date ages out and the reconcile's prune()
+    # empties the table before the assertion runs.
     return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
 
@@ -159,9 +150,8 @@ def test_import_that_replaced_a_file_is_reported_with_both_scores():
 
 
 def test_import_that_replaced_nothing_is_an_acquisition():
-    """Lidarr's missing-mode backfill: the album imported having replaced no
-    file. Reporting only replacements is what dropped it from the notification.
-    """
+    """Missing-mode backfill: the album imported having replaced no file, which
+    reporting only replacements dropped from the notification."""
     module = make_upgradinatorr(dry_run=False)
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], [])
@@ -230,10 +220,8 @@ def test_season_pack_reports_once_not_once_per_episode():
 
 
 def test_a_pack_that_replaced_one_file_is_an_upgrade_not_an_acquisition():
-    """A season pack lands one import record per episode under one downloadId,
-    and only some replace a file. The release is deduped to the FIRST record
-    seen, so taking them in date order files a real upgrade as an acquisition.
-    """
+    """A pack imports one record per episode under one downloadId and only some
+    replace a file; the paired record must win the dedupe, not the earliest."""
     module = make_upgradinatorr(dry_run=False)
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR(
@@ -663,8 +651,9 @@ def test_an_acquisition_names_the_quality_it_got():
     completed = _collect(module, app, grabs)
 
     assert completed[0]["replaced"] is False
+    log = _run_log(module, completed)
     assert "Quality: FLAC" in _embed_body(completed)
-    assert "Score 7007, FLAC —" in _run_log(module, completed)
+    assert "Score 7007, FLAC —" in log
 
 
 def test_an_unknown_score_prints_no_score_at_all():
@@ -720,9 +709,8 @@ def test_two_downloads_sharing_a_release_title_both_count(isolated_db):
 
 
 def test_upgrades_survive_the_nothing_left_to_search_bail_out(isolated_db):
-    """process_instance bails out early when there is no media to search. The
-    collector has already cleared those grabs from the table, so returning None
-    there loses a completed upgrade permanently rather than deferring it."""
+    """process_instance bails out early when there is no media to search, so
+    returning None there would drop an import the reconcile already confirmed."""
     module = make_upgradinatorr(dry_run=False)
     UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).record(
         "radarr", [_grab()], grabbed_at=_pending_since()

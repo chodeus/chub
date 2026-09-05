@@ -602,7 +602,7 @@ class Upgradinatorr(ChubModule):
         if not pair_field or import_event is None or delete_event is None:
             self.logger.debug(
                 f"{app.instance_name} maps no history events; skipping the "
-                "completed-upgrade report."
+                "completed-import report."
             )
             return [], set()
         since = self._history_lookback(pending)
@@ -637,9 +637,8 @@ class Upgradinatorr(ChubModule):
         ours.sort(key=lambda record: str(record.get("date") or ""))
         paired = self._pair_upgrades(ours, pair_field, replaced)
 
-        # A grab imports as several records (a Sonarr season pack lands one per
-        # episode), so key by download id and report the release once. Paired
-        # first — a pack replacing even one file upgraded, whatever imported first.
+        # One grab imports as several records (a Sonarr season pack, one per
+        # episode); take paired first, or a pack that replaced reads as acquired.
         order = sorted(range(len(ours)), key=lambda index: (index not in paired, index))
         completed_by_download: Dict[str, Dict[str, Any]] = {}
         for index in order:
