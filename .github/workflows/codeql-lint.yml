@@ -203,7 +203,7 @@ jobs:
   # ---- Frontend Lint (reusable) ----
   frontend-lint:
     name: Frontend Lint
-    uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@579feb04e3219248963bd27843298a8c2ea6b2fd # main
+    uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@f35f1f8b3e78542fc99e8c2b075a7685b3f5b9b9 # main
     with:
       node_version: '24'
       package_json_dir: frontend
@@ -272,7 +272,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
@@ -334,7 +334,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
@@ -431,7 +431,7 @@ jobs:
   notify-failure:
     needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@579feb04e3219248963bd27843298a8c2ea6b2fd # main
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@f35f1f8b3e78542fc99e8c2b075a7685b3f5b9b9 # main
     with:
       event_type: build
       status: failure
