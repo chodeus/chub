@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext.jsx';
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 import { instancesAPI } from '../utils/api/instances.js';
 import { configAPI } from '../utils/api/config.js';
+import { SECRET_INPUT_PROPS } from '../utils/forms/secretInput.js';
 
 // Wizard steps. `optional` steps can be skipped; required steps gate Finish.
 const STEPS = [
@@ -545,7 +546,13 @@ const InstanceStep = ({ title, lead, services, list, onAdd, onRemove, busy, toke
                 </label>
                 <label className="sw-fld">
                     <span>{tokenLabel}</span>
-                    <input type="password" value={api} onChange={e => setApi(e.target.value)} />
+                    <input
+                        type="password"
+                        name="api_key"
+                        value={api}
+                        onChange={e => setApi(e.target.value)}
+                        {...SECRET_INPUT_PROPS}
+                    />
                 </label>
             </div>
             <button
