@@ -3,6 +3,7 @@ import { FieldRow, InputBase } from '../primitives';
 import { FieldButton } from '../features/shared';
 import { useOptionalFormField } from '../../forms/FormContext';
 import { configAPI } from '../../../utils/api';
+import { SECRET_INPUT_PROPS } from '../../../utils/forms/secretInput.js';
 
 // Saved secrets arrive from the backend redacted to this placeholder; the real
 // value is only ever fetched on demand via configAPI.revealSecret.
@@ -97,7 +98,7 @@ export const PasswordField = React.memo(
                         onChange={handleChange}
                         onBlur={finalOnBlur}
                         invalid={finalHighlightInvalid}
-                        autoComplete="off"
+                        {...SECRET_INPUT_PROPS}
                         aria-describedby={`${field.descId || `${inputId}-desc`} ${field.errorId || `${inputId}-error`}`.trim()}
                         aria-invalid={finalHighlightInvalid}
                         className="flex-1 border border-border bg-input rounded-l-lg"
