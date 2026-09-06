@@ -2,6 +2,23 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.49.0](https://github.com/chodeus/chub/compare/v2.48.1...v2.49.0) (2026-09-06)
+
+
+### Features
+
+* **upgradinatorr:** report upgrades that completed, not grabs ([#609](https://github.com/chodeus/chub/issues/609)) ([5f03c0b](https://github.com/chodeus/chub/commit/5f03c0bdc4fb835734bb26075f553fac6d5a29ff))
+
+
+### Bug Fixes
+
+* **api:** stop non-awaiting handlers from blocking the event loop ([#603](https://github.com/chodeus/chub/issues/603)) ([ee8e658](https://github.com/chodeus/chub/commit/ee8e6580cba0805d916768c80db4e74fc4ff3fed))
+* **config:** give config read-modify-write a single owner ([#611](https://github.com/chodeus/chub/issues/611)) ([f3c25b9](https://github.com/chodeus/chub/commit/f3c25b92a91a6a07c571729942ba6c9dc7df334b))
+* **posters:** make match state transitions atomic ([#606](https://github.com/chodeus/chub/issues/606)) ([f5aab1d](https://github.com/chodeus/chub/commit/f5aab1d5916fce620763933943b085474ff8374e))
+* preview-refresh collisions and the reversed container uid/gid ([#612](https://github.com/chodeus/chub/issues/612)) ([6e19078](https://github.com/chodeus/chub/commit/6e19078d74631288aa614289c2b9a6e07a89469b))
+* **settings:** stop password managers filling logins into secret fields ([#620](https://github.com/chodeus/chub/issues/620)) ([26508f8](https://github.com/chodeus/chub/commit/26508f836800c8d0a1703de4ff4e93ac6cd00580))
+* **upgradinatorr:** report first acquisitions, not just upgrades ([#615](https://github.com/chodeus/chub/issues/615)) ([b8f17bb](https://github.com/chodeus/chub/commit/b8f17bb92db4f6340acd239e387994f0f1af857b))
+
 ## [2.48.1](https://github.com/chodeus/chub/compare/v2.48.0...v2.48.1) (2026-08-30)
 
 
