@@ -1,9 +1,4 @@
-/**
- * Every secret in Settings (*arr API keys, Plex tokens, webhook secrets) renders
- * through PasswordField. Browsers ignore autocomplete="off" on type=password, so
- * without an explicit opt-out a password manager offers the saved CHUB login for
- * these fields — one stray accept silently writes the wrong secret into config.
- */
+/** Guards the autofill opt-out — a manager must not offer the saved CHUB login for secrets. */
 import { render, screen } from '@testing-library/react';
 
 vi.mock('../../../utils/api', () => ({ configAPI: { revealSecret: vi.fn() } }));
