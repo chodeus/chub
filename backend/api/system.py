@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, List
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -569,7 +569,7 @@ def test(
 )
 def create_backup(
     request: Request, logger: Any = Depends(get_logger)
-) -> StreamingResponse:
+) -> FileResponse:
     """
     Create and download a backup zip containing config.yml and chub.db.
 
@@ -578,11 +578,12 @@ def create_backup(
     try:
         logger.info("Creating backup...")
         backup_path = save_backup(logger)
-        buf = io.BytesIO(backup_path.read_bytes())
-        return StreamingResponse(
-            buf,
+        # FileResponse streams from disk; read_bytes held the whole zip in
+        # memory on top of the copies build_backup_bytes already makes.
+        return FileResponse(
+            backup_path,
             media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={backup_path.name}"},
+            filename=backup_path.name,
         )
 
     except ConfigError:

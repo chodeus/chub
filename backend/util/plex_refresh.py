@@ -72,8 +72,10 @@ def refresh_plex_cache_if_stale(
     from backend.util.connector import Connector
 
     instance_map = {"plex": dict(enabled_instances)}
-    connector = Connector(db=db, logger=logger, instance_map=instance_map)
-    connector.update_plex_database()
+    # Context manager, or close_all_connections never runs and the cached
+    # plexapi Sessions keep their socket pools open for the process lifetime.
+    with Connector(db=db, logger=logger, instance_map=instance_map) as connector:
+        connector.update_plex_database()
     if logger:
         logger.debug("plex_media_cache refreshed from Plex")
     return True

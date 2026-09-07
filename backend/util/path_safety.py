@@ -86,7 +86,8 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     # works for fresh setups before any config field has been populated.
     roots.extend(str(p) for p in _discover_container_mounts())
 
-    # Resolve all and deduplicate
+    # Deliberately not memoised: callers include destructive confinement
+    # checks, and a cached resolution goes stale if a root is replaced.
     resolved = []
     for r in roots:
         if not r:
