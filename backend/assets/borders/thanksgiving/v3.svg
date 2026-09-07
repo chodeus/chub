@@ -1,0 +1,244 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#200810"/>
+      <stop offset="50%" stop-color="#100408"/>
+      <stop offset="100%" stop-color="#080204"/>
+    </linearGradient>
+    <radialGradient id="creamPale" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff5dc"/>
+      <stop offset="55%" stop-color="#dac090"/>
+      <stop offset="100%" stop-color="#806038"/>
+    </radialGradient>
+    <radialGradient id="goldPale" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff0b8"/>
+      <stop offset="55%" stop-color="#c89030"/>
+      <stop offset="100%" stop-color="#503808"/>
+    </radialGradient>
+    <radialGradient id="burgPlush" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#a04848"/>
+      <stop offset="55%" stop-color="#5a1828"/>
+      <stop offset="100%" stop-color="#1a0408"/>
+    </radialGradient>
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5a3a08"/>
+      <stop offset="50%" stop-color="#f0d050"/>
+      <stop offset="100%" stop-color="#7a5018"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="creamMapleLeaf">
+    <path d="M0,18 L0,4 L-6,8 L-12,2 L-14,-8 L-22,-6 L-18,-16 L-10,-18 L-6,-26 L0,-22 L6,-26 L10,-18 L18,-16 L22,-6 L14,-8 L12,2 L6,8 L0,4 Z" fill="url(#creamPale)" stroke="#806038" stroke-width="0.5"/>
+    <path d="M0,4 L0,18 M0,4 L-12,2 M0,4 L12,2 M0,4 L-10,-18 M0,4 L10,-18 M0,4 L0,-22" stroke="#806038" stroke-width="0.4"/>
+  </g>
+
+  <g id="goldMapleLeaf">
+    <path d="M0,18 L0,4 L-6,8 L-12,2 L-14,-8 L-22,-6 L-18,-16 L-10,-18 L-6,-26 L0,-22 L6,-26 L10,-18 L18,-16 L22,-6 L14,-8 L12,2 L6,8 L0,4 Z" fill="url(#goldPale)" stroke="#503808" stroke-width="0.5"/>
+    <path d="M0,4 L0,18 M0,4 L-12,2 M0,4 L12,2 M0,4 L-10,-18 M0,4 L10,-18 M0,4 L0,-22" stroke="#503808" stroke-width="0.4"/>
+  </g>
+
+  <g id="goldOakLeaf">
+    <path d="M0,20 L0,8 C-6,8 -10,4 -8,-2 C-12,-4 -14,-10 -8,-12 C-10,-18 -6,-22 -2,-20 C-2,-24 2,-24 2,-20 C6,-22 10,-18 8,-12 C14,-10 12,-4 8,-2 C10,4 6,8 0,8 Z" fill="url(#goldPale)" stroke="#503808" stroke-width="0.5"/>
+    <path d="M0,8 L0,20 M0,8 L-8,-2 M0,8 L8,-2 M0,8 L0,-20" stroke="#503808" stroke-width="0.4"/>
+  </g>
+
+  <g id="damaskScroll">
+    <path d="M0,0 C-12,-4 -18,4 -14,14 C-10,22 0,20 6,12 C12,4 6,-4 0,0 Z" fill="url(#goldPale)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-14,14 C-20,18 -22,24 -16,28 C-10,30 -4,26 -2,18" stroke="#503808" stroke-width="0.5" fill="none"/>
+    <path d="M6,12 C12,16 14,20 10,24" stroke="#503808" stroke-width="0.5" fill="none"/>
+    <circle cx="-4" cy="6" r="2" fill="url(#creamPale)" stroke="#503808" stroke-width="0.3"/>
+    <circle cx="-16" cy="28" r="1.4" fill="url(#goldPale)"/>
+    <circle cx="10" cy="24" r="1.4" fill="url(#goldPale)"/>
+  </g>
+
+  <g id="velvetTassel">
+    <path d="M-5,0 L5,0 L4,2 L-4,2 Z" fill="url(#goldPale)" stroke="#503808" stroke-width="0.3"/>
+    <path d="M-4,2 L-4,14 M-2,2 L-2,16 M0,2 L0,18 M2,2 L2,16 M4,2 L4,14" stroke="url(#burgPlush)" stroke-width="0.9"/>
+    <path d="M-4,2 L-4,14 M-2,2 L-2,16 M0,2 L0,18 M2,2 L2,16 M4,2 L4,14" stroke="#1a0408" stroke-width="0.3"/>
+    <ellipse cx="0" cy="-2" rx="6" ry="3" fill="url(#burgPlush)" stroke="#1a0408" stroke-width="0.4"/>
+    <ellipse cx="0" cy="-3" rx="5" ry="2" fill="url(#goldPale)" stroke="#503808" stroke-width="0.3"/>
+  </g>
+
+  <g id="cameoOval">
+    <ellipse cx="0" cy="0" rx="14" ry="20" fill="url(#burgPlush)" stroke="#1a0408" stroke-width="0.6"/>
+    <ellipse cx="0" cy="0" rx="14" ry="20" fill="none" stroke="url(#goldStroke)" stroke-width="1"/>
+    <ellipse cx="0" cy="0" rx="10" ry="16" fill="none" stroke="url(#goldPale)" stroke-width="0.4"/>
+    <use href="#creamMapleLeaf" transform="translate(0,0) scale(0.55)"/>
+    <g fill="url(#goldPale)">
+      <circle cx="0" cy="-20" r="1.2"/>
+      <circle cx="0" cy="20" r="1.2"/>
+      <circle cx="-14" cy="0" r="1.2"/>
+      <circle cx="14" cy="0" r="1.2"/>
+    </g>
+  </g>
+
+  <g id="berryCluster">
+    <circle cx="0" cy="0" r="3" fill="url(#burgPlush)" stroke="#1a0408" stroke-width="0.4"/>
+    <circle cx="5" cy="2" r="2.6" fill="url(#burgPlush)" stroke="#1a0408" stroke-width="0.4"/>
+    <circle cx="-4" cy="3" r="2.8" fill="url(#burgPlush)" stroke="#1a0408" stroke-width="0.4"/>
+    <circle cx="2" cy="-4" r="2.2" fill="url(#burgPlush)" stroke="#1a0408" stroke-width="0.4"/>
+    <circle cx="-1" cy="-1" r="0.6" fill="#a04848" opacity="0.8"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#damaskScroll" transform="translate(110,52) rotate(180)"/>
+  <use href="#damaskScroll" transform="translate(220,52) rotate(180)"/>
+  <use href="#damaskScroll" transform="translate(330,52) rotate(180)"/>
+  <use href="#damaskScroll" transform="translate(440,52) rotate(180)"/>
+  <use href="#damaskScroll" transform="translate(550,52) rotate(180)"/>
+  <use href="#damaskScroll" transform="translate(660,52) rotate(180)"/>
+  <use href="#damaskScroll" transform="translate(770,52) rotate(180)"/>
+  <use href="#damaskScroll" transform="translate(880,52) rotate(180)"/>
+  <use href="#creamMapleLeaf" transform="translate(150,40) rotate(180)"/>
+  <use href="#goldMapleLeaf" transform="translate(260,40) rotate(170)"/>
+  <use href="#creamMapleLeaf" transform="translate(370,40) rotate(190)"/>
+  <use href="#goldOakLeaf" transform="translate(480,40) rotate(175)"/>
+  <use href="#creamMapleLeaf" transform="translate(590,40) rotate(185)"/>
+  <use href="#goldMapleLeaf" transform="translate(700,40) rotate(170)"/>
+  <use href="#creamMapleLeaf" transform="translate(810,40) rotate(195)"/>
+  <use href="#velvetTassel" transform="translate(180,16)"/>
+  <use href="#velvetTassel" transform="translate(360,16)"/>
+  <use href="#velvetTassel" transform="translate(540,16)"/>
+  <use href="#velvetTassel" transform="translate(720,16)"/>
+  <use href="#velvetTassel" transform="translate(900,16)"/>
+  <use href="#berryCluster" transform="translate(220,30)"/>
+  <use href="#berryCluster" transform="translate(420,30)"/>
+  <use href="#berryCluster" transform="translate(620,30)"/>
+  <use href="#berryCluster" transform="translate(820,30)"/>
+
+  <!-- BOTTOM -->
+  <use href="#damaskScroll" transform="translate(110,1448)"/>
+  <use href="#damaskScroll" transform="translate(220,1448)"/>
+  <use href="#damaskScroll" transform="translate(330,1448)"/>
+  <use href="#damaskScroll" transform="translate(440,1448)"/>
+  <use href="#damaskScroll" transform="translate(550,1448)"/>
+  <use href="#damaskScroll" transform="translate(660,1448)"/>
+  <use href="#damaskScroll" transform="translate(770,1448)"/>
+  <use href="#damaskScroll" transform="translate(880,1448)"/>
+  <use href="#creamMapleLeaf" transform="translate(150,1460) rotate(10)"/>
+  <use href="#goldMapleLeaf" transform="translate(260,1460) rotate(-15)"/>
+  <use href="#creamMapleLeaf" transform="translate(370,1460) rotate(5)"/>
+  <use href="#goldOakLeaf" transform="translate(480,1460) rotate(-10)"/>
+  <use href="#creamMapleLeaf" transform="translate(590,1460) rotate(15)"/>
+  <use href="#goldMapleLeaf" transform="translate(700,1460) rotate(-10)"/>
+  <use href="#creamMapleLeaf" transform="translate(810,1460) rotate(5)"/>
+  <use href="#velvetTassel" transform="translate(180,1474) scale(1,-1)"/>
+  <use href="#velvetTassel" transform="translate(360,1474) scale(1,-1)"/>
+  <use href="#velvetTassel" transform="translate(540,1474) scale(1,-1)"/>
+  <use href="#velvetTassel" transform="translate(720,1474) scale(1,-1)"/>
+  <use href="#velvetTassel" transform="translate(900,1474) scale(1,-1)"/>
+  <use href="#berryCluster" transform="translate(220,1470)"/>
+  <use href="#berryCluster" transform="translate(420,1470)"/>
+  <use href="#berryCluster" transform="translate(620,1470)"/>
+  <use href="#berryCluster" transform="translate(820,1470)"/>
+
+  <!-- LEFT -->
+  <use href="#damaskScroll" transform="translate(52,110) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,220) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,330) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,440) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,550) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,660) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,770) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,880) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,990) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,1100) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,1210) rotate(90)"/>
+  <use href="#damaskScroll" transform="translate(52,1320) rotate(90)"/>
+  <use href="#creamMapleLeaf" transform="translate(40,150) rotate(90)"/>
+  <use href="#goldMapleLeaf" transform="translate(40,260) rotate(80)"/>
+  <use href="#creamMapleLeaf" transform="translate(40,370) rotate(100)"/>
+  <use href="#goldOakLeaf" transform="translate(40,480) rotate(85)"/>
+  <use href="#creamMapleLeaf" transform="translate(40,590) rotate(95)"/>
+  <use href="#goldMapleLeaf" transform="translate(40,700) rotate(80)"/>
+  <use href="#creamMapleLeaf" transform="translate(40,810) rotate(105)"/>
+  <use href="#goldOakLeaf" transform="translate(40,920) rotate(90)"/>
+  <use href="#goldMapleLeaf" transform="translate(40,1030) rotate(85)"/>
+  <use href="#creamMapleLeaf" transform="translate(40,1140) rotate(95)"/>
+  <use href="#goldMapleLeaf" transform="translate(40,1250) rotate(80)"/>
+  <use href="#creamMapleLeaf" transform="translate(40,1360) rotate(105)"/>
+  <use href="#cameoOval" transform="translate(28,200)"/>
+  <use href="#cameoOval" transform="translate(28,440)"/>
+  <use href="#cameoOval" transform="translate(28,680)"/>
+  <use href="#cameoOval" transform="translate(28,920)"/>
+  <use href="#cameoOval" transform="translate(28,1160)"/>
+  <use href="#cameoOval" transform="translate(28,1400)"/>
+  <use href="#berryCluster" transform="translate(20,180)"/>
+  <use href="#berryCluster" transform="translate(20,340)"/>
+  <use href="#berryCluster" transform="translate(20,580)"/>
+  <use href="#berryCluster" transform="translate(20,820)"/>
+  <use href="#berryCluster" transform="translate(20,1060)"/>
+  <use href="#berryCluster" transform="translate(20,1300)"/>
+
+  <!-- RIGHT -->
+  <use href="#damaskScroll" transform="translate(948,110) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,220) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,330) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,440) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,550) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,660) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,770) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,880) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,990) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,1100) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,1210) rotate(270)"/>
+  <use href="#damaskScroll" transform="translate(948,1320) rotate(270)"/>
+  <use href="#creamMapleLeaf" transform="translate(960,150) rotate(270)"/>
+  <use href="#goldMapleLeaf" transform="translate(960,260) rotate(280)"/>
+  <use href="#creamMapleLeaf" transform="translate(960,370) rotate(260)"/>
+  <use href="#goldOakLeaf" transform="translate(960,480) rotate(275)"/>
+  <use href="#creamMapleLeaf" transform="translate(960,590) rotate(265)"/>
+  <use href="#goldMapleLeaf" transform="translate(960,700) rotate(280)"/>
+  <use href="#creamMapleLeaf" transform="translate(960,810) rotate(255)"/>
+  <use href="#goldOakLeaf" transform="translate(960,920) rotate(270)"/>
+  <use href="#goldMapleLeaf" transform="translate(960,1030) rotate(275)"/>
+  <use href="#creamMapleLeaf" transform="translate(960,1140) rotate(265)"/>
+  <use href="#goldMapleLeaf" transform="translate(960,1250) rotate(280)"/>
+  <use href="#creamMapleLeaf" transform="translate(960,1360) rotate(255)"/>
+  <use href="#cameoOval" transform="translate(972,200)"/>
+  <use href="#cameoOval" transform="translate(972,440)"/>
+  <use href="#cameoOval" transform="translate(972,680)"/>
+  <use href="#cameoOval" transform="translate(972,920)"/>
+  <use href="#cameoOval" transform="translate(972,1160)"/>
+  <use href="#cameoOval" transform="translate(972,1400)"/>
+  <use href="#berryCluster" transform="translate(980,180)"/>
+  <use href="#berryCluster" transform="translate(980,340)"/>
+  <use href="#berryCluster" transform="translate(980,580)"/>
+  <use href="#berryCluster" transform="translate(980,820)"/>
+  <use href="#berryCluster" transform="translate(980,1060)"/>
+  <use href="#berryCluster" transform="translate(980,1300)"/>
+
+  <!-- CORNERS: cameo + velvet tassel -->
+  <g transform="translate(40,40)">
+    <use href="#cameoOval" transform="translate(30,30) scale(1.4)"/>
+    <use href="#velvetTassel" transform="translate(60,2)"/>
+    <use href="#creamMapleLeaf" transform="translate(64,30)"/>
+    <use href="#damaskScroll" transform="translate(20,68)"/>
+    <use href="#berryCluster" transform="translate(56,56)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#cameoOval" transform="translate(-30,30) scale(1.4)"/>
+    <use href="#velvetTassel" transform="translate(-60,2)"/>
+    <use href="#creamMapleLeaf" transform="translate(-64,30)"/>
+    <use href="#damaskScroll" transform="translate(-20,68)"/>
+    <use href="#berryCluster" transform="translate(-56,56)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#cameoOval" transform="translate(30,-30) scale(1.4)"/>
+    <use href="#velvetTassel" transform="translate(60,-22) scale(1,-1)"/>
+    <use href="#creamMapleLeaf" transform="translate(64,-30)"/>
+    <use href="#damaskScroll" transform="translate(20,-30) scale(1,-1)"/>
+    <use href="#berryCluster" transform="translate(56,-56)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#cameoOval" transform="translate(-30,-30) scale(1.4)"/>
+    <use href="#velvetTassel" transform="translate(-60,-22) scale(1,-1)"/>
+    <use href="#creamMapleLeaf" transform="translate(-64,-30)"/>
+    <use href="#damaskScroll" transform="translate(-20,-30) scale(1,-1)"/>
+    <use href="#berryCluster" transform="translate(-56,-56)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldStroke)" stroke-width="1.4" fill="none"/>
+</svg>

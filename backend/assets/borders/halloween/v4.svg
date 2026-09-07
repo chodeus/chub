@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a22"/>
+      <stop offset="50%" stop-color="#0a0a14"/>
+      <stop offset="100%" stop-color="#04040a"/>
+    </linearGradient>
+    <radialGradient id="ghost" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="50%" stop-color="#dde0ea" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#a0a4b0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ghost2" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.7"/>
+      <stop offset="60%" stop-color="#bdc2cf" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#7a7e8c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stoneG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7a7e8c"/>
+      <stop offset="60%" stop-color="#4a4e5c"/>
+      <stop offset="100%" stop-color="#1a1c24"/>
+    </linearGradient>
+    <linearGradient id="fence" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a5466"/>
+      <stop offset="60%" stop-color="#2a2632"/>
+      <stop offset="100%" stop-color="#0a0810"/>
+    </linearGradient>
+    <radialGradient id="lanternGlow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#fff8c0" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="#dac890" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#7a6a40" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softblur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="ghostWisp">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#ghost)" filter="url(#softblur)"/>
+    <path d="M-12,18 C-14,12 -14,2 -10,-8 C-6,-16 6,-16 10,-8 C14,2 14,12 12,18 L8,14 L4,18 L0,14 L-4,18 L-8,14 Z" fill="url(#ghost)"/>
+    <ellipse cx="-4" cy="-4" rx="2.5" ry="3.5" fill="#1a1a22" opacity="0.6"/>
+    <ellipse cx="4" cy="-4" rx="2.5" ry="3.5" fill="#1a1a22" opacity="0.6"/>
+    <path d="M-2,4 Q0,6 2,4" stroke="#1a1a22" stroke-width="0.6" fill="none" opacity="0.5"/>
+  </g>
+
+  <g id="ghostWisp2">
+    <ellipse cx="0" cy="0" rx="30" ry="10" fill="url(#ghost2)" filter="url(#softblur)"/>
+    <path d="M-24,2 C-24,-8 -12,-10 0,-8 C12,-10 24,-8 28,0 C28,8 16,10 4,8 C4,12 -4,12 -8,8 C-14,10 -22,8 -24,2 Z" fill="url(#ghost2)"/>
+  </g>
+
+  <g id="tombstoneRound">
+    <path d="M-14,18 L-14,-6 Q-14,-22 0,-22 Q14,-22 14,-6 L14,18 Z" fill="url(#stoneG)" stroke="#0a0810" stroke-width="0.5"/>
+    <path d="M-12,18 L-12,-6 Q-12,-20 0,-20 Q12,-20 12,-6 L12,18" fill="none" stroke="#a0a4b0" stroke-width="0.4" opacity="0.6"/>
+    <path d="M-2,-12 L2,-12 M0,-14 L0,-8" stroke="#1a1c24" stroke-width="1"/>
+    <ellipse cx="-4" cy="-10" rx="2" ry="6" fill="#1a1c24" opacity="0.4"/>
+    <path d="M-14,18 L14,18 L14,22 L-14,22 Z" fill="#0a0810"/>
+    <path d="M-4,4 L-4,12 M4,4 L4,12 M-8,8 L8,8" stroke="#1a1c24" stroke-width="0.4" opacity="0.5"/>
+  </g>
+
+  <g id="tombstoneCross">
+    <path d="M-10,22 L-10,-4 L-4,-4 L-4,-14 L4,-14 L4,-4 L10,-4 L10,22 Z" fill="url(#stoneG)" stroke="#0a0810" stroke-width="0.5"/>
+    <path d="M-9,22 L-9,-4 L-3,-4 L-3,-13 L3,-13 L3,-4 L9,-4 L9,22" fill="none" stroke="#a0a4b0" stroke-width="0.4" opacity="0.6"/>
+    <path d="M-10,22 L10,22 L10,26 L-10,26 Z" fill="#0a0810"/>
+    <ellipse cx="-3" cy="6" rx="1.4" ry="4" fill="#1a1c24" opacity="0.4"/>
+  </g>
+
+  <g id="picketFence">
+    <rect x="-2" y="-2" width="4" height="22" fill="url(#fence)" stroke="#0a0810" stroke-width="0.3"/>
+    <path d="M-3,-2 L0,-8 L3,-2 Z" fill="url(#fence)" stroke="#0a0810" stroke-width="0.3"/>
+    <rect x="-12" y="6" width="24" height="2" fill="url(#fence)" stroke="#0a0810" stroke-width="0.2"/>
+  </g>
+
+  <g id="picketFenceTilted">
+    <use href="#picketFence" transform="rotate(-6)"/>
+    <use href="#picketFence" transform="translate(8,0) rotate(4)"/>
+    <use href="#picketFence" transform="translate(16,0) rotate(-3)"/>
+  </g>
+
+  <g id="lantern">
+    <rect x="-6" y="-4" width="12" height="14" fill="#1a1a22" stroke="#3a3a44" stroke-width="0.5"/>
+    <rect x="-5" y="-3" width="10" height="12" fill="url(#lanternGlow)"/>
+    <path d="M-6,-4 L6,-4 L4,-8 L-4,-8 Z" fill="#1a1a22" stroke="#3a3a44" stroke-width="0.4"/>
+    <path d="M-4,-8 L-4,-12 Q0,-14 4,-12 L4,-8" stroke="#3a3a44" stroke-width="0.8" fill="none"/>
+    <path d="M-4,-2 L4,-2 M-4,4 L4,4" stroke="#1a1a22" stroke-width="0.8"/>
+    <path d="M0,-3 L0,8" stroke="#1a1a22" stroke-width="0.6"/>
+    <ellipse cx="0" cy="3" rx="2" ry="3" fill="#fff8c0" opacity="0.8"/>
+  </g>
+
+  <g id="branchG">
+    <path d="M0,0 C20,-4 40,4 60,-2 C80,-8 100,4 120,0" stroke="#3a3a44" stroke-width="2.4" fill="none"/>
+    <path d="M10,-2 L8,-8 L14,-4 Z M30,0 L34,-8 L34,-2 Z M50,-2 L48,-10 L54,-4 Z M70,-4 L70,-10 L74,-4 Z M90,-2 L94,-10 L90,-4 Z M110,-2 L110,-8 L114,-4 Z" fill="#0a0a14"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#branchG" transform="translate(60,40)"/>
+  <use href="#branchG" transform="translate(180,28)"/>
+  <use href="#branchG" transform="translate(300,42)"/>
+  <use href="#branchG" transform="translate(420,30)"/>
+  <use href="#branchG" transform="translate(540,42)"/>
+  <use href="#branchG" transform="translate(660,30)"/>
+  <use href="#branchG" transform="translate(780,42)"/>
+  <use href="#branchG" transform="translate(880,30)"/>
+  <use href="#ghostWisp2" transform="translate(180,32)"/>
+  <use href="#ghostWisp2" transform="translate(500,32)"/>
+  <use href="#ghostWisp2" transform="translate(820,32)"/>
+  <use href="#ghostWisp" transform="translate(140,28)"/>
+  <use href="#ghostWisp" transform="translate(280,32) scale(1.1)"/>
+  <use href="#ghostWisp" transform="translate(420,28)"/>
+  <use href="#ghostWisp" transform="translate(580,32) scale(1.1)"/>
+  <use href="#ghostWisp" transform="translate(720,28)"/>
+  <use href="#ghostWisp" transform="translate(860,32) scale(1.1)"/>
+
+  <!-- BOTTOM: tombstones along bottom strip -->
+  <use href="#picketFenceTilted" transform="translate(80,1462)"/>
+  <use href="#picketFenceTilted" transform="translate(200,1462)"/>
+  <use href="#picketFenceTilted" transform="translate(320,1462)"/>
+  <use href="#picketFenceTilted" transform="translate(440,1462)"/>
+  <use href="#picketFenceTilted" transform="translate(560,1462)"/>
+  <use href="#picketFenceTilted" transform="translate(680,1462)"/>
+  <use href="#picketFenceTilted" transform="translate(800,1462)"/>
+  <use href="#picketFenceTilted" transform="translate(920,1462)"/>
+  <use href="#tombstoneRound" transform="translate(120,1460)"/>
+  <use href="#tombstoneCross" transform="translate(240,1458)"/>
+  <use href="#tombstoneRound" transform="translate(360,1460) scale(1.1)"/>
+  <use href="#tombstoneCross" transform="translate(480,1458)"/>
+  <use href="#tombstoneRound" transform="translate(600,1460) scale(1.1)"/>
+  <use href="#tombstoneCross" transform="translate(720,1458)"/>
+  <use href="#tombstoneRound" transform="translate(840,1460)"/>
+  <use href="#ghostWisp2" transform="translate(180,1480)"/>
+  <use href="#ghostWisp2" transform="translate(500,1480)"/>
+  <use href="#ghostWisp2" transform="translate(820,1480)"/>
+
+  <!-- LEFT -->
+  <use href="#branchG" transform="translate(40,80) rotate(90)"/>
+  <use href="#branchG" transform="translate(28,200) rotate(90)"/>
+  <use href="#branchG" transform="translate(42,320) rotate(90)"/>
+  <use href="#branchG" transform="translate(30,440) rotate(90)"/>
+  <use href="#branchG" transform="translate(42,560) rotate(90)"/>
+  <use href="#branchG" transform="translate(30,680) rotate(90)"/>
+  <use href="#branchG" transform="translate(42,800) rotate(90)"/>
+  <use href="#branchG" transform="translate(30,920) rotate(90)"/>
+  <use href="#branchG" transform="translate(42,1040) rotate(90)"/>
+  <use href="#branchG" transform="translate(30,1160) rotate(90)"/>
+  <use href="#branchG" transform="translate(42,1280) rotate(90)"/>
+  <use href="#ghostWisp" transform="translate(35,150)"/>
+  <use href="#ghostWisp" transform="translate(28,330) scale(1.1)"/>
+  <use href="#ghostWisp" transform="translate(35,510)"/>
+  <use href="#ghostWisp" transform="translate(28,690) scale(1.1)"/>
+  <use href="#ghostWisp" transform="translate(35,870)"/>
+  <use href="#ghostWisp" transform="translate(28,1050) scale(1.1)"/>
+  <use href="#ghostWisp" transform="translate(35,1230)"/>
+  <use href="#ghostWisp" transform="translate(28,1390) scale(1.1)"/>
+  <use href="#tombstoneRound" transform="translate(34,230) scale(0.9)"/>
+  <use href="#tombstoneCross" transform="translate(34,430) scale(0.9)"/>
+  <use href="#tombstoneRound" transform="translate(34,630) scale(0.9)"/>
+  <use href="#tombstoneCross" transform="translate(34,830) scale(0.9)"/>
+  <use href="#tombstoneRound" transform="translate(34,1030) scale(0.9)"/>
+  <use href="#tombstoneCross" transform="translate(34,1230) scale(0.9)"/>
+  <use href="#lantern" transform="translate(38,400)"/>
+  <use href="#lantern" transform="translate(38,800)"/>
+  <use href="#lantern" transform="translate(38,1200)"/>
+
+  <!-- RIGHT -->
+  <use href="#branchG" transform="translate(960,80) rotate(90)"/>
+  <use href="#branchG" transform="translate(972,200) rotate(90)"/>
+  <use href="#branchG" transform="translate(958,320) rotate(90)"/>
+  <use href="#branchG" transform="translate(970,440) rotate(90)"/>
+  <use href="#branchG" transform="translate(958,560) rotate(90)"/>
+  <use href="#branchG" transform="translate(970,680) rotate(90)"/>
+  <use href="#branchG" transform="translate(958,800) rotate(90)"/>
+  <use href="#branchG" transform="translate(970,920) rotate(90)"/>
+  <use href="#branchG" transform="translate(958,1040) rotate(90)"/>
+  <use href="#branchG" transform="translate(970,1160) rotate(90)"/>
+  <use href="#branchG" transform="translate(958,1280) rotate(90)"/>
+  <use href="#ghostWisp" transform="translate(965,150)"/>
+  <use href="#ghostWisp" transform="translate(972,330) scale(1.1)"/>
+  <use href="#ghostWisp" transform="translate(965,510)"/>
+  <use href="#ghostWisp" transform="translate(972,690) scale(1.1)"/>
+  <use href="#ghostWisp" transform="translate(965,870)"/>
+  <use href="#ghostWisp" transform="translate(972,1050) scale(1.1)"/>
+  <use href="#ghostWisp" transform="translate(965,1230)"/>
+  <use href="#ghostWisp" transform="translate(972,1390) scale(1.1)"/>
+  <use href="#tombstoneRound" transform="translate(966,230) scale(0.9)"/>
+  <use href="#tombstoneCross" transform="translate(966,430) scale(0.9)"/>
+  <use href="#tombstoneRound" transform="translate(966,630) scale(0.9)"/>
+  <use href="#tombstoneCross" transform="translate(966,830) scale(0.9)"/>
+  <use href="#tombstoneRound" transform="translate(966,1030) scale(0.9)"/>
+  <use href="#tombstoneCross" transform="translate(966,1230) scale(0.9)"/>
+  <use href="#lantern" transform="translate(962,400)"/>
+  <use href="#lantern" transform="translate(962,800)"/>
+  <use href="#lantern" transform="translate(962,1200)"/>
+
+  <!-- CORNERS: lantern + tombstone + ghost -->
+  <g transform="translate(40,40)">
+    <use href="#tombstoneRound" transform="translate(18,28) scale(1.2)"/>
+    <use href="#lantern" transform="translate(52,18) scale(1.2)"/>
+    <use href="#ghostWisp" transform="translate(20,18) scale(0.9)"/>
+    <use href="#picketFenceTilted" transform="translate(8,54)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#tombstoneCross" transform="translate(-18,28) scale(1.2)"/>
+    <use href="#lantern" transform="translate(-52,18) scale(1.2)"/>
+    <use href="#ghostWisp" transform="translate(-20,18) scale(0.9)"/>
+    <use href="#picketFenceTilted" transform="translate(-58,54)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#tombstoneCross" transform="translate(18,-22) scale(1.2)"/>
+    <use href="#picketFenceTilted" transform="translate(2,-2)"/>
+    <use href="#ghostWisp" transform="translate(50,-30) scale(0.9)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#tombstoneRound" transform="translate(-18,-22) scale(1.2)"/>
+    <use href="#picketFenceTilted" transform="translate(-58,-2)"/>
+    <use href="#ghostWisp" transform="translate(-50,-30) scale(0.9)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#1a1a22" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#dde0ea" stroke-width="0.5" fill="none" opacity="0.55"/>
+</svg>

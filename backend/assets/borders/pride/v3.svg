@@ -1,0 +1,253 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#200810"/>
+      <stop offset="50%" stop-color="#100408"/>
+      <stop offset="100%" stop-color="#080204"/>
+    </linearGradient>
+    <linearGradient id="sunsetH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8a1830"/>
+      <stop offset="25%" stop-color="#e0282a"/>
+      <stop offset="50%" stop-color="#f08818"/>
+      <stop offset="75%" stop-color="#ff6090"/>
+      <stop offset="100%" stop-color="#8a1830"/>
+    </linearGradient>
+    <linearGradient id="sunsetV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8a1830"/>
+      <stop offset="25%" stop-color="#e0282a"/>
+      <stop offset="50%" stop-color="#f08818"/>
+      <stop offset="75%" stop-color="#ff6090"/>
+      <stop offset="100%" stop-color="#8a1830"/>
+    </linearGradient>
+    <radialGradient id="sunDisc" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#fff0c0"/>
+      <stop offset="50%" stop-color="#f4a040"/>
+      <stop offset="100%" stop-color="#a02828"/>
+    </radialGradient>
+    <linearGradient id="warmRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a0810"/>
+      <stop offset="100%" stop-color="#e0282a"/>
+    </linearGradient>
+    <linearGradient id="warmOrange" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7a3008"/>
+      <stop offset="100%" stop-color="#f08818"/>
+    </linearGradient>
+    <linearGradient id="warmPink" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a02860"/>
+      <stop offset="100%" stop-color="#ff80b0"/>
+    </linearGradient>
+    <linearGradient id="warmMagenta" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#702070"/>
+      <stop offset="100%" stop-color="#e040a0"/>
+    </linearGradient>
+    <linearGradient id="warmViolet" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#401860"/>
+      <stop offset="100%" stop-color="#9038c8"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="sunsetBandH">
+    <rect x="0" y="0" width="120" height="5" fill="url(#warmRed)"/>
+    <rect x="0" y="5" width="120" height="5" fill="url(#warmOrange)"/>
+    <rect x="0" y="10" width="120" height="5" fill="url(#warmPink)"/>
+    <rect x="0" y="15" width="120" height="5" fill="url(#warmMagenta)"/>
+    <rect x="0" y="20" width="120" height="5" fill="url(#warmViolet)"/>
+  </g>
+
+  <g id="sunsetBandV">
+    <rect x="0" y="0" width="5" height="120" fill="url(#warmRed)"/>
+    <rect x="5" y="0" width="5" height="120" fill="url(#warmOrange)"/>
+    <rect x="10" y="0" width="5" height="120" fill="url(#warmPink)"/>
+    <rect x="15" y="0" width="5" height="120" fill="url(#warmMagenta)"/>
+    <rect x="20" y="0" width="5" height="120" fill="url(#warmViolet)"/>
+  </g>
+
+  <g id="sunArc">
+    <path d="M-30,0 A30,30 0 0,1 30,0" stroke="url(#warmRed)" stroke-width="3" fill="none"/>
+    <path d="M-24,0 A24,24 0 0,1 24,0" stroke="url(#warmOrange)" stroke-width="3" fill="none"/>
+    <path d="M-18,0 A18,18 0 0,1 18,0" stroke="url(#warmPink)" stroke-width="3" fill="none"/>
+    <path d="M-12,0 A12,12 0 0,1 12,0" stroke="url(#warmMagenta)" stroke-width="3" fill="none"/>
+    <path d="M-6,0 A6,6 0 0,1 6,0" stroke="url(#warmViolet)" stroke-width="3" fill="none"/>
+  </g>
+
+  <g id="sunDiscG">
+    <circle cx="0" cy="0" r="12" fill="url(#sunDisc)" stroke="#a02828" stroke-width="0.5"/>
+    <circle cx="0" cy="0" r="12" fill="none" stroke="#f4a040" stroke-width="0.6" opacity="0.6"/>
+    <circle cx="-4" cy="-4" r="3" fill="#fff0c0" opacity="0.6"/>
+  </g>
+
+  <g id="rayBurst">
+    <g stroke="url(#warmOrange)" stroke-width="1.4" fill="none">
+      <path d="M0,0 L0,-20 M0,0 L14,-14 M0,0 L20,0 M0,0 L14,14 M0,0 L0,20 M0,0 L-14,14 M0,0 L-20,0 M0,0 L-14,-14"/>
+    </g>
+    <circle cx="0" cy="0" r="2" fill="url(#sunDisc)"/>
+  </g>
+
+  <g id="warmDot">
+    <circle cx="0" cy="0" r="2" fill="url(#warmPink)"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#sunsetBandH" transform="translate(60,18)"/>
+  <use href="#sunsetBandH" transform="translate(180,18)"/>
+  <use href="#sunsetBandH" transform="translate(300,18)"/>
+  <use href="#sunsetBandH" transform="translate(420,18)"/>
+  <use href="#sunsetBandH" transform="translate(540,18)"/>
+  <use href="#sunsetBandH" transform="translate(660,18)"/>
+  <use href="#sunsetBandH" transform="translate(780,18)"/>
+  <use href="#sunsetBandH" transform="translate(820,18)"/>
+  <use href="#sunDiscG" transform="translate(140,52)"/>
+  <use href="#sunDiscG" transform="translate(320,52)"/>
+  <use href="#sunDiscG" transform="translate(500,52)"/>
+  <use href="#sunDiscG" transform="translate(680,52)"/>
+  <use href="#sunDiscG" transform="translate(860,52)"/>
+  <use href="#sunArc" transform="translate(220,52)"/>
+  <use href="#sunArc" transform="translate(400,52)"/>
+  <use href="#sunArc" transform="translate(580,52)"/>
+  <use href="#sunArc" transform="translate(760,52)"/>
+  <use href="#rayBurst" transform="translate(180,48) scale(0.6)"/>
+  <use href="#rayBurst" transform="translate(360,48) scale(0.6)"/>
+  <use href="#rayBurst" transform="translate(540,48) scale(0.6)"/>
+  <use href="#rayBurst" transform="translate(720,48) scale(0.6)"/>
+  <use href="#rayBurst" transform="translate(900,48) scale(0.6)"/>
+  <use href="#warmDot" transform="translate(120,44)"/>
+  <use href="#warmDot" transform="translate(260,44)"/>
+  <use href="#warmDot" transform="translate(400,44)"/>
+  <use href="#warmDot" transform="translate(540,44)"/>
+  <use href="#warmDot" transform="translate(680,44)"/>
+  <use href="#warmDot" transform="translate(820,44)"/>
+
+  <!-- BOTTOM -->
+  <use href="#sunsetBandH" transform="translate(60,1478) scale(1,-1)"/>
+  <use href="#sunsetBandH" transform="translate(180,1478) scale(1,-1)"/>
+  <use href="#sunsetBandH" transform="translate(300,1478) scale(1,-1)"/>
+  <use href="#sunsetBandH" transform="translate(420,1478) scale(1,-1)"/>
+  <use href="#sunsetBandH" transform="translate(540,1478) scale(1,-1)"/>
+  <use href="#sunsetBandH" transform="translate(660,1478) scale(1,-1)"/>
+  <use href="#sunsetBandH" transform="translate(780,1478) scale(1,-1)"/>
+  <use href="#sunsetBandH" transform="translate(820,1478) scale(1,-1)"/>
+  <use href="#sunDiscG" transform="translate(140,1448)"/>
+  <use href="#sunDiscG" transform="translate(320,1448)"/>
+  <use href="#sunDiscG" transform="translate(500,1448)"/>
+  <use href="#sunDiscG" transform="translate(680,1448)"/>
+  <use href="#sunDiscG" transform="translate(860,1448)"/>
+  <use href="#sunArc" transform="translate(220,1448) scale(1,-1)"/>
+  <use href="#sunArc" transform="translate(400,1448) scale(1,-1)"/>
+  <use href="#sunArc" transform="translate(580,1448) scale(1,-1)"/>
+  <use href="#sunArc" transform="translate(760,1448) scale(1,-1)"/>
+  <use href="#rayBurst" transform="translate(180,1452) scale(0.6)"/>
+  <use href="#rayBurst" transform="translate(360,1452) scale(0.6)"/>
+  <use href="#rayBurst" transform="translate(540,1452) scale(0.6)"/>
+  <use href="#rayBurst" transform="translate(720,1452) scale(0.6)"/>
+  <use href="#rayBurst" transform="translate(900,1452) scale(0.6)"/>
+
+  <!-- LEFT -->
+  <use href="#sunsetBandV" transform="translate(18,60)"/>
+  <use href="#sunsetBandV" transform="translate(18,180)"/>
+  <use href="#sunsetBandV" transform="translate(18,300)"/>
+  <use href="#sunsetBandV" transform="translate(18,420)"/>
+  <use href="#sunsetBandV" transform="translate(18,540)"/>
+  <use href="#sunsetBandV" transform="translate(18,660)"/>
+  <use href="#sunsetBandV" transform="translate(18,780)"/>
+  <use href="#sunsetBandV" transform="translate(18,900)"/>
+  <use href="#sunsetBandV" transform="translate(18,1020)"/>
+  <use href="#sunsetBandV" transform="translate(18,1140)"/>
+  <use href="#sunsetBandV" transform="translate(18,1260)"/>
+  <use href="#sunsetBandV" transform="translate(18,1320)"/>
+  <use href="#sunDiscG" transform="translate(52,140)"/>
+  <use href="#sunDiscG" transform="translate(52,320)"/>
+  <use href="#sunDiscG" transform="translate(52,500)"/>
+  <use href="#sunDiscG" transform="translate(52,680)"/>
+  <use href="#sunDiscG" transform="translate(52,860)"/>
+  <use href="#sunDiscG" transform="translate(52,1040)"/>
+  <use href="#sunDiscG" transform="translate(52,1220)"/>
+  <use href="#sunDiscG" transform="translate(52,1400)"/>
+  <use href="#sunArc" transform="translate(52,220) rotate(90)"/>
+  <use href="#sunArc" transform="translate(52,400) rotate(90)"/>
+  <use href="#sunArc" transform="translate(52,580) rotate(90)"/>
+  <use href="#sunArc" transform="translate(52,760) rotate(90)"/>
+  <use href="#sunArc" transform="translate(52,940) rotate(90)"/>
+  <use href="#sunArc" transform="translate(52,1120) rotate(90)"/>
+  <use href="#sunArc" transform="translate(52,1300) rotate(90)"/>
+  <use href="#warmDot" transform="translate(44,180)"/>
+  <use href="#warmDot" transform="translate(44,300)"/>
+  <use href="#warmDot" transform="translate(44,420)"/>
+  <use href="#warmDot" transform="translate(44,540)"/>
+  <use href="#warmDot" transform="translate(44,660)"/>
+  <use href="#warmDot" transform="translate(44,780)"/>
+  <use href="#warmDot" transform="translate(44,900)"/>
+  <use href="#warmDot" transform="translate(44,1020)"/>
+  <use href="#warmDot" transform="translate(44,1140)"/>
+  <use href="#warmDot" transform="translate(44,1260)"/>
+  <use href="#warmDot" transform="translate(44,1380)"/>
+
+  <!-- RIGHT -->
+  <use href="#sunsetBandV" transform="translate(958,60)"/>
+  <use href="#sunsetBandV" transform="translate(958,180)"/>
+  <use href="#sunsetBandV" transform="translate(958,300)"/>
+  <use href="#sunsetBandV" transform="translate(958,420)"/>
+  <use href="#sunsetBandV" transform="translate(958,540)"/>
+  <use href="#sunsetBandV" transform="translate(958,660)"/>
+  <use href="#sunsetBandV" transform="translate(958,780)"/>
+  <use href="#sunsetBandV" transform="translate(958,900)"/>
+  <use href="#sunsetBandV" transform="translate(958,1020)"/>
+  <use href="#sunsetBandV" transform="translate(958,1140)"/>
+  <use href="#sunsetBandV" transform="translate(958,1260)"/>
+  <use href="#sunsetBandV" transform="translate(958,1320)"/>
+  <use href="#sunDiscG" transform="translate(948,140)"/>
+  <use href="#sunDiscG" transform="translate(948,320)"/>
+  <use href="#sunDiscG" transform="translate(948,500)"/>
+  <use href="#sunDiscG" transform="translate(948,680)"/>
+  <use href="#sunDiscG" transform="translate(948,860)"/>
+  <use href="#sunDiscG" transform="translate(948,1040)"/>
+  <use href="#sunDiscG" transform="translate(948,1220)"/>
+  <use href="#sunDiscG" transform="translate(948,1400)"/>
+  <use href="#sunArc" transform="translate(948,220) rotate(270)"/>
+  <use href="#sunArc" transform="translate(948,400) rotate(270)"/>
+  <use href="#sunArc" transform="translate(948,580) rotate(270)"/>
+  <use href="#sunArc" transform="translate(948,760) rotate(270)"/>
+  <use href="#sunArc" transform="translate(948,940) rotate(270)"/>
+  <use href="#sunArc" transform="translate(948,1120) rotate(270)"/>
+  <use href="#sunArc" transform="translate(948,1300) rotate(270)"/>
+  <use href="#warmDot" transform="translate(956,180)"/>
+  <use href="#warmDot" transform="translate(956,300)"/>
+  <use href="#warmDot" transform="translate(956,420)"/>
+  <use href="#warmDot" transform="translate(956,540)"/>
+  <use href="#warmDot" transform="translate(956,660)"/>
+  <use href="#warmDot" transform="translate(956,780)"/>
+  <use href="#warmDot" transform="translate(956,900)"/>
+  <use href="#warmDot" transform="translate(956,1020)"/>
+  <use href="#warmDot" transform="translate(956,1140)"/>
+  <use href="#warmDot" transform="translate(956,1260)"/>
+  <use href="#warmDot" transform="translate(956,1380)"/>
+
+  <!-- CORNERS: setting sun -->
+  <g transform="translate(40,40)">
+    <use href="#sunDiscG" transform="translate(30,30) scale(1.8)"/>
+    <use href="#rayBurst" transform="translate(30,30)"/>
+    <use href="#sunArc" transform="translate(70,18) scale(0.8)"/>
+    <use href="#sunArc" transform="translate(18,70) scale(0.8) rotate(90)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#sunDiscG" transform="translate(-30,30) scale(1.8)"/>
+    <use href="#rayBurst" transform="translate(-30,30)"/>
+    <use href="#sunArc" transform="translate(-70,18) scale(0.8)"/>
+    <use href="#sunArc" transform="translate(-18,70) scale(0.8) rotate(270)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#sunDiscG" transform="translate(30,-30) scale(1.8)"/>
+    <use href="#rayBurst" transform="translate(30,-30)"/>
+    <use href="#sunArc" transform="translate(70,-18) scale(0.8) scale(1,-1)"/>
+    <use href="#sunArc" transform="translate(18,-70) scale(0.8) rotate(90)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#sunDiscG" transform="translate(-30,-30) scale(1.8)"/>
+    <use href="#rayBurst" transform="translate(-30,-30)"/>
+    <use href="#sunArc" transform="translate(-70,-18) scale(0.8) scale(1,-1)"/>
+    <use href="#sunArc" transform="translate(-18,-70) scale(0.8) rotate(270)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#sunsetH)" stroke-width="1.4" fill="none"/>
+</svg>

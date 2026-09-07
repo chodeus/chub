@@ -1,0 +1,286 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1830"/>
+      <stop offset="50%" stop-color="#061020"/>
+      <stop offset="100%" stop-color="#020610"/>
+    </linearGradient>
+    <radialGradient id="navyLeaf" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#5a87b8"/>
+      <stop offset="55%" stop-color="#1c3a6a"/>
+      <stop offset="100%" stop-color="#04102a"/>
+    </radialGradient>
+    <radialGradient id="iceOrn" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#b8d2ea"/>
+      <stop offset="100%" stop-color="#2a4a7a"/>
+    </radialGradient>
+    <radialGradient id="silverOrn" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#dde3eb"/>
+      <stop offset="100%" stop-color="#4a5a72"/>
+    </radialGradient>
+    <linearGradient id="silverRibbonH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2a3a55"/>
+      <stop offset="50%" stop-color="#eef3f8"/>
+      <stop offset="100%" stop-color="#2a3a55"/>
+    </linearGradient>
+    <linearGradient id="silverRibbonV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a3a55"/>
+      <stop offset="50%" stop-color="#eef3f8"/>
+      <stop offset="100%" stop-color="#2a3a55"/>
+    </linearGradient>
+    <radialGradient id="navyCone" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#7aa0d0"/>
+      <stop offset="55%" stop-color="#1c3a6a"/>
+      <stop offset="100%" stop-color="#04102a"/>
+    </radialGradient>
+    <radialGradient id="snowflakeIce" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#a8c4dc"/>
+      <stop offset="100%" stop-color="#2a4a7a"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="navySprig">
+    <path d="M0,0 C-2,-18 -10,-32 -22,-44 C-12,-40 -4,-30 0,-20 C4,-30 12,-40 22,-44 C10,-32 2,-18 0,0 Z" fill="url(#navyLeaf)" stroke="#04102a" stroke-width="0.6"/>
+    <path d="M0,0 L0,-44" stroke="#021022" stroke-width="0.5" fill="none"/>
+    <path d="M-6,-12 L-2,-22 M6,-12 L2,-22 M-8,-22 L-3,-30 M8,-22 L3,-30 M-9,-30 L-4,-36 M9,-30 L4,-36" stroke="#9abdde" stroke-width="0.4" fill="none" opacity="0.6"/>
+  </g>
+
+  <g id="iceFlake">
+    <g stroke="url(#snowflakeIce)" stroke-width="1.2" fill="none">
+      <path d="M0,-14 L0,14 M-12.1,-7 L12.1,7 M-12.1,7 L12.1,-7"/>
+      <path d="M0,-10 L-2,-12 M0,-10 L2,-12 M0,10 L-2,12 M0,10 L2,12"/>
+      <path d="M-8.7,-5 L-11,-4 M-8.7,-5 L-10,-7 M8.7,5 L11,4 M8.7,5 L10,7"/>
+      <path d="M-8.7,5 L-11,4 M-8.7,5 L-10,7 M8.7,-5 L11,-4 M8.7,-5 L10,-7"/>
+    </g>
+    <circle cx="0" cy="0" r="1.8" fill="url(#snowflakeIce)"/>
+  </g>
+
+  <g id="iceOrnament">
+    <circle cx="0" cy="0" r="6" fill="url(#iceOrn)" stroke="#2a4a7a" stroke-width="0.4"/>
+    <circle cx="9" cy="3" r="5" fill="url(#silverOrn)" stroke="#4a5a72" stroke-width="0.4"/>
+    <circle cx="-7" cy="5" r="5.5" fill="url(#iceOrn)" stroke="#2a4a7a" stroke-width="0.4"/>
+    <circle cx="4" cy="-7" r="4" fill="url(#silverOrn)" stroke="#4a5a72" stroke-width="0.4"/>
+    <circle cx="-1" cy="-2" r="1.4" fill="#ffffff"/>
+    <circle cx="8" cy="1" r="1.2" fill="#ffffff"/>
+  </g>
+
+  <g id="navyHolly">
+    <path d="M0,0 C-4,-5 -10,-7 -14,-12 C-12,-18 -8,-22 -4,-26 C-8,-30 -10,-34 -8,-38 C-4,-36 -2,-32 0,-30 C2,-32 4,-36 8,-38 C10,-34 8,-30 4,-26 C8,-22 12,-18 14,-12 C10,-7 4,-5 0,0 Z" fill="url(#navyLeaf)" stroke="#04102a" stroke-width="0.7"/>
+    <path d="M0,-2 L0,-34" stroke="#020a18" stroke-width="0.5"/>
+    <path d="M-6,-12 Q-2,-14 0,-20 M6,-12 Q2,-14 0,-20" stroke="#9abdde" stroke-width="0.4" fill="none"/>
+  </g>
+
+  <path d="M60,30 Q150,12 250,30 Q350,48 450,28 Q550,8 650,30 Q750,52 850,30 Q920,18 940,30" stroke="url(#silverRibbonH)" stroke-width="7" fill="none"/>
+  <use href="#navySprig" transform="translate(120,52) rotate(180)"/>
+  <use href="#navySprig" transform="translate(170,48) rotate(170)"/>
+  <use href="#navySprig" transform="translate(220,54) rotate(195)"/>
+  <use href="#navySprig" transform="translate(280,46) rotate(175)"/>
+  <use href="#navySprig" transform="translate(340,52) rotate(185)"/>
+  <use href="#navySprig" transform="translate(400,48) rotate(170)"/>
+  <use href="#navySprig" transform="translate(460,54) rotate(195)"/>
+  <use href="#navySprig" transform="translate(520,48) rotate(175)"/>
+  <use href="#navySprig" transform="translate(580,52) rotate(190)"/>
+  <use href="#navySprig" transform="translate(640,46) rotate(170)"/>
+  <use href="#navySprig" transform="translate(700,52) rotate(200)"/>
+  <use href="#navySprig" transform="translate(760,48) rotate(180)"/>
+  <use href="#navySprig" transform="translate(820,52) rotate(195)"/>
+  <use href="#navySprig" transform="translate(880,48) rotate(170)"/>
+  <use href="#navyHolly" transform="translate(200,40) rotate(200)"/>
+  <use href="#navyHolly" transform="translate(210,42) rotate(150)"/>
+  <use href="#navyHolly" transform="translate(380,42) rotate(195)"/>
+  <use href="#navyHolly" transform="translate(390,40) rotate(155)"/>
+  <use href="#navyHolly" transform="translate(560,42) rotate(200)"/>
+  <use href="#navyHolly" transform="translate(570,40) rotate(150)"/>
+  <use href="#navyHolly" transform="translate(740,40) rotate(195)"/>
+  <use href="#navyHolly" transform="translate(750,42) rotate(155)"/>
+  <use href="#iceOrnament" transform="translate(180,32)"/>
+  <use href="#iceOrnament" transform="translate(310,28)"/>
+  <use href="#iceOrnament" transform="translate(440,32)"/>
+  <use href="#iceOrnament" transform="translate(560,30)"/>
+  <use href="#iceOrnament" transform="translate(680,28)"/>
+  <use href="#iceOrnament" transform="translate(800,32)"/>
+  <use href="#iceFlake" transform="translate(240,22) scale(1.2)"/>
+  <use href="#iceFlake" transform="translate(420,18) scale(0.9)"/>
+  <use href="#iceFlake" transform="translate(600,22) scale(1.1)"/>
+  <use href="#iceFlake" transform="translate(780,18) scale(0.95)"/>
+  <use href="#iceFlake" transform="translate(140,12) scale(0.7)"/>
+  <use href="#iceFlake" transform="translate(870,14) scale(0.7)"/>
+
+  <path d="M60,1470 Q150,1488 250,1470 Q350,1452 450,1472 Q550,1492 650,1470 Q750,1448 850,1470 Q920,1482 940,1470" stroke="url(#silverRibbonH)" stroke-width="7" fill="none"/>
+  <use href="#navySprig" transform="translate(120,1448)"/>
+  <use href="#navySprig" transform="translate(170,1452) rotate(10)"/>
+  <use href="#navySprig" transform="translate(220,1446) rotate(-15)"/>
+  <use href="#navySprig" transform="translate(280,1454) rotate(5)"/>
+  <use href="#navySprig" transform="translate(340,1448)"/>
+  <use href="#navySprig" transform="translate(400,1452) rotate(10)"/>
+  <use href="#navySprig" transform="translate(460,1446) rotate(-15)"/>
+  <use href="#navySprig" transform="translate(520,1452) rotate(5)"/>
+  <use href="#navySprig" transform="translate(580,1448) rotate(-10)"/>
+  <use href="#navySprig" transform="translate(640,1454) rotate(10)"/>
+  <use href="#navySprig" transform="translate(700,1448) rotate(-20)"/>
+  <use href="#navySprig" transform="translate(760,1452)"/>
+  <use href="#navySprig" transform="translate(820,1448) rotate(15)"/>
+  <use href="#navySprig" transform="translate(880,1452) rotate(-10)"/>
+  <use href="#navyHolly" transform="translate(200,1460) rotate(20)"/>
+  <use href="#navyHolly" transform="translate(210,1458) rotate(-30)"/>
+  <use href="#navyHolly" transform="translate(380,1458) rotate(15)"/>
+  <use href="#navyHolly" transform="translate(390,1460) rotate(-25)"/>
+  <use href="#navyHolly" transform="translate(560,1460) rotate(20)"/>
+  <use href="#navyHolly" transform="translate(570,1458) rotate(-30)"/>
+  <use href="#navyHolly" transform="translate(740,1458) rotate(15)"/>
+  <use href="#navyHolly" transform="translate(750,1460) rotate(-25)"/>
+  <use href="#iceOrnament" transform="translate(180,1468)"/>
+  <use href="#iceOrnament" transform="translate(310,1472)"/>
+  <use href="#iceOrnament" transform="translate(440,1468)"/>
+  <use href="#iceOrnament" transform="translate(560,1470)"/>
+  <use href="#iceOrnament" transform="translate(680,1472)"/>
+  <use href="#iceOrnament" transform="translate(800,1468)"/>
+  <use href="#iceFlake" transform="translate(240,1478) scale(1.2)"/>
+  <use href="#iceFlake" transform="translate(420,1482) scale(0.9)"/>
+  <use href="#iceFlake" transform="translate(600,1478) scale(1.1)"/>
+  <use href="#iceFlake" transform="translate(780,1482) scale(0.95)"/>
+
+  <path d="M30,60 Q12,150 30,250 Q48,350 28,450 Q8,550 30,650 Q52,750 30,850 Q18,920 30,940 Q42,1050 30,1150 Q12,1250 30,1350 Q48,1420 30,1440" stroke="url(#silverRibbonV)" stroke-width="7" fill="none"/>
+  <use href="#navySprig" transform="translate(48,120) rotate(90)"/>
+  <use href="#navySprig" transform="translate(52,180) rotate(80)"/>
+  <use href="#navySprig" transform="translate(46,240) rotate(105)"/>
+  <use href="#navySprig" transform="translate(54,300) rotate(85)"/>
+  <use href="#navySprig" transform="translate(48,360) rotate(95)"/>
+  <use href="#navySprig" transform="translate(52,420) rotate(80)"/>
+  <use href="#navySprig" transform="translate(46,480) rotate(105)"/>
+  <use href="#navySprig" transform="translate(54,540) rotate(85)"/>
+  <use href="#navySprig" transform="translate(48,600) rotate(100)"/>
+  <use href="#navySprig" transform="translate(52,660) rotate(80)"/>
+  <use href="#navySprig" transform="translate(46,720) rotate(110)"/>
+  <use href="#navySprig" transform="translate(54,780) rotate(85)"/>
+  <use href="#navySprig" transform="translate(48,840) rotate(95)"/>
+  <use href="#navySprig" transform="translate(52,900) rotate(80)"/>
+  <use href="#navySprig" transform="translate(46,960) rotate(105)"/>
+  <use href="#navySprig" transform="translate(54,1020) rotate(85)"/>
+  <use href="#navySprig" transform="translate(48,1080) rotate(100)"/>
+  <use href="#navySprig" transform="translate(52,1140) rotate(80)"/>
+  <use href="#navySprig" transform="translate(46,1200) rotate(110)"/>
+  <use href="#navySprig" transform="translate(54,1260) rotate(85)"/>
+  <use href="#navySprig" transform="translate(48,1320) rotate(95)"/>
+  <use href="#navySprig" transform="translate(52,1380) rotate(80)"/>
+  <use href="#navyHolly" transform="translate(40,200) rotate(110)"/>
+  <use href="#navyHolly" transform="translate(42,210) rotate(60)"/>
+  <use href="#navyHolly" transform="translate(40,380) rotate(105)"/>
+  <use href="#navyHolly" transform="translate(42,390) rotate(65)"/>
+  <use href="#navyHolly" transform="translate(40,560) rotate(110)"/>
+  <use href="#navyHolly" transform="translate(42,570) rotate(60)"/>
+  <use href="#navyHolly" transform="translate(40,740) rotate(105)"/>
+  <use href="#navyHolly" transform="translate(42,750) rotate(65)"/>
+  <use href="#navyHolly" transform="translate(40,920) rotate(110)"/>
+  <use href="#navyHolly" transform="translate(42,930) rotate(60)"/>
+  <use href="#navyHolly" transform="translate(40,1100) rotate(105)"/>
+  <use href="#navyHolly" transform="translate(42,1110) rotate(65)"/>
+  <use href="#navyHolly" transform="translate(40,1280) rotate(110)"/>
+  <use href="#navyHolly" transform="translate(42,1290) rotate(60)"/>
+  <use href="#iceOrnament" transform="translate(32,160)"/>
+  <use href="#iceOrnament" transform="translate(28,290)"/>
+  <use href="#iceOrnament" transform="translate(32,420)"/>
+  <use href="#iceOrnament" transform="translate(30,560)"/>
+  <use href="#iceOrnament" transform="translate(28,680)"/>
+  <use href="#iceOrnament" transform="translate(32,800)"/>
+  <use href="#iceOrnament" transform="translate(28,920)"/>
+  <use href="#iceOrnament" transform="translate(32,1060)"/>
+  <use href="#iceOrnament" transform="translate(28,1200)"/>
+  <use href="#iceOrnament" transform="translate(32,1320)"/>
+  <use href="#iceFlake" transform="translate(18,260) scale(1.1)"/>
+  <use href="#iceFlake" transform="translate(22,460) scale(0.9)"/>
+  <use href="#iceFlake" transform="translate(18,660) scale(1.2)"/>
+  <use href="#iceFlake" transform="translate(22,860) scale(0.9)"/>
+  <use href="#iceFlake" transform="translate(18,1060) scale(1.1)"/>
+  <use href="#iceFlake" transform="translate(22,1260) scale(0.95)"/>
+
+  <path d="M970,60 Q988,150 970,250 Q952,350 972,450 Q992,550 970,650 Q948,750 970,850 Q982,920 970,940 Q958,1050 970,1150 Q988,1250 970,1350 Q952,1420 970,1440" stroke="url(#silverRibbonV)" stroke-width="7" fill="none"/>
+  <use href="#navySprig" transform="translate(952,120) rotate(270)"/>
+  <use href="#navySprig" transform="translate(948,180) rotate(280)"/>
+  <use href="#navySprig" transform="translate(954,240) rotate(255)"/>
+  <use href="#navySprig" transform="translate(946,300) rotate(275)"/>
+  <use href="#navySprig" transform="translate(952,360) rotate(265)"/>
+  <use href="#navySprig" transform="translate(948,420) rotate(280)"/>
+  <use href="#navySprig" transform="translate(954,480) rotate(255)"/>
+  <use href="#navySprig" transform="translate(946,540) rotate(275)"/>
+  <use href="#navySprig" transform="translate(952,600) rotate(260)"/>
+  <use href="#navySprig" transform="translate(948,660) rotate(280)"/>
+  <use href="#navySprig" transform="translate(954,720) rotate(250)"/>
+  <use href="#navySprig" transform="translate(946,780) rotate(275)"/>
+  <use href="#navySprig" transform="translate(952,840) rotate(265)"/>
+  <use href="#navySprig" transform="translate(948,900) rotate(280)"/>
+  <use href="#navySprig" transform="translate(954,960) rotate(255)"/>
+  <use href="#navySprig" transform="translate(946,1020) rotate(275)"/>
+  <use href="#navySprig" transform="translate(952,1080) rotate(260)"/>
+  <use href="#navySprig" transform="translate(948,1140) rotate(280)"/>
+  <use href="#navySprig" transform="translate(954,1200) rotate(250)"/>
+  <use href="#navySprig" transform="translate(946,1260) rotate(275)"/>
+  <use href="#navySprig" transform="translate(952,1320) rotate(265)"/>
+  <use href="#navySprig" transform="translate(948,1380) rotate(280)"/>
+  <use href="#navyHolly" transform="translate(960,200) rotate(290)"/>
+  <use href="#navyHolly" transform="translate(958,210) rotate(240)"/>
+  <use href="#navyHolly" transform="translate(960,380) rotate(285)"/>
+  <use href="#navyHolly" transform="translate(958,390) rotate(245)"/>
+  <use href="#navyHolly" transform="translate(960,560) rotate(290)"/>
+  <use href="#navyHolly" transform="translate(958,570) rotate(240)"/>
+  <use href="#navyHolly" transform="translate(960,740) rotate(285)"/>
+  <use href="#navyHolly" transform="translate(958,750) rotate(245)"/>
+  <use href="#navyHolly" transform="translate(960,920) rotate(290)"/>
+  <use href="#navyHolly" transform="translate(958,930) rotate(240)"/>
+  <use href="#navyHolly" transform="translate(960,1100) rotate(285)"/>
+  <use href="#navyHolly" transform="translate(958,1110) rotate(245)"/>
+  <use href="#navyHolly" transform="translate(960,1280) rotate(290)"/>
+  <use href="#navyHolly" transform="translate(958,1290) rotate(240)"/>
+  <use href="#iceOrnament" transform="translate(968,160)"/>
+  <use href="#iceOrnament" transform="translate(972,290)"/>
+  <use href="#iceOrnament" transform="translate(968,420)"/>
+  <use href="#iceOrnament" transform="translate(970,560)"/>
+  <use href="#iceOrnament" transform="translate(972,680)"/>
+  <use href="#iceOrnament" transform="translate(968,800)"/>
+  <use href="#iceOrnament" transform="translate(972,920)"/>
+  <use href="#iceOrnament" transform="translate(968,1060)"/>
+  <use href="#iceOrnament" transform="translate(972,1200)"/>
+  <use href="#iceOrnament" transform="translate(968,1320)"/>
+  <use href="#iceFlake" transform="translate(982,260) scale(1.1)"/>
+  <use href="#iceFlake" transform="translate(978,460) scale(0.9)"/>
+  <use href="#iceFlake" transform="translate(982,660) scale(1.2)"/>
+  <use href="#iceFlake" transform="translate(978,860) scale(0.9)"/>
+  <use href="#iceFlake" transform="translate(982,1060) scale(1.1)"/>
+  <use href="#iceFlake" transform="translate(978,1260) scale(0.95)"/>
+
+  <g transform="translate(38,38)">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#navyCone)" transform="rotate(225)"/>
+    <use href="#navyHolly" transform="translate(18,4) rotate(120)"/>
+    <use href="#navyHolly" transform="translate(4,18) rotate(210)"/>
+    <use href="#iceOrnament" transform="translate(18,18)"/>
+    <use href="#iceFlake" transform="translate(8,8) scale(1.6)"/>
+  </g>
+  <g transform="translate(962,38)">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#navyCone)" transform="rotate(135)"/>
+    <use href="#navyHolly" transform="translate(-18,4) rotate(240)"/>
+    <use href="#navyHolly" transform="translate(-4,18) rotate(150)"/>
+    <use href="#iceOrnament" transform="translate(-18,18)"/>
+    <use href="#iceFlake" transform="translate(-8,8) scale(1.6)"/>
+  </g>
+  <g transform="translate(38,1462)">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#navyCone)" transform="rotate(315)"/>
+    <use href="#navyHolly" transform="translate(18,-4) rotate(60)"/>
+    <use href="#navyHolly" transform="translate(4,-18) rotate(330)"/>
+    <use href="#iceOrnament" transform="translate(18,-18)"/>
+    <use href="#iceFlake" transform="translate(8,-8) scale(1.6)"/>
+  </g>
+  <g transform="translate(962,1462)">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#navyCone)" transform="rotate(45)"/>
+    <use href="#navyHolly" transform="translate(-18,-4) rotate(300)"/>
+    <use href="#navyHolly" transform="translate(-4,-18) rotate(30)"/>
+    <use href="#iceOrnament" transform="translate(-18,-18)"/>
+    <use href="#iceFlake" transform="translate(-8,-8) scale(1.6)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#silverRibbonH)" stroke-width="1.4" fill="none"/>
+</svg>

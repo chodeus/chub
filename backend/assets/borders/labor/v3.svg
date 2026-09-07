@@ -1,0 +1,356 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1408"/>
+      <stop offset="50%" stop-color="#0c0a04"/>
+      <stop offset="100%" stop-color="#040302"/>
+    </linearGradient>
+    <radialGradient id="sunflower" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#fff0a8"/>
+      <stop offset="55%" stop-color="#f0b830"/>
+      <stop offset="100%" stop-color="#7a4818"/>
+    </radialGradient>
+    <radialGradient id="sunflowerCore" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#5a3818"/>
+      <stop offset="100%" stop-color="#1a0c04"/>
+    </radialGradient>
+    <radialGradient id="wheatGrain" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fae098"/>
+      <stop offset="60%" stop-color="#c88838"/>
+      <stop offset="100%" stop-color="#503810"/>
+    </radialGradient>
+    <radialGradient id="leafGreen" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#a8d090"/>
+      <stop offset="55%" stop-color="#587828"/>
+      <stop offset="100%" stop-color="#1a3010"/>
+    </radialGradient>
+    <radialGradient id="leafGold" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#f0d870"/>
+      <stop offset="55%" stop-color="#a07820"/>
+      <stop offset="100%" stop-color="#3a2808"/>
+    </radialGradient>
+    <radialGradient id="leafRust" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#e08840"/>
+      <stop offset="55%" stop-color="#a05018"/>
+      <stop offset="100%" stop-color="#3a1808"/>
+    </radialGradient>
+    <linearGradient id="stem" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#80a070"/>
+      <stop offset="100%" stop-color="#3a5028"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="sunflower">
+    <g>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(36)"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(72)"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(108)"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(144)"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(180)"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(216)"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(252)"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(288)"/>
+      <path d="M0,0 L-4,-16 L0,-22 L4,-16 Z" fill="url(#sunflower)" stroke="#7a4818" stroke-width="0.4" transform="rotate(324)"/>
+    </g>
+    <circle cx="0" cy="0" r="9" fill="url(#sunflowerCore)" stroke="#1a0c04" stroke-width="0.4"/>
+    <g fill="#3a2008">
+      <circle cx="-3" cy="-3" r="0.7"/>
+      <circle cx="3" cy="-3" r="0.7"/>
+      <circle cx="0" cy="-5" r="0.7"/>
+      <circle cx="-4" cy="2" r="0.7"/>
+      <circle cx="4" cy="2" r="0.7"/>
+      <circle cx="0" cy="4" r="0.7"/>
+      <circle cx="-2" cy="0" r="0.7"/>
+      <circle cx="2" cy="0" r="0.7"/>
+    </g>
+  </g>
+
+  <g id="wheatStalk">
+    <path d="M0,0 L0,32" stroke="url(#stem)" stroke-width="1.2" fill="none"/>
+    <g fill="url(#wheatGrain)" stroke="#503810" stroke-width="0.3">
+      <ellipse cx="-2" cy="-2" rx="1.5" ry="3.2" transform="rotate(-30,-2,-2)"/>
+      <ellipse cx="2" cy="-4" rx="1.5" ry="3.2" transform="rotate(30,2,-4)"/>
+      <ellipse cx="-2" cy="-9" rx="1.5" ry="3.2" transform="rotate(-30,-2,-9)"/>
+      <ellipse cx="2" cy="-11" rx="1.5" ry="3.2" transform="rotate(30,2,-11)"/>
+      <ellipse cx="-2" cy="-16" rx="1.5" ry="3.2" transform="rotate(-30,-2,-16)"/>
+      <ellipse cx="2" cy="-18" rx="1.5" ry="3.2" transform="rotate(30,2,-18)"/>
+      <ellipse cx="0" cy="-22" rx="1.6" ry="3.6"/>
+    </g>
+    <path d="M0,-24 L-2,-26 M0,-24 L2,-26" stroke="#503810" stroke-width="0.4"/>
+  </g>
+
+  <g id="transitionLeafG">
+    <path d="M0,18 L0,4 L-6,8 L-12,2 L-14,-8 L-22,-6 L-18,-16 L-10,-18 L-6,-26 L0,-22 L6,-26 L10,-18 L18,-16 L22,-6 L14,-8 L12,2 L6,8 L0,4 Z" fill="url(#leafGreen)" stroke="#1a3010" stroke-width="0.5"/>
+    <path d="M0,4 L0,18 M0,4 L-12,2 M0,4 L12,2 M0,4 L-10,-18 M0,4 L10,-18 M0,4 L0,-22" stroke="#1a3010" stroke-width="0.4"/>
+  </g>
+
+  <g id="transitionLeafGold">
+    <path d="M0,18 L0,4 L-6,8 L-12,2 L-14,-8 L-22,-6 L-18,-16 L-10,-18 L-6,-26 L0,-22 L6,-26 L10,-18 L18,-16 L22,-6 L14,-8 L12,2 L6,8 L0,4 Z" fill="url(#leafGold)" stroke="#3a2808" stroke-width="0.5"/>
+    <path d="M0,4 L0,18 M0,4 L-12,2 M0,4 L12,2 M0,4 L-10,-18 M0,4 L10,-18 M0,4 L0,-22" stroke="#3a2808" stroke-width="0.4"/>
+  </g>
+
+  <g id="transitionLeafRust">
+    <path d="M0,18 L0,4 L-6,8 L-12,2 L-14,-8 L-22,-6 L-18,-16 L-10,-18 L-6,-26 L0,-22 L6,-26 L10,-18 L18,-16 L22,-6 L14,-8 L12,2 L6,8 L0,4 Z" fill="url(#leafRust)" stroke="#3a1808" stroke-width="0.5"/>
+    <path d="M0,4 L0,18 M0,4 L-12,2 M0,4 L12,2 M0,4 L-10,-18 M0,4 L10,-18 M0,4 L0,-22" stroke="#3a1808" stroke-width="0.4"/>
+  </g>
+
+  <g id="picnicCheck">
+    <rect x="0" y="0" width="6" height="6" fill="#c83028" stroke="#5a0808" stroke-width="0.2"/>
+    <rect x="6" y="0" width="6" height="6" fill="#fff4d8" stroke="#5a0808" stroke-width="0.2"/>
+    <rect x="12" y="0" width="6" height="6" fill="#c83028" stroke="#5a0808" stroke-width="0.2"/>
+    <rect x="18" y="0" width="6" height="6" fill="#fff4d8" stroke="#5a0808" stroke-width="0.2"/>
+    <rect x="24" y="0" width="6" height="6" fill="#c83028" stroke="#5a0808" stroke-width="0.2"/>
+    <rect x="30" y="0" width="6" height="6" fill="#fff4d8" stroke="#5a0808" stroke-width="0.2"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#picnicCheck" transform="translate(60,52)"/>
+  <use href="#picnicCheck" transform="translate(96,52)"/>
+  <use href="#picnicCheck" transform="translate(132,52)"/>
+  <use href="#picnicCheck" transform="translate(168,52)"/>
+  <use href="#picnicCheck" transform="translate(204,52)"/>
+  <use href="#picnicCheck" transform="translate(240,52)"/>
+  <use href="#picnicCheck" transform="translate(276,52)"/>
+  <use href="#picnicCheck" transform="translate(312,52)"/>
+  <use href="#picnicCheck" transform="translate(348,52)"/>
+  <use href="#picnicCheck" transform="translate(384,52)"/>
+  <use href="#picnicCheck" transform="translate(420,52)"/>
+  <use href="#picnicCheck" transform="translate(456,52)"/>
+  <use href="#picnicCheck" transform="translate(492,52)"/>
+  <use href="#picnicCheck" transform="translate(528,52)"/>
+  <use href="#picnicCheck" transform="translate(564,52)"/>
+  <use href="#picnicCheck" transform="translate(600,52)"/>
+  <use href="#picnicCheck" transform="translate(636,52)"/>
+  <use href="#picnicCheck" transform="translate(672,52)"/>
+  <use href="#picnicCheck" transform="translate(708,52)"/>
+  <use href="#picnicCheck" transform="translate(744,52)"/>
+  <use href="#picnicCheck" transform="translate(780,52)"/>
+  <use href="#picnicCheck" transform="translate(816,52)"/>
+  <use href="#picnicCheck" transform="translate(852,52)"/>
+  <use href="#picnicCheck" transform="translate(888,52)"/>
+  <use href="#sunflower" transform="translate(150,30)"/>
+  <use href="#sunflower" transform="translate(310,30) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(470,30)"/>
+  <use href="#sunflower" transform="translate(630,30) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(790,30)"/>
+  <use href="#sunflower" transform="translate(900,30) scale(1.1)"/>
+  <use href="#transitionLeafG" transform="translate(220,40) rotate(180)"/>
+  <use href="#transitionLeafGold" transform="translate(380,40) rotate(180)"/>
+  <use href="#transitionLeafRust" transform="translate(540,40) rotate(180)"/>
+  <use href="#transitionLeafGold" transform="translate(700,40) rotate(180)"/>
+  <use href="#transitionLeafG" transform="translate(840,40) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(110,40) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(250,40) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(420,40) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(580,40) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(740,40) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(880,40) rotate(180)"/>
+
+  <!-- BOTTOM -->
+  <use href="#picnicCheck" transform="translate(60,1444)"/>
+  <use href="#picnicCheck" transform="translate(96,1444)"/>
+  <use href="#picnicCheck" transform="translate(132,1444)"/>
+  <use href="#picnicCheck" transform="translate(168,1444)"/>
+  <use href="#picnicCheck" transform="translate(204,1444)"/>
+  <use href="#picnicCheck" transform="translate(240,1444)"/>
+  <use href="#picnicCheck" transform="translate(276,1444)"/>
+  <use href="#picnicCheck" transform="translate(312,1444)"/>
+  <use href="#picnicCheck" transform="translate(348,1444)"/>
+  <use href="#picnicCheck" transform="translate(384,1444)"/>
+  <use href="#picnicCheck" transform="translate(420,1444)"/>
+  <use href="#picnicCheck" transform="translate(456,1444)"/>
+  <use href="#picnicCheck" transform="translate(492,1444)"/>
+  <use href="#picnicCheck" transform="translate(528,1444)"/>
+  <use href="#picnicCheck" transform="translate(564,1444)"/>
+  <use href="#picnicCheck" transform="translate(600,1444)"/>
+  <use href="#picnicCheck" transform="translate(636,1444)"/>
+  <use href="#picnicCheck" transform="translate(672,1444)"/>
+  <use href="#picnicCheck" transform="translate(708,1444)"/>
+  <use href="#picnicCheck" transform="translate(744,1444)"/>
+  <use href="#picnicCheck" transform="translate(780,1444)"/>
+  <use href="#picnicCheck" transform="translate(816,1444)"/>
+  <use href="#picnicCheck" transform="translate(852,1444)"/>
+  <use href="#picnicCheck" transform="translate(888,1444)"/>
+  <use href="#sunflower" transform="translate(150,1470)"/>
+  <use href="#sunflower" transform="translate(310,1470) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(470,1470)"/>
+  <use href="#sunflower" transform="translate(630,1470) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(790,1470)"/>
+  <use href="#sunflower" transform="translate(900,1470) scale(1.1)"/>
+  <use href="#transitionLeafG" transform="translate(220,1462)"/>
+  <use href="#transitionLeafGold" transform="translate(380,1462)"/>
+  <use href="#transitionLeafRust" transform="translate(540,1462)"/>
+  <use href="#transitionLeafGold" transform="translate(700,1462)"/>
+  <use href="#transitionLeafG" transform="translate(840,1462)"/>
+  <use href="#wheatStalk" transform="translate(110,1460)"/>
+  <use href="#wheatStalk" transform="translate(250,1460)"/>
+  <use href="#wheatStalk" transform="translate(420,1460)"/>
+  <use href="#wheatStalk" transform="translate(580,1460)"/>
+  <use href="#wheatStalk" transform="translate(740,1460)"/>
+  <use href="#wheatStalk" transform="translate(880,1460)"/>
+
+  <!-- LEFT -->
+  <use href="#picnicCheck" transform="translate(52,60) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,96) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,132) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,168) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,204) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,240) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,276) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,312) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,348) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,384) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,420) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,456) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,492) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,528) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,564) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,600) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,636) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,672) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,708) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,744) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,780) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,816) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,852) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,888) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,924) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,960) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,996) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1032) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1068) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1104) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1140) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1176) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1212) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1248) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1284) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1320) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1356) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(52,1392) rotate(90)"/>
+  <use href="#sunflower" transform="translate(30,150)"/>
+  <use href="#sunflower" transform="translate(30,310) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(30,470)"/>
+  <use href="#sunflower" transform="translate(30,630) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(30,790)"/>
+  <use href="#sunflower" transform="translate(30,950) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(30,1110)"/>
+  <use href="#sunflower" transform="translate(30,1270) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(30,1400)"/>
+  <use href="#transitionLeafG" transform="translate(20,220) rotate(90)"/>
+  <use href="#transitionLeafGold" transform="translate(20,380) rotate(90)"/>
+  <use href="#transitionLeafRust" transform="translate(20,540) rotate(90)"/>
+  <use href="#transitionLeafGold" transform="translate(20,700) rotate(90)"/>
+  <use href="#transitionLeafG" transform="translate(20,860) rotate(90)"/>
+  <use href="#transitionLeafRust" transform="translate(20,1020) rotate(90)"/>
+  <use href="#transitionLeafGold" transform="translate(20,1180) rotate(90)"/>
+  <use href="#transitionLeafG" transform="translate(20,1340) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,110) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,250) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,420) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,580) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,740) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,900) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,1060) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,1220) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,1380) rotate(90)"/>
+
+  <!-- RIGHT -->
+  <use href="#picnicCheck" transform="translate(948,60) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,96) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,132) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,168) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,204) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,240) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,276) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,312) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,348) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,384) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,420) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,456) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,492) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,528) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,564) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,600) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,636) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,672) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,708) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,744) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,780) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,816) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,852) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,888) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,924) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,960) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,996) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1032) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1068) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1104) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1140) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1176) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1212) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1248) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1284) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1320) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1356) rotate(90)"/>
+  <use href="#picnicCheck" transform="translate(948,1392) rotate(90)"/>
+  <use href="#sunflower" transform="translate(970,150)"/>
+  <use href="#sunflower" transform="translate(970,310) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(970,470)"/>
+  <use href="#sunflower" transform="translate(970,630) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(970,790)"/>
+  <use href="#sunflower" transform="translate(970,950) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(970,1110)"/>
+  <use href="#sunflower" transform="translate(970,1270) scale(1.1)"/>
+  <use href="#sunflower" transform="translate(970,1400)"/>
+  <use href="#transitionLeafG" transform="translate(980,220) rotate(270)"/>
+  <use href="#transitionLeafGold" transform="translate(980,380) rotate(270)"/>
+  <use href="#transitionLeafRust" transform="translate(980,540) rotate(270)"/>
+  <use href="#transitionLeafGold" transform="translate(980,700) rotate(270)"/>
+  <use href="#transitionLeafG" transform="translate(980,860) rotate(270)"/>
+  <use href="#transitionLeafRust" transform="translate(980,1020) rotate(270)"/>
+  <use href="#transitionLeafGold" transform="translate(980,1180) rotate(270)"/>
+  <use href="#transitionLeafG" transform="translate(980,1340) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,110) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,250) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,420) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,580) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,740) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,900) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,1060) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,1220) rotate(270)"/>
+  <use href="#wheatStalk" transform="translate(980,1380) rotate(270)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(40,40)">
+    <use href="#sunflower" transform="translate(28,28) scale(1.5)"/>
+    <use href="#transitionLeafGold" transform="translate(64,18)"/>
+    <use href="#transitionLeafRust" transform="translate(18,64)"/>
+    <use href="#wheatStalk" transform="translate(56,48) rotate(45)"/>
+    <use href="#wheatStalk" transform="translate(48,56) rotate(-45)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#sunflower" transform="translate(-28,28) scale(1.5)"/>
+    <use href="#transitionLeafGold" transform="translate(-64,18)"/>
+    <use href="#transitionLeafRust" transform="translate(-18,64)"/>
+    <use href="#wheatStalk" transform="translate(-56,48) rotate(-45)"/>
+    <use href="#wheatStalk" transform="translate(-48,56) rotate(45)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#sunflower" transform="translate(28,-28) scale(1.5)"/>
+    <use href="#transitionLeafGold" transform="translate(64,-18)"/>
+    <use href="#transitionLeafRust" transform="translate(18,-64)"/>
+    <use href="#wheatStalk" transform="translate(56,-48) rotate(135)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#sunflower" transform="translate(-28,-28) scale(1.5)"/>
+    <use href="#transitionLeafGold" transform="translate(-64,-18)"/>
+    <use href="#transitionLeafRust" transform="translate(-18,-64)"/>
+    <use href="#wheatStalk" transform="translate(-56,-48) rotate(-135)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#c88838" stroke-width="1.4" fill="none"/>
+</svg>

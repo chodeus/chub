@@ -1,0 +1,2225 @@
+# modules/upgradinatorr.py
+
+import threading
+import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+from backend.util.arr import (
+    COMMAND_COMPLETED,
+    COMMAND_FAILED,
+    COMMAND_TIMEOUT,
+    COMMAND_UNREACHABLE,
+    BaseARRClient,
+    classify_queue_row,
+    create_arr_client,
+)
+from backend.util.base_module import ChubModule
+from backend.util.constants import (
+    QUEUE_REPORT_SECTIONS,
+    import_quality_text,
+    import_report_sections,
+    import_report_tally,
+    import_score_text,
+    queue_report_tally,
+)
+from backend.util.database import ChubDB
+from backend.util.database.upgradinatorr_grabs import UpgradinatorrGrabs
+from backend.util.database.upgradinatorr_progress import UpgradinatorrProgress
+from backend.util.helper import as_list, create_table, print_settings
+from backend.util.logger import Logger
+from backend.util.notification import NotificationManager
+
+VALID_STATUSES = {"continuing", "airing", "ended", "canceled", "released"}
+VALID_SEARCH_MODES = {"upgrade", "missing", "cutoff"}
+VALID_COUNT_MODES = {"series_artist", "season_album"}
+
+# Outcomes that mean "the *arr is behind", not "the search failed" — the run
+# stops and leaves the work untagged so the next run resumes it.
+DEFERRED_OUTCOMES = (COMMAND_TIMEOUT, COMMAND_UNREACHABLE)
+# Queued/running searches at which an instance is considered too busy to accept
+# more. The *arr runs them one at a time, so anything above this just backs up.
+SEARCH_BACKLOG_LIMIT = 3
+# Search commands to count when checking whether an instance is ready.
+SEARCH_COMMAND_NAMES = (
+    "MoviesSearch",
+    "MissingMoviesSearch",
+    "SeriesSearch",
+    "SeasonSearch",
+    "EpisodeSearch",
+    "MissingEpisodeSearch",
+    "AlbumSearch",
+    "ArtistSearch",
+    "MissingAlbumSearch",
+)
+# Bound on queue paging so a mispaginating *arr can't spin the run forever.
+QUEUE_MAX_PAGES = 50
+# Mirrors UpgradinatorrInstance.queue_block_hours.
+QUEUE_BLOCK_HOURS_DEFAULT = 72
+# How long a grab stays pending an import outcome. Also bounds the history
+# lookback: the window starts at the oldest grab still held.
+GRAB_RETENTION_DAYS = 7
+# Synthetic ids _history_record_to_download mints when an *arr reports no
+# downloadId. They can never match an import record, so they're never stored.
+SYNTHETIC_DOWNLOAD_ID_PREFIX = "history:"
+# How far an Upgrade delete may sit from the import that caused it. Measured
+# across a live Radarr/Sonarr history: 24/24 pairs landed within 1 second.
+UPGRADE_PAIR_WINDOW_SECONDS = 300
+
+
+class _BufferingLogger:
+    """Captures log calls in memory so parallel instances don't interleave
+    their output. ``flush_to()`` replays them to the real logger in order.
+
+    Thread-safe: an instance's DB worker thread can log through the same
+    buffer concurrently, so appends are guarded by a lock.
+    """
+
+    def __init__(self, real_logger: Any = None) -> None:
+        self._records: List[Tuple[str, Any, tuple, dict]] = []
+        self._lock = threading.Lock()
+        # Kept only so __getattr__ can delegate introspection/config calls
+        # (isEnabledFor, setLevel, name, ...). The explicit logging methods
+        # below are found via normal lookup and never reach __getattr__, so
+        # they stay buffered.
+        self._real_logger = real_logger
+
+    def _store(self, level: str, msg: Any, args: tuple, kwargs: dict) -> None:
+        with self._lock:
+            self._records.append((level, msg, args, kwargs, time.time()))
+
+    def debug(self, msg: Any, *args, **kwargs) -> None:
+        self._store("debug", msg, args, kwargs)
+
+    def info(self, msg: Any, *args, **kwargs) -> None:
+        self._store("info", msg, args, kwargs)
+
+    def warning(self, msg: Any, *args, **kwargs) -> None:
+        self._store("warning", msg, args, kwargs)
+
+    def error(self, msg: Any, *args, **kwargs) -> None:
+        self._store("error", msg, args, kwargs)
+
+    def exception(self, msg: Any, *args, **kwargs) -> None:
+        kwargs.setdefault("exc_info", True)
+        self._store("error", msg, args, kwargs)
+
+    def get_adapter(self, extra: Any = None) -> "_BufferingLogger":
+        """Stand in for Logger.get_adapter. The source context
+        (DATABASE/WORKER/...) is ignored — it is dropped on flush anyway,
+        since records replay through the real logger's plain level methods.
+        Returning self keeps every chained call buffered and in order, and is
+        chainable because self also provides get_adapter."""
+        return self
+
+    def heartbeat(self, msg: Any, *args, **kwargs) -> None:
+        self.info(f"[hb] {msg}", *args, **kwargs)
+
+    def log_outro(self) -> None:
+        # Only meaningful on the real logger; no-op while buffering.
+        pass
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate anything not explicitly defined (e.g. isEnabledFor,
+        setLevel, name) to the real logger so the buffer is a faithful
+        drop-in. Reads __dict__ directly to avoid recursing through
+        __getattr__ before _real_logger is set."""
+        real = self.__dict__.get("_real_logger")
+        if real is not None:
+            return getattr(real, name)
+        raise AttributeError(name)
+
+    def flush_to(self, logger: Any) -> None:
+        with self._lock:
+            records = list(self._records)
+            self._records.clear()
+        for level, msg, args, kwargs, created in records:
+            # Carry the original event time so replayed lines aren't all stamped
+            # with the flush time (SafeFormatter honours orig_created).
+            kwargs = dict(kwargs)
+            kwargs["extra"] = {**(kwargs.get("extra") or {}), "orig_created": created}
+            getattr(logger, level)(msg, *args, **kwargs)
+
+
+class Upgradinatorr(ChubModule):
+    def __init__(self, logger: Optional[Logger] = None) -> None:
+        # Set up the thread-local logger override before super().__init__ runs,
+        # since it assigns self.logger (routed through the property setter).
+        self._thread_local = threading.local()
+        self._real_logger: Any = None
+        super().__init__(logger=logger)
+
+    @property
+    def logger(self) -> Any:
+        """Return the per-thread buffering logger when one is active (parallel
+        instance processing), otherwise the real module logger."""
+        thread_local = getattr(self, "_thread_local", None)
+        if thread_local is not None:
+            buffered = getattr(thread_local, "logger", None)
+            if buffered is not None:
+                return buffered
+        return getattr(self, "_real_logger", None)
+
+    @logger.setter
+    def logger(self, value: Any) -> None:
+        self._real_logger = value
+
+    @staticmethod
+    def _get_setting(settings: Any, key: str, default: Any = None) -> Any:
+        if isinstance(settings, dict):
+            return settings.get(key, default)
+        return getattr(settings, key, default)
+
+    @staticmethod
+    def _coerce_hours(raw: Any) -> Optional[int]:
+        """A whole, non-negative hour count, or None when the value isn't one.
+        bool is excluded first — it is an int subclass, so True would read as 1."""
+        if raw is None or isinstance(raw, bool):
+            return None
+        if isinstance(raw, float):
+            raw = int(raw) if raw.is_integer() else None
+        elif isinstance(raw, str):
+            try:
+                raw = int(raw.strip())
+            except ValueError:
+                return None
+        if not isinstance(raw, int):
+            return None
+        return raw if raw >= 0 else None
+
+    def _queue_block_hours(self, settings: Any) -> int:
+        """Hours an unresolved download suppresses re-searching. Only an explicit
+        0 opts out — every unusable value falls back, never to 0."""
+        raw = self._get_setting(settings, "queue_block_hours", QUEUE_BLOCK_HOURS_DEFAULT)
+        hours = self._coerce_hours(raw)
+        if hours is not None:
+            return hours
+        if raw is not None and str(raw).strip():
+            self.logger.warning(
+                f"Invalid queue_block_hours {raw!r}; using "
+                f"{QUEUE_BLOCK_HOURS_DEFAULT}."
+            )
+        return QUEUE_BLOCK_HOURS_DEFAULT
+
+    @staticmethod
+    def _tag_names(item: Dict[str, Any]) -> set:
+        return {
+            str(tag).strip().lower()
+            for tag in item.get("tags", [])
+            if tag is not None and str(tag).strip()
+        }
+
+    def filter_media(
+        self,
+        media_dict: List[Dict[str, Any]],
+        checked_tag_name: str,
+        ignore_tag_name: Optional[str],
+        count: int,
+        season_monitored_threshold: int,
+        blocked_downloads: Optional[Dict[Tuple[Any, ...], str]] = None,
+    ) -> List[Dict[str, Any]]:
+        filtered_media_dict: List[Dict[str, Any]] = []
+        filter_count: int = 0
+        checked_tag = (checked_tag_name or "").strip().lower()
+        ignore_tag = (ignore_tag_name or "").strip().lower()
+        blocked = blocked_downloads or {}
+        for item in media_dict:
+            if filter_count == count:
+                break
+            item_tags = self._tag_names(item)
+            movie_key = ("movie", item["media_id"])
+            if (
+                checked_tag in item_tags
+                or (ignore_tag and ignore_tag in item_tags)
+                or not item["monitored"]
+                or item["status"] not in VALID_STATUSES
+                or movie_key in blocked
+            ):
+                reasons = []
+                if checked_tag in item_tags:
+                    reasons.append("tagged")
+                if ignore_tag and ignore_tag in item_tags:
+                    reasons.append("ignore")
+                if not item["monitored"]:
+                    reasons.append("unmonitored")
+                if item["status"] not in VALID_STATUSES:
+                    reasons.append(f"status={item['status']}")
+                if movie_key in blocked:
+                    reasons.append(blocked[movie_key])
+                self.logger.debug(
+                    f"Skipping {item['title']} ({item['year']}), Reason: {', '.join(reasons)}"
+                )
+                continue
+            if item["seasons"]:
+                series_monitored = False
+                for i, season in enumerate(item["seasons"]):
+                    monitored_count = 0
+                    for episode in season["episode_data"]:
+                        if episode["monitored"]:
+                            monitored_count += 1
+                    if len(season["episode_data"]) > 0:
+                        monitored_percentage = (
+                            monitored_count / len(season["episode_data"])
+                        ) * 100
+                    elif season.get("monitored"):
+                        # Lidarr albums (and other leaf-level seasons) carry no
+                        # sub-items — the season's own monitored flag is the
+                        # authoritative signal.
+                        monitored_percentage = 100
+                    else:
+                        self.logger.debug(
+                            f"Skipping {item['title']} ({item['year']}), Season {season.get('season_number', i)} unmonitored. Reason: No episodes in season."
+                        )
+                        continue
+                    if (
+                        season_monitored_threshold is not None
+                        and monitored_percentage < season_monitored_threshold
+                    ):
+                        item["seasons"][i]["monitored"] = False
+                        self.logger.debug(
+                            f"{item['title']}, Season {season.get('season_number', i)} unmonitored. Reason: monitored percentage {int(monitored_percentage)}% less than season_monitored_threshold {int(season_monitored_threshold)}%"
+                        )
+                    season_key = (
+                        ("album", season.get("album_id"))
+                        if season.get("album_id") is not None
+                        else ("season", item["media_id"], season.get("season_number"))
+                    )
+                    if item["seasons"][i]["monitored"] and season_key in blocked:
+                        item["seasons"][i]["monitored"] = False
+                        child_label = season.get("album_title") or (
+                            f"Season {season.get('season_number', i)}"
+                        )
+                        self.logger.debug(
+                            f"{item['title']}, {child_label} skipped. "
+                            f"Reason: {blocked[season_key]}"
+                        )
+                    if item["seasons"][i]["monitored"]:
+                        series_monitored = True
+                if not series_monitored:
+                    self.logger.debug(
+                        f"Skipping {item['title']} ({item['year']}), Status: {item['status']}, Monitored: {item['monitored']}, Tags: {item['tags']}"
+                    )
+                    continue
+            filtered_media_dict.append(item)
+            self.logger.debug(
+                f"Candidate: {item['title']} ({item['year']}) [ID: {item['media_id']}]"
+            )
+            filter_count += 1
+        return filtered_media_dict
+
+    def process_search_response(
+        self,
+        search_response: Optional[Dict[str, Any]],
+        media_id: int,
+        app: BaseARRClient,
+        label: str = "",
+    ) -> str:
+        """Wait on a fired search. Returns an arr COMMAND_* outcome — callers must
+        treat TIMEOUT/UNREACHABLE as "defer", NOT as a failure: the search is
+        still queued on the *arr and completes after we stop watching."""
+        if not search_response:
+            self.logger.warning(f"No search response for media ID: {media_id}")
+            return COMMAND_FAILED
+
+        command_id = search_response["id"]
+        self.logger.debug(
+            f"    [CMD] Waiting for command to complete for search response ID: {command_id}"
+        )
+        outcome = app.wait_for_command_result(command_id, label)
+        if outcome == COMMAND_COMPLETED:
+            self.logger.debug(
+                f"    [CMD] Command completed successfully for search response ID: {command_id}"
+            )
+        elif outcome in DEFERRED_OUTCOMES:
+            self.logger.warning(
+                f"    [CMD] Search {command_id} left {outcome} on {app.instance_name} — "
+                "staging it for the next run (the search itself was NOT lost)."
+            )
+        else:
+            self.logger.warning(
+                f"    [CMD] Command did not complete successfully for search response ID: {command_id}"
+            )
+        return outcome
+
+    @staticmethod
+    def _history_records(history_response: Any) -> Optional[List[Dict[str, Any]]]:
+        if history_response is None:
+            return None
+        if isinstance(history_response, dict):
+            return history_response.get("records", [])
+        if isinstance(history_response, list):
+            return history_response
+        return []
+
+    @staticmethod
+    def _queue_status_messages(record: Dict[str, Any]) -> List[str]:
+        """The *arr's own reasons for a queue row, flattened to plain strings."""
+        out: List[str] = []
+        for entry in as_list(record.get("statusMessages")):
+            if not isinstance(entry, dict):
+                continue
+            messages = [str(m).strip() for m in as_list(entry.get("messages")) if m]
+            if messages:
+                out.extend(messages)
+            elif entry.get("title"):
+                out.append(str(entry["title"]).strip())
+        # Every track in a release repeats the same rejection, so collapse them.
+        return list(dict.fromkeys(out))
+
+    @staticmethod
+    def _parse_arr_datetime(value: Any) -> Optional[datetime]:
+        """Parse an *arr UTC timestamp. Returns None when it isn't parseable —
+        callers must treat that as "unknown", never as "old"."""
+        if not value:
+            return None
+        text = str(value).strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    @classmethod
+    def _queue_row_age_hours(
+        cls, record: Dict[str, Any], now: Optional[datetime] = None
+    ) -> Optional[float]:
+        added = cls._parse_arr_datetime(record.get("added"))
+        if added is None:
+            return None
+        reference = now or datetime.now(timezone.utc)
+        return (reference - added).total_seconds() / 3600.0
+
+    @staticmethod
+    def _download_key(download: Dict[str, Any]) -> Tuple[str, str]:
+        return (
+            str(download.get("download_id") or ""),
+            str(download.get("download") or ""),
+        )
+
+    def _history_record_to_download(
+        self, record: Dict[str, Any], media_id: int
+    ) -> Optional[Dict[str, Any]]:
+        data = record.get("data") or {}
+        if not isinstance(data, dict):
+            data = {}
+
+        download = (
+            record.get("sourceTitle")
+            or record.get("title")
+            or data.get("sourceTitle")
+            or data.get("releaseTitle")
+            or data.get("downloadClientName")
+        )
+        if not download:
+            return None
+
+        score = record.get("customFormatScore")
+        if score is None:
+            score = data.get("customFormatScore")
+
+        return {
+            "download_id": record.get("downloadId")
+            or data.get("downloadId")
+            or f"history:{record.get('id', download)}",
+            "media_id": media_id,
+            "download": download,
+            "torrent_custom_format_score": score,
+        }
+
+    @staticmethod
+    def _is_grabbed_history(record: Dict[str, Any]) -> bool:
+        event_type = record.get("eventType")
+        if event_type is None:
+            return True
+        return str(event_type).strip().lower() in {"grabbed", "1"}
+
+    # History record field naming the item a grab belongs to, per *arr.
+    _HISTORY_OWNER_FIELD = {
+        "radarr": "movieId",
+        "sonarr": "seriesId",
+        "lidarr": "artistId",
+    }
+
+    @classmethod
+    def _record_in_scope(
+        cls,
+        record: Dict[str, Any],
+        instance_type: str,
+        media_id: int,
+        album_id: Optional[int],
+    ) -> bool:
+        """Drop a record whose owning id contradicts the request; a missing id is
+        kept. Guards against an *arr that ignores its history scope params."""
+        checks = [(cls._HISTORY_OWNER_FIELD.get(instance_type), media_id)]
+        if album_id is not None:
+            checks.append(("albumId", album_id))
+        for field, expected in checks:
+            actual = record.get(field) if field else None
+            if actual is not None and str(actual) != str(expected):
+                return False
+        return True
+
+    @staticmethod
+    def _record_search_attempt(
+        search_stats: Optional[Dict[str, int]], outcome: str
+    ) -> None:
+        if search_stats is None:
+            return
+        search_stats["searches_attempted"] = (
+            search_stats.get("searches_attempted", 0) + 1
+        )
+        if outcome == COMMAND_COMPLETED:
+            key = "searches_succeeded"
+        elif outcome in DEFERRED_OUTCOMES:
+            key = "searches_deferred"
+        else:
+            key = "searches_failed"
+        search_stats[key] = search_stats.get(key, 0) + 1
+
+    @staticmethod
+    def _deferred_count(search_stats: Optional[Dict[str, int]]) -> int:
+        return (search_stats or {}).get("searches_deferred", 0)
+
+    @staticmethod
+    def _record_search_failure(
+        failed_searches: Optional[Dict[int, List[str]]],
+        media_id: int,
+        label: str,
+    ) -> None:
+        if failed_searches is None:
+            return
+        failed_searches.setdefault(media_id, []).append(label)
+
+    def _get_grabbed_downloads(
+        self,
+        app: BaseARRClient,
+        media_id: int,
+        instance_type: str,
+        season_number: Optional[int] = None,
+        album_id: Optional[int] = None,
+    ) -> Optional[List[Dict[str, Any]]]:
+        try:
+            if (
+                instance_type == "sonarr"
+                and season_number is not None
+                and hasattr(app, "get_season_grab_history")
+            ):
+                history_response = app.get_season_grab_history(media_id, season_number)
+            elif (
+                instance_type == "lidarr"
+                and album_id is not None
+                and hasattr(app, "get_album_grab_history")
+            ):
+                history_response = app.get_album_grab_history(album_id)
+            elif hasattr(app, "get_grab_history"):
+                history_response = app.get_grab_history(media_id)
+            else:
+                return None
+        except Exception as e:
+            self.logger.warning(
+                f"Failed to fetch grab history for media ID {media_id}: {e}",
+                exc_info=True,
+            )
+            return None
+
+        records = self._history_records(history_response)
+        if records is None:
+            return None
+
+        downloads: List[Dict[str, Any]] = []
+        out_of_scope = 0
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            if not self._is_grabbed_history(record):
+                continue
+            if not self._record_in_scope(record, instance_type, media_id, album_id):
+                out_of_scope += 1
+                continue
+            download = self._history_record_to_download(record, media_id)
+            if download:
+                downloads.append(download)
+        if out_of_scope:
+            self.logger.warning(
+                f"Discarded {out_of_scope} history record(s) belonging to other media "
+                f"while reading grabs for {instance_type} ID {media_id} — "
+                f"{app.instance_name} ignored the history scope filter."
+            )
+        return downloads
+
+    def _capture_new_grabs(
+        self,
+        grabbed_downloads: Optional[Dict[int, List[Dict[str, Any]]]],
+        before_downloads: Optional[List[Dict[str, Any]]],
+        after_downloads: Optional[List[Dict[str, Any]]],
+        media_id: int,
+    ) -> None:
+        if (
+            grabbed_downloads is None
+            or before_downloads is None
+            or after_downloads is None
+        ):
+            return
+
+        before_keys = {self._download_key(download) for download in before_downloads}
+        existing_keys = {
+            self._download_key(download)
+            for download in grabbed_downloads.get(media_id, [])
+        }
+        for download in after_downloads:
+            key = self._download_key(download)
+            if key in before_keys or key in existing_keys:
+                continue
+            grabbed_downloads.setdefault(media_id, []).append(download)
+            existing_keys.add(key)
+
+    @staticmethod
+    def _history_lookback(pending: List[Dict[str, Any]]) -> str:
+        """Oldest pending grab, as a UTC stamp every *arr parses."""
+        stamps = [row.get("grabbed_at") for row in pending if row.get("grabbed_at")]
+        oldest = Upgradinatorr._parse_arr_datetime(min(stamps)) if stamps else None
+        if oldest is None:
+            oldest = datetime.now(timezone.utc) - timedelta(days=GRAB_RETENTION_DAYS)
+        return oldest.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def _collect_completed_imports(
+        self, app: BaseARRClient, grabs_db: UpgradinatorrGrabs
+    ) -> Tuple[List[Dict[str, Any]], Set[str]]:
+        """(completed imports, resolved download ids) for grabs that imported."""
+        # Each entry carries ``replaced``. Fails closed: an unreadable history
+        # leaves grabs pending rather than resolving them as "nothing imported".
+        grabs_db.prune(app.instance_name, GRAB_RETENTION_DAYS)
+        pending = grabs_db.pending(app.instance_name)
+        if not pending:
+            return [], set()
+        pair_field = getattr(app, "upgrade_pair_field", None)
+        import_event = getattr(app, "history_import_event", None)
+        delete_event = getattr(app, "history_upgrade_delete_event", None)
+        if not pair_field or import_event is None or delete_event is None:
+            self.logger.debug(
+                f"{app.instance_name} maps no history events; skipping the "
+                "completed-import report."
+            )
+            return [], set()
+        since = self._history_lookback(pending)
+        imports = app.get_history_since(since, import_event)
+        deletes = app.get_history_since(since, delete_event)
+        if not isinstance(imports, list) or not isinstance(deletes, list):
+            self.logger.warning(
+                f"Could not read {app.instance_name} history since {since}; "
+                f"{len(pending)} grab(s) stay pending for the next run."
+            )
+            return [], set()
+
+        # A file deleted "for Upgrade" separates an upgrade from a first
+        # acquisition. Both are reported, so search_mode never matters here.
+        replaced: Dict[Any, List[Tuple[datetime, Dict[str, Any]]]] = {}
+        for record in deletes:
+            if not isinstance(record, dict):
+                continue
+            reason = str((record.get("data") or {}).get("reason") or "").strip().lower()
+            key = record.get(pair_field)
+            when = self._parse_arr_datetime(record.get("date"))
+            if reason == "upgrade" and key is not None and when is not None:
+                replaced.setdefault(key, []).append((when, record))
+
+        by_download_id = {str(row["download_id"]): row for row in pending}
+        ours = [
+            record
+            for record in imports
+            if isinstance(record, dict)
+            and str(record.get("downloadId") or "") in by_download_id
+        ]
+        ours.sort(key=lambda record: str(record.get("date") or ""))
+        paired = self._pair_upgrades(ours, pair_field, replaced)
+
+        # One grab imports as several records (a Sonarr season pack, one per
+        # episode); take paired first, or a pack that replaced reads as acquired.
+        order = sorted(range(len(ours)), key=lambda index: (index not in paired, index))
+        completed_by_download: Dict[str, Dict[str, Any]] = {}
+        for index in order:
+            record = ours[index]
+            download_id = str(record.get("downloadId"))
+            if download_id in completed_by_download:
+                continue
+            grab = by_download_id[download_id]
+            score = record.get("customFormatScore")
+            deleted = paired.get(index)
+            completed_by_download[download_id] = {
+                "media_id": grab.get("media_id"),
+                "title": grab.get("title"),
+                "year": grab.get("year"),
+                "download": grab.get("release_title"),
+                "score": grab.get("score") if score is None else score,
+                "previous_score": (deleted or {}).get("customFormatScore"),
+                "quality": self._quality_name(record),
+                "previous_quality": self._quality_name(deleted or {}),
+                "replaced": deleted is not None,
+            }
+        # Resolved, but deliberately NOT cleared here: an *arr call later in the
+        # run can still abort it and discard this report, and a cleared grab can
+        # never be reported again. The caller settles them on a path that returns.
+        resolved = {str(record.get("downloadId")) for record in ours}
+        return list(completed_by_download.values()), resolved
+
+    @staticmethod
+    def _quality_name(record: Dict[str, Any]) -> Optional[str]:
+        """The *arr's quality name for a history record, e.g. ``Remux-1080p``."""
+        quality = (record.get("quality") or {}).get("quality") or {}
+        return quality.get("name")
+
+    @classmethod
+    def _pair_upgrades(
+        cls,
+        records: List[Dict[str, Any]],
+        pair_field: str,
+        replaced: Dict[Any, List[Tuple[datetime, Dict[str, Any]]]],
+    ) -> Dict[int, Dict[str, Any]]:
+        """Import index -> the delete record it replaced, for imports that upgraded.
+
+        An *arr deletes the outgoing file as it imports the replacement; across
+        a live Radarr/Sonarr history every pair landed within 1s. The closest
+        pair wins OUTRIGHT rather than first-come — two releases of one episode
+        can import a second apart against a single delete, and awarding it by
+        time order credits the release that was itself the one replaced. Each
+        delete is claimed once, so no file counts as replaced twice.
+        """
+        candidates: List[Tuple[float, int, Any, int]] = []
+        for index, record in enumerate(records):
+            when = cls._parse_arr_datetime(record.get("date"))
+            key = record.get(pair_field)
+            if when is None or key is None:
+                continue
+            for slot, (deleted_at, _deleted) in enumerate(replaced.get(key) or []):
+                delta = abs((deleted_at - when).total_seconds())
+                if delta <= UPGRADE_PAIR_WINDOW_SECONDS:
+                    candidates.append((delta, index, key, slot))
+        candidates.sort(key=lambda candidate: (candidate[0], candidate[1]))
+        paired: Dict[int, Dict[str, Any]] = {}
+        taken: Set[Tuple[Any, int]] = set()
+        for _delta, index, key, slot in candidates:
+            if index in paired or (key, slot) in taken:
+                continue
+            taken.add((key, slot))
+            paired[index] = replaced[key][slot][1]
+        return paired
+
+    def _process_sonarr_item(
+        self,
+        item: Dict[str, Any],
+        app: BaseARRClient,
+        checked_tag_id: int,
+        count: int,
+        granular: bool,
+        progress_db: Optional[UpgradinatorrProgress],
+        search_count: int,
+        grabbed_downloads: Optional[Dict[int, List[Dict[str, Any]]]] = None,
+        failed_searches: Optional[Dict[int, List[str]]] = None,
+        search_stats: Optional[Dict[str, int]] = None,
+    ) -> Tuple[int, bool]:
+        """Handle one Sonarr series. Returns (new_search_count, budget_hit).
+
+        In series_artist mode: searches every monitored season then tags the
+        series once, counting it as a single search toward the budget.
+
+        In season_album mode: each monitored season is a separate search counted
+        against the budget. Already-processed seasons (from a previous run) are
+        skipped via the progress table. The series is only tagged once every
+        monitored season has been searched in this rotation."""
+        if not granular:
+            searched = False
+            all_successful = True
+            deferred = False
+            for season in item["seasons"]:
+                if season["monitored"]:
+                    season_number = season["season_number"]
+                    self.logger.debug(
+                        f"[SEARCH] {item['title']} S{season_number}"
+                    )
+                    before_downloads = self._get_grabbed_downloads(
+                        app, item["media_id"], "sonarr", season_number
+                    )
+                    search_response = app.search_season(item["media_id"], season_number)
+                    outcome = self.process_search_response(
+                        search_response,
+                        item["media_id"],
+                        app,
+                        f"{item['title']} S{season_number}",
+                    )
+                    self._record_search_attempt(search_stats, outcome)
+                    if outcome == COMMAND_COMPLETED:
+                        after_downloads = self._get_grabbed_downloads(
+                            app, item["media_id"], "sonarr", season_number
+                        )
+                        self._capture_new_grabs(
+                            grabbed_downloads,
+                            before_downloads,
+                            after_downloads,
+                            item["media_id"],
+                        )
+                    elif outcome in DEFERRED_OUTCOMES:
+                        all_successful = False
+                        deferred = True
+                        searched = True
+                        break
+                    else:
+                        all_successful = False
+                        self._record_search_failure(
+                            failed_searches, item["media_id"], f"Season {season_number}"
+                        )
+                    searched = True
+            if searched:
+                search_count += 1
+                if all_successful:
+                    self.logger.debug(
+                        f"[TAG] {item['title']} += {checked_tag_id}"
+                    )
+                    app.add_tags(item["media_id"], checked_tag_id)
+                    if progress_db is not None:
+                        # Clean up any stale progress rows from a prior granular run.
+                        progress_db.clear_for_media(app.instance_name, item["media_id"])
+                elif deferred:
+                    self.logger.warning(
+                        f"Not tagging {self._format_item_title(item)} yet — "
+                        f"{app.instance_name} is still working through the searches."
+                    )
+                else:
+                    self.logger.warning(
+                        f"Not tagging {self._format_item_title(item)} because one or more "
+                        "season searches failed."
+                    )
+            return search_count, search_count >= count
+
+        # Granular: per-season counting + resume support.
+        processed = (
+            progress_db.get_processed_children(app.instance_name, item["media_id"])
+            if progress_db is not None
+            else set()
+        )
+        monitored_seasons = sorted(
+            (s for s in item["seasons"] if s.get("monitored")),
+            key=lambda s: s.get("season_number", 0),
+        )
+        remaining = [
+            s for s in monitored_seasons if str(s["season_number"]) not in processed
+        ]
+        if not monitored_seasons:
+            return search_count, False
+        if not remaining:
+            # All monitored seasons searched in earlier runs — finalize.
+            self.logger.debug(
+                f"[TAG] {item['title']} += {checked_tag_id} (all seasons already processed)"
+            )
+            app.add_tags(item["media_id"], checked_tag_id)
+            if progress_db is not None:
+                progress_db.clear_for_media(app.instance_name, item["media_id"])
+            return search_count, False
+
+        for season in remaining:
+            season_number = season["season_number"]
+            # Per-season detail stays at DEBUG — at INFO this is one line per
+            # season and floods the log on large libraries.
+            self.logger.debug(
+                f"  [SEASON] {item['title']} S{season_number}: Searching..."
+            )
+            before_downloads = self._get_grabbed_downloads(
+                app, item["media_id"], "sonarr", season_number
+            )
+            search_response = app.search_season(item["media_id"], season_number)
+            outcome = self.process_search_response(
+                search_response,
+                item["media_id"],
+                app,
+                f"{item['title']} S{season_number}",
+            )
+            self._record_search_attempt(search_stats, outcome)
+            if outcome == COMMAND_COMPLETED:
+                after_downloads = self._get_grabbed_downloads(
+                    app, item["media_id"], "sonarr", season_number
+                )
+                self._capture_new_grabs(
+                    grabbed_downloads,
+                    before_downloads,
+                    after_downloads,
+                    item["media_id"],
+                )
+            elif outcome in DEFERRED_OUTCOMES:
+                # Untagged + unrecorded, so the next run resumes at this season.
+                return search_count, True
+            else:
+                self._record_search_failure(
+                    failed_searches, item["media_id"], f"Season {season_number}"
+                )
+            if outcome == COMMAND_COMPLETED and progress_db is not None:
+                progress_db.record_processed_child(
+                    app.instance_name, item["media_id"], str(season_number)
+                )
+            search_count += 1
+            if search_count >= count:
+                # Cut off mid-series: leave untagged so next run resumes here.
+                return search_count, True
+
+        if failed_searches and failed_searches.get(item["media_id"]):
+            self.logger.warning(
+                f"Not tagging {self._format_item_title(item)} because one or more "
+                "season searches failed."
+            )
+            return search_count, False
+
+        # Finished every monitored season this rotation — tag and clear progress.
+        self.logger.debug(
+            f"[TAG] {item['title']} += {checked_tag_id} (all seasons searched)"
+        )
+        app.add_tags(item["media_id"], checked_tag_id)
+        if progress_db is not None:
+            progress_db.clear_for_media(app.instance_name, item["media_id"])
+        return search_count, search_count >= count
+
+    def _process_lidarr_item(
+        self,
+        item: Dict[str, Any],
+        app: BaseARRClient,
+        checked_tag_id: int,
+        count: int,
+        granular: bool,
+        progress_db: Optional[UpgradinatorrProgress],
+        search_count: int,
+        grabbed_downloads: Optional[Dict[int, List[Dict[str, Any]]]] = None,
+        failed_searches: Optional[Dict[int, List[str]]] = None,
+        search_stats: Optional[Dict[str, int]] = None,
+    ) -> Tuple[int, bool]:
+        """Handle one Lidarr artist. Returns (new_search_count, budget_hit).
+        Mirrors _process_sonarr_item but operates on albums (album_id is the
+        child key in the progress table)."""
+        if not granular:
+            searched = False
+            all_successful = True
+            deferred = False
+            for album in item["seasons"]:
+                if album.get("monitored", False):
+                    album_id = album.get("album_id")
+                    album_title = album.get(
+                        "album_title", f"Album #{album.get('season_number', '?')}"
+                    )
+                    if album_id:
+                        self.logger.debug(
+                            f"[SEARCH] {item['title']} — {album_title}"
+                        )
+                        before_downloads = self._get_grabbed_downloads(
+                            app, item["media_id"], "lidarr", album_id=album_id
+                        )
+                        search_response = app.search_album(album_id)
+                        outcome = self.process_search_response(
+                            search_response,
+                            item["media_id"],
+                            app,
+                            f"{item['title']} — {album_title}",
+                        )
+                        self._record_search_attempt(search_stats, outcome)
+                        if outcome == COMMAND_COMPLETED:
+                            after_downloads = self._get_grabbed_downloads(
+                                app, item["media_id"], "lidarr", album_id=album_id
+                            )
+                            self._capture_new_grabs(
+                                grabbed_downloads,
+                                before_downloads,
+                                after_downloads,
+                                item["media_id"],
+                            )
+                        elif outcome in DEFERRED_OUTCOMES:
+                            all_successful = False
+                            deferred = True
+                            searched = True
+                            break
+                        else:
+                            all_successful = False
+                            self._record_search_failure(
+                                failed_searches,
+                                item["media_id"],
+                                f"Album {album_title}",
+                            )
+                        searched = True
+            if searched:
+                search_count += 1
+                if all_successful:
+                    self.logger.debug(
+                        f"[TAG] {item['title']} += {checked_tag_id}"
+                    )
+                    app.add_tags(item["media_id"], checked_tag_id)
+                    if progress_db is not None:
+                        progress_db.clear_for_media(app.instance_name, item["media_id"])
+                elif deferred:
+                    self.logger.warning(
+                        f"Not tagging {item['title']} yet — {app.instance_name} is "
+                        "still working through the searches."
+                    )
+                else:
+                    self.logger.warning(
+                        f"Not tagging {item['title']} because one or more album searches failed."
+                    )
+            return search_count, search_count >= count
+
+        # Granular: per-album counting + resume support.
+        processed = (
+            progress_db.get_processed_children(app.instance_name, item["media_id"])
+            if progress_db is not None
+            else set()
+        )
+        monitored_albums = [
+            a for a in item["seasons"] if a.get("monitored") and a.get("album_id")
+        ]
+        remaining = [a for a in monitored_albums if str(a["album_id"]) not in processed]
+        if not monitored_albums:
+            return search_count, False
+        if not remaining:
+            self.logger.debug(
+                f"[TAG] {item['title']} += {checked_tag_id} (all albums already processed)"
+            )
+            app.add_tags(item["media_id"], checked_tag_id)
+            if progress_db is not None:
+                progress_db.clear_for_media(app.instance_name, item["media_id"])
+            return search_count, False
+
+        for album in remaining:
+            album_id = album["album_id"]
+            album_title = album.get(
+                "album_title", f"Album #{album.get('season_number', '?')}"
+            )
+            self.logger.debug(
+                f"  [ALBUM] {item['title']} — {album_title}: Searching..."
+            )
+            before_downloads = self._get_grabbed_downloads(
+                app, item["media_id"], "lidarr", album_id=album_id
+            )
+            search_response = app.search_album(album_id)
+            outcome = self.process_search_response(
+                search_response,
+                item["media_id"],
+                app,
+                f"{item['title']} — {album_title}",
+            )
+            self._record_search_attempt(search_stats, outcome)
+            if outcome == COMMAND_COMPLETED:
+                after_downloads = self._get_grabbed_downloads(
+                    app, item["media_id"], "lidarr", album_id=album_id
+                )
+                self._capture_new_grabs(
+                    grabbed_downloads,
+                    before_downloads,
+                    after_downloads,
+                    item["media_id"],
+                )
+            elif outcome in DEFERRED_OUTCOMES:
+                # Untagged + unrecorded, so the next run resumes at this album.
+                return search_count, True
+            else:
+                self._record_search_failure(
+                    failed_searches, item["media_id"], f"Album {album_title}"
+                )
+            if outcome == COMMAND_COMPLETED and progress_db is not None:
+                progress_db.record_processed_child(
+                    app.instance_name, item["media_id"], str(album_id)
+                )
+            search_count += 1
+            if search_count >= count:
+                return search_count, True
+
+        if failed_searches and failed_searches.get(item["media_id"]):
+            self.logger.warning(
+                f"Not tagging {item['title']} because one or more album searches failed."
+            )
+            return search_count, False
+
+        self.logger.debug(
+            f"[TAG] {item['title']} += {checked_tag_id} (all albums searched)"
+        )
+        app.add_tags(item["media_id"], checked_tag_id)
+        if progress_db is not None:
+            progress_db.clear_for_media(app.instance_name, item["media_id"])
+        return search_count, search_count >= count
+
+    def process_queue(
+        self, queue: Dict[str, Any], instance_type: str, media_ids: List[int]
+    ) -> List[Dict[str, Any]]:
+        id_type = {"radarr": "movieId", "sonarr": "seriesId", "lidarr": "artistId"}[
+            instance_type
+        ]
+        queue_dict: List[Dict[str, Any]] = []
+        seen: Set[Tuple[Any, Any]] = set()
+        records = queue.get("records", [])
+        for item in records:
+            media_id = item.get(id_type)
+            if media_id not in media_ids:
+                continue
+            if "downloadId" not in item:
+                continue
+            key = (item["downloadId"], item.get("title"))
+            if key in seen:
+                continue
+            seen.add(key)
+            queue_dict.append(
+                {
+                    "download_id": item["downloadId"],
+                    "media_id": media_id,
+                    "download": item.get("title"),
+                    "torrent_custom_format_score": item.get("customFormatScore"),
+                    "state": classify_queue_row(item),
+                    "added": item.get("added"),
+                    "messages": self._queue_status_messages(item),
+                }
+            )
+        return queue_dict
+
+    @staticmethod
+    def _queue_record_keys(
+        record: Dict[str, Any], instance_type: str
+    ) -> List[Tuple[Any, ...]]:
+        """Search targets one queue row covers, namespaced by kind so a movie id
+        can't collide with an album id."""
+        if instance_type == "radarr":
+            movie_id = record.get("movieId")
+            return [("movie", movie_id)] if movie_id is not None else []
+        if instance_type == "lidarr":
+            album_id = record.get("albumId")
+            return [("album", album_id)] if album_id is not None else []
+        if instance_type == "sonarr":
+            series_id = record.get("seriesId")
+            if series_id is None:
+                return []
+            seasons = record.get("seasonNumbers")
+            if seasons is None and record.get("seasonNumber") is not None:
+                seasons = [record["seasonNumber"]]
+            # Some Sonarr rows carry neither field; without a season we can't
+            # tell which search to suppress, so leave the series searchable.
+            return [("season", series_id, season) for season in as_list(seasons)]
+        return []
+
+    def _fetch_queue_records(self, app: BaseARRClient) -> Optional[List[Dict[str, Any]]]:
+        """Every queue row across all pages, or None when the queue can't be
+        read. A single page would leave later rows unsuppressed and re-searched."""
+        page_size = 200
+        out: List[Dict[str, Any]] = []
+        for page in range(1, QUEUE_MAX_PAGES + 1):
+            try:
+                queue = app.get_queue(page=page, page_size=page_size)
+            except Exception as e:
+                self.logger.warning(
+                    f"Could not read the {app.instance_name} queue ({e})."
+                )
+                return None
+            # None/""/[] is a failed page, not the end of the queue — breaking
+            # here would suppress from a partial read.
+            if not isinstance(queue, dict):
+                self.logger.warning(
+                    f"{app.instance_name} returned a {type(queue).__name__} for "
+                    "its queue, not the expected object."
+                )
+                return None
+            records = queue.get("records")
+            if records is not None and not isinstance(records, list):
+                self.logger.warning(
+                    f"{app.instance_name} returned a non-list queue 'records' field."
+                )
+                return None
+            page_rows = as_list(records)
+            out.extend(r for r in page_rows if isinstance(r, dict))
+            # A short page is the end of the queue and doesn't depend on
+            # totalRecords, which the *arrs report stale.
+            if len(page_rows) < page_size:
+                return out
+        # Same rule as a failed page: a partial snapshot would suppress only the
+        # rows we happened to read and re-search the rest.
+        self.logger.warning(
+            f"Stopped reading the {app.instance_name} queue at "
+            f"{QUEUE_MAX_PAGES} pages; searching without the guard."
+        )
+        return None
+
+    def _queue_blocked_downloads(
+        self, app: BaseARRClient, instance_type: str, block_hours: int
+    ) -> Tuple[Dict[Tuple[Any, ...], str], Dict[int, List[Dict[str, Any]]]]:
+        """Search targets holding an unresolved download: (key -> reason) plus the
+        queue rows per parent. Fails OPEN so a bad queue can't stall searching."""
+        blocked: Dict[Tuple[Any, ...], str] = {}
+        rows: Dict[int, List[Dict[str, Any]]] = {}
+        if not block_hours or block_hours <= 0:
+            return blocked, rows
+        records = self._fetch_queue_records(app)
+        if records is None:
+            self.logger.warning(
+                f"Searching {app.instance_name} without the in-flight-download guard."
+            )
+            return blocked, rows
+        owner_field = self._HISTORY_OWNER_FIELD.get(instance_type)
+        now = datetime.now(timezone.utc)
+        for record in records:
+            state = classify_queue_row(record)
+            if state == "done":
+                continue
+            age = self._queue_row_age_hours(record, now)
+            if age is None or age > block_hours:
+                continue
+            keys = self._queue_record_keys(record, instance_type)
+            if not keys:
+                continue
+            label = "awaiting import" if state == "pending" else "import stuck"
+            for key in keys:
+                blocked.setdefault(key, f"{label} for {age:.0f}h")
+            media_id = record.get(owner_field) if owner_field else None
+            if media_id is None:
+                continue
+            rows.setdefault(media_id, []).append(
+                {
+                    "state": state,
+                    "download": record.get("title"),
+                    "torrent_custom_format_score": record.get("customFormatScore"),
+                    "age_hours": age,
+                    "messages": self._queue_status_messages(record),
+                }
+            )
+        return blocked, rows
+
+    def _get_all_wanted(
+        self, app: BaseARRClient, search_mode: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Fetch all pages from the wanted/missing or wanted/cutoff endpoint.
+
+        Page 1 is fetched first (it reports totalRecords); the remaining pages
+        are fetched concurrently on private sessions (threadsafe=True) since
+        they're independent and the client's shared session is not thread-safe.
+        """
+        page_size = 200
+        fetch_fn = (
+            app.get_wanted_missing
+            if search_mode == "missing"
+            else app.get_wanted_cutoff
+        )
+
+        first = fetch_fn(page=1, page_size=page_size)
+        if first is None:
+            self.logger.warning(
+                f"Failed to fetch {search_mode} page 1 from {app.instance_name}; "
+                "aborting this Upgradinatorr profile."
+            )
+            return None
+        if not first:
+            return []
+
+        all_records: List[Dict[str, Any]] = list(first.get("records", []))
+        total = first.get("totalRecords", 0)
+        # A page shorter than page_size is the definitive end-of-list signal and
+        # does not depend on totalRecords (which the ARR endpoints can report
+        # stale or under-counted for the monitored-filtered view).
+        if len(all_records) < page_size:
+            return all_records
+
+        # Use totalRecords only as a hint for how many pages to fetch
+        # concurrently; always fetch at least page 2 so an under-reported total
+        # can't truncate the list, and verify the tail sequentially below.
+        last_page = max(2, -(-total // page_size))  # ceil division
+        remaining_pages = list(range(2, last_page + 1))
+
+        pages: Dict[int, List[Dict[str, Any]]] = {}
+        failed = False
+
+        def fetch(page: int):
+            return page, fetch_fn(page=page, page_size=page_size, threadsafe=True)
+
+        workers = min(8, len(remaining_pages))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(fetch, p): p for p in remaining_pages}
+            for future in as_completed(futures):
+                page, result = future.result()
+                if result is None:
+                    self.logger.warning(
+                        f"Failed to fetch {search_mode} page {page} from "
+                        f"{app.instance_name}; aborting this Upgradinatorr profile."
+                    )
+                    failed = True
+                else:
+                    pages[page] = result.get("records", [])
+
+        if failed:
+            return None
+
+        # Reassemble in page order so output is deterministic.
+        for p in remaining_pages:
+            all_records.extend(pages.get(p, []))
+
+        # Guard against an under-reported totalRecords: if the last computed
+        # page still came back full, more records may exist beyond it. Page
+        # sequentially until a short/empty page confirms the true end.
+        tail = pages.get(last_page, [])
+        next_page = last_page + 1
+        while len(tail) >= page_size:
+            result = fetch_fn(page=next_page, page_size=page_size, threadsafe=True)
+            if result is None:
+                self.logger.warning(
+                    f"Failed to fetch {search_mode} page {next_page} from "
+                    f"{app.instance_name}; aborting this Upgradinatorr profile."
+                )
+                return None
+            tail = result.get("records", [])
+            all_records.extend(tail)
+            next_page += 1
+
+        return all_records
+
+    def _convert_wanted_to_media_dict(
+        self,
+        wanted_records: List[Dict[str, Any]],
+        instance_type: str,
+        app: BaseARRClient,
+    ) -> List[Dict[str, Any]]:
+        """Convert wanted/missing or wanted/cutoff records into the same dict format
+        that filter_media() expects. For Sonarr, groups episodes by series.
+        For Radarr, records are already movie-level. For Lidarr, records are album-level
+        and get grouped by artist."""
+        if instance_type == "radarr":
+            tags = app.get_all_tags() or []
+            from backend.util.arr import normalize_arr_media
+
+            return [
+                normalize_arr_media(item, tags, arr_type="radarr", logger=self.logger)
+                for item in wanted_records
+            ]
+
+        elif instance_type == "sonarr":
+            # Sonarr wanted endpoints return episodes — group by series
+            series_map: Dict[int, Dict[str, Any]] = {}
+            for ep in wanted_records:
+                series_data = ep.get("series", {})
+                series_id = series_data.get("id")
+                if series_id is None:
+                    continue
+                if series_id not in series_map:
+                    series_map[series_id] = series_data
+                    series_map[series_id]["_wanted_seasons"] = set()
+                season_num = ep.get("seasonNumber")
+                if season_num is not None:
+                    series_map[series_id]["_wanted_seasons"].add(season_num)
+
+            # Normalize each unique series
+            tags = app.get_all_tags() or []
+            from backend.util.arr import normalize_arr_media
+
+            # Prefetch every series' episodes in parallel (one call per series)
+            # instead of one blocking call per season inside normalization.
+            episode_map: Dict[int, Dict[int, List[Dict[str, Any]]]] = {}
+            if hasattr(app, "_fetch_episodes_by_series"):
+                episode_map = app._fetch_episodes_by_series(list(series_map.keys()))
+
+            def _wanted_episode_lookup(sid, sn, _map=episode_map):
+                return _map.get(sid, {}).get(sn, [])
+
+            result = []
+            for series_data in series_map.values():
+                wanted_seasons = series_data.pop("_wanted_seasons", set())
+                normalized = normalize_arr_media(
+                    series_data,
+                    tags,
+                    arr_type="sonarr",
+                    include_episode=True,
+                    episode_lookup=_wanted_episode_lookup,
+                    logger=self.logger,
+                )
+                # Mark only the wanted seasons as monitored, rest as unmonitored
+                if normalized.get("seasons"):
+                    for season in normalized["seasons"]:
+                        if season["season_number"] not in wanted_seasons:
+                            season["monitored"] = False
+                result.append(normalized)
+            return result
+
+        elif instance_type == "lidarr":
+            # Lidarr wanted endpoints return albums — group by artist
+            artist_map: Dict[int, Dict[str, Any]] = {}
+            for album in wanted_records:
+                artist_data = album.get("artist", {})
+                artist_id = artist_data.get("id")
+                if artist_id is None:
+                    continue
+                if artist_id not in artist_map:
+                    artist_map[artist_id] = artist_data
+                    artist_map[artist_id]["_wanted_albums"] = []
+                artist_map[artist_id]["_wanted_albums"].append(album)
+
+            tags = app.get_all_tags() or []
+            from backend.util.arr import normalize_arr_media
+
+            result = []
+            for artist_data in artist_map.values():
+                wanted_albums = artist_data.pop("_wanted_albums", [])
+                # Build album list for the normalize function
+                album_list = []
+                for idx, album in enumerate(wanted_albums):
+                    album_list.append(
+                        {
+                            "season_number": idx,
+                            "album_id": album.get("id"),
+                            "album_title": album.get("title", ""),
+                            "foreign_album_id": album.get("foreignAlbumId", ""),
+                            "monitored": album.get("monitored", True),
+                            "episode_data": [],
+                        }
+                    )
+                normalized = normalize_arr_media(
+                    artist_data,
+                    tags,
+                    arr_type="lidarr",
+                    logger=self.logger,
+                )
+                normalized["seasons"] = album_list if album_list else None
+                result.append(normalized)
+            return result
+
+        return []
+
+    @staticmethod
+    def _new_output(
+        server_name: str, completed: List[Dict[str, Any]], resolved: Set[str]
+    ) -> Dict[str, Any]:
+        """The per-instance result shape. One definition so a bail-out and a full
+        run can't drift apart."""
+        return {
+            "server_name": server_name,
+            "tagged_count": 0,
+            "untagged_count": 0,
+            "total_count": 0,
+            "searches_attempted": 0,
+            "searches_succeeded": 0,
+            "searches_failed": 0,
+            "searches_deferred": 0,
+            "data": [],
+            # Grabs from EARLIER runs whose download imported, upgrade or
+            # first acquisition. This run's own grabs haven't downloaded yet.
+            "completed": completed,
+            # Grabs this result accounts for. run() pops it once print_output
+            # has written the report, so it never reaches a notification.
+            "resolved_grabs": sorted(resolved),
+        }
+
+    def _settle_grabs(self, instance_name: str, resolved: Any) -> None:
+        """Forget grabs whose report has been written.
+
+        A failed clear re-reports next run, which beats never reporting.
+        """
+        if not resolved or self.config.dry_run:
+            return
+        try:
+            with ChubDB(logger=self.logger) as grabs_ctx:
+                grabs_ctx.upgradinatorr_grabs.clear(instance_name, resolved)
+        except Exception as e:
+            self.logger.warning(
+                f"Could not clear settled grabs for {instance_name} ({e}); "
+                "they are reconciled again next run."
+            )
+
+    def _settle_reported_grabs(self, output: Dict[str, Any]) -> None:
+        """Settle only AFTER print_output has written the report.
+
+        The run log is this module's durable handoff, and it is written well
+        after process_instance returns — settling any earlier can drop an
+        import that was never reported anywhere.
+        """
+        for run_data in output.values():
+            if not isinstance(run_data, dict):
+                continue
+            self._settle_grabs(
+                run_data.get("server_name", ""), run_data.pop("resolved_grabs", None)
+            )
+
+    def _completed_only(
+        self, app: BaseARRClient, completed: List[Dict[str, Any]], resolved: Set[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Result for a run with nothing left to search, carrying any import the
+        reconcile confirmed — returning None here would drop it."""
+        if not completed:
+            # Nothing to report, so nothing to lose by settling now.
+            self._settle_grabs(app.instance_name, resolved)
+            return None
+        self.logger.info(
+            f"{len(completed)} completed import(s) to report for {app.instance_name}."
+        )
+        return self._new_output(app.instance_name, completed, resolved)
+
+    def process_instance(
+        self,
+        instance_type: str,
+        instance_settings: Dict[str, Any],
+        app: BaseARRClient,
+    ) -> Optional[Dict[str, Any]]:
+        tagged_count: int = 0
+        untagged_count: int = 0
+        total_count: int = 0
+        count: int = self._get_setting(instance_settings, "count", 0) or 0
+        checked_tag_name: str = (
+            self._get_setting(instance_settings, "tag_name", "") or "checked"
+        ).strip()
+        ignore_tag_name: str = (
+            self._get_setting(instance_settings, "ignore_tag", "") or "ignore"
+        ).strip()
+        unattended: bool = bool(
+            self._get_setting(instance_settings, "unattended", False)
+        )
+        season_monitored_threshold = (
+            self._get_setting(instance_settings, "season_monitored_threshold", None)
+            or 0
+        )
+        search_mode: str = (
+            self._get_setting(instance_settings, "search_mode", "upgrade") or "upgrade"
+        )
+        count_mode: str = (
+            self._get_setting(instance_settings, "count_mode", "series_artist")
+            or "series_artist"
+        )
+        queue_block_hours: int = self._queue_block_hours(instance_settings)
+        # Anchors "was this grabbed by this run?" — queue rows added before it
+        # are pre-existing work, not something this run caused.
+        run_started = datetime.now(timezone.utc)
+
+        if count <= 0:
+            self.logger.warning(
+                f"Skipping {app.instance_name}: count must be greater than 0."
+            )
+            return None
+
+        if search_mode not in VALID_SEARCH_MODES:
+            self.logger.warning(
+                f"Invalid search_mode '{search_mode}', falling back to 'upgrade'."
+            )
+            search_mode = "upgrade"
+
+        if count_mode not in VALID_COUNT_MODES:
+            self.logger.warning(
+                f"Invalid count_mode '{count_mode}', falling back to 'series_artist'."
+            )
+            count_mode = "series_artist"
+        # Granular mode only meaningful for sonarr/lidarr; radarr items always
+        # cost 1 search regardless.
+        granular = count_mode == "season_album" and instance_type in (
+            "sonarr",
+            "lidarr",
+        )
+
+        # Resolved BEFORE the media gathering and every early return below it:
+        # these grabs are from earlier runs, so whether this run has anything
+        # left to search says nothing about whether one finished importing.
+        completed_imports: List[Dict[str, Any]] = []
+        resolved_grabs: Set[str] = set()
+        if not self.config.dry_run:
+            # Reporting is not worth losing a run over: this now sits upstream of
+            # the searches, so a history or DB error must degrade to "nothing to
+            # report" rather than skipping the instance entirely.
+            try:
+                with ChubDB(logger=self.logger) as grabs_ctx:
+                    (
+                        completed_imports,
+                        resolved_grabs,
+                    ) = self._collect_completed_imports(
+                        app, grabs_ctx.upgradinatorr_grabs
+                    )
+            except Exception as e:
+                self.logger.warning(
+                    f"Could not reconcile pending grabs for {app.instance_name} "
+                    f"({e}); searching anyway."
+                )
+
+        self.logger.info(
+            f"Gathering media from {app.instance_name} ({instance_type}) "
+            f"[mode: {search_mode}]"
+        )
+
+        wanted_count: Optional[int] = None
+        if search_mode in ("missing", "cutoff"):
+            wanted_records = self._get_all_wanted(app, search_mode)
+            if wanted_records is None:
+                return self._completed_only(app, completed_imports, resolved_grabs)
+            wanted_count = len(wanted_records)
+            media_dict = self._convert_wanted_to_media_dict(
+                wanted_records, instance_type, app
+            )
+        elif app.instance_type.lower() in ("sonarr", "lidarr"):
+            media_dict = app.get_all_media(include_episode=True)
+        else:
+            media_dict = app.get_all_media()
+        checked_tag_id: int = app.get_tag_id_from_name(checked_tag_name)
+        if ignore_tag_name:
+            app.get_tag_id_from_name(ignore_tag_name)
+
+        # In granular mode, `count` caps season/album searches, not parents — so
+        # we need to keep the parent cap loose enough that we can consume the
+        # budget even when each parent only contributes a few unprocessed children.
+        filter_cap = len(media_dict) if granular else count
+
+        # Read before searching: anything already downloaded and waiting on an
+        # import must not be searched again, or the *arr grabs a second copy.
+        blocked_downloads, blocked_rows = self._queue_blocked_downloads(
+            app, instance_type, queue_block_hours
+        )
+        if blocked_downloads:
+            self.logger.info(
+                f"{len(blocked_downloads)} item(s) skipped this run — already "
+                f"downloaded and waiting on {app.instance_name} to import."
+            )
+
+        filtered_media_dict: List[Dict[str, Any]] = self.filter_media(
+            media_dict,
+            checked_tag_name,
+            ignore_tag_name,
+            filter_cap,
+            season_monitored_threshold,
+            blocked_downloads,
+        )
+        # Blocked work is deferred, not finished — an empty candidate list caused
+        # by it must not reach the reset below, which strips every checked tag.
+        rotation_complete = not filtered_media_dict and not blocked_downloads
+        if rotation_complete and unattended:
+            self.logger.info(
+                f"All media for {app.instance_name} is already tagged—removing tags for unattended operation."
+            )
+            media_ids = [item["media_id"] for item in media_dict]
+            if self.config.dry_run:
+                self.logger.info(
+                    "[DRY RUN] Would remove checked tags for unattended operation."
+                )
+            else:
+                self.logger.info("All media is tagged. Removing tags...")
+                app.remove_tags(media_ids, checked_tag_id)
+                if instance_type in ("sonarr", "lidarr"):
+                    try:
+                        with ChubDB(logger=self.logger) as db:
+                            db.upgradinatorr_progress.clear_for_instance(
+                                app.instance_name
+                            )
+                            self.logger.debug(
+                                f"Cleared upgradinatorr_progress rows for {app.instance_name} (unattended reset)."
+                            )
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Failed to clear upgradinatorr_progress for {app.instance_name}: {e}"
+                        )
+            if search_mode in ("missing", "cutoff"):
+                wanted_records = self._get_all_wanted(app, search_mode)
+                if wanted_records is None:
+                    return self._completed_only(app, completed_imports, resolved_grabs)
+                media_dict = self._convert_wanted_to_media_dict(
+                    wanted_records, instance_type, app
+                )
+            elif app.instance_type.lower() in ("sonarr", "lidarr"):
+                media_dict = app.get_all_media(include_episode=True)
+            else:
+                media_dict = app.get_all_media()
+            filter_cap = len(media_dict) if granular else count
+            filtered_media_dict = self.filter_media(
+                media_dict,
+                checked_tag_name,
+                ignore_tag_name,
+                filter_cap,
+                season_monitored_threshold,
+                blocked_downloads,
+            )
+
+        # blocked_rows still have to be reported, so only bail when there is
+        # genuinely nothing to say.
+        if not filtered_media_dict and not unattended and not blocked_rows:
+            self.logger.info(f"No media left to process for {app.instance_name}.")
+            self.logger.warning(
+                f"No media found for {app.instance_name}. Reason: nothing left to tag."
+            )
+            return self._completed_only(app, completed_imports, resolved_grabs)
+
+        if wanted_count is not None:
+            self.logger.info(
+                f"Found {wanted_count} {search_mode} item(s); "
+                f"selected {len(filtered_media_dict)} candidate(s) (search budget: {count})."
+            )
+        else:
+            self.logger.info(
+                f"Selected {len(filtered_media_dict)} candidate(s) from "
+                f"{len(media_dict)} total (search budget: {count})."
+            )
+        if media_dict:
+            total_count = len(media_dict)
+            for item in media_dict:
+                if checked_tag_name.strip().lower() in self._tag_names(item):
+                    tagged_count += 1
+                else:
+                    untagged_count += 1
+
+        output_dict: Dict[str, Any] = self._new_output(
+            app.instance_name, completed_imports, resolved_grabs
+        )
+        output_dict["tagged_count"] = tagged_count
+        output_dict["untagged_count"] = untagged_count
+        output_dict["total_count"] = total_count
+
+        if not self.config.dry_run:
+            search_count: int = 0
+            searched_items: List[Dict[str, Any]] = []
+            grabbed_downloads: Dict[int, List[Dict[str, Any]]] = {}
+            failed_searches: Dict[int, List[str]] = {}
+            search_stats: Dict[str, int] = {
+                "searches_attempted": 0,
+                "searches_succeeded": 0,
+                "searches_failed": 0,
+                "searches_deferred": 0,
+            }
+            progress_db: Optional[UpgradinatorrProgress] = None
+            db_ctx: Optional[ChubDB] = None
+            # Open the progress DB for any sonarr/lidarr run so that leftover
+            # rows from a previous granular run get cleared when those parents
+            # are tagged in series_artist mode.
+            if instance_type in ("sonarr", "lidarr"):
+                db_ctx = ChubDB(logger=self.logger)
+                db_ctx.__enter__()
+                progress_db = db_ctx.upgradinatorr_progress
+
+            try:
+                # Readiness gate: an *arr already chewing through searches will
+                # just queue ours behind them, so stage the run instead of
+                # piling on. MUST stay inside the try — count_queued_commands
+                # re-raises on 401/404 and db_ctx is already open.
+                backlog = app.count_queued_commands(SEARCH_COMMAND_NAMES)
+                if backlog is None or backlog >= SEARCH_BACKLOG_LIMIT:
+                    reason = (
+                        "its command queue could not be read"
+                        if backlog is None
+                        else f"{backlog} search command(s) already queued or running"
+                    )
+                    self.logger.warning(
+                        f"Skipping {app.instance_name}: {reason}. Nothing is lost — "
+                        "the next run picks this up."
+                    )
+                    filtered_media_dict = []
+
+                for item in filtered_media_dict:
+                    if self.is_cancelled():
+                        break
+                    self.logger.debug("")  # Blank line before block
+                    self.logger.debug("═" * 70)
+                    self.logger.debug(
+                        f"[PROCESSING] {item['title']} ({item['year']}) | ID: {item['media_id']}"
+                    )
+                    self.logger.debug("═" * 70)
+                    self.logger.info(
+                        f"Processing: {self._format_item_title(item)} [ID: {item['media_id']}]"
+                    )
+                    searched_items.append(item)
+
+                    budget_hit = False
+
+                    if item["seasons"] is None:
+                        # Movies (Radarr) or artists without album data
+                        self.logger.debug(f"[SEARCH] {item['title']}")
+                        before_downloads = self._get_grabbed_downloads(
+                            app, item["media_id"], instance_type
+                        )
+                        search_response = app.search_media(item["media_id"])
+                        outcome = self.process_search_response(
+                            search_response,
+                            item["media_id"],
+                            app,
+                            self._format_item_title(item),
+                        )
+                        self._record_search_attempt(search_stats, outcome)
+                        success = outcome == COMMAND_COMPLETED
+                        if success:
+                            after_downloads = self._get_grabbed_downloads(
+                                app, item["media_id"], instance_type
+                            )
+                            self._capture_new_grabs(
+                                grabbed_downloads,
+                                before_downloads,
+                                after_downloads,
+                                item["media_id"],
+                            )
+                            self.logger.debug(
+                                f"[TAG] {item['title']} += {checked_tag_id}"
+                            )
+                            app.add_tags(item["media_id"], checked_tag_id)
+                        elif outcome not in DEFERRED_OUTCOMES:
+                            self._record_search_failure(
+                                failed_searches, item["media_id"], "Media search"
+                            )
+                            self.logger.warning(
+                                f"Not tagging {self._format_item_title(item)} "
+                                "because the media search failed."
+                            )
+                        search_count += 1
+                        if search_count >= count:
+                            budget_hit = True
+                    elif instance_type == "lidarr":
+                        search_count, budget_hit = self._process_lidarr_item(
+                            item,
+                            app,
+                            checked_tag_id,
+                            count,
+                            granular,
+                            progress_db,
+                            search_count,
+                            grabbed_downloads,
+                            failed_searches,
+                            search_stats,
+                        )
+                    else:
+                        search_count, budget_hit = self._process_sonarr_item(
+                            item,
+                            app,
+                            checked_tag_id,
+                            count,
+                            granular,
+                            progress_db,
+                            search_count,
+                            grabbed_downloads,
+                            failed_searches,
+                            search_stats,
+                        )
+
+                    if self._deferred_count(search_stats):
+                        self.logger.warning(
+                            f"{app.instance_name} is not keeping up — stopping this run "
+                            f"after {search_count} search(es). The staged work is "
+                            "untagged and unrecorded, so the next run resumes from here."
+                        )
+                        break
+
+                    if budget_hit:
+                        self.logger.debug(
+                            f"Reached search count limit ({search_count} >= {count}), breaking."
+                        )
+                        self.logger.debug("─" * 70)
+                        self.logger.debug(
+                            f"[END] Finished: {item['title']} ({item['year']}) | ID: {item['media_id']}"
+                        )
+                        self.logger.debug("─" * 70)
+                        self.logger.debug("")
+                        break
+
+                    self.logger.debug("─" * 70)
+                    self.logger.debug(
+                        f"[END] Finished: {item['title']} ({item['year']}) | ID: {item['media_id']}"
+                    )
+                    self.logger.debug("─" * 70)
+                    self.logger.debug("")  # Blank line after block
+            finally:
+                if db_ctx is not None:
+                    db_ctx.__exit__(None, None, None)
+
+            self.logger.debug(
+                f"Completed upgrade operations for {app.instance_name}. "
+                "Now reconciling grabbed downloads and current queue..."
+            )
+            searched_ids = [item["media_id"] for item in searched_items]
+            # An unreadable queue must not discard searches already completed.
+            records = self._fetch_queue_records(app) or []
+            self.logger.debug(f"Queue item count: {len(records)}")
+            queue_dict: List[Dict[str, Any]] = self.process_queue(
+                {"records": records}, instance_type, searched_ids
+            )
+            self.logger.debug(f"Queue dict item count: {len(queue_dict)}")
+
+            queue_map: Dict[int, List[Dict[str, Any]]] = {}
+            for q in queue_dict:
+                queue_map.setdefault(q["media_id"], []).append(q)
+
+            run_grabs: List[Dict[str, Any]] = []
+            for item in searched_items:
+                # Keyed by download id, not title: Lidarr's queue rewrites a
+                # release title (drops the year, reorders tags), so a title
+                # compare never matches its own grab history and lists it twice.
+                by_download_id: Dict[str, Dict[str, Any]] = {}
+                for q in grabbed_downloads.get(item["media_id"], []):
+                    by_download_id[str(q["download_id"])] = {
+                        "download": q["download"],
+                        "score": q["torrent_custom_format_score"],
+                    }
+                queue_imports: List[Dict[str, Any]] = []
+                for q in queue_map.get(item["media_id"], []):
+                    if q["state"] == "done" or str(q["download_id"]) in by_download_id:
+                        continue
+                    added = self._parse_arr_datetime(q.get("added"))
+                    if added is None or added >= run_started:
+                        # Undated rows report as grabs: that arm is the only grab
+                        # signal for *arrs with unscoped grab history.
+                        by_download_id[str(q["download_id"])] = {
+                            "download": q["download"],
+                            "score": q["torrent_custom_format_score"],
+                        }
+                        continue
+                    queue_imports.append(
+                        {
+                            "state": q["state"],
+                            "download": q["download"],
+                            "torrent_custom_format_score": q[
+                                "torrent_custom_format_score"
+                            ],
+                            "age_hours": self._queue_row_age_hours(q, run_started),
+                            "messages": q.get("messages") or [],
+                        }
+                    )
+                grabs = [
+                    {"download_id": download_id, **grab}
+                    for download_id, grab in by_download_id.items()
+                ]
+                run_grabs.extend(
+                    {
+                        "download_id": grab["download_id"],
+                        "media_id": item["media_id"],
+                        "title": item["title"],
+                        "year": item["year"],
+                        "release_title": grab["download"],
+                        "score": grab["score"],
+                    }
+                    for grab in grabs
+                    if not grab["download_id"].startswith(SYNTHETIC_DOWNLOAD_ID_PREFIX)
+                )
+                output_dict["data"].append(
+                    {
+                        "media_id": item["media_id"],
+                        "title": item["title"],
+                        "year": item["year"],
+                        "grabs": grabs,
+                        "queue_imports": queue_imports,
+                        "search_failures": failed_searches.get(item["media_id"], []),
+                    }
+                )
+            output_dict.update(search_stats)
+            tagged_in_run = len(searched_items) - sum(
+                1 for v in failed_searches.values() if v
+            )
+            # A deferred item is in searched_items but records no failure, so it
+            # would otherwise be counted as tagged when it deliberately is not.
+            deferred = self._deferred_count(search_stats)
+            tagged_in_run -= deferred
+            summary = (
+                f"   → {search_stats['searches_attempted']} searched, "
+                f"{max(tagged_in_run, 0)} tagged"
+            )
+            if deferred:
+                summary += f", {deferred} staged for the next run"
+            self.logger.info(summary)
+            # Opened after the search loop's db_ctx has closed — the searches
+            # can run for minutes and nothing here needs a connection held open.
+            with ChubDB(logger=self.logger) as grabs_ctx:
+                grabs_ctx.upgradinatorr_grabs.record(
+                    app.instance_name, run_grabs, grabbed_at=run_started.isoformat()
+                )
+        else:
+            for item in filtered_media_dict:
+                output_dict["data"].append(
+                    {
+                        "media_id": item["media_id"],
+                        "title": item["title"],
+                        "year": item["year"],
+                        "grabs": [],
+                        "queue_imports": [],
+                        "search_failures": [],
+                    }
+                )
+        # Media held back by the queue guard never reach filtered_media_dict, so
+        # report their rows here — dry run included — or the skip is invisible.
+        self._append_blocked_rows(output_dict, blocked_rows, media_dict)
+        return output_dict
+
+    @staticmethod
+    def _append_blocked_rows(
+        output_dict: Dict[str, Any],
+        blocked_rows: Dict[int, List[Dict[str, Any]]],
+        media_dict: List[Dict[str, Any]],
+    ) -> None:
+        """Add queue rows for media the guard skipped, merging into an existing
+        entry when the same parent was also searched."""
+        if not blocked_rows:
+            return
+        titles = {m["media_id"]: m for m in media_dict}
+        by_id = {e["media_id"]: e for e in output_dict["data"]}
+        for media_id, rows in blocked_rows.items():
+            entry = by_id.get(media_id)
+            if entry is None:
+                source = titles.get(media_id) or {}
+                entry = {
+                    "media_id": media_id,
+                    "title": source.get("title", f"ID {media_id}"),
+                    "year": source.get("year"),
+                    "grabs": [],
+                    "queue_imports": [],
+                    "search_failures": [],
+                }
+                output_dict["data"].append(entry)
+                by_id[media_id] = entry
+            seen = {q.get("download") for q in entry["queue_imports"]}
+            for row in rows:
+                download = row.get("download")
+                if download in seen:
+                    continue
+                entry["queue_imports"].append(row)
+                seen.add(download)
+
+    @staticmethod
+    def _queue_imports(item: Dict[str, Any], state: str) -> List[Dict[str, Any]]:
+        return [
+            entry
+            for entry in as_list(item.get("queue_imports"))
+            if entry.get("state") == state
+        ]
+
+    @staticmethod
+    def _detail_prefix(
+        score: object, previous: object = None, quality: Optional[str] = None
+    ) -> str:
+        """``Score 7007 (was 4851), FLAC — ``, empty when neither is known."""
+        parts = []
+        score_text = import_score_text(score, previous)
+        if score_text:
+            parts.append(f"Score {score_text}")
+        if quality:
+            parts.append(quality)
+        return f"{', '.join(parts)} — " if parts else ""
+
+    @staticmethod
+    def _format_queue_entry(entry: Dict[str, Any]) -> str:
+        age = entry.get("age_hours")
+        age_text = f", waiting {age:.0f}h" if age is not None else ""
+        prefix = Upgradinatorr._detail_prefix(entry.get("torrent_custom_format_score"))
+        return f"{prefix}{entry.get('download')}{age_text}"
+
+    @staticmethod
+    def _format_item_title(item: Dict[str, Any]) -> str:
+        year = item.get("year")
+        if year:
+            return f"{item['title']} ({year})"
+        return str(item["title"])
+
+    def print_output(self, output_dict: Dict[str, Any]) -> None:
+        for instance, run_data in output_dict.items():
+            if not run_data:
+                continue
+            instance_data = run_data.get("data") or []
+            completed = run_data.get("completed") or []
+            # Completed imports come from EARLIER runs' grabs, so they must
+            # print even when this run searched nothing.
+            if not instance_data and not completed:
+                self.logger.info(f"No items found for {instance}.")
+                continue
+
+            table = [[f"{run_data['server_name']}"]]
+            self.logger.info(create_table(table))
+            deferred = run_data.get("searches_deferred", 0)
+            self.logger.info(
+                f"Searches: {run_data.get('searches_attempted', 0)} attempted, "
+                f"{run_data.get('searches_succeeded', 0)} completed, "
+                f"{run_data.get('searches_failed', 0)} failed"
+                + (f", {deferred} staged" if deferred else "")
+                + f" | Parents: {run_data.get('untagged_count', 0)} untagged, "
+                f"{run_data.get('tagged_count', 0)} tagged, "
+                f"{run_data.get('total_count', 0)} total."
+            )
+            if deferred:
+                self.logger.info(
+                    f"[STAGED] {deferred} search(es) left with "
+                    f"{run_data['server_name']} — they finish there on their own and "
+                    "the next run resumes the untagged work. Not a failure."
+                )
+
+            with_grabs = [it for it in instance_data if it.get("grabs")]
+            with_failures = [it for it in instance_data if it.get("search_failures")]
+            no_grabs = [
+                it
+                for it in instance_data
+                if not it.get("grabs")
+                and not it.get("search_failures")
+                and not it.get("queue_imports")
+            ]
+
+            for tag, noun, section in import_report_sections(completed):
+                items = {it.get("media_id") for it in section}
+                self.logger.info(
+                    f"[{tag}] {import_report_tally(len(section), len(items), noun)}:"
+                )
+                for entry in section:
+                    self.logger.info(f"  {self._format_item_title(entry)}")
+                    prefix = self._detail_prefix(
+                        entry.get("score"),
+                        entry.get("previous_score"),
+                        import_quality_text(
+                            entry.get("quality"), entry.get("previous_quality")
+                        ),
+                    )
+                    self.logger.info(f"    {prefix}{entry.get('download')}")
+
+            if with_grabs:
+                grab_total = sum(len(it["grabs"]) for it in with_grabs)
+                self.logger.info(
+                    f"[GRABBED] {grab_total} download(s) across {len(with_grabs)} item(s):"
+                )
+                for item in with_grabs:
+                    self.logger.info(f"  {self._format_item_title(item)}")
+                    for grab in item["grabs"]:
+                        prefix = self._detail_prefix(grab["score"])
+                        self.logger.info(f"    {prefix}{grab['download']}")
+
+            for state, tag, note, level in QUEUE_REPORT_SECTIONS:
+                grouped = [
+                    (it, entries)
+                    for it, entries in (
+                        (it, self._queue_imports(it, state)) for it in instance_data
+                    )
+                    if entries
+                ]
+                if not grouped:
+                    continue
+                # Tally at the section's level, per-item detail always at debug —
+                # the listing is what buries the grabs and upgrades this run made.
+                total = sum(len(entries) for _it, entries in grouped)
+                getattr(self.logger, level)(
+                    f"[{tag}] {queue_report_tally(total, len(grouped), note)}"
+                )
+                for item, entries in grouped:
+                    self.logger.debug(f"  {self._format_item_title(item)}")
+                    for entry in entries:
+                        self.logger.debug(f"    {self._format_queue_entry(entry)}")
+
+            if with_failures:
+                self.logger.info(f"[FAILED] {len(with_failures)} item(s):")
+                for item in with_failures:
+                    failures = ", ".join(item["search_failures"])
+                    self.logger.warning(
+                        f"  {self._format_item_title(item)} — {failures}"
+                    )
+
+            if no_grabs:
+                titles = ", ".join(self._format_item_title(it) for it in no_grabs)
+                self.logger.info(
+                    f"[NO GRABS] {len(no_grabs)} item(s) searched, nothing grabbed: {titles}"
+                )
+
+    def run(self):
+        try:
+            if getattr(self.config, "log_level", "INFO").lower() == "debug":
+                print_settings(self.logger, self.config)
+            if self.config.dry_run:
+                table = [["Dry Run"], ["NO CHANGES WILL BE MADE"]]
+                self.logger.info(create_table(table))
+            if not getattr(self.config, "instances_list", None):
+                self.logger.error("No instances found in config file.")
+                return
+
+            # Phase 1: resolve config + connect to every enabled instance
+            # sequentially, so connection/skip logging stays ordered.
+            jobs: List[Tuple[str, str, Any, BaseARRClient]] = []
+            for instance_entry in self.config.instances_list:
+                if not self._get_setting(instance_entry, "enabled", True):
+                    label = self._get_setting(
+                        instance_entry, "label", ""
+                    ) or self._get_setting(instance_entry, "instance", "unknown")
+                    self.logger.info(
+                        f"Skipping disabled Upgradinatorr profile: {label}"
+                    )
+                    continue
+
+                instance_name = self._get_setting(instance_entry, "instance", "")
+                if not instance_name:
+                    continue
+
+                # Find the instance type and connection details in full_config.instances
+                instance_type = None
+                instance_cfg = None
+                for typ in ["radarr", "sonarr", "lidarr"]:
+                    type_dict = getattr(self.full_config.instances, typ, {})
+                    if instance_name in type_dict:
+                        instance_type = typ
+                        instance_cfg = type_dict[instance_name]
+                        break
+
+                if not instance_cfg or not instance_type:
+                    self.logger.warning(
+                        f"Instance '{instance_name}' not found in config!"
+                    )
+                    continue
+
+                app = create_arr_client(
+                    instance_cfg.url,
+                    instance_cfg.api,
+                    self.logger,
+                )
+                if app and app.connect_status:
+                    jobs.append((instance_name, instance_type, instance_entry, app))
+
+            # Phase 2: process instances in parallel. Each instance writes to
+            # its own buffered logger (via the thread-local override) so their
+            # log lines don't interleave; buffers are flushed in config order
+            # once every instance finishes, keeping output grouped per instance.
+            output: Dict[str, Any] = {}
+            if jobs:
+
+                def _run_instance(
+                    index: int,
+                    instance_name: str,
+                    instance_type: str,
+                    instance_entry: Any,
+                    app: BaseARRClient,
+                ) -> Tuple[int, str, Optional[Dict[str, Any]], _BufferingLogger]:
+                    buf = _BufferingLogger(self._real_logger)
+                    self._thread_local.logger = buf
+                    # Route the ARR client's own logging (incl. its nested
+                    # prefetch threads) through this instance's buffer too, so
+                    # concurrent instances' client log lines don't interleave.
+                    # Each job has its own client, so this rebind is per-instance.
+                    prev_app_logger = getattr(app, "logger", None)
+                    app.logger = buf
+                    try:
+                        result = self.process_instance(
+                            instance_type, instance_entry, app
+                        )
+                    except Exception:
+                        buf.error(
+                            f"An error occurred processing {instance_name}:\n"
+                            f"{traceback.format_exc()}"
+                        )
+                        result = None
+                    finally:
+                        # Worker threads are reused by the pool — clear the
+                        # override so the next task starts with a fresh buffer.
+                        app.logger = prev_app_logger
+                        self._thread_local.logger = None
+                    return index, instance_name, result, buf
+
+                results: Dict[
+                    int, Tuple[str, Optional[Dict[str, Any]], _BufferingLogger]
+                ] = {}
+                with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+                    futures = [
+                        pool.submit(_run_instance, i, name, typ, entry, app)
+                        for i, (name, typ, entry, app) in enumerate(jobs)
+                    ]
+                    for future in as_completed(futures):
+                        index, name, result, buf = future.result()
+                        results[index] = (name, result, buf)
+
+                for i in range(len(jobs)):
+                    name, result, buf = results[i]
+                    buf.flush_to(self._real_logger)
+                    if result:
+                        output[name] = result
+
+            self.logger.debug(f"Processed instances: {list(output.keys())}")
+            if output:
+                self.print_output(output)
+                self._settle_reported_grabs(output)
+                manager = NotificationManager(
+                    self.full_config, self.logger, module_name="upgradinatorr"
+                )
+                manager.send_notification(output)
+        except KeyboardInterrupt:
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
+            return
+        except Exception:
+            self.logger.error("\n\nAn error occurred:\n", exc_info=True)
+            self.logger.error("\n\n")
+        finally:
+            self.logger.log_outro()

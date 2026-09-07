@@ -1,0 +1,223 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1408"/>
+      <stop offset="50%" stop-color="#050a04"/>
+      <stop offset="100%" stop-color="#020402"/>
+    </linearGradient>
+    <linearGradient id="bronzeStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a2810"/>
+      <stop offset="50%" stop-color="#b87830"/>
+      <stop offset="100%" stop-color="#5a3818"/>
+    </linearGradient>
+    <linearGradient id="bronzeStrokeV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a2810"/>
+      <stop offset="50%" stop-color="#b87830"/>
+      <stop offset="100%" stop-color="#5a3818"/>
+    </linearGradient>
+    <radialGradient id="darkEmerald" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#4a7848"/>
+      <stop offset="60%" stop-color="#1a4a1a"/>
+      <stop offset="100%" stop-color="#04200c"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="triquetraKnot">
+    <path d="M0,-18 C-10,-8 -16,4 -8,12 C0,18 8,12 8,4 C8,-4 0,-10 -4,-2 C-8,4 -2,12 6,12 C14,12 18,4 12,-6 C8,-12 0,-14 -6,-10" stroke="url(#bronzeStroke)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M-18,8 C-8,18 4,16 12,8 C16,2 14,-4 6,-6 C-2,-8 -8,-2 -4,4 C0,8 8,4 8,-4" stroke="url(#bronzeStroke)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M18,8 C8,18 -4,16 -12,8 C-16,2 -14,-4 -6,-6" stroke="url(#bronzeStroke)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="22" fill="none" stroke="url(#bronzeStroke)" stroke-width="1.4"/>
+    <circle cx="0" cy="0" r="3" fill="url(#bronzeStroke)"/>
+  </g>
+
+  <g id="ringKnot">
+    <circle cx="-8" cy="0" r="12" fill="none" stroke="url(#bronzeStroke)" stroke-width="2.8"/>
+    <circle cx="8" cy="0" r="12" fill="none" stroke="url(#bronzeStroke)" stroke-width="2.8"/>
+    <circle cx="0" cy="-10" r="12" fill="none" stroke="url(#bronzeStroke)" stroke-width="2.8"/>
+    <circle cx="0" cy="10" r="12" fill="none" stroke="url(#bronzeStroke)" stroke-width="2.8"/>
+    <circle cx="-8" cy="0" r="12" fill="none" stroke="#5a3818" stroke-width="0.5"/>
+    <circle cx="8" cy="0" r="12" fill="none" stroke="#5a3818" stroke-width="0.5"/>
+    <circle cx="0" cy="-10" r="12" fill="none" stroke="#5a3818" stroke-width="0.5"/>
+    <circle cx="0" cy="10" r="12" fill="none" stroke="#5a3818" stroke-width="0.5"/>
+  </g>
+
+  <g id="complexBraid">
+    <path d="M0,0 C20,-10 40,10 60,0 C80,-10 100,10 120,0" stroke="url(#bronzeStroke)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M0,8 C20,-2 40,18 60,8 C80,-2 100,18 120,8" stroke="url(#bronzeStroke)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M0,16 C20,6 40,26 60,16 C80,6 100,26 120,16" stroke="url(#bronzeStroke)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M10,-2 Q14,-6 18,-2 M30,4 Q34,0 38,4 M50,-2 Q54,-6 58,-2 M70,4 Q74,0 78,4 M90,-2 Q94,-6 98,-2 M110,4 Q114,0 118,4" stroke="#3a2810" stroke-width="0.4" fill="none"/>
+    <path d="M2,4 Q6,8 10,4 M22,12 Q26,16 30,12 M42,4 Q46,8 50,4 M62,12 Q66,16 70,12 M82,4 Q86,8 90,4 M102,12 Q106,16 110,12" stroke="#3a2810" stroke-width="0.4" fill="none"/>
+  </g>
+
+  <g id="braidV">
+    <path d="M0,0 C-10,20 10,40 0,60 C-10,80 10,100 0,120" stroke="url(#bronzeStrokeV)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M8,0 C-2,20 18,40 8,60 C-2,80 18,100 8,120" stroke="url(#bronzeStrokeV)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M16,0 C6,20 26,40 16,60 C6,80 26,100 16,120" stroke="url(#bronzeStrokeV)" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <g id="endlessKnot">
+    <path d="M-16,-4 Q-8,-12 0,-4 Q8,-12 16,-4 Q24,4 16,12 Q8,20 0,12 Q-8,20 -16,12 Q-24,4 -16,-4 Z" stroke="url(#bronzeStroke)" stroke-width="2.6" fill="none"/>
+    <path d="M-16,12 Q-8,4 0,12 Q8,4 16,12" stroke="url(#bronzeStroke)" stroke-width="2.6" fill="none"/>
+    <path d="M-12,-2 Q0,8 12,-2 M-12,8 Q0,-2 12,8" stroke="url(#bronzeStroke)" stroke-width="1.4" fill="none"/>
+    <circle cx="0" cy="4" r="2" fill="url(#bronzeStroke)"/>
+  </g>
+
+  <g id="cornerKnotMass">
+    <path d="M0,0 Q20,-20 40,0 Q60,20 80,0 Q60,-20 40,0" stroke="url(#bronzeStroke)" stroke-width="3" fill="none"/>
+    <path d="M0,20 Q20,0 40,20 Q60,40 80,20 Q60,0 40,20" stroke="url(#bronzeStroke)" stroke-width="3" fill="none"/>
+    <path d="M0,40 Q20,20 40,40 Q60,60 80,40 Q60,20 40,40" stroke="url(#bronzeStroke)" stroke-width="3" fill="none"/>
+    <path d="M0,0 Q-10,10 0,20 Q-10,30 0,40" stroke="url(#bronzeStroke)" stroke-width="3" fill="none"/>
+    <circle cx="40" cy="20" r="4" fill="url(#bronzeStroke)"/>
+  </g>
+
+  <g id="darkClover">
+    <path d="M0,0 C-2,-8 -10,-10 -10,-2 C-10,4 -4,4 0,0 Z" fill="url(#darkEmerald)" stroke="#04200c" stroke-width="0.4"/>
+    <path d="M0,0 C2,-8 10,-10 10,-2 C10,4 4,4 0,0 Z" fill="url(#darkEmerald)" stroke="#04200c" stroke-width="0.4"/>
+    <path d="M0,0 C-2,8 -10,10 -10,2 C-10,-4 -4,-4 0,0 Z" fill="url(#darkEmerald)" stroke="#04200c" stroke-width="0.4"/>
+    <circle cx="0" cy="0" r="1.4" fill="#04200c"/>
+  </g>
+
+  <!-- TOP: dense knotwork -->
+  <use href="#complexBraid" transform="translate(60,30)"/>
+  <use href="#complexBraid" transform="translate(180,30)"/>
+  <use href="#complexBraid" transform="translate(300,30)"/>
+  <use href="#complexBraid" transform="translate(420,30)"/>
+  <use href="#complexBraid" transform="translate(540,30)"/>
+  <use href="#complexBraid" transform="translate(660,30)"/>
+  <use href="#complexBraid" transform="translate(780,30)"/>
+  <use href="#triquetraKnot" transform="translate(140,28)"/>
+  <use href="#triquetraKnot" transform="translate(280,28)"/>
+  <use href="#triquetraKnot" transform="translate(420,28)"/>
+  <use href="#triquetraKnot" transform="translate(560,28)"/>
+  <use href="#triquetraKnot" transform="translate(700,28)"/>
+  <use href="#triquetraKnot" transform="translate(840,28)"/>
+  <use href="#ringKnot" transform="translate(200,52) scale(0.7)"/>
+  <use href="#ringKnot" transform="translate(360,52) scale(0.7)"/>
+  <use href="#ringKnot" transform="translate(500,52) scale(0.7)"/>
+  <use href="#ringKnot" transform="translate(640,52) scale(0.7)"/>
+  <use href="#ringKnot" transform="translate(780,52) scale(0.7)"/>
+  <use href="#darkClover" transform="translate(180,16)"/>
+  <use href="#darkClover" transform="translate(340,16)"/>
+  <use href="#darkClover" transform="translate(500,16)"/>
+  <use href="#darkClover" transform="translate(660,16)"/>
+  <use href="#darkClover" transform="translate(820,16)"/>
+
+  <!-- BOTTOM -->
+  <use href="#complexBraid" transform="translate(60,1454)"/>
+  <use href="#complexBraid" transform="translate(180,1454)"/>
+  <use href="#complexBraid" transform="translate(300,1454)"/>
+  <use href="#complexBraid" transform="translate(420,1454)"/>
+  <use href="#complexBraid" transform="translate(540,1454)"/>
+  <use href="#complexBraid" transform="translate(660,1454)"/>
+  <use href="#complexBraid" transform="translate(780,1454)"/>
+  <use href="#triquetraKnot" transform="translate(140,1472)"/>
+  <use href="#triquetraKnot" transform="translate(280,1472)"/>
+  <use href="#triquetraKnot" transform="translate(420,1472)"/>
+  <use href="#triquetraKnot" transform="translate(560,1472)"/>
+  <use href="#triquetraKnot" transform="translate(700,1472)"/>
+  <use href="#triquetraKnot" transform="translate(840,1472)"/>
+  <use href="#ringKnot" transform="translate(200,1448) scale(0.7)"/>
+  <use href="#ringKnot" transform="translate(360,1448) scale(0.7)"/>
+  <use href="#ringKnot" transform="translate(500,1448) scale(0.7)"/>
+  <use href="#ringKnot" transform="translate(640,1448) scale(0.7)"/>
+  <use href="#ringKnot" transform="translate(780,1448) scale(0.7)"/>
+  <use href="#darkClover" transform="translate(180,1484)"/>
+  <use href="#darkClover" transform="translate(340,1484)"/>
+  <use href="#darkClover" transform="translate(500,1484)"/>
+  <use href="#darkClover" transform="translate(660,1484)"/>
+  <use href="#darkClover" transform="translate(820,1484)"/>
+
+  <!-- LEFT -->
+  <use href="#braidV" transform="translate(22,60)"/>
+  <use href="#braidV" transform="translate(22,180)"/>
+  <use href="#braidV" transform="translate(22,300)"/>
+  <use href="#braidV" transform="translate(22,420)"/>
+  <use href="#braidV" transform="translate(22,540)"/>
+  <use href="#braidV" transform="translate(22,660)"/>
+  <use href="#braidV" transform="translate(22,780)"/>
+  <use href="#braidV" transform="translate(22,900)"/>
+  <use href="#braidV" transform="translate(22,1020)"/>
+  <use href="#braidV" transform="translate(22,1140)"/>
+  <use href="#braidV" transform="translate(22,1260)"/>
+  <use href="#triquetraKnot" transform="translate(48,140)"/>
+  <use href="#triquetraKnot" transform="translate(48,280)"/>
+  <use href="#triquetraKnot" transform="translate(48,420)"/>
+  <use href="#triquetraKnot" transform="translate(48,560)"/>
+  <use href="#triquetraKnot" transform="translate(48,700)"/>
+  <use href="#triquetraKnot" transform="translate(48,840)"/>
+  <use href="#triquetraKnot" transform="translate(48,980)"/>
+  <use href="#triquetraKnot" transform="translate(48,1120)"/>
+  <use href="#triquetraKnot" transform="translate(48,1260)"/>
+  <use href="#triquetraKnot" transform="translate(48,1400)"/>
+  <use href="#endlessKnot" transform="translate(50,210)"/>
+  <use href="#endlessKnot" transform="translate(50,350)"/>
+  <use href="#endlessKnot" transform="translate(50,490)"/>
+  <use href="#endlessKnot" transform="translate(50,630)"/>
+  <use href="#endlessKnot" transform="translate(50,770)"/>
+  <use href="#endlessKnot" transform="translate(50,910)"/>
+  <use href="#endlessKnot" transform="translate(50,1050)"/>
+  <use href="#endlessKnot" transform="translate(50,1190)"/>
+  <use href="#endlessKnot" transform="translate(50,1330)"/>
+
+  <!-- RIGHT -->
+  <use href="#braidV" transform="translate(962,60)"/>
+  <use href="#braidV" transform="translate(962,180)"/>
+  <use href="#braidV" transform="translate(962,300)"/>
+  <use href="#braidV" transform="translate(962,420)"/>
+  <use href="#braidV" transform="translate(962,540)"/>
+  <use href="#braidV" transform="translate(962,660)"/>
+  <use href="#braidV" transform="translate(962,780)"/>
+  <use href="#braidV" transform="translate(962,900)"/>
+  <use href="#braidV" transform="translate(962,1020)"/>
+  <use href="#braidV" transform="translate(962,1140)"/>
+  <use href="#braidV" transform="translate(962,1260)"/>
+  <use href="#triquetraKnot" transform="translate(952,140)"/>
+  <use href="#triquetraKnot" transform="translate(952,280)"/>
+  <use href="#triquetraKnot" transform="translate(952,420)"/>
+  <use href="#triquetraKnot" transform="translate(952,560)"/>
+  <use href="#triquetraKnot" transform="translate(952,700)"/>
+  <use href="#triquetraKnot" transform="translate(952,840)"/>
+  <use href="#triquetraKnot" transform="translate(952,980)"/>
+  <use href="#triquetraKnot" transform="translate(952,1120)"/>
+  <use href="#triquetraKnot" transform="translate(952,1260)"/>
+  <use href="#triquetraKnot" transform="translate(952,1400)"/>
+  <use href="#endlessKnot" transform="translate(950,210)"/>
+  <use href="#endlessKnot" transform="translate(950,350)"/>
+  <use href="#endlessKnot" transform="translate(950,490)"/>
+  <use href="#endlessKnot" transform="translate(950,630)"/>
+  <use href="#endlessKnot" transform="translate(950,770)"/>
+  <use href="#endlessKnot" transform="translate(950,910)"/>
+  <use href="#endlessKnot" transform="translate(950,1050)"/>
+  <use href="#endlessKnot" transform="translate(950,1190)"/>
+  <use href="#endlessKnot" transform="translate(950,1330)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(36,36)">
+    <use href="#cornerKnotMass" transform="translate(0,0) scale(0.55)"/>
+    <use href="#triquetraKnot" transform="translate(34,34) scale(1.4)"/>
+    <use href="#darkClover" transform="translate(54,12)"/>
+    <use href="#darkClover" transform="translate(12,54)"/>
+  </g>
+  <g transform="translate(964,36)">
+    <use href="#cornerKnotMass" transform="translate(0,0) scale(-0.55,0.55)"/>
+    <use href="#triquetraKnot" transform="translate(-34,34) scale(1.4)"/>
+    <use href="#darkClover" transform="translate(-54,12)"/>
+    <use href="#darkClover" transform="translate(-12,54)"/>
+  </g>
+  <g transform="translate(36,1464)">
+    <use href="#cornerKnotMass" transform="translate(0,0) scale(0.55,-0.55)"/>
+    <use href="#triquetraKnot" transform="translate(34,-34) scale(1.4)"/>
+    <use href="#darkClover" transform="translate(54,-12)"/>
+    <use href="#darkClover" transform="translate(12,-54)"/>
+  </g>
+  <g transform="translate(964,1464)">
+    <use href="#cornerKnotMass" transform="translate(0,0) scale(-0.55,-0.55)"/>
+    <use href="#triquetraKnot" transform="translate(-34,-34) scale(1.4)"/>
+    <use href="#darkClover" transform="translate(-54,-12)"/>
+    <use href="#darkClover" transform="translate(-12,-54)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#bronzeStroke)" stroke-width="1.4" fill="none"/>
+</svg>

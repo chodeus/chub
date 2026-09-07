@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1430"/>
+      <stop offset="50%" stop-color="#050a1a"/>
+      <stop offset="100%" stop-color="#02040e"/>
+    </linearGradient>
+    <linearGradient id="redStripe" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6a0010"/>
+      <stop offset="50%" stop-color="#e02838"/>
+      <stop offset="100%" stop-color="#6a0010"/>
+    </linearGradient>
+    <linearGradient id="blueStripe" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0a1860"/>
+      <stop offset="50%" stop-color="#2848c0"/>
+      <stop offset="100%" stop-color="#0a1860"/>
+    </linearGradient>
+    <linearGradient id="whiteStripe" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a8b0c8"/>
+      <stop offset="50%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#a8b0c8"/>
+    </linearGradient>
+    <linearGradient id="redStripeV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6a0010"/>
+      <stop offset="50%" stop-color="#e02838"/>
+      <stop offset="100%" stop-color="#6a0010"/>
+    </linearGradient>
+    <linearGradient id="blueStripeV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1860"/>
+      <stop offset="50%" stop-color="#2848c0"/>
+      <stop offset="100%" stop-color="#0a1860"/>
+    </linearGradient>
+    <linearGradient id="whiteStripeV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a8b0c8"/>
+      <stop offset="50%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#a8b0c8"/>
+    </linearGradient>
+    <radialGradient id="starGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#f0d040"/>
+      <stop offset="100%" stop-color="#a07020"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="brightStar">
+    <path d="M0,-16 L4.7,-4.9 L16,-4.9 L7.1,1.9 L10.6,12.9 L0,6.4 L-10.6,12.9 L-7.1,1.9 L-16,-4.9 L-4.7,-4.9 Z" fill="url(#starGrad)" stroke="#a07020" stroke-width="0.4"/>
+    <path d="M0,-16 L0,16 M-16,-4.9 L16,-4.9" stroke="#a07020" stroke-width="0.3" opacity="0.6"/>
+    <circle cx="-3" cy="-6" r="2" fill="#ffffff" opacity="0.7"/>
+  </g>
+
+  <g id="starSm">
+    <path d="M0,-8 L2.4,-2.4 L8,-2.4 L3.6,1 L5.3,6.4 L0,3.2 L-5.3,6.4 L-3.6,1 L-8,-2.4 L-2.4,-2.4 Z" fill="#ffffff" stroke="#a07020" stroke-width="0.2"/>
+  </g>
+
+  <g id="ribbonSwagBold">
+    <path d="M0,0 C40,16 80,16 120,0" stroke="url(#redStripe)" stroke-width="5" fill="none"/>
+    <path d="M0,6 C40,22 80,22 120,6" stroke="url(#whiteStripe)" stroke-width="5" fill="none"/>
+    <path d="M0,12 C40,28 80,28 120,12" stroke="url(#blueStripe)" stroke-width="5" fill="none"/>
+    <path d="M0,0 C40,16 80,16 120,0" stroke="#3a0008" stroke-width="0.4" fill="none" opacity="0.7"/>
+    <path d="M0,12 C40,28 80,28 120,12" stroke="#020c30" stroke-width="0.4" fill="none" opacity="0.7"/>
+  </g>
+
+  <g id="ribbonSwagBoldV">
+    <path d="M0,0 C16,40 16,80 0,120" stroke="url(#redStripeV)" stroke-width="5" fill="none"/>
+    <path d="M6,0 C22,40 22,80 6,120" stroke="url(#whiteStripeV)" stroke-width="5" fill="none"/>
+    <path d="M12,0 C28,40 28,80 12,120" stroke="url(#blueStripeV)" stroke-width="5" fill="none"/>
+  </g>
+
+  <g id="radialFirework">
+    <g stroke="#e02838" stroke-width="1.4" fill="none">
+      <path d="M0,0 L0,-32 M0,0 L0,32 M0,0 L-32,0 M0,0 L32,0"/>
+      <path d="M0,0 L22.6,-22.6 M0,0 L-22.6,-22.6 M0,0 L22.6,22.6 M0,0 L-22.6,22.6"/>
+    </g>
+    <g stroke="#ffffff" stroke-width="1" fill="none">
+      <path d="M0,0 L12,-28 M0,0 L-12,-28 M0,0 L12,28 M0,0 L-12,28"/>
+      <path d="M0,0 L28,-12 M0,0 L28,12 M0,0 L-28,-12 M0,0 L-28,12"/>
+    </g>
+    <circle cx="0" cy="-32" r="2" fill="#e02838"/>
+    <circle cx="0" cy="32" r="2" fill="#e02838"/>
+    <circle cx="-32" cy="0" r="2" fill="#e02838"/>
+    <circle cx="32" cy="0" r="2" fill="#e02838"/>
+    <circle cx="22.6" cy="-22.6" r="1.6" fill="#2848c0"/>
+    <circle cx="-22.6" cy="-22.6" r="1.6" fill="#2848c0"/>
+    <circle cx="22.6" cy="22.6" r="1.6" fill="#2848c0"/>
+    <circle cx="-22.6" cy="22.6" r="1.6" fill="#2848c0"/>
+    <circle cx="0" cy="0" r="3" fill="url(#starGrad)"/>
+  </g>
+
+  <g id="sparkleDot">
+    <circle cx="0" cy="0" r="1.4" fill="#ffffff"/>
+    <path d="M0,-3 L0,3 M-3,0 L3,0" stroke="#ffffff" stroke-width="0.4"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#ribbonSwagBold" transform="translate(60,28)"/>
+  <use href="#ribbonSwagBold" transform="translate(220,28)"/>
+  <use href="#ribbonSwagBold" transform="translate(380,28)"/>
+  <use href="#ribbonSwagBold" transform="translate(540,28)"/>
+  <use href="#ribbonSwagBold" transform="translate(700,28)"/>
+  <use href="#ribbonSwagBold" transform="translate(820,28)"/>
+  <use href="#brightStar" transform="translate(140,42)"/>
+  <use href="#brightStar" transform="translate(280,42) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(420,42)"/>
+  <use href="#brightStar" transform="translate(580,42) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(720,42)"/>
+  <use href="#brightStar" transform="translate(860,42) scale(0.85)"/>
+  <use href="#starSm" transform="translate(180,18)"/>
+  <use href="#starSm" transform="translate(320,16)"/>
+  <use href="#starSm" transform="translate(460,18)"/>
+  <use href="#starSm" transform="translate(600,16)"/>
+  <use href="#starSm" transform="translate(740,18)"/>
+  <use href="#starSm" transform="translate(880,16)"/>
+  <use href="#sparkleDot" transform="translate(220,52)"/>
+  <use href="#sparkleDot" transform="translate(360,50)"/>
+  <use href="#sparkleDot" transform="translate(500,52)"/>
+  <use href="#sparkleDot" transform="translate(640,50)"/>
+  <use href="#sparkleDot" transform="translate(780,52)"/>
+
+  <!-- BOTTOM -->
+  <use href="#ribbonSwagBold" transform="translate(60,1442) scale(1,-1)"/>
+  <use href="#ribbonSwagBold" transform="translate(220,1442) scale(1,-1)"/>
+  <use href="#ribbonSwagBold" transform="translate(380,1442) scale(1,-1)"/>
+  <use href="#ribbonSwagBold" transform="translate(540,1442) scale(1,-1)"/>
+  <use href="#ribbonSwagBold" transform="translate(700,1442) scale(1,-1)"/>
+  <use href="#ribbonSwagBold" transform="translate(820,1442) scale(1,-1)"/>
+  <use href="#brightStar" transform="translate(140,1458)"/>
+  <use href="#brightStar" transform="translate(280,1458) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(420,1458)"/>
+  <use href="#brightStar" transform="translate(580,1458) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(720,1458)"/>
+  <use href="#brightStar" transform="translate(860,1458) scale(0.85)"/>
+  <use href="#starSm" transform="translate(180,1482)"/>
+  <use href="#starSm" transform="translate(320,1484)"/>
+  <use href="#starSm" transform="translate(460,1482)"/>
+  <use href="#starSm" transform="translate(600,1484)"/>
+  <use href="#starSm" transform="translate(740,1482)"/>
+  <use href="#starSm" transform="translate(880,1484)"/>
+
+  <!-- LEFT -->
+  <use href="#ribbonSwagBoldV" transform="translate(28,60)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(28,220)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(28,380)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(28,540)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(28,700)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(28,860)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(28,1020)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(28,1180)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(28,1320)"/>
+  <use href="#brightStar" transform="translate(42,140)"/>
+  <use href="#brightStar" transform="translate(42,300) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(42,460)"/>
+  <use href="#brightStar" transform="translate(42,620) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(42,780)"/>
+  <use href="#brightStar" transform="translate(42,940) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(42,1100)"/>
+  <use href="#brightStar" transform="translate(42,1260) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(42,1400)"/>
+  <use href="#starSm" transform="translate(18,180)"/>
+  <use href="#starSm" transform="translate(16,340)"/>
+  <use href="#starSm" transform="translate(18,500)"/>
+  <use href="#starSm" transform="translate(16,660)"/>
+  <use href="#starSm" transform="translate(18,820)"/>
+  <use href="#starSm" transform="translate(16,980)"/>
+  <use href="#starSm" transform="translate(18,1140)"/>
+  <use href="#starSm" transform="translate(16,1300)"/>
+
+  <!-- RIGHT -->
+  <use href="#ribbonSwagBoldV" transform="translate(960,60)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(960,220)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(960,380)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(960,540)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(960,700)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(960,860)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(960,1020)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(960,1180)"/>
+  <use href="#ribbonSwagBoldV" transform="translate(960,1320)"/>
+  <use href="#brightStar" transform="translate(958,140)"/>
+  <use href="#brightStar" transform="translate(958,300) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(958,460)"/>
+  <use href="#brightStar" transform="translate(958,620) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(958,780)"/>
+  <use href="#brightStar" transform="translate(958,940) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(958,1100)"/>
+  <use href="#brightStar" transform="translate(958,1260) scale(0.85)"/>
+  <use href="#brightStar" transform="translate(958,1400)"/>
+  <use href="#starSm" transform="translate(982,180)"/>
+  <use href="#starSm" transform="translate(984,340)"/>
+  <use href="#starSm" transform="translate(982,500)"/>
+  <use href="#starSm" transform="translate(984,660)"/>
+  <use href="#starSm" transform="translate(982,820)"/>
+  <use href="#starSm" transform="translate(984,980)"/>
+  <use href="#starSm" transform="translate(982,1140)"/>
+  <use href="#starSm" transform="translate(984,1300)"/>
+
+  <!-- CORNER FIREWORKS -->
+  <g transform="translate(36,36)">
+    <use href="#radialFirework" transform="translate(20,20)"/>
+    <use href="#brightStar" transform="translate(58,18)"/>
+    <use href="#brightStar" transform="translate(18,58)"/>
+    <use href="#sparkleDot" transform="translate(48,48)"/>
+    <use href="#sparkleDot" transform="translate(58,38)"/>
+    <use href="#sparkleDot" transform="translate(38,58)"/>
+  </g>
+  <g transform="translate(964,36)">
+    <use href="#radialFirework" transform="translate(-20,20)"/>
+    <use href="#brightStar" transform="translate(-58,18)"/>
+    <use href="#brightStar" transform="translate(-18,58)"/>
+    <use href="#sparkleDot" transform="translate(-48,48)"/>
+    <use href="#sparkleDot" transform="translate(-58,38)"/>
+    <use href="#sparkleDot" transform="translate(-38,58)"/>
+  </g>
+  <g transform="translate(36,1464)">
+    <use href="#radialFirework" transform="translate(20,-20)"/>
+    <use href="#brightStar" transform="translate(58,-18)"/>
+    <use href="#brightStar" transform="translate(18,-58)"/>
+    <use href="#sparkleDot" transform="translate(48,-48)"/>
+    <use href="#sparkleDot" transform="translate(58,-38)"/>
+    <use href="#sparkleDot" transform="translate(38,-58)"/>
+  </g>
+  <g transform="translate(964,1464)">
+    <use href="#radialFirework" transform="translate(-20,-20)"/>
+    <use href="#brightStar" transform="translate(-58,-18)"/>
+    <use href="#brightStar" transform="translate(-18,-58)"/>
+    <use href="#sparkleDot" transform="translate(-48,-48)"/>
+    <use href="#sparkleDot" transform="translate(-58,-38)"/>
+    <use href="#sparkleDot" transform="translate(-38,-58)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#ffffff" stroke-width="1.4" fill="none" opacity="0.6"/>
+</svg>

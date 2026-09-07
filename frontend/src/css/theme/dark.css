@@ -1,0 +1,107 @@
+/**
+ * CHUB Dark Theme
+ *
+ * Indigo-led cool palette (sl1ckbe3ts) tuned for low-light viewing. Brighter
+ * indigo primary on deep indigo surfaces; pastel badge accents reused
+ * (with darker foreground swapped where needed for contrast).
+ *
+ * Theme Application: Applied via data-theme="dark" attribute on <html> element
+ */
+
+:root,
+[data-theme='dark'] {
+    /* Brand & Semantic Colors */
+    --primary: #8767f7; /* Violet brand — buttons, active nav, AUTO tag */
+    --primary-hover: #a99eff;
+    --accent: #53e8f0; /* Cyan — live/running, links, GDrive, info */
+    --accent-2: #8767f7;
+    --success: #6cbc66; /* Healthy / active / Local source */
+    --warning: #ffc944; /* Gold — logo, storage pressure, MM2K */
+    --error: #fd355c; /* Failed / bloat / danger */
+    --info: #53e8f0;
+    --focus: #8767f7;
+
+    /* Extended accent roles (each colour does ONE job) */
+    --azure: #1992f3; /* Secondary / scheduled */
+    --gold-deep: #e28b2d; /* Storage-bar gradient base */
+    --manual: #9a7ba9; /* MANUAL tags / lilac accents */
+    --source-gdrive: #53e8f0; /* GDrive provenance (cyan) */
+    --source-local: #6cbc66; /* Local provenance (green) */
+    --source-cl2k: #a99eff; /* CL2K provenance (light lilac) */
+    --source-mm2k: #ffc944; /* MM2K provenance (gold) */
+    --source-orphan: #ff9d75; /* Orphans (peach) */
+
+    /* Surface & Background Colors — indigo-black elevation ramp (no flat grays) */
+    --bg: #110b28; /* Deep indigo canvas */
+    --surface: #191636; /* Content panel / card */
+    --surface-inset: #140f2b; /* Inset controls, sub-rows */
+    --surface-alt: #140f2b; /* Secondary / inset blocks */
+    --surface-elevated: #1d1942; /* Row hover / raised */
+    --row-hover: #1d1942;
+
+    /* Border & Separation Colors */
+    --border: #2a3052; /* Cards, strong dividers */
+    --border-light: #211c46; /* Subtle row separators */
+
+    /* Text & Content Colors */
+    --text-primary: #fff;
+    --text-secondary: #b2d1e8;
+    --text-tertiary: #6582ca;
+    --text-muted: #4f4a7a; /* Faint */
+    --text-faint: #564f8a; /* Section headings / idle */
+    --text-data: #8ea3cc; /* On-mono-data secondary */
+
+    /* Layout Specific Colors */
+    --sidebar-bg: #0c0820;
+    --sidebar-surface: #1d1942;
+    --sidebar-hover: #191636;
+    --sidebar-border: #211c46;
+    --sidebar-text: #fff;
+    --sidebar-text-secondary: #b2d1e8;
+    --sidebar-heading: #564f8a;
+    --header-bg: #0c0820;
+
+    /* Overlay & Modal Colors */
+    --overlay: rgb(10 6 24 / 64%);
+    --overlay-strong: rgb(0 0 0 / 85%);
+
+    /* Text-on-Color Utilities */
+    --on-color-text: #fff;
+    --primary-text: #fff;
+
+    /* Link state colors */
+    --link-hover: #a99eff;
+    --link-visited: #a99eff;
+    --accent-hover: #7cf0f6;
+    --accent-visited: #7cf0f6;
+
+    /* Form Control Colors */
+    --input-bg: #140f2b;
+    --input-bg-hover: #1d1942;
+    --input-bg-disabled: #0c0820;
+    --input-bg-readonly: #191636;
+    --input-border-disabled: #2a3052;
+    --checkbox-indicator-bg: #fff;
+
+    /* Pastel badge accents — dashboard quick-start icons (shared with light) */
+    --badge-1-bg: #d9b8bc;
+    --badge-1-fg: #773c47;
+    --badge-2-bg: #b2d1e8;
+    --badge-2-fg: #20558a;
+    --badge-3-bg: #a99eff;
+    --badge-3-fg: #463fbc;
+    --badge-4-bg: #fddfb6;
+    --badge-4-fg: #a5624b;
+    --badge-5-bg: #bff266;
+    --badge-5-fg: #2e7364;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: more) {
+    :root,
+    [data-theme='dark'] {
+        --border: #fff;
+        --text-primary: #fff;
+        --bg: #000;
+    }
+}

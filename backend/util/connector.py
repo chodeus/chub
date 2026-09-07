@@ -1,0 +1,1355 @@
+import itertools
+import sys
+import threading
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Union
+
+from backend.util.arr import (
+    ARRAuthenticationError,
+    ARRConnectionError,
+    create_arr_client,
+)
+from backend.util.config import (
+    ChubConfig,
+    load_config,
+    seed_plex_enabled_libraries,
+)
+from backend.util.database import ChubDB
+from backend.util.helper import as_list
+from backend.util.logger import Logger
+from backend.util.plex import PlexClient
+
+
+# Custom exceptions
+class ConnectorError(Exception):
+    """Base exception for connector operations"""
+
+    pass
+
+
+class InstanceConfigError(ConnectorError):
+    """Raised when instance configuration is invalid"""
+
+    pass
+
+
+class DatabaseSyncError(ConnectorError):
+    """Raised when database synchronization fails"""
+
+    pass
+
+
+class ConnectionPoolError(ConnectorError):
+    """Raised when connection pool operations fail"""
+
+    pass
+
+
+@dataclass
+class SyncResult:
+    """Result of a sync operation"""
+
+    instance_name: str
+    instance_type: str
+    success: bool
+    items_processed: int = 0
+    error_message: Optional[str] = None
+    duration: float = 0.0
+
+
+@dataclass
+class InstanceConfig:
+    """Validated instance configuration"""
+
+    name: str
+    type: str  # 'radarr', 'sonarr', 'plex'
+    url: str
+    api_key: str
+    libraries: Optional[List[str]] = None  # For Plex instances
+
+
+class InstanceParser:
+    """Parses and validates instance configurations"""
+
+    @staticmethod
+    def parse_instance_map(
+        instance_map: Dict[str, Any], config: ChubConfig
+    ) -> Dict[str, List[InstanceConfig]]:
+        """
+        Parse instance_map into validated InstanceConfig objects.
+
+        Expected formats:
+        - {'arrs': ['Radarr Test', 'Sonarr Test'], 'plex': {'plex_1': ['Test Movies', 'Test TV Shows']}}
+        - {'plex': {'plex_1': {'library_names': ['Test Movies', 'Test TV Shows']}}}
+        - {'arrs': ['Radarr Test']}
+        """
+        parsed_instances = {"arr": [], "plex": []}
+        # Parse ARR instances
+        arr_names = instance_map.get("arrs", [])
+        if arr_names:
+            parsed_instances["arr"] = InstanceParser._parse_arr_instances(
+                arr_names, config
+            )
+
+        # Parse Plex instances
+        plex_map = instance_map.get("plex", {})
+        if plex_map:
+            parsed_instances["plex"] = InstanceParser._parse_plex_instances(
+                plex_map, config
+            )
+        return parsed_instances
+
+    @staticmethod
+    def _parse_arr_instances(
+        arr_names: List[str], config: ChubConfig
+    ) -> List[InstanceConfig]:
+        """Parse ARR instance names into InstanceConfig objects"""
+        instances = []
+
+        for instance_name in arr_names:
+            # Check in both Radarr and Sonarr configs
+            instance_config = None
+            instance_type = None
+
+            if instance_name in config.instances.radarr:
+                instance_config = config.instances.radarr[instance_name]
+                instance_type = "radarr"
+            elif instance_name in config.instances.sonarr:
+                instance_config = config.instances.sonarr[instance_name]
+                instance_type = "sonarr"
+            elif instance_name in config.instances.lidarr:
+                instance_config = config.instances.lidarr[instance_name]
+                instance_type = "lidarr"
+
+            if not instance_config:
+                raise InstanceConfigError(
+                    f"ARR instance '{instance_name}' not found in config"
+                )
+
+            if not getattr(instance_config, "enabled", True):
+                continue
+
+            if not instance_config.url or not instance_config.api:
+                raise InstanceConfigError(
+                    f"ARR instance '{instance_name}' missing URL or API key"
+                )
+
+            instances.append(
+                InstanceConfig(
+                    name=instance_name,
+                    type=instance_type,
+                    url=instance_config.url,
+                    api_key=instance_config.api,
+                )
+            )
+
+        return instances
+
+    @staticmethod
+    def _parse_plex_instances(
+        plex_map: Dict[str, Union[List[str], Dict[str, List[str]]]], config: ChubConfig
+    ) -> List[InstanceConfig]:
+        """
+        Parse Plex instance map into InstanceConfig objects.
+
+        Supports two formats:
+        - {'plex_1': ['Test Movies', 'Test TV Shows']}  # Simple list
+        - {'plex_1': {'library_names': ['Test Movies', 'Test TV Shows']}}  # Dict format
+        """
+        instances = []
+        for instance_name, plex_config in plex_map.items():
+            if instance_name not in config.instances.plex:
+                raise InstanceConfigError(
+                    f"Plex instance '{instance_name}' not found in config"
+                )
+
+            plex_instance_config = config.instances.plex[instance_name]
+
+            if not getattr(plex_instance_config, "enabled", True):
+                continue
+
+            if not plex_instance_config.url or not plex_instance_config.api:
+                raise InstanceConfigError(
+                    f"Plex instance '{instance_name}' missing URL or API key"
+                )
+
+            # Extract library names from different formats
+            library_names = []
+            if isinstance(plex_config, list):
+                # Simple format: {'plex_1': ['Movies', 'TV Shows']}
+                library_names = plex_config
+            elif isinstance(plex_config, dict):
+                # Dict format: {'plex_1': {'library_names': ['Movies', 'TV Shows']}}
+                library_names = plex_config.get("library_names", [])
+            else:
+                raise InstanceConfigError(
+                    f"Invalid format for Plex instance '{instance_name}'. Expected list or dict with 'library_names'"
+                )
+
+            instances.append(
+                InstanceConfig(
+                    name=instance_name,
+                    type="plex",
+                    url=plex_instance_config.url,
+                    api_key=plex_instance_config.api,
+                    libraries=library_names,
+                )
+            )
+
+        return instances
+
+
+class ConnectionManager:
+    """Manages connections with connection pooling and retry logic"""
+
+    def __init__(self, logger: Logger):
+        self.logger = logger
+        self._lock = threading.Lock()
+        self._connections = {}
+
+    @contextmanager
+    def get_arr_client(self, instance_config: InstanceConfig):
+        """Get ARR client with connection management"""
+        cache_key = f"{instance_config.type}:{instance_config.name}"
+
+        try:
+            with self._lock:
+                if cache_key not in self._connections:
+                    arr_logger = self.logger.get_adapter(
+                        f"{instance_config.type}:{instance_config.name}"
+                    )
+                    client = create_arr_client(
+                        instance_config.url, instance_config.api_key, arr_logger
+                    )
+
+                    if not client or not client.is_connected():
+                        raise ConnectionPoolError(
+                            f"Failed to connect to {instance_config.type} instance '{instance_config.name}'"
+                        )
+
+                    self._connections[cache_key] = client
+
+            yield self._connections[cache_key]
+
+        except (ARRConnectionError, ARRAuthenticationError) as e:
+            with self._lock:
+                self._connections.pop(cache_key, None)
+            raise ConnectionPoolError(f"ARR connection failed: {e}")
+        except Exception as e:
+            self.logger.error(f"Unexpected error with ARR client {cache_key}: {e}")
+            raise
+
+    @contextmanager
+    def get_plex_client(self, instance_config: InstanceConfig):
+        """Get Plex client with connection management"""
+        cache_key = f"plex:{instance_config.name}"
+
+        try:
+            with self._lock:
+                if cache_key not in self._connections:
+                    plex_logger = self.logger.get_adapter(instance_config.name)
+                    client = PlexClient(
+                        instance_config.url, instance_config.api_key, plex_logger
+                    )
+
+                    if not client.is_connected():
+                        raise ConnectionPoolError(
+                            f"Failed to connect to Plex instance '{instance_config.name}'"
+                        )
+
+                    self._connections[cache_key] = client
+
+            yield self._connections[cache_key]
+
+        except Exception as e:
+            with self._lock:
+                self._connections.pop(cache_key, None)
+            raise ConnectionPoolError(f"Plex connection failed: {e}")
+
+    def close_all_connections(self):
+        """Close all cached connections"""
+        with self._lock:
+            for key, client in self._connections.items():
+                try:
+                    if hasattr(client, "session") and client.session:
+                        client.session.close()
+                except Exception:  # noqa: S110 -- best-effort cleanup
+                    pass
+            self._connections.clear()
+
+
+class Connector:
+    """
+    Enhanced connector class for CHUB v3 with proper instance_map support
+    and improved error handling.
+    """
+
+    def __init__(
+        self,
+        db: Optional[ChubDB] = None,
+        logger: Optional[Logger] = None,
+        instance_map: Optional[Dict[str, Any]] = None,
+    ):
+        self.db = db
+        self.config = load_config()
+        self.logger = logger
+        self.instance_map = instance_map
+
+        # Enhanced components
+        self.connection_manager = ConnectionManager(self.logger)
+        self.spinner = itertools.cycle(["-", "\\", "|", "/"])
+        # \r progress spinners only make sense on a TTY. Headless (container
+        # stdout is a pipe) they never redraw and just spam the log, so gate
+        # them and route the completion line through the logger instead.
+        self._tty = sys.stdout.isatty()
+
+        # Parse and validate instances using internal config
+        try:
+            self.parsed_instances = InstanceParser.parse_instance_map(
+                self.instance_map, self.config
+            )
+
+        except InstanceConfigError as e:
+            if self.logger:
+                self.logger.error(f"Instance configuration error: {e}")
+            raise
+
+    def update_arr_database(self) -> List[SyncResult]:
+        """Update ARR database with enhanced error handling"""
+        logger = self.logger.get_adapter("arr") if self.logger else None
+        arr_instances = self.parsed_instances.get("arr", [])
+
+        if not arr_instances:
+            if logger:
+                logger.warning("No ARR instances found in instance_map")
+            return []
+
+        if logger:
+            logger.info(f"Syncing {len(arr_instances)} ARR instances...")
+
+        results = []
+        for i, instance_config in enumerate(arr_instances, 1):
+            if self._tty:
+                sys.stdout.write(
+                    f"\rIndexing '{instance_config.name}' ({i}/{len(arr_instances)})... {next(self.spinner)}"
+                )
+                sys.stdout.flush()
+
+            result = self._sync_single_arr_instance(instance_config, logger)
+            results.append(result)
+
+            if not result.success and logger:
+                logger.warning(
+                    f"Failed to sync {instance_config.name}: {result.error_message}"
+                )
+
+            time.sleep(0.05)
+
+        if self._tty:
+            sys.stdout.write("\r" + " " * 80 + "\r")
+        if logger:
+            logger.info(f"ARR database sync complete. ({len(results)} instances)")
+
+        # Backfill missing tmdb_id values for rows we just synced. No-op if
+        # the user hasn't configured a TMDB API key. Running here (after all
+        # instances) lets the in-process memo dedup IDs shared between
+        # Radarr/Sonarr instances.
+        try:
+            from backend.util.tmdb import backfill_missing_tmdb_ids
+
+            tmdb_cfg = load_config().tmdb
+            synced_instances = [r.instance_name for r in results if r.success]
+            if synced_instances:
+                resolved = backfill_missing_tmdb_ids(
+                    self.db,
+                    tmdb_cfg,
+                    logger or self.logger,
+                    instance_names=synced_instances,
+                )
+                if resolved and logger:
+                    logger.info(
+                        f"TMDB backfill resolved {resolved} missing IDs across "
+                        f"{len(synced_instances)} synced instances"
+                    )
+        except Exception as exc:
+            (logger or self.logger).warning(f"TMDB backfill skipped: {exc}")
+
+        self._record_sync_completion(results)
+        return results
+
+    def _sync_single_arr_instance(
+        self, instance_config: InstanceConfig, logger
+    ) -> SyncResult:
+        """Sync a single ARR instance with comprehensive error handling"""
+        start_time = time.time()
+
+        try:
+            with self.connection_manager.get_arr_client(instance_config) as client:
+                asset_type = {
+                    "Radarr": "movie",
+                    "Sonarr": "show",
+                    "Lidarr": "artist",
+                }.get(client.instance_type, "show")
+
+                # Get all media with built-in retry logic from improved ARR client.
+                # Lidarr needs include_episode=True so each artist's albums are
+                # fetched (one parallel /album call per artist) and surface as
+                # asset_type="album" rows; Radarr/Sonarr carry their child data
+                # in the main payload, so they stay on the cheap path.
+                raw_media = client.get_all_media(
+                    include_episode=(client.instance_type == "Lidarr")
+                )
+                if not raw_media:
+                    return SyncResult(
+                        instance_name=instance_config.name,
+                        instance_type=instance_config.type,
+                        success=False,
+                        error_message="No media retrieved from instance",
+                        duration=time.time() - start_time,
+                    )
+
+                # Process media data - this now preserves all metadata including genres and cast
+                fresh_media = self._process_arr_media(raw_media, asset_type)
+
+                # Sync to database with enhanced metadata
+                # The sync_for_instance method will automatically use upsert_with_metadata
+                # when genres or cast_data are present in the media items.
+                #
+                # Partition by each row's own asset_type before syncing.
+                # sync_for_instance scopes its staleness comparison to one
+                # (instance, asset_type) pair, so Lidarr's mixed artist/album
+                # rows must be synced as two groups. Movies/shows are a single
+                # group, so this is a no-op for them.
+                try:
+                    rows_by_type: Dict[str, List[Dict]] = {}
+                    for row in fresh_media:
+                        rows_by_type.setdefault(
+                            row.get("asset_type") or asset_type, []
+                        ).append(row)
+                    # Always sync every asset_type this instance can emit, even
+                    # when a type is empty this run — otherwise sync_for_instance
+                    # (scoped to one asset_type) never runs for it and its stale
+                    # rows are never purged. A Lidarr artist can drop all albums,
+                    # so 'album' must still be synced (with []) to delete them.
+                    types_to_sync = set(rows_by_type)
+                    if asset_type == "artist":
+                        types_to_sync |= {"artist", "album"}
+                    else:
+                        types_to_sync.add(asset_type)
+                    for row_asset_type in types_to_sync:
+                        self.db.media.sync_for_instance(
+                            instance_config.name,
+                            # Stored as media_cache.source — must be the lowercase
+                            # service type (matches sync_state.scope and
+                            # /instances/types), NOT client.instance_type which is
+                            # title-cased ("Sonarr"); the mismatch broke the
+                            # snapshot-age lookup and the by-instance type labels.
+                            instance_config.type,
+                            row_asset_type,
+                            rows_by_type.get(row_asset_type, []),
+                            logger,
+                        )
+
+                    return SyncResult(
+                        instance_name=instance_config.name,
+                        instance_type=instance_config.type,
+                        success=True,
+                        items_processed=len(fresh_media),
+                        duration=time.time() - start_time,
+                    )
+
+                except Exception as db_error:
+                    raise DatabaseSyncError(f"Database sync failed: {db_error}")
+
+        except ConnectionPoolError as e:
+            return SyncResult(
+                instance_name=instance_config.name,
+                instance_type=instance_config.type,
+                success=False,
+                error_message=f"Connection error: {e}",
+                duration=time.time() - start_time,
+            )
+
+        except DatabaseSyncError as e:
+            return SyncResult(
+                instance_name=instance_config.name,
+                instance_type=instance_config.type,
+                success=False,
+                error_message=str(e),
+                duration=time.time() - start_time,
+            )
+
+        except Exception as e:
+            return SyncResult(
+                instance_name=instance_config.name,
+                instance_type=instance_config.type,
+                success=False,
+                error_message=f"Unexpected error: {e}",
+                duration=time.time() - start_time,
+            )
+
+    def _process_arr_media(self, raw_media: List[Dict], asset_type: str) -> List[Dict]:
+        """Process raw ARR media data for database, preserving all metadata including genres and cast"""
+        fresh_media = []
+
+        if asset_type == "show":
+            # Create entries for main show and each season, preserving all metadata
+            for show in raw_media:
+                # Main show entry - preserve all metadata fields
+                show_row = dict(show)
+                show_row["season_number"] = None
+                fresh_media.append(show_row)
+
+                # Season entries - inherit metadata from parent show
+                for season in show.get("seasons", []):
+                    season_row = dict(show)  # Copy all parent show metadata
+                    season_row["season_number"] = season.get("season_number")
+                    # Override has_content with per-season episode availability
+                    # so unreleased/unaired seasons aren't flagged as unmatched.
+                    season_row["has_content"] = (
+                        season.get("season_has_episodes") or 0
+                    ) > 0
+                    # Per-season episode unit counts drive episode-level stats
+                    # (Sonarr's native unit) — see media_cache stats fragments.
+                    season_row["episode_files"] = season.get("episode_files")
+                    season_row["aired_episodes"] = season.get("aired_episodes")
+                    season_row["total_episodes"] = season.get("total_episodes")
+                    # Override monitored with the per-season flag — Sonarr
+                    # tracks this per season (e.g. user unmonitors Specials
+                    # but keeps the main seasons monitored). Without this
+                    # override, every season inherits the show's monitored
+                    # state and `ignore_unmonitored` can't act on per-season
+                    # decisions.
+                    if season.get("monitored") is not None:
+                        season_row["monitored"] = season.get("monitored")
+                    # Preserve genres and cast_data from parent show for each season
+                    if "genres" in show:
+                        season_row["genres"] = show["genres"]
+                    if "cast_data" in show:
+                        season_row["cast_data"] = show["cast_data"]
+                    fresh_media.append(season_row)
+        elif asset_type == "artist":
+            from backend.util.normalization import normalize_titles
+
+            # Create entries for the main artist and each album. Albums become
+            # first-class asset_type="album" rows keyed by their own MusicBrainz
+            # ID (foreign_album_id) and scoped to the parent artist, so custom
+            # album covers can be matched/applied independently. (This replaces
+            # the older dormant "artist"+positional-season_number album rows,
+            # which dropped the album identity and could never be matched.)
+            for artist in raw_media:
+                # Main artist entry - preserve all metadata fields
+                artist_row = dict(artist)
+                artist_row["season_number"] = None
+                artist_row["parent_musicbrainz_id"] = None
+                artist_row["parent_title"] = None
+                fresh_media.append(artist_row)
+
+                artist_title = artist.get("title")
+                artist_mbid = artist.get("musicbrainz_id")
+
+                # Album entries - inherit metadata from parent artist.
+                # Coercing a malformed seasons to [] deletes this artist's
+                # cached albums as stale. seasons=None is normal, though.
+                seasons = artist.get("seasons")
+                if seasons is not None and not isinstance(seasons, list):
+                    raise ValueError(
+                        f"Artist {artist.get('title')!r} returned a "
+                        f"{type(seasons).__name__} for 'seasons'; refusing to "
+                        "sync album rows from malformed data."
+                    )
+                for season in as_list(seasons):
+                    album_title = season.get("album_title") or ""
+                    album_row = dict(artist)  # Copy parent artist metadata
+                    album_row["asset_type"] = "album"
+                    album_row["season_number"] = None
+                    album_row["title"] = album_title
+                    album_row["normalized_title"] = normalize_titles(album_title)
+                    # Album-level identity + parent linkage
+                    album_row["musicbrainz_id"] = season.get("foreign_album_id")
+                    album_row["parent_musicbrainz_id"] = artist_mbid
+                    album_row["parent_title"] = artist_title
+                    album_row["arr_id"] = season.get("album_id")
+                    album_row["monitored"] = season.get("monitored")
+                    # Override the inherited artist-level has_content with this
+                    # album's own track-file presence (set in arr normalize), so
+                    # each album row reflects whether *that* album is on disk.
+                    album_row["has_content"] = season.get("has_content")
+                    # Per-album release date drives missing-vs-upcoming in stats.
+                    album_row["release_date"] = season.get("release_date")
+                    # Parent artist's monitored flag — Library Statistics excludes
+                    # albums under an unmonitored artist from "missing" (album_row's
+                    # own `monitored` is the album's flag, set below).
+                    album_row["artist_monitored"] = artist.get("monitored")
+                    # Album titles don't share the artist's alternate titles.
+                    album_row["alternate_titles"] = None
+                    album_row["normalized_alternate_titles"] = None
+                    # Preserve genres and cast_data from parent artist for each album
+                    if "genres" in artist:
+                        album_row["genres"] = artist["genres"]
+                    if "cast_data" in artist:
+                        album_row["cast_data"] = artist["cast_data"]
+                    fresh_media.append(album_row)
+        else:
+            # For movies, data is already properly formatted
+            fresh_media = raw_media
+
+        return fresh_media
+
+    def update_plex_database(self) -> List[SyncResult]:
+        """Update Plex database with enhanced error handling"""
+        logger = self.logger.get_adapter("plex") if self.logger else None
+        plex_instances = self.parsed_instances.get("plex", [])
+        if not plex_instances:
+            if logger:
+                logger.warning("No Plex instances found in instance_map")
+            return []
+
+        results = []
+        for i, instance_config in enumerate(plex_instances, 1):
+            if self._tty:
+                sys.stdout.write(
+                    f"\rIndexing Plex '{instance_config.name}' ({i}/{len(plex_instances)})... {next(self.spinner)}"
+                )
+                sys.stdout.flush()
+
+            result = self._sync_single_plex_instance(instance_config, logger)
+            results.append(result)
+
+            if not result.success and logger:
+                logger.warning(
+                    f"Failed to sync {instance_config.name}: {result.error_message}"
+                )
+
+            time.sleep(0.05)
+
+        if self._tty:
+            sys.stdout.write("\r" + " " * 80 + "\r")
+        if logger:
+            logger.info(f"Plex database sync complete. ({len(results)} instances)")
+        self._record_sync_completion(results)
+        return results
+
+    def _record_sync_completion(self, results: List[SyncResult]) -> None:
+        """Stamp sync_state for each successfully synced instance so the
+        freshness signal reflects the sync run rather than row churn.
+        Non-critical: a failure here never fails the sync."""
+        db = getattr(self, "db", None)
+        if db is None:
+            return
+        try:
+            for r in results:
+                if r.success:
+                    db.sync_state.mark_synced(r.instance_type, r.instance_name)
+        except Exception as exc:
+            if self.logger:
+                self.logger.warning(f"sync_state update skipped: {exc}")
+
+    def _sync_single_plex_instance(
+        self, instance_config: InstanceConfig, logger
+    ) -> SyncResult:
+        """Sync a single Plex instance"""
+        start_time = time.time()
+        total_items = 0
+
+        try:
+            with self.connection_manager.get_plex_client(instance_config) as client:
+                # Get available libraries
+                try:
+                    all_libraries = client.get_libraries()
+                except Exception as e:
+                    raise ConnectionPoolError(f"Failed to fetch libraries: {e}")
+
+                # Apply the instance-level opt-in allow-list BEFORE any per-caller
+                # (plex_scope) selection, so a non-opted library is invisible to
+                # every consumer of plex_media_cache.
+                allowed_libraries = self._apply_instance_opt_in(
+                    instance_config.name, all_libraries, logger
+                )
+
+                # Determine target libraries (per-caller scope narrows within the
+                # allow-list; empty scope == all opted-in libraries)
+                target_libraries = self._determine_target_libraries(
+                    allowed_libraries, instance_config.libraries
+                )
+
+                if not target_libraries:
+                    return SyncResult(
+                        instance_name=instance_config.name,
+                        instance_type=instance_config.type,
+                        success=False,
+                        error_message="No valid libraries found",
+                        duration=time.time() - start_time,
+                    )
+
+                # Sync each library
+                for library_name in target_libraries:
+                    try:
+                        fresh_media = client.get_all_plex_media(
+                            library_name=library_name,
+                            logger=logger,
+                            instance_name=instance_config.name,
+                        )
+
+                        if fresh_media:
+                            self.db.plex.sync_for_library(
+                                instance_name=instance_config.name,
+                                library_name=library_name,
+                                fresh_media=fresh_media,
+                                logger=logger,
+                            )
+                            total_items += len(fresh_media)
+
+                    except Exception as e:
+                        logger.warning(f"Failed to sync library '{library_name}': {e}")
+
+                return SyncResult(
+                    instance_name=instance_config.name,
+                    instance_type=instance_config.type,
+                    success=True,
+                    items_processed=total_items,
+                    duration=time.time() - start_time,
+                )
+
+        except ConnectionPoolError as e:
+            return SyncResult(
+                instance_name=instance_config.name,
+                instance_type=instance_config.type,
+                success=False,
+                error_message=str(e),
+                duration=time.time() - start_time,
+            )
+
+        except Exception as e:
+            return SyncResult(
+                instance_name=instance_config.name,
+                instance_type=instance_config.type,
+                success=False,
+                error_message=f"Unexpected error: {e}",
+                duration=time.time() - start_time,
+            )
+
+    def update_collections_database(self) -> List[SyncResult]:
+        """Update Plex collections database"""
+        logger = self.logger.get_adapter("plex") if self.logger else None
+        plex_instances = self.parsed_instances.get("plex", [])
+        if not plex_instances:
+            if logger:
+                logger.warning("No Plex instances found for collections sync")
+            return []
+
+        results = []
+        for i, instance_config in enumerate(plex_instances, 1):
+            if self._tty:
+                sys.stdout.write(
+                    f"\rIndexing collections '{instance_config.name}' ({i}/{len(plex_instances)})... {next(self.spinner)}"
+                )
+                sys.stdout.flush()
+
+            result = self._sync_single_plex_collections(instance_config, logger)
+            results.append(result)
+
+            if not result.success and logger:
+                logger.warning(
+                    f"Failed to sync collections for {instance_config.name}: {result.error_message}"
+                )
+
+        if self._tty:
+            sys.stdout.write("\r" + " " * 80 + "\r")
+        if logger:
+            logger.info(f"Collections sync complete. ({len(results)} instances)")
+        return results
+
+    def _sync_single_plex_collections(
+        self, instance_config: InstanceConfig, logger
+    ) -> SyncResult:
+        """Sync collections for a single Plex instance"""
+        start_time = time.time()
+        total_collections = 0
+
+        try:
+            with self.connection_manager.get_plex_client(instance_config) as client:
+                all_libraries = client.get_libraries()
+                allowed_libraries = self._apply_instance_opt_in(
+                    instance_config.name, all_libraries, logger
+                )
+                target_libraries = self._determine_target_libraries(
+                    allowed_libraries, instance_config.libraries
+                )
+
+                for library_name in target_libraries:
+                    try:
+                        collections = client.get_collections(
+                            library_name, include_smart=True
+                        )
+
+                        if collections:
+                            self.db.collection.sync_collections_cache(
+                                instance_config.name, library_name, collections, logger
+                            )
+                            total_collections += len(collections)
+
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to sync collections for library '{library_name}': {e}"
+                        )
+
+                return SyncResult(
+                    instance_name=instance_config.name,
+                    instance_type="plex_collections",
+                    success=True,
+                    items_processed=total_collections,
+                    duration=time.time() - start_time,
+                )
+
+        except Exception as e:
+            return SyncResult(
+                instance_name=instance_config.name,
+                instance_type="plex_collections",
+                success=False,
+                error_message=str(e),
+                duration=time.time() - start_time,
+            )
+
+    @staticmethod
+    def _normalize_library_name(name: str) -> str:
+        return name.strip().lower() if isinstance(name, str) else ""
+
+    def _apply_instance_opt_in(
+        self, instance_name: str, all_libraries: List[str], logger=None
+    ) -> List[str]:
+        """Restrict ``all_libraries`` to the instance's opt-in allow-list.
+
+        This is the single ingestion chokepoint for the Plex library opt-in.
+        Reads ``config.instances.plex[name].enabled_libraries`` (tri-state):
+
+        - ``None``  — legacy/unset: SEED the allow-list with the currently-present
+          libraries (so libraries added later stay hidden until opted in) and
+          treat all as enabled for this run. Preserves existing behaviour on
+          upgrade — no library silently disappears.
+        - ``[]``    — opted out: return ``[]`` (fail closed; nothing is synced).
+        - ``[...]`` — return the intersection with the live library list.
+
+        A per-caller (plex_scope) selection is applied AFTER this, narrowing
+        within the returned set. An instance missing from config fails closed
+        (returns ``[]``) — a real sync only ever reaches here for a configured
+        instance, so this guards a config race, not the legacy path.
+        """
+        detail = None
+        try:
+            detail = self.config.instances.plex.get(instance_name)
+        except Exception:
+            detail = None
+        if detail is None:
+            if logger:
+                logger.debug(
+                    "Plex '%s' not in config — opting out (fail closed)",
+                    instance_name,
+                )
+            return []
+        enabled = getattr(detail, "enabled_libraries", None)
+
+        if enabled is None:
+            seeded = seed_plex_enabled_libraries(instance_name, all_libraries)
+            if seeded:
+                # Keep the in-memory snapshot consistent for the rest of this run
+                # (e.g. the collections pass) so it doesn't re-seed.
+                detail.enabled_libraries = list(dict.fromkeys(all_libraries))
+            if seeded and logger:
+                logger.info(
+                    "Seeded library opt-in for Plex '%s' with %d current "
+                    "librar%s; new libraries stay hidden until opted in",
+                    instance_name,
+                    len(all_libraries),
+                    "y" if len(all_libraries) == 1 else "ies",
+                )
+            return list(all_libraries)
+
+        allowed_norm = {self._normalize_library_name(lib) for lib in enabled}
+        allowed = [
+            lib
+            for lib in all_libraries
+            if self._normalize_library_name(lib) in allowed_norm
+        ]
+        if not allowed and logger:
+            logger.debug(
+                "Plex '%s' has no opted-in libraries — skipping", instance_name
+            )
+        return allowed
+
+    def _determine_target_libraries(
+        self, all_libraries: List[str], selected_libraries: Optional[List[str]]
+    ) -> List[str]:
+        """Determine which libraries to process"""
+        if not selected_libraries:
+            return all_libraries
+
+        normalized_selected = {
+            self._normalize_library_name(lib) for lib in selected_libraries
+        }
+        return [
+            lib
+            for lib in all_libraries
+            if self._normalize_library_name(lib) in normalized_selected
+        ]
+
+    def update_media_plex_mappings(self) -> Dict[str, int]:
+        """
+        Update plex_mapping_id in media_cache table using labelarr.py matching logic.
+        This creates pre-computed mappings between ARR media and Plex items for faster access.
+
+        Returns:
+            Dict with mapping statistics: {'updated': count, 'no_match': count}
+        """
+        if self.logger:
+            self.logger.info("Starting media-to-plex mapping update...")
+
+        stats = {"updated": 0, "no_match": 0}
+
+        try:
+            # Import normalization function from labelarr logic
+
+            # Get all plex media cache entries for validation
+            plex_items = self.db.plex.get_all()
+            valid_plex_ids = (
+                {item.get("id") for item in plex_items} if plex_items else set()
+            )
+
+            # Build a set of plex IDs that share GUIDs with at least one sibling
+            # (same guids string, different plex row). When a media_cache row
+            # currently maps to one of these ambiguous targets, we re-evaluate
+            # so file-path disambiguation can swap it to the correct copy.
+            ambiguous_plex_ids = set()
+            if plex_items:
+                guids_to_ids = {}
+                for p in plex_items:
+                    g = p.get("guids")
+                    if not g or g in ("{}", "[]", ""):
+                        continue
+                    guids_to_ids.setdefault(g, []).append(p.get("id"))
+                for ids in guids_to_ids.values():
+                    if len(ids) > 1:
+                        ambiguous_plex_ids.update(ids)
+
+            # Get all media cache entries that need mapping
+            # (NULL, invalid, or pointing at an ambiguous GUID-sibling target)
+            media_items = [
+                item
+                for item in self.db.media.get_all()
+                if item.get("plex_mapping_id") is None
+                or item.get("plex_mapping_id") not in valid_plex_ids
+                or item.get("plex_mapping_id") in ambiguous_plex_ids
+            ]
+
+            if not media_items:
+                if self.logger:
+                    self.logger.info("No media items need plex mapping")
+                return stats
+
+            if self.logger and plex_items:
+                self.logger.debug(f"First plex_item keys: {list(plex_items[0].keys())}")
+
+            if not plex_items:
+                if self.logger:
+                    self.logger.warning("No plex items found for mapping")
+                return stats
+
+            # Precompute the normalized Plex index ONCE (parsing guids +
+            # normalizing titles for every Plex row is the expensive part, and
+            # rescanning all rows per media item was O(N×M)).
+            prepared_index = self._prepare_plex_index(plex_items)
+
+            # Process each media item for mapping using direct database-to-database matching
+            for media_item in media_items:
+                plex_mapping_id = self._find_plex_match(
+                    media_item, plex_items, prepared_index
+                )
+
+                if plex_mapping_id:
+                    # Update the media_cache record with the mapping
+                    self.db.media.execute_query(
+                        "UPDATE media_cache SET plex_mapping_id = ? WHERE id = ?",
+                        (plex_mapping_id, media_item["id"]),
+                    )
+                    stats["updated"] += 1
+                else:
+                    stats["no_match"] += 1
+
+            if self.logger:
+                self.logger.info(
+                    f"Plex mapping complete: {stats['updated']} mapped, {stats['no_match']} no match"
+                )
+
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Error updating plex mappings: {e}")
+            raise ConnectorError(f"Plex mapping update failed: {e}")
+
+        return stats
+
+    def _prepare_plex_index(self, plex_items):
+        """Precompute normalized fields for every Plex row once, plus id and
+        title indices, so _find_plex_match examines only plausible candidates
+        (O(candidates)) instead of re-parsing/normalizing every row per media
+        item (O(N×M)). Returns (prepared, id_index, title_index)."""
+        from backend.util.normalization import normalize_titles
+
+        prepared = []
+        id_index = {}
+        title_index = {}
+        for idx, plex_item in enumerate(plex_items):
+            guids = self._parse_plex_guids(plex_item.get("guids", ""))
+            entry = {
+                "item": plex_item,
+                "tmdb": self._get_clean_id(guids.get("tmdb")),
+                "tvdb": self._get_clean_id(guids.get("tvdb")),
+                "imdb": self._get_clean_id(guids.get("imdb")),
+                "mbid": self._get_clean_id(guids.get("mbid")),
+                "season": plex_item.get("season_number"),
+                "title": normalize_titles(plex_item.get("title")),
+                "year": self._clean_year(plex_item.get("year")),
+            }
+            prepared.append(entry)
+            for idtype in ("tmdb", "tvdb", "imdb", "mbid"):
+                val = entry[idtype]
+                if val:
+                    id_index.setdefault((idtype, val), []).append(idx)
+            # Title indexed unconditionally (incl. empty) so empty-title
+            # title+year matches behave exactly as the old full scan.
+            title_index.setdefault(entry["title"], []).append(idx)
+        return prepared, id_index, title_index
+
+    def _find_plex_match(self, media_item, plex_items, prepared_index=None):
+        """Direct table-to-table matching: media_cache → plex_media_cache.
+
+        When multiple Plex rows match (e.g. Plex stores 1080p + 4K as two separate
+        items sharing GUIDs), disambiguate by comparing file paths against the
+        ARR row's folder. This ensures each ARR copy maps to its own Plex copy
+        instead of both pointing at whichever row was returned first.
+        """
+        import json
+
+        from backend.util.helper import YEAR_MATCH_TOLERANCE
+        from backend.util.normalization import normalize_titles
+
+        # Extract media item data
+        media_tmdb = self._get_clean_id(media_item.get("tmdb_id"))
+        media_tvdb = self._get_clean_id(media_item.get("tvdb_id"))
+        media_imdb = self._get_clean_id(media_item.get("imdb_id"))
+        media_mbid = self._get_clean_id(media_item.get("musicbrainz_id"))
+        media_season = media_item.get("season_number")
+        media_title = normalize_titles(media_item.get("title"))
+        media_year = self._clean_year(media_item.get("year"))
+        media_folder = media_item.get("folder") or ""
+        media_root = media_item.get("root_folder") or ""
+
+        # Build (or reuse) the normalized index, then examine only plausible
+        # candidates (rows sharing an ID or the exact title) rather than every
+        # Plex row. Membership is identical to the old full scan because the
+        # predicate requires id_match OR title_match, both of which are indexed.
+        if prepared_index is None:
+            prepared_index = self._prepare_plex_index(plex_items)
+        prepared, id_index, title_index = prepared_index
+
+        cand_idx = set()
+        for idtype, val in (
+            ("tmdb", media_tmdb),
+            ("tvdb", media_tvdb),
+            ("imdb", media_imdb),
+            ("mbid", media_mbid),
+        ):
+            if val:
+                cand_idx.update(id_index.get((idtype, val), ()))
+        cand_idx.update(title_index.get(media_title, ()))
+
+        # Collect ALL matching plex items (not just the first), in original
+        # Plex-row order so candidates[0] stays the same as the old scan.
+        candidates = []
+        for idx in sorted(cand_idx):
+            entry = prepared[idx]
+            title_match = media_title == entry["title"]
+            # ±1 tolerance, and a missing year on either side does not block —
+            # exact string equality wrongly dropped TV titles where ARR's
+            # release year and Plex's first-air year differ, and yearless ARR
+            # rows (e.g. "House of Anubis") never matched their yeared Plex
+            # counterpart. Mirrors helper.is_match's year gate.
+            year_match = (
+                media_year is None
+                or entry["year"] is None
+                or abs(media_year - entry["year"]) <= YEAR_MATCH_TOLERANCE
+            )
+
+            if media_season == 0:
+                season_match = entry["season"] is None or entry["season"] == 0
+            else:
+                season_match = media_season == entry["season"]
+
+            id_match = False
+            if media_tmdb and entry["tmdb"] and media_tmdb == entry["tmdb"]:
+                id_match = True
+            elif media_tvdb and entry["tvdb"] and media_tvdb == entry["tvdb"]:
+                id_match = True
+            elif media_imdb and entry["imdb"] and media_imdb == entry["imdb"]:
+                id_match = True
+            elif media_mbid and entry["mbid"] and media_mbid == entry["mbid"]:
+                id_match = True
+
+            if season_match and (id_match or (title_match and year_match)):
+                match_type = "ID" if id_match else "title+year"
+                candidates.append((entry["item"], match_type))
+
+        if not candidates:
+            if self.logger:
+                # DEBUG, not WARNING — an ARR row without a Plex counterpart is
+                # expected for any announced / tba / upcoming title (no file
+                # downloaded yet) and for any released item the user simply
+                # hasn't grabbed. Promoting it to WARNING fires for every
+                # such row, drowning the log on big libraries with no
+                # actionable signal. Keep it at DEBUG so it's still
+                # accessible when investigating a specific mapping miss.
+                self.logger.debug(
+                    f"✗ No direct match found for '{media_item.get('title')}' season {media_season}"
+                )
+            return None
+
+        chosen_plex_item, chosen_match_type = candidates[0]
+
+        if len(candidates) > 1 and media_folder:
+            # Multiple candidates (likely 1080p + 4K split in Plex). Pick the
+            # candidate whose file paths contain this ARR row's root + folder.
+            # media_cache.folder stores only the basename (e.g. "Avatar (2009)
+            # {tmdb-19995}"), so both radarr and radarr4k rows for the same
+            # movie share the same folder — the root_folder is what distinguishes
+            # them ("/data/media/movies" vs "/data/media/movies4k"). We take the
+            # root_folder's basename to build a discriminator that tolerates
+            # mount-prefix differences between Plex ("/movies/...") and ARR
+            # ("/data/media/movies/..."):
+            #   root_folder="/data/media/movies" + folder="Avatar (2009) {tmdb-19995}"
+            #   => discriminator = "/movies/Avatar (2009) {tmdb-19995}/"
+            root_name = ""
+            if media_root:
+                root_name = media_root.rstrip("/").rsplit("/", 1)[-1]
+            discriminator = (
+                f"/{root_name}/{media_folder}/" if root_name else f"/{media_folder}/"
+            )
+
+            path_winner = None
+            if discriminator:
+                for plex_item, _ in candidates:
+                    raw_paths = plex_item.get("file_paths")
+                    if not raw_paths:
+                        continue
+                    try:
+                        paths = (
+                            json.loads(raw_paths)
+                            if isinstance(raw_paths, str)
+                            else raw_paths
+                        )
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(paths, list):
+                        continue
+                    if any(isinstance(p, str) and discriminator in p for p in paths):
+                        path_winner = plex_item
+                        break
+
+            if path_winner is not None:
+                chosen_plex_item = path_winner
+                chosen_match_type = "path"
+            elif self.logger:
+                # Log ambiguity so users can spot unmerged multi-version items
+                # whose file paths don't contain the ARR folder's tail.
+                cand_ids = [self._get_plex_rowid(c[0]) for c in candidates]
+                self.logger.debug(
+                    f"⚠ Multiple Plex matches for '{media_item.get('title')}' "
+                    f"({media_item.get('instance_name')}): rowids={cand_ids}, "
+                    f"discriminator='{discriminator}' not in any file_paths. "
+                    f"Falling back to first candidate."
+                )
+
+        if self.logger:
+            rowid = self._get_plex_rowid(chosen_plex_item)
+            self.logger.debug(
+                f"✓ Direct match found for '{media_item.get('title')}' season {media_season} "
+                f"using {chosen_match_type}, rowid={rowid}"
+            )
+        return self._get_plex_rowid(chosen_plex_item)
+
+    def _get_plex_rowid(self, plex_item):
+        """Get the database ID for a plex item"""
+        return plex_item.get("id")
+
+    def _parse_plex_guids(self, guids_str):
+        """Parse Plex GUID string into structured data.
+
+        Handles both formats:
+        - New (dict): {"tmdb": "12345", "tvdb": "67890", "imdb": "tt12345"}
+        - Old (list of URIs): ["com.plexapp.agents.themoviedb://12345", ...]
+        """
+        import json
+
+        guids = {}
+        if not guids_str:
+            return guids
+
+        try:
+            parsed = json.loads(guids_str)
+
+            # New format: already a dict with clean keys → use directly
+            if isinstance(parsed, dict):
+                for key in ("tmdb", "tvdb", "imdb", "mbid"):
+                    val = parsed.get(key)
+                    if val is not None:
+                        guids[key] = str(val).split("?")[0]
+                # If we got matches, return immediately
+                if guids:
+                    return guids
+                # Otherwise fall through to URI parsing for legacy dict values
+
+            # Old format: list of URI strings like "com.plexapp.agents.themoviedb://12345"
+            guid_array = []
+            if isinstance(parsed, list):
+                guid_array = parsed
+            elif isinstance(parsed, str):
+                guid_array = [parsed]
+            elif isinstance(parsed, dict):
+                guid_array = list(parsed.values())
+
+            for guid in guid_array:
+                if not isinstance(guid, str):
+                    continue
+                # Strip old agent prefix if present, then extract provider://id
+                clean = guid.replace("com.plexapp.agents.", "")
+                if "themoviedb://" in clean:
+                    guids["tmdb"] = clean.split("themoviedb://")[1].split("?")[0]
+                elif "thetvdb://" in clean:
+                    guids["tvdb"] = clean.split("thetvdb://")[1].split("?")[0]
+                elif "imdb://" in clean:
+                    guids["imdb"] = clean.split("imdb://")[1].split("?")[0]
+                # New-style short URIs: tmdb://12345
+                elif "tmdb://" in clean:
+                    guids["tmdb"] = clean.split("tmdb://")[1].split("?")[0]
+                elif "tvdb://" in clean:
+                    guids["tvdb"] = clean.split("tvdb://")[1].split("?")[0]
+                # MusicBrainz (Lidarr/Plex music agent): mbid://<uuid>
+                elif "mbid://" in clean:
+                    guids["mbid"] = clean.split("mbid://")[1].split("?")[0]
+
+        except Exception:
+            pass  # Return empty dict on parse error
+
+        return guids
+
+    def _get_clean_id(self, val):
+        """Normalize IDs into comparable strings or None (from labelarr.py logic)"""
+        return str(val).strip() if val not in (None, "null", "", "None") else None
+
+    @staticmethod
+    def _clean_year(val):
+        """Parse a year into an int, or None when absent/unparseable.
+
+        None means "unknown" to the matcher and never blocks a title match,
+        rather than collapsing to "" and failing exact equality.
+        """
+        if val in (None, "", "None", 0, "0"):
+            return None
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            return None
+
+    def sync_all_databases(self) -> Dict[str, List[SyncResult]]:
+        """Sync all databases and return results"""
+        if self.logger:
+            self.logger.info("Starting comprehensive database sync...")
+
+        results = {}
+
+        try:
+            results["arr"] = self.update_arr_database()
+            results["plex"] = self.update_plex_database()
+            results["collections"] = self.update_collections_database()
+
+            # Update plex mappings after both ARR and Plex data are synced
+            try:
+                mapping_stats = self.update_media_plex_mappings()
+                results["mappings"] = mapping_stats
+            except Exception as e:
+                if self.logger:
+                    self.logger.warning(f"Plex mapping update failed: {e}")
+                results["mappings"] = {"error": str(e)}
+
+            if self.logger:
+                # Only count sync results, not mapping results which is a dict
+                sync_result_keys = ["arr", "plex", "collections"]
+                total_successful = sum(
+                    len([r for r in results.get(key, []) if r.success])
+                    for key in sync_result_keys
+                )
+                total_attempted = sum(
+                    len(results.get(key, [])) for key in sync_result_keys
+                )
+
+                self.logger.info(
+                    f"Database sync complete: {total_successful}/{total_attempted} instances successful"
+                )
+
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Error during comprehensive sync: {e}")
+            raise ConnectorError(f"Comprehensive sync failed: {e}")
+        finally:
+            self.connection_manager.close_all_connections()
+
+        return results
+
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - clean up connections"""
+        self.connection_manager.close_all_connections()
+
+
+def gather_media_and_collections(config: Any, db: ChubDB) -> List[dict]:
+    """Collect media (ARR, from media_cache) + collections (Plex, from
+    collections_cache) a poster/asset run matches against.
+
+    - ARR instances -> all their media_cache rows.
+    - plex_scope entries with match_collections -> their collections;
+      empty library_names == all libraries of that instance.
+    """
+    all_media: List[dict] = []
+    for name in getattr(config, "instances", []):
+        if isinstance(name, str):
+            media = db.media.get_by_instance(name)
+            if media:
+                all_media.extend(media)
+    for scope in getattr(config, "plex_scope", []) or []:
+        if not getattr(scope, "match_collections", False):
+            continue
+        libs = list(scope.library_names or [])
+        if not libs:
+            libs = db.collection.get_library_names_for_instance(scope.instance)
+        for library_name in libs:
+            collections = db.collection.get_by_instance_and_library(
+                scope.instance, library_name
+            )
+            if collections:
+                all_media.extend(collections)
+    return all_media
+
+
+def build_instance_map(config: Any) -> Dict[str, Any]:
+    """Build {"arrs": [...], "plex": {name: [libraries]}} from the split
+    `instances` (ARR strings) + `plex_scope` (Plex) fields. An empty
+    `library_names` means all libraries (downstream `_determine_target_libraries`
+    treats an empty selection as all)."""
+    arrs = [i for i in getattr(config, "instances", []) if isinstance(i, str)]
+    plex: Dict[str, list] = {}
+    for scope in getattr(config, "plex_scope", []) or []:
+        plex[scope.instance] = list(scope.library_names or [])
+    return {"arrs": arrs, "plex": plex}

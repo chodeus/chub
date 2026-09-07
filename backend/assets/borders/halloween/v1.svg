@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a0a04"/>
+      <stop offset="50%" stop-color="#0a0402"/>
+      <stop offset="100%" stop-color="#050201"/>
+    </linearGradient>
+    <radialGradient id="pumpkin" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffb14a"/>
+      <stop offset="50%" stop-color="#e07a18"/>
+      <stop offset="100%" stop-color="#6a2a00"/>
+    </radialGradient>
+    <radialGradient id="pumpkinGlow" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#fff0c8" stop-opacity="0.7"/>
+      <stop offset="60%" stop-color="#ff9d2a" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#e07a18" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="stem" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#4a6022"/>
+      <stop offset="100%" stop-color="#1a2008"/>
+    </radialGradient>
+    <linearGradient id="webStrand" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3a2a22"/>
+      <stop offset="50%" stop-color="#a89280"/>
+      <stop offset="100%" stop-color="#3a2a22"/>
+    </linearGradient>
+    <radialGradient id="spiderBody" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#3a2a22"/>
+      <stop offset="50%" stop-color="#1a100a"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </radialGradient>
+    <filter id="fog" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="pumpkinShape">
+    <ellipse cx="0" cy="0" rx="22" ry="20" fill="url(#pumpkinGlow)" filter="url(#fog)" opacity="0.6"/>
+    <ellipse cx="-8" cy="0" rx="6" ry="14" fill="url(#pumpkin)" stroke="#3a1400" stroke-width="0.6"/>
+    <ellipse cx="0" cy="0" rx="6" ry="15" fill="url(#pumpkin)" stroke="#3a1400" stroke-width="0.6"/>
+    <ellipse cx="8" cy="0" rx="6" ry="14" fill="url(#pumpkin)" stroke="#3a1400" stroke-width="0.6"/>
+    <ellipse cx="-14" cy="0" rx="4" ry="12" fill="url(#pumpkin)" stroke="#3a1400" stroke-width="0.6"/>
+    <ellipse cx="14" cy="0" rx="4" ry="12" fill="url(#pumpkin)" stroke="#3a1400" stroke-width="0.6"/>
+    <path d="M-1,-14 L-1,-20 Q0,-22 1,-20 L1,-14 Z" fill="url(#stem)"/>
+    <path d="M2,-18 Q6,-22 4,-16" stroke="#1a2008" stroke-width="0.8" fill="none"/>
+    <path d="M-8,-10 Q-8,0 -8,10 M0,-12 Q0,0 0,12 M8,-10 Q8,0 8,10" stroke="#3a1400" stroke-width="0.4" fill="none"/>
+  </g>
+
+  <g id="webChunk">
+    <path d="M0,0 L40,0 L40,40 L0,40 Z" fill="none" stroke="url(#webStrand)" stroke-width="0.4"/>
+    <path d="M0,0 L40,40 M40,0 L0,40" stroke="url(#webStrand)" stroke-width="0.5"/>
+    <path d="M20,0 L0,20 M0,20 L20,40 M20,40 L40,20 M40,20 L20,0" stroke="url(#webStrand)" stroke-width="0.4"/>
+    <path d="M0,0 Q10,4 20,0 M20,0 Q30,4 40,0 M0,40 Q10,36 20,40 M20,40 Q30,36 40,40 M0,0 Q4,10 0,20 M0,20 Q4,30 0,40 M40,0 Q36,10 40,20 M40,20 Q36,30 40,40" stroke="url(#webStrand)" stroke-width="0.4" fill="none"/>
+  </g>
+
+  <g id="cornerWeb">
+    <path d="M0,0 L100,0 L100,100 L0,100 Z" fill="none"/>
+    <path d="M0,0 L100,100 M30,0 L0,30 M60,0 L0,60 M90,0 L0,90 M100,30 L30,100 M100,60 L60,100 M100,90 L90,100" stroke="url(#webStrand)" stroke-width="0.6" opacity="0.9"/>
+    <path d="M14,0 Q24,8 14,16 Q24,24 14,32 M28,0 Q38,10 28,20 Q38,30 28,40 M42,0 Q52,12 42,24 Q52,36 42,48 M56,0 Q66,14 56,28 Q66,42 56,56" stroke="url(#webStrand)" stroke-width="0.4" fill="none" opacity="0.7"/>
+    <path d="M0,14 Q8,24 16,14 Q24,24 32,14 M0,28 Q10,38 20,28 Q30,38 40,28 M0,42 Q12,52 24,42 Q36,52 48,42 M0,56 Q14,66 28,56 Q42,66 56,56" stroke="url(#webStrand)" stroke-width="0.4" fill="none" opacity="0.7"/>
+    <path d="M4,4 L20,12 M12,4 L20,12 M20,12 L36,4 M20,12 L36,20 M4,12 L20,12 M20,12 L20,28" stroke="url(#webStrand)" stroke-width="0.5"/>
+  </g>
+
+  <g id="spider">
+    <ellipse cx="0" cy="0" rx="6" ry="8" fill="url(#spiderBody)" stroke="#000" stroke-width="0.3"/>
+    <ellipse cx="0" cy="-8" rx="4" ry="4" fill="url(#spiderBody)" stroke="#000" stroke-width="0.3"/>
+    <path d="M-4,-2 L-14,-10 L-18,-4 M-4,0 L-16,2 L-18,8 M-4,2 L-14,8 L-18,14 M-4,4 L-12,12 L-16,18" stroke="#0a0606" stroke-width="0.8" fill="none"/>
+    <path d="M4,-2 L14,-10 L18,-4 M4,0 L16,2 L18,8 M4,2 L14,8 L18,14 M4,4 L12,12 L16,18" stroke="#0a0606" stroke-width="0.8" fill="none"/>
+    <circle cx="-1.5" cy="-8" r="0.6" fill="#ff9d2a"/>
+    <circle cx="1.5" cy="-8" r="0.6" fill="#ff9d2a"/>
+    <path d="M0,4 L0,6 Q-1,8 0,8 Q1,8 0,6" stroke="url(#webStrand)" stroke-width="0.4" fill="none"/>
+  </g>
+
+  <g id="hangingSpider">
+    <path d="M0,0 L0,30" stroke="url(#webStrand)" stroke-width="0.5"/>
+    <use href="#spider" transform="translate(0,30) scale(0.8)"/>
+  </g>
+
+  <g id="bat">
+    <path d="M0,0 C-4,-4 -10,-4 -16,-2 C-22,-6 -28,-4 -30,2 C-26,4 -22,4 -18,4 L-14,2 L-12,4 C-10,2 -8,2 -6,4 L-4,2 L-2,4 C0,2 2,4 4,2 L6,4 C8,2 10,2 12,4 L14,2 L18,4 C22,4 26,4 30,2 C28,-4 22,-6 16,-2 C10,-4 4,-4 0,0 Z" fill="#000000"/>
+    <ellipse cx="0" cy="2" rx="4" ry="3" fill="#000000"/>
+    <circle cx="-1.5" cy="1" r="0.5" fill="#ffb14a"/>
+    <circle cx="1.5" cy="1" r="0.5" fill="#ffb14a"/>
+  </g>
+
+  <g id="vineSegment">
+    <path d="M0,0 Q14,-4 28,2 Q42,8 56,0 Q70,-4 84,2 Q98,8 112,0" stroke="#1a1410" stroke-width="2.4" fill="none"/>
+    <path d="M14,-4 Q18,-12 22,-6 M42,2 Q40,10 36,4 M70,-4 Q74,-12 78,-6 M98,2 Q96,10 92,4" stroke="#0a0808" stroke-width="0.8" fill="none"/>
+  </g>
+
+  <!-- TOP: pumpkins + web strands + spider -->
+  <use href="#vineSegment" transform="translate(60,40)"/>
+  <use href="#vineSegment" transform="translate(180,30)"/>
+  <use href="#vineSegment" transform="translate(300,42)"/>
+  <use href="#vineSegment" transform="translate(420,30)"/>
+  <use href="#vineSegment" transform="translate(540,42)"/>
+  <use href="#vineSegment" transform="translate(660,30)"/>
+  <use href="#vineSegment" transform="translate(780,42)"/>
+  <use href="#pumpkinShape" transform="translate(150,38) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(280,30) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(420,38) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(580,30) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(720,38) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(860,30) scale(1.0)"/>
+  <use href="#webChunk" transform="translate(190,20) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(370,20) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(550,20) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(730,20) scale(0.5)"/>
+  <use href="#hangingSpider" transform="translate(320,16)"/>
+  <use href="#hangingSpider" transform="translate(680,16)"/>
+  <use href="#bat" transform="translate(120,18) scale(1.0)"/>
+  <use href="#bat" transform="translate(880,18) scale(1.0)"/>
+
+  <!-- BOTTOM -->
+  <use href="#vineSegment" transform="translate(60,1460)"/>
+  <use href="#vineSegment" transform="translate(180,1472)"/>
+  <use href="#vineSegment" transform="translate(300,1458)"/>
+  <use href="#vineSegment" transform="translate(420,1470)"/>
+  <use href="#vineSegment" transform="translate(540,1458)"/>
+  <use href="#vineSegment" transform="translate(660,1470)"/>
+  <use href="#vineSegment" transform="translate(780,1458)"/>
+  <use href="#pumpkinShape" transform="translate(150,1462) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(280,1470) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(420,1462) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(580,1470) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(720,1462) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(860,1470) scale(1.0)"/>
+  <use href="#webChunk" transform="translate(190,1448) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(370,1448) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(550,1448) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(730,1448) scale(0.5)"/>
+
+  <!-- LEFT -->
+  <use href="#vineSegment" transform="translate(40,80) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(28,200) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,320) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(30,440) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,560) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(30,680) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,800) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(30,920) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,1040) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(30,1160) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,1280) rotate(90)"/>
+  <use href="#pumpkinShape" transform="translate(38,150) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(30,290) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(38,430) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(30,570) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(38,710) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(30,850) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(38,990) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(30,1130) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(38,1270) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(30,1390) scale(1.0)"/>
+  <use href="#webChunk" transform="translate(16,220) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(16,500) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(16,780) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(16,1060) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(16,1340) scale(0.5)"/>
+  <use href="#hangingSpider" transform="translate(20,360)"/>
+  <use href="#hangingSpider" transform="translate(20,920)"/>
+
+  <!-- RIGHT -->
+  <use href="#vineSegment" transform="translate(960,80) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(972,200) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,320) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(970,440) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,560) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(970,680) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,800) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(970,920) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,1040) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(970,1160) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,1280) rotate(90)"/>
+  <use href="#pumpkinShape" transform="translate(962,150) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(970,290) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(962,430) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(970,570) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(962,710) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(970,850) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(962,990) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(970,1130) scale(1.0)"/>
+  <use href="#pumpkinShape" transform="translate(962,1270) scale(0.8)"/>
+  <use href="#pumpkinShape" transform="translate(970,1390) scale(1.0)"/>
+  <use href="#webChunk" transform="translate(964,220) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(964,500) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(964,780) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(964,1060) scale(0.5)"/>
+  <use href="#webChunk" transform="translate(964,1340) scale(0.5)"/>
+  <use href="#hangingSpider" transform="translate(980,360)"/>
+  <use href="#hangingSpider" transform="translate(980,920)"/>
+
+  <!-- CORNERS: BIG cobweb + spider unique to this variant -->
+  <g transform="translate(0,0)">
+    <use href="#cornerWeb"/>
+    <use href="#spider" transform="translate(48,48) scale(1.4)"/>
+    <use href="#pumpkinShape" transform="translate(24,24) scale(0.75)"/>
+    <use href="#bat" transform="translate(80,20) scale(0.9)"/>
+  </g>
+  <g transform="translate(1000,0)">
+    <use href="#cornerWeb" transform="scale(-1,1)"/>
+    <use href="#spider" transform="translate(-48,48) scale(1.4)"/>
+    <use href="#pumpkinShape" transform="translate(-24,24) scale(0.75)"/>
+    <use href="#bat" transform="translate(-80,20) scale(0.9)"/>
+  </g>
+  <g transform="translate(0,1500)">
+    <use href="#cornerWeb" transform="scale(1,-1)"/>
+    <use href="#spider" transform="translate(48,-48) scale(1.4)"/>
+    <use href="#pumpkinShape" transform="translate(24,-24) scale(0.75)"/>
+  </g>
+  <g transform="translate(1000,1500)">
+    <use href="#cornerWeb" transform="scale(-1,-1)"/>
+    <use href="#spider" transform="translate(-48,-48) scale(1.4)"/>
+    <use href="#pumpkinShape" transform="translate(-24,-24) scale(0.75)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#1a1410" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#e07a18" stroke-width="0.5" fill="none" opacity="0.7"/>
+</svg>

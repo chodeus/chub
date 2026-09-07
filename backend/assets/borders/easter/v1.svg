@@ -1,0 +1,307 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0e1a14"/>
+      <stop offset="50%" stop-color="#060c08"/>
+      <stop offset="100%" stop-color="#020403"/>
+    </linearGradient>
+    <radialGradient id="eggPink" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffeaee"/>
+      <stop offset="60%" stop-color="#f4a8b8"/>
+      <stop offset="100%" stop-color="#a0606a"/>
+    </radialGradient>
+    <radialGradient id="eggBlue" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#e0f0fa"/>
+      <stop offset="60%" stop-color="#90c0e0"/>
+      <stop offset="100%" stop-color="#5078a8"/>
+    </radialGradient>
+    <radialGradient id="eggYellow" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fffadc"/>
+      <stop offset="60%" stop-color="#f4d870"/>
+      <stop offset="100%" stop-color="#a08840"/>
+    </radialGradient>
+    <radialGradient id="eggGreen" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#e8f4d4"/>
+      <stop offset="60%" stop-color="#a0d090"/>
+      <stop offset="100%" stop-color="#608a50"/>
+    </radialGradient>
+    <radialGradient id="eggLavender" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#f0e8fa"/>
+      <stop offset="60%" stop-color="#c0a0e8"/>
+      <stop offset="100%" stop-color="#7858a0"/>
+    </radialGradient>
+    <radialGradient id="tulipPink" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#ffc8d4"/>
+      <stop offset="60%" stop-color="#e4708a"/>
+      <stop offset="100%" stop-color="#7a3848"/>
+    </radialGradient>
+    <radialGradient id="tulipYellow" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#fff0a8"/>
+      <stop offset="60%" stop-color="#f4ca40"/>
+      <stop offset="100%" stop-color="#a07020"/>
+    </radialGradient>
+    <radialGradient id="daffodil" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#fffadc"/>
+      <stop offset="60%" stop-color="#f4d870"/>
+      <stop offset="100%" stop-color="#a08840"/>
+    </radialGradient>
+    <linearGradient id="stem" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#80b070"/>
+      <stop offset="100%" stop-color="#3a6028"/>
+    </linearGradient>
+    <radialGradient id="bunny" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#fff0e8"/>
+      <stop offset="60%" stop-color="#dac0b0"/>
+      <stop offset="100%" stop-color="#705848"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="eggBase">
+    <ellipse cx="0" cy="0" rx="11" ry="15" stroke-width="0.5"/>
+  </g>
+
+  <g id="eggPinkG">
+    <ellipse cx="0" cy="0" rx="11" ry="15" fill="url(#eggPink)" stroke="#a0606a" stroke-width="0.5"/>
+    <path d="M-10,-4 Q0,-2 10,-4 M-10,4 Q0,6 10,4" stroke="#a0606a" stroke-width="0.7" fill="none"/>
+    <circle cx="-4" cy="-8" r="1" fill="#fff" opacity="0.7"/>
+    <circle cx="4" cy="8" r="1" fill="#a0606a"/>
+    <circle cx="-3" cy="6" r="0.8" fill="#a0606a"/>
+  </g>
+
+  <g id="eggBlueG">
+    <ellipse cx="0" cy="0" rx="11" ry="15" fill="url(#eggBlue)" stroke="#5078a8" stroke-width="0.5"/>
+    <path d="M-10,0 Q-5,-4 0,0 Q5,4 10,0" stroke="#5078a8" stroke-width="0.7" fill="none"/>
+    <path d="M-8,-8 L8,-8 M-8,8 L8,8" stroke="#5078a8" stroke-width="0.5"/>
+    <circle cx="-3" cy="-9" r="1" fill="#fff" opacity="0.7"/>
+  </g>
+
+  <g id="eggYellowG">
+    <ellipse cx="0" cy="0" rx="11" ry="15" fill="url(#eggYellow)" stroke="#a08840" stroke-width="0.5"/>
+    <circle cx="0" cy="-5" r="2" fill="#a08840" opacity="0.4"/>
+    <circle cx="-4" cy="3" r="1.5" fill="#a08840" opacity="0.4"/>
+    <circle cx="5" cy="6" r="1.5" fill="#a08840" opacity="0.4"/>
+    <circle cx="-3" cy="-9" r="1" fill="#fff" opacity="0.7"/>
+  </g>
+
+  <g id="eggGreenG">
+    <ellipse cx="0" cy="0" rx="11" ry="15" fill="url(#eggGreen)" stroke="#608a50" stroke-width="0.5"/>
+    <path d="M-10,-2 L10,-2 M-10,2 L10,2 M-10,-6 L10,-6 M-10,6 L10,6" stroke="#608a50" stroke-width="0.6"/>
+    <circle cx="-3" cy="-9" r="1" fill="#fff" opacity="0.7"/>
+  </g>
+
+  <g id="eggLavenderG">
+    <ellipse cx="0" cy="0" rx="11" ry="15" fill="url(#eggLavender)" stroke="#7858a0" stroke-width="0.5"/>
+    <path d="M-7,0 Q0,-5 7,0 Q0,5 -7,0 Z" stroke="#7858a0" stroke-width="0.5" fill="none"/>
+    <circle cx="0" cy="-9" r="1.4" fill="#7858a0"/>
+    <circle cx="0" cy="9" r="1.4" fill="#7858a0"/>
+    <circle cx="-3" cy="-11" r="1" fill="#fff" opacity="0.7"/>
+  </g>
+
+  <g id="tulip">
+    <path d="M0,0 L0,30" stroke="url(#stem)" stroke-width="2" fill="none"/>
+    <path d="M-8,-2 C-10,-12 -6,-18 0,-20 C6,-18 10,-12 8,-2 C4,-4 0,-2 -4,-4 Z" fill="url(#tulipPink)" stroke="#7a3848" stroke-width="0.5"/>
+    <path d="M0,-20 L0,-4" stroke="#7a3848" stroke-width="0.4" opacity="0.6"/>
+    <path d="M-3,10 L-12,16 L-4,18 Z" fill="url(#stem)"/>
+  </g>
+
+  <g id="tulipYel">
+    <path d="M0,0 L0,30" stroke="url(#stem)" stroke-width="2" fill="none"/>
+    <path d="M-8,-2 C-10,-12 -6,-18 0,-20 C6,-18 10,-12 8,-2 C4,-4 0,-2 -4,-4 Z" fill="url(#tulipYellow)" stroke="#a07020" stroke-width="0.5"/>
+    <path d="M3,10 L12,16 L4,18 Z" fill="url(#stem)"/>
+  </g>
+
+  <g id="daffodilG">
+    <path d="M0,0 L0,30" stroke="url(#stem)" stroke-width="2" fill="none"/>
+    <g>
+      <ellipse cx="0" cy="-14" rx="3" ry="10" fill="url(#daffodil)" stroke="#a08840" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-14" rx="3" ry="10" fill="url(#daffodil)" transform="rotate(72)" stroke="#a08840" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-14" rx="3" ry="10" fill="url(#daffodil)" transform="rotate(144)" stroke="#a08840" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-14" rx="3" ry="10" fill="url(#daffodil)" transform="rotate(216)" stroke="#a08840" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-14" rx="3" ry="10" fill="url(#daffodil)" transform="rotate(288)" stroke="#a08840" stroke-width="0.4"/>
+    </g>
+    <circle cx="0" cy="-12" r="3.6" fill="#f4ca40" stroke="#a07020" stroke-width="0.4"/>
+    <circle cx="0" cy="-12" r="2" fill="#a07020" opacity="0.5"/>
+  </g>
+
+  <g id="willowLeaf">
+    <ellipse cx="0" cy="-10" rx="2.5" ry="8" fill="url(#stem)" stroke="#3a6028" stroke-width="0.3"/>
+  </g>
+
+  <g id="willowSpray">
+    <path d="M0,0 Q4,-8 6,-20 M0,0 Q-2,-10 -4,-22 M0,0 Q6,-4 14,-14" stroke="#3a6028" stroke-width="0.6" fill="none"/>
+    <use href="#willowLeaf" transform="translate(4,-8) rotate(-15)"/>
+    <use href="#willowLeaf" transform="translate(5,-14) rotate(-15)"/>
+    <use href="#willowLeaf" transform="translate(-2,-10) rotate(15)"/>
+    <use href="#willowLeaf" transform="translate(-3,-18) rotate(15)"/>
+    <use href="#willowLeaf" transform="translate(8,-8) rotate(-50)"/>
+    <use href="#willowLeaf" transform="translate(12,-12) rotate(-60)"/>
+  </g>
+
+  <g id="bunnyEars">
+    <ellipse cx="-7" cy="-18" rx="5" ry="22" fill="url(#bunny)" stroke="#705848" stroke-width="0.6" transform="rotate(-12,-7,-18)"/>
+    <ellipse cx="7" cy="-18" rx="5" ry="22" fill="url(#bunny)" stroke="#705848" stroke-width="0.6" transform="rotate(12,7,-18)"/>
+    <ellipse cx="-7" cy="-20" rx="2" ry="14" fill="#f4a8b8" opacity="0.7" transform="rotate(-12,-7,-20)"/>
+    <ellipse cx="7" cy="-20" rx="2" ry="14" fill="#f4a8b8" opacity="0.7" transform="rotate(12,7,-20)"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#willowSpray" transform="translate(120,52) rotate(180)"/>
+  <use href="#willowSpray" transform="translate(220,52) rotate(180)"/>
+  <use href="#willowSpray" transform="translate(320,52) rotate(180)"/>
+  <use href="#willowSpray" transform="translate(420,52) rotate(180)"/>
+  <use href="#willowSpray" transform="translate(520,52) rotate(180)"/>
+  <use href="#willowSpray" transform="translate(620,52) rotate(180)"/>
+  <use href="#willowSpray" transform="translate(720,52) rotate(180)"/>
+  <use href="#willowSpray" transform="translate(820,52) rotate(180)"/>
+  <use href="#tulip" transform="translate(180,52) rotate(180)"/>
+  <use href="#daffodilG" transform="translate(280,52) rotate(180)"/>
+  <use href="#tulipYel" transform="translate(380,52) rotate(180)"/>
+  <use href="#tulip" transform="translate(480,52) rotate(180)"/>
+  <use href="#daffodilG" transform="translate(580,52) rotate(180)"/>
+  <use href="#tulipYel" transform="translate(680,52) rotate(180)"/>
+  <use href="#tulip" transform="translate(780,52) rotate(180)"/>
+  <use href="#daffodilG" transform="translate(880,52) rotate(180)"/>
+  <use href="#eggPinkG" transform="translate(150,28)"/>
+  <use href="#eggBlueG" transform="translate(240,30)"/>
+  <use href="#eggYellowG" transform="translate(330,28)"/>
+  <use href="#eggGreenG" transform="translate(420,30)"/>
+  <use href="#eggLavenderG" transform="translate(510,28)"/>
+  <use href="#eggPinkG" transform="translate(600,30)"/>
+  <use href="#eggBlueG" transform="translate(690,28)"/>
+  <use href="#eggYellowG" transform="translate(780,30)"/>
+  <use href="#eggGreenG" transform="translate(870,28)"/>
+
+  <!-- BOTTOM -->
+  <use href="#willowSpray" transform="translate(120,1448)"/>
+  <use href="#willowSpray" transform="translate(220,1448)"/>
+  <use href="#willowSpray" transform="translate(320,1448)"/>
+  <use href="#willowSpray" transform="translate(420,1448)"/>
+  <use href="#willowSpray" transform="translate(520,1448)"/>
+  <use href="#willowSpray" transform="translate(620,1448)"/>
+  <use href="#willowSpray" transform="translate(720,1448)"/>
+  <use href="#willowSpray" transform="translate(820,1448)"/>
+  <use href="#tulip" transform="translate(180,1448)"/>
+  <use href="#daffodilG" transform="translate(280,1448)"/>
+  <use href="#tulipYel" transform="translate(380,1448)"/>
+  <use href="#tulip" transform="translate(480,1448)"/>
+  <use href="#daffodilG" transform="translate(580,1448)"/>
+  <use href="#tulipYel" transform="translate(680,1448)"/>
+  <use href="#tulip" transform="translate(780,1448)"/>
+  <use href="#daffodilG" transform="translate(880,1448)"/>
+  <use href="#eggPinkG" transform="translate(150,1472)"/>
+  <use href="#eggBlueG" transform="translate(240,1470)"/>
+  <use href="#eggYellowG" transform="translate(330,1472)"/>
+  <use href="#eggGreenG" transform="translate(420,1470)"/>
+  <use href="#eggLavenderG" transform="translate(510,1472)"/>
+  <use href="#eggPinkG" transform="translate(600,1470)"/>
+  <use href="#eggBlueG" transform="translate(690,1472)"/>
+  <use href="#eggYellowG" transform="translate(780,1470)"/>
+  <use href="#eggGreenG" transform="translate(870,1472)"/>
+
+  <!-- LEFT -->
+  <use href="#willowSpray" transform="translate(52,120) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,220) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,320) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,420) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,520) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,620) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,720) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,820) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,920) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,1020) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,1120) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,1220) rotate(90)"/>
+  <use href="#willowSpray" transform="translate(52,1320) rotate(90)"/>
+  <use href="#tulip" transform="translate(52,180) rotate(90)"/>
+  <use href="#daffodilG" transform="translate(52,280) rotate(90)"/>
+  <use href="#tulipYel" transform="translate(52,380) rotate(90)"/>
+  <use href="#tulip" transform="translate(52,480) rotate(90)"/>
+  <use href="#daffodilG" transform="translate(52,580) rotate(90)"/>
+  <use href="#tulipYel" transform="translate(52,680) rotate(90)"/>
+  <use href="#tulip" transform="translate(52,780) rotate(90)"/>
+  <use href="#daffodilG" transform="translate(52,880) rotate(90)"/>
+  <use href="#tulipYel" transform="translate(52,980) rotate(90)"/>
+  <use href="#tulip" transform="translate(52,1080) rotate(90)"/>
+  <use href="#daffodilG" transform="translate(52,1180) rotate(90)"/>
+  <use href="#tulipYel" transform="translate(52,1280) rotate(90)"/>
+  <use href="#tulip" transform="translate(52,1380) rotate(90)"/>
+  <use href="#eggPinkG" transform="translate(28,150)"/>
+  <use href="#eggBlueG" transform="translate(30,240)"/>
+  <use href="#eggYellowG" transform="translate(28,330)"/>
+  <use href="#eggGreenG" transform="translate(30,420)"/>
+  <use href="#eggLavenderG" transform="translate(28,510)"/>
+  <use href="#eggPinkG" transform="translate(30,600)"/>
+  <use href="#eggBlueG" transform="translate(28,690)"/>
+  <use href="#eggYellowG" transform="translate(30,780)"/>
+  <use href="#eggGreenG" transform="translate(28,870)"/>
+  <use href="#eggLavenderG" transform="translate(30,960)"/>
+  <use href="#eggPinkG" transform="translate(28,1050)"/>
+  <use href="#eggBlueG" transform="translate(30,1140)"/>
+  <use href="#eggYellowG" transform="translate(28,1230)"/>
+  <use href="#eggGreenG" transform="translate(30,1320)"/>
+
+  <!-- RIGHT -->
+  <use href="#willowSpray" transform="translate(948,120) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,220) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,320) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,420) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,520) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,620) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,720) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,820) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,920) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,1020) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,1120) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,1220) rotate(270)"/>
+  <use href="#willowSpray" transform="translate(948,1320) rotate(270)"/>
+  <use href="#tulip" transform="translate(948,180) rotate(270)"/>
+  <use href="#daffodilG" transform="translate(948,280) rotate(270)"/>
+  <use href="#tulipYel" transform="translate(948,380) rotate(270)"/>
+  <use href="#tulip" transform="translate(948,480) rotate(270)"/>
+  <use href="#daffodilG" transform="translate(948,580) rotate(270)"/>
+  <use href="#tulipYel" transform="translate(948,680) rotate(270)"/>
+  <use href="#tulip" transform="translate(948,780) rotate(270)"/>
+  <use href="#daffodilG" transform="translate(948,880) rotate(270)"/>
+  <use href="#tulipYel" transform="translate(948,980) rotate(270)"/>
+  <use href="#tulip" transform="translate(948,1080) rotate(270)"/>
+  <use href="#daffodilG" transform="translate(948,1180) rotate(270)"/>
+  <use href="#tulipYel" transform="translate(948,1280) rotate(270)"/>
+  <use href="#tulip" transform="translate(948,1380) rotate(270)"/>
+  <use href="#eggPinkG" transform="translate(972,150)"/>
+  <use href="#eggBlueG" transform="translate(970,240)"/>
+  <use href="#eggYellowG" transform="translate(972,330)"/>
+  <use href="#eggGreenG" transform="translate(970,420)"/>
+  <use href="#eggLavenderG" transform="translate(972,510)"/>
+  <use href="#eggPinkG" transform="translate(970,600)"/>
+  <use href="#eggBlueG" transform="translate(972,690)"/>
+  <use href="#eggYellowG" transform="translate(970,780)"/>
+  <use href="#eggGreenG" transform="translate(972,870)"/>
+  <use href="#eggLavenderG" transform="translate(970,960)"/>
+  <use href="#eggPinkG" transform="translate(972,1050)"/>
+  <use href="#eggBlueG" transform="translate(970,1140)"/>
+  <use href="#eggYellowG" transform="translate(972,1230)"/>
+  <use href="#eggGreenG" transform="translate(970,1320)"/>
+
+  <g transform="translate(50,50)">
+    <use href="#bunnyEars" transform="translate(0,40) scale(0.8)"/>
+    <use href="#eggLavenderG" transform="translate(30,30) scale(1.2)"/>
+    <use href="#tulip" transform="translate(50,18) rotate(35)"/>
+  </g>
+  <g transform="translate(950,50)">
+    <use href="#bunnyEars" transform="translate(0,40) scale(0.8)"/>
+    <use href="#eggBlueG" transform="translate(-30,30) scale(1.2)"/>
+    <use href="#tulip" transform="translate(-50,18) rotate(-35)"/>
+  </g>
+  <g transform="translate(50,1450)">
+    <use href="#eggPinkG" transform="translate(30,-30) scale(1.2)"/>
+    <use href="#daffodilG" transform="translate(50,-12) rotate(-35)"/>
+  </g>
+  <g transform="translate(950,1450)">
+    <use href="#eggYellowG" transform="translate(-30,-30) scale(1.2)"/>
+    <use href="#daffodilG" transform="translate(-50,-12) rotate(35)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#f4ca40" stroke-width="1.4" fill="none" opacity="0.8"/>
+</svg>

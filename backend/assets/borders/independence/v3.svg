@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#08102a"/>
+      <stop offset="50%" stop-color="#040818"/>
+      <stop offset="100%" stop-color="#02040e"/>
+    </linearGradient>
+    <radialGradient id="goldStar" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#fff4b0"/>
+      <stop offset="55%" stop-color="#e8c440"/>
+      <stop offset="100%" stop-color="#604010"/>
+    </radialGradient>
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6b4f15"/>
+      <stop offset="50%" stop-color="#f0d05a"/>
+      <stop offset="100%" stop-color="#8a6520"/>
+    </linearGradient>
+    <radialGradient id="medallionG" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#fff4b0"/>
+      <stop offset="50%" stop-color="#c89c2a"/>
+      <stop offset="100%" stop-color="#3a2a08"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="goldStarLg">
+    <path d="M0,-20 L5.9,-6.1 L20,-6.1 L8.9,2.3 L13.2,16.2 L0,8 L-13.2,16.2 L-8.9,2.3 L-20,-6.1 L-5.9,-6.1 Z" fill="url(#goldStar)" stroke="#604010" stroke-width="0.5"/>
+    <path d="M0,-20 L0,8 M-20,-6.1 L20,-6.1" stroke="#604010" stroke-width="0.3" opacity="0.5"/>
+    <circle cx="-4" cy="-6" r="2" fill="#fff4b0" opacity="0.7"/>
+  </g>
+
+  <g id="goldStarMd">
+    <path d="M0,-12 L3.5,-3.7 L12,-3.7 L5.3,1.4 L7.9,9.7 L0,4.8 L-7.9,9.7 L-5.3,1.4 L-12,-3.7 L-3.5,-3.7 Z" fill="url(#goldStar)" stroke="#604010" stroke-width="0.4"/>
+  </g>
+
+  <g id="goldStarSm">
+    <path d="M0,-7 L2,-2.2 L7,-2.2 L3.1,0.8 L4.6,5.6 L0,2.8 L-4.6,5.6 L-3.1,0.8 L-7,-2.2 L-2,-2.2 Z" fill="url(#goldStar)"/>
+  </g>
+
+  <g id="constellationLink">
+    <path d="M0,0 L40,0" stroke="url(#goldStroke)" stroke-width="0.4" opacity="0.6"/>
+  </g>
+
+  <g id="starCluster">
+    <use href="#constellationLink" transform="translate(-14,-2) rotate(15)"/>
+    <use href="#constellationLink" transform="translate(8,-4) rotate(-20)"/>
+    <use href="#constellationLink" transform="translate(-10,8) rotate(30)"/>
+    <use href="#goldStarLg" transform="translate(0,0)"/>
+    <use href="#goldStarMd" transform="translate(28,-6)"/>
+    <use href="#goldStarMd" transform="translate(-22,8)"/>
+    <use href="#goldStarSm" transform="translate(38,4)"/>
+    <use href="#goldStarSm" transform="translate(-30,-6)"/>
+    <use href="#goldStarSm" transform="translate(14,18)"/>
+    <use href="#goldStarSm" transform="translate(-8,-18)"/>
+  </g>
+
+  <g id="sunburstMedallion">
+    <circle cx="0" cy="0" r="22" fill="url(#medallionG)" stroke="#604010" stroke-width="0.8"/>
+    <circle cx="0" cy="0" r="22" fill="none" stroke="url(#goldStroke)" stroke-width="0.5"/>
+    <g stroke="url(#goldStroke)" stroke-width="0.8" fill="none">
+      <path d="M0,-22 L0,-30 M0,22 L0,30 M-22,0 L-30,0 M22,0 L30,0"/>
+      <path d="M-15.6,-15.6 L-21.2,-21.2 M15.6,-15.6 L21.2,-21.2 M-15.6,15.6 L-21.2,21.2 M15.6,15.6 L21.2,21.2"/>
+      <path d="M-8.4,-20.4 L-11.3,-27.6 M8.4,-20.4 L11.3,-27.6 M-20.4,-8.4 L-27.6,-11.3 M20.4,-8.4 L27.6,-11.3"/>
+      <path d="M-8.4,20.4 L-11.3,27.6 M8.4,20.4 L11.3,27.6 M-20.4,8.4 L-27.6,11.3 M20.4,8.4 L27.6,11.3"/>
+    </g>
+    <circle cx="0" cy="0" r="16" fill="none" stroke="#604010" stroke-width="0.4"/>
+    <use href="#goldStarLg" transform="translate(0,0) scale(0.6)"/>
+  </g>
+
+  <g id="dotConstellation">
+    <circle cx="0" cy="0" r="1.4" fill="url(#goldStar)"/>
+    <circle cx="20" cy="-6" r="1.4" fill="url(#goldStar)"/>
+    <circle cx="40" cy="-2" r="1.4" fill="url(#goldStar)"/>
+    <circle cx="60" cy="-8" r="1.4" fill="url(#goldStar)"/>
+    <circle cx="80" cy="-4" r="1.4" fill="url(#goldStar)"/>
+    <path d="M0,0 L20,-6 L40,-2 L60,-8 L80,-4" stroke="url(#goldStroke)" stroke-width="0.3" fill="none" opacity="0.5"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#starCluster" transform="translate(140,32)"/>
+  <use href="#starCluster" transform="translate(300,32)"/>
+  <use href="#starCluster" transform="translate(460,32)"/>
+  <use href="#starCluster" transform="translate(620,32)"/>
+  <use href="#starCluster" transform="translate(780,32)"/>
+  <use href="#starCluster" transform="translate(900,32) scale(0.8)"/>
+  <use href="#dotConstellation" transform="translate(100,16)"/>
+  <use href="#dotConstellation" transform="translate(260,18)"/>
+  <use href="#dotConstellation" transform="translate(420,16)"/>
+  <use href="#dotConstellation" transform="translate(580,18)"/>
+  <use href="#dotConstellation" transform="translate(740,16)"/>
+  <use href="#goldStarSm" transform="translate(220,46)"/>
+  <use href="#goldStarSm" transform="translate(380,46)"/>
+  <use href="#goldStarSm" transform="translate(540,46)"/>
+  <use href="#goldStarSm" transform="translate(700,46)"/>
+  <use href="#goldStarSm" transform="translate(860,46)"/>
+
+  <!-- BOTTOM -->
+  <use href="#starCluster" transform="translate(140,1468)"/>
+  <use href="#starCluster" transform="translate(300,1468)"/>
+  <use href="#starCluster" transform="translate(460,1468)"/>
+  <use href="#starCluster" transform="translate(620,1468)"/>
+  <use href="#starCluster" transform="translate(780,1468)"/>
+  <use href="#starCluster" transform="translate(900,1468) scale(0.8)"/>
+  <use href="#dotConstellation" transform="translate(100,1484)"/>
+  <use href="#dotConstellation" transform="translate(260,1482)"/>
+  <use href="#dotConstellation" transform="translate(420,1484)"/>
+  <use href="#dotConstellation" transform="translate(580,1482)"/>
+  <use href="#dotConstellation" transform="translate(740,1484)"/>
+  <use href="#goldStarSm" transform="translate(220,1454)"/>
+  <use href="#goldStarSm" transform="translate(380,1454)"/>
+  <use href="#goldStarSm" transform="translate(540,1454)"/>
+  <use href="#goldStarSm" transform="translate(700,1454)"/>
+  <use href="#goldStarSm" transform="translate(860,1454)"/>
+
+  <!-- LEFT -->
+  <use href="#starCluster" transform="translate(32,140) rotate(90)"/>
+  <use href="#starCluster" transform="translate(32,300) rotate(90)"/>
+  <use href="#starCluster" transform="translate(32,460) rotate(90)"/>
+  <use href="#starCluster" transform="translate(32,620) rotate(90)"/>
+  <use href="#starCluster" transform="translate(32,780) rotate(90)"/>
+  <use href="#starCluster" transform="translate(32,940) rotate(90)"/>
+  <use href="#starCluster" transform="translate(32,1100) rotate(90)"/>
+  <use href="#starCluster" transform="translate(32,1260) rotate(90)"/>
+  <use href="#starCluster" transform="translate(32,1400) rotate(90) scale(0.8)"/>
+  <use href="#dotConstellation" transform="translate(16,100) rotate(90)"/>
+  <use href="#dotConstellation" transform="translate(16,260) rotate(90)"/>
+  <use href="#dotConstellation" transform="translate(16,420) rotate(90)"/>
+  <use href="#dotConstellation" transform="translate(16,580) rotate(90)"/>
+  <use href="#dotConstellation" transform="translate(16,740) rotate(90)"/>
+  <use href="#dotConstellation" transform="translate(16,900) rotate(90)"/>
+  <use href="#dotConstellation" transform="translate(16,1060) rotate(90)"/>
+  <use href="#dotConstellation" transform="translate(16,1220) rotate(90)"/>
+  <use href="#dotConstellation" transform="translate(16,1380) rotate(90)"/>
+  <use href="#goldStarSm" transform="translate(46,220)"/>
+  <use href="#goldStarSm" transform="translate(46,380)"/>
+  <use href="#goldStarSm" transform="translate(46,540)"/>
+  <use href="#goldStarSm" transform="translate(46,700)"/>
+  <use href="#goldStarSm" transform="translate(46,860)"/>
+  <use href="#goldStarSm" transform="translate(46,1020)"/>
+  <use href="#goldStarSm" transform="translate(46,1180)"/>
+  <use href="#goldStarSm" transform="translate(46,1340)"/>
+
+  <!-- RIGHT -->
+  <use href="#starCluster" transform="translate(968,140) rotate(90)"/>
+  <use href="#starCluster" transform="translate(968,300) rotate(90)"/>
+  <use href="#starCluster" transform="translate(968,460) rotate(90)"/>
+  <use href="#starCluster" transform="translate(968,620) rotate(90)"/>
+  <use href="#starCluster" transform="translate(968,780) rotate(90)"/>
+  <use href="#starCluster" transform="translate(968,940) rotate(90)"/>
+  <use href="#starCluster" transform="translate(968,1100) rotate(90)"/>
+  <use href="#starCluster" transform="translate(968,1260) rotate(90)"/>
+  <use href="#starCluster" transform="translate(968,1400) rotate(90) scale(0.8)"/>
+  <use href="#dotConstellation" transform="translate(984,100) rotate(90) scale(-1,1)"/>
+  <use href="#dotConstellation" transform="translate(984,260) rotate(90) scale(-1,1)"/>
+  <use href="#dotConstellation" transform="translate(984,420) rotate(90) scale(-1,1)"/>
+  <use href="#dotConstellation" transform="translate(984,580) rotate(90) scale(-1,1)"/>
+  <use href="#dotConstellation" transform="translate(984,740) rotate(90) scale(-1,1)"/>
+  <use href="#dotConstellation" transform="translate(984,900) rotate(90) scale(-1,1)"/>
+  <use href="#dotConstellation" transform="translate(984,1060) rotate(90) scale(-1,1)"/>
+  <use href="#dotConstellation" transform="translate(984,1220) rotate(90) scale(-1,1)"/>
+  <use href="#dotConstellation" transform="translate(984,1380) rotate(90) scale(-1,1)"/>
+  <use href="#goldStarSm" transform="translate(954,220)"/>
+  <use href="#goldStarSm" transform="translate(954,380)"/>
+  <use href="#goldStarSm" transform="translate(954,540)"/>
+  <use href="#goldStarSm" transform="translate(954,700)"/>
+  <use href="#goldStarSm" transform="translate(954,860)"/>
+  <use href="#goldStarSm" transform="translate(954,1020)"/>
+  <use href="#goldStarSm" transform="translate(954,1180)"/>
+  <use href="#goldStarSm" transform="translate(954,1340)"/>
+
+  <!-- CORNERS: large sunburst medallions -->
+  <g transform="translate(36,36)">
+    <use href="#sunburstMedallion" transform="translate(28,28) scale(1.1)"/>
+    <use href="#goldStarLg" transform="translate(64,18)"/>
+    <use href="#goldStarLg" transform="translate(18,64)"/>
+    <use href="#goldStarSm" transform="translate(56,56)"/>
+    <use href="#goldStarSm" transform="translate(74,32)"/>
+    <use href="#goldStarSm" transform="translate(32,74)"/>
+  </g>
+  <g transform="translate(964,36)">
+    <use href="#sunburstMedallion" transform="translate(-28,28) scale(1.1)"/>
+    <use href="#goldStarLg" transform="translate(-64,18)"/>
+    <use href="#goldStarLg" transform="translate(-18,64)"/>
+    <use href="#goldStarSm" transform="translate(-56,56)"/>
+    <use href="#goldStarSm" transform="translate(-74,32)"/>
+    <use href="#goldStarSm" transform="translate(-32,74)"/>
+  </g>
+  <g transform="translate(36,1464)">
+    <use href="#sunburstMedallion" transform="translate(28,-28) scale(1.1)"/>
+    <use href="#goldStarLg" transform="translate(64,-18)"/>
+    <use href="#goldStarLg" transform="translate(18,-64)"/>
+    <use href="#goldStarSm" transform="translate(56,-56)"/>
+    <use href="#goldStarSm" transform="translate(74,-32)"/>
+    <use href="#goldStarSm" transform="translate(32,-74)"/>
+  </g>
+  <g transform="translate(964,1464)">
+    <use href="#sunburstMedallion" transform="translate(-28,-28) scale(1.1)"/>
+    <use href="#goldStarLg" transform="translate(-64,-18)"/>
+    <use href="#goldStarLg" transform="translate(-18,-64)"/>
+    <use href="#goldStarSm" transform="translate(-56,-56)"/>
+    <use href="#goldStarSm" transform="translate(-74,-32)"/>
+    <use href="#goldStarSm" transform="translate(-32,-74)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldStroke)" stroke-width="1.4" fill="none"/>
+</svg>

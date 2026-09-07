@@ -1,0 +1,286 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#14101a"/>
+      <stop offset="50%" stop-color="#0a080c"/>
+      <stop offset="100%" stop-color="#040306"/>
+    </linearGradient>
+    <radialGradient id="redBlob" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#e0282a" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#a01840" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#5a0810" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="orangeBlob" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#f08818" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#c06030" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#702a08" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="yellowBlob" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#f4d040" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#c0a040" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#705820" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="greenBlob" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#48b840" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#286830" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#102a18" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blueBlob" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#3878d8" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#204870" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#102038" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="violetBlob" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#8038c8" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#481870" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#200838" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="pinkBlob" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#ff60a8" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#a02868" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#48102a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="watercolorH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e0282a"/>
+      <stop offset="16%" stop-color="#f08818"/>
+      <stop offset="33%" stop-color="#f4d040"/>
+      <stop offset="50%" stop-color="#48b840"/>
+      <stop offset="66%" stop-color="#3878d8"/>
+      <stop offset="83%" stop-color="#8038c8"/>
+      <stop offset="100%" stop-color="#e0282a"/>
+    </linearGradient>
+    <filter id="bleed" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="softerBleed" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="wcBlobRed">
+    <ellipse cx="0" cy="0" rx="30" ry="22" fill="url(#redBlob)" filter="url(#bleed)"/>
+  </g>
+  <g id="wcBlobOrange">
+    <ellipse cx="0" cy="0" rx="32" ry="20" fill="url(#orangeBlob)" filter="url(#bleed)"/>
+  </g>
+  <g id="wcBlobYellow">
+    <ellipse cx="0" cy="0" rx="28" ry="24" fill="url(#yellowBlob)" filter="url(#bleed)"/>
+  </g>
+  <g id="wcBlobGreen">
+    <ellipse cx="0" cy="0" rx="30" ry="22" fill="url(#greenBlob)" filter="url(#bleed)"/>
+  </g>
+  <g id="wcBlobBlue">
+    <ellipse cx="0" cy="0" rx="32" ry="20" fill="url(#blueBlob)" filter="url(#bleed)"/>
+  </g>
+  <g id="wcBlobViolet">
+    <ellipse cx="0" cy="0" rx="28" ry="24" fill="url(#violetBlob)" filter="url(#bleed)"/>
+  </g>
+  <g id="wcBlobPink">
+    <ellipse cx="0" cy="0" rx="30" ry="22" fill="url(#pinkBlob)" filter="url(#bleed)"/>
+  </g>
+
+  <g id="wcDropletRed">
+    <circle cx="0" cy="0" r="5" fill="url(#redBlob)" filter="url(#softerBleed)"/>
+  </g>
+  <g id="wcDropletOrange">
+    <circle cx="0" cy="0" r="5" fill="url(#orangeBlob)" filter="url(#softerBleed)"/>
+  </g>
+  <g id="wcDropletYellow">
+    <circle cx="0" cy="0" r="5" fill="url(#yellowBlob)" filter="url(#softerBleed)"/>
+  </g>
+  <g id="wcDropletGreen">
+    <circle cx="0" cy="0" r="5" fill="url(#greenBlob)" filter="url(#softerBleed)"/>
+  </g>
+  <g id="wcDropletBlue">
+    <circle cx="0" cy="0" r="5" fill="url(#blueBlob)" filter="url(#softerBleed)"/>
+  </g>
+  <g id="wcDropletViolet">
+    <circle cx="0" cy="0" r="5" fill="url(#violetBlob)" filter="url(#softerBleed)"/>
+  </g>
+
+  <!-- TOP: overlapping blobs -->
+  <use href="#wcBlobRed" transform="translate(100,30)"/>
+  <use href="#wcBlobOrange" transform="translate(180,32)"/>
+  <use href="#wcBlobYellow" transform="translate(260,30)"/>
+  <use href="#wcBlobGreen" transform="translate(340,32)"/>
+  <use href="#wcBlobBlue" transform="translate(420,30)"/>
+  <use href="#wcBlobViolet" transform="translate(500,32)"/>
+  <use href="#wcBlobPink" transform="translate(580,30)"/>
+  <use href="#wcBlobRed" transform="translate(660,32)"/>
+  <use href="#wcBlobOrange" transform="translate(740,30)"/>
+  <use href="#wcBlobYellow" transform="translate(820,32)"/>
+  <use href="#wcBlobGreen" transform="translate(900,30)"/>
+  <use href="#wcDropletRed" transform="translate(140,12)"/>
+  <use href="#wcDropletOrange" transform="translate(220,14)"/>
+  <use href="#wcDropletYellow" transform="translate(300,12)"/>
+  <use href="#wcDropletGreen" transform="translate(380,14)"/>
+  <use href="#wcDropletBlue" transform="translate(460,12)"/>
+  <use href="#wcDropletViolet" transform="translate(540,14)"/>
+  <use href="#wcDropletRed" transform="translate(620,12)"/>
+  <use href="#wcDropletOrange" transform="translate(700,14)"/>
+  <use href="#wcDropletYellow" transform="translate(780,12)"/>
+  <use href="#wcDropletGreen" transform="translate(860,14)"/>
+  <use href="#wcDropletBlue" transform="translate(120,46)"/>
+  <use href="#wcDropletViolet" transform="translate(200,46)"/>
+  <use href="#wcDropletRed" transform="translate(280,46)"/>
+  <use href="#wcDropletOrange" transform="translate(360,46)"/>
+  <use href="#wcDropletYellow" transform="translate(440,46)"/>
+  <use href="#wcDropletGreen" transform="translate(520,46)"/>
+  <use href="#wcDropletBlue" transform="translate(600,46)"/>
+  <use href="#wcDropletViolet" transform="translate(680,46)"/>
+  <use href="#wcDropletRed" transform="translate(760,46)"/>
+  <use href="#wcDropletOrange" transform="translate(840,46)"/>
+
+  <!-- BOTTOM -->
+  <use href="#wcBlobViolet" transform="translate(100,1470)"/>
+  <use href="#wcBlobBlue" transform="translate(180,1468)"/>
+  <use href="#wcBlobGreen" transform="translate(260,1470)"/>
+  <use href="#wcBlobYellow" transform="translate(340,1468)"/>
+  <use href="#wcBlobOrange" transform="translate(420,1470)"/>
+  <use href="#wcBlobRed" transform="translate(500,1468)"/>
+  <use href="#wcBlobPink" transform="translate(580,1470)"/>
+  <use href="#wcBlobViolet" transform="translate(660,1468)"/>
+  <use href="#wcBlobBlue" transform="translate(740,1470)"/>
+  <use href="#wcBlobGreen" transform="translate(820,1468)"/>
+  <use href="#wcBlobYellow" transform="translate(900,1470)"/>
+  <use href="#wcDropletRed" transform="translate(140,1488)"/>
+  <use href="#wcDropletOrange" transform="translate(220,1486)"/>
+  <use href="#wcDropletYellow" transform="translate(300,1488)"/>
+  <use href="#wcDropletGreen" transform="translate(380,1486)"/>
+  <use href="#wcDropletBlue" transform="translate(460,1488)"/>
+  <use href="#wcDropletViolet" transform="translate(540,1486)"/>
+  <use href="#wcDropletRed" transform="translate(620,1488)"/>
+  <use href="#wcDropletOrange" transform="translate(700,1486)"/>
+  <use href="#wcDropletYellow" transform="translate(780,1488)"/>
+  <use href="#wcDropletGreen" transform="translate(860,1486)"/>
+  <use href="#wcDropletViolet" transform="translate(120,1454)"/>
+  <use href="#wcDropletBlue" transform="translate(200,1454)"/>
+  <use href="#wcDropletGreen" transform="translate(280,1454)"/>
+  <use href="#wcDropletYellow" transform="translate(360,1454)"/>
+  <use href="#wcDropletOrange" transform="translate(440,1454)"/>
+  <use href="#wcDropletRed" transform="translate(520,1454)"/>
+  <use href="#wcDropletViolet" transform="translate(600,1454)"/>
+  <use href="#wcDropletBlue" transform="translate(680,1454)"/>
+  <use href="#wcDropletGreen" transform="translate(760,1454)"/>
+  <use href="#wcDropletYellow" transform="translate(840,1454)"/>
+
+  <!-- LEFT -->
+  <use href="#wcBlobRed" transform="translate(30,100)"/>
+  <use href="#wcBlobOrange" transform="translate(32,180)"/>
+  <use href="#wcBlobYellow" transform="translate(30,260)"/>
+  <use href="#wcBlobGreen" transform="translate(32,340)"/>
+  <use href="#wcBlobBlue" transform="translate(30,420)"/>
+  <use href="#wcBlobViolet" transform="translate(32,500)"/>
+  <use href="#wcBlobPink" transform="translate(30,580)"/>
+  <use href="#wcBlobRed" transform="translate(32,660)"/>
+  <use href="#wcBlobOrange" transform="translate(30,740)"/>
+  <use href="#wcBlobYellow" transform="translate(32,820)"/>
+  <use href="#wcBlobGreen" transform="translate(30,900)"/>
+  <use href="#wcBlobBlue" transform="translate(32,980)"/>
+  <use href="#wcBlobViolet" transform="translate(30,1060)"/>
+  <use href="#wcBlobPink" transform="translate(32,1140)"/>
+  <use href="#wcBlobRed" transform="translate(30,1220)"/>
+  <use href="#wcBlobOrange" transform="translate(32,1300)"/>
+  <use href="#wcBlobYellow" transform="translate(30,1380)"/>
+  <use href="#wcDropletRed" transform="translate(12,140)"/>
+  <use href="#wcDropletOrange" transform="translate(14,220)"/>
+  <use href="#wcDropletYellow" transform="translate(12,300)"/>
+  <use href="#wcDropletGreen" transform="translate(14,380)"/>
+  <use href="#wcDropletBlue" transform="translate(12,460)"/>
+  <use href="#wcDropletViolet" transform="translate(14,540)"/>
+  <use href="#wcDropletRed" transform="translate(12,620)"/>
+  <use href="#wcDropletOrange" transform="translate(14,700)"/>
+  <use href="#wcDropletYellow" transform="translate(12,780)"/>
+  <use href="#wcDropletGreen" transform="translate(14,860)"/>
+  <use href="#wcDropletBlue" transform="translate(12,940)"/>
+  <use href="#wcDropletViolet" transform="translate(14,1020)"/>
+  <use href="#wcDropletRed" transform="translate(12,1100)"/>
+  <use href="#wcDropletOrange" transform="translate(14,1180)"/>
+  <use href="#wcDropletYellow" transform="translate(12,1260)"/>
+  <use href="#wcDropletGreen" transform="translate(14,1340)"/>
+  <use href="#wcDropletBlue" transform="translate(46,140)"/>
+  <use href="#wcDropletViolet" transform="translate(46,300)"/>
+  <use href="#wcDropletRed" transform="translate(46,460)"/>
+  <use href="#wcDropletOrange" transform="translate(46,620)"/>
+  <use href="#wcDropletYellow" transform="translate(46,780)"/>
+  <use href="#wcDropletGreen" transform="translate(46,940)"/>
+  <use href="#wcDropletBlue" transform="translate(46,1100)"/>
+  <use href="#wcDropletViolet" transform="translate(46,1260)"/>
+
+  <!-- RIGHT -->
+  <use href="#wcBlobViolet" transform="translate(970,100)"/>
+  <use href="#wcBlobBlue" transform="translate(968,180)"/>
+  <use href="#wcBlobGreen" transform="translate(970,260)"/>
+  <use href="#wcBlobYellow" transform="translate(968,340)"/>
+  <use href="#wcBlobOrange" transform="translate(970,420)"/>
+  <use href="#wcBlobRed" transform="translate(968,500)"/>
+  <use href="#wcBlobPink" transform="translate(970,580)"/>
+  <use href="#wcBlobViolet" transform="translate(968,660)"/>
+  <use href="#wcBlobBlue" transform="translate(970,740)"/>
+  <use href="#wcBlobGreen" transform="translate(968,820)"/>
+  <use href="#wcBlobYellow" transform="translate(970,900)"/>
+  <use href="#wcBlobOrange" transform="translate(968,980)"/>
+  <use href="#wcBlobRed" transform="translate(970,1060)"/>
+  <use href="#wcBlobPink" transform="translate(968,1140)"/>
+  <use href="#wcBlobViolet" transform="translate(970,1220)"/>
+  <use href="#wcBlobBlue" transform="translate(968,1300)"/>
+  <use href="#wcBlobGreen" transform="translate(970,1380)"/>
+  <use href="#wcDropletRed" transform="translate(988,140)"/>
+  <use href="#wcDropletOrange" transform="translate(986,220)"/>
+  <use href="#wcDropletYellow" transform="translate(988,300)"/>
+  <use href="#wcDropletGreen" transform="translate(986,380)"/>
+  <use href="#wcDropletBlue" transform="translate(988,460)"/>
+  <use href="#wcDropletViolet" transform="translate(986,540)"/>
+  <use href="#wcDropletRed" transform="translate(988,620)"/>
+  <use href="#wcDropletOrange" transform="translate(986,700)"/>
+  <use href="#wcDropletYellow" transform="translate(988,780)"/>
+  <use href="#wcDropletGreen" transform="translate(986,860)"/>
+  <use href="#wcDropletBlue" transform="translate(988,940)"/>
+  <use href="#wcDropletViolet" transform="translate(986,1020)"/>
+  <use href="#wcDropletRed" transform="translate(988,1100)"/>
+  <use href="#wcDropletOrange" transform="translate(986,1180)"/>
+  <use href="#wcDropletYellow" transform="translate(988,1260)"/>
+  <use href="#wcDropletGreen" transform="translate(986,1340)"/>
+  <use href="#wcDropletBlue" transform="translate(954,140)"/>
+  <use href="#wcDropletViolet" transform="translate(954,300)"/>
+  <use href="#wcDropletRed" transform="translate(954,460)"/>
+  <use href="#wcDropletOrange" transform="translate(954,620)"/>
+  <use href="#wcDropletYellow" transform="translate(954,780)"/>
+  <use href="#wcDropletGreen" transform="translate(954,940)"/>
+  <use href="#wcDropletBlue" transform="translate(954,1100)"/>
+  <use href="#wcDropletViolet" transform="translate(954,1260)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(30,30)">
+    <use href="#wcBlobRed" transform="translate(36,36) scale(1.4)"/>
+    <use href="#wcBlobOrange" transform="translate(60,18) scale(0.9)"/>
+    <use href="#wcBlobPink" transform="translate(18,60) scale(0.9)"/>
+    <use href="#wcDropletYellow" transform="translate(70,40)"/>
+    <use href="#wcDropletViolet" transform="translate(40,70)"/>
+  </g>
+  <g transform="translate(970,30)">
+    <use href="#wcBlobViolet" transform="translate(-36,36) scale(1.4)"/>
+    <use href="#wcBlobBlue" transform="translate(-60,18) scale(0.9)"/>
+    <use href="#wcBlobPink" transform="translate(-18,60) scale(0.9)"/>
+    <use href="#wcDropletGreen" transform="translate(-70,40)"/>
+    <use href="#wcDropletRed" transform="translate(-40,70)"/>
+  </g>
+  <g transform="translate(30,1470)">
+    <use href="#wcBlobGreen" transform="translate(36,-36) scale(1.4)"/>
+    <use href="#wcBlobYellow" transform="translate(60,-18) scale(0.9)"/>
+    <use href="#wcBlobBlue" transform="translate(18,-60) scale(0.9)"/>
+    <use href="#wcDropletViolet" transform="translate(70,-40)"/>
+    <use href="#wcDropletRed" transform="translate(40,-70)"/>
+  </g>
+  <g transform="translate(970,1470)">
+    <use href="#wcBlobBlue" transform="translate(-36,-36) scale(1.4)"/>
+    <use href="#wcBlobViolet" transform="translate(-60,-18) scale(0.9)"/>
+    <use href="#wcBlobOrange" transform="translate(-18,-60) scale(0.9)"/>
+    <use href="#wcDropletYellow" transform="translate(-70,-40)"/>
+    <use href="#wcDropletRed" transform="translate(-40,-70)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#watercolorH)" stroke-width="1.4" fill="none" opacity="0.7"/>
+</svg>

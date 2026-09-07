@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a0408"/>
+      <stop offset="50%" stop-color="#14020c"/>
+      <stop offset="100%" stop-color="#080104"/>
+    </linearGradient>
+    <radialGradient id="vermilion" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ff5848"/>
+      <stop offset="55%" stop-color="#d01828"/>
+      <stop offset="100%" stop-color="#5a0408"/>
+    </radialGradient>
+    <linearGradient id="goldFil" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5a3a08"/>
+      <stop offset="50%" stop-color="#f0d050"/>
+      <stop offset="100%" stop-color="#8a5018"/>
+    </linearGradient>
+    <radialGradient id="gold" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff0a8"/>
+      <stop offset="55%" stop-color="#d4a020"/>
+      <stop offset="100%" stop-color="#503808"/>
+    </radialGradient>
+    <radialGradient id="plumWhite" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#fae0e8"/>
+      <stop offset="100%" stop-color="#c08090"/>
+    </radialGradient>
+    <radialGradient id="plumPink" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fac0d0"/>
+      <stop offset="60%" stop-color="#e07898"/>
+      <stop offset="100%" stop-color="#8a3050"/>
+    </radialGradient>
+    <linearGradient id="branchG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a2818"/>
+      <stop offset="100%" stop-color="#1a0c04"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="lantern">
+    <rect x="-3" y="-22" width="6" height="3" fill="url(#gold)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-3,-19 L3,-19 L0,-23 Z" fill="none" stroke="#503808" stroke-width="0.5"/>
+    <path d="M-14,-19 L14,-19 L14,-14 L-14,-14 Z" fill="url(#gold)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-18,-14 C-22,0 -22,4 -14,8 L14,8 C22,4 22,0 18,-14 Z" fill="url(#vermilion)" stroke="#5a0408" stroke-width="0.6"/>
+    <path d="M-18,-14 C-22,0 -22,4 -14,8 L14,8 C22,4 22,0 18,-14" fill="none" stroke="url(#goldFil)" stroke-width="0.8"/>
+    <path d="M-14,8 L14,8 L14,12 L-14,12 Z" fill="url(#gold)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-16,-6 L16,-6 M-18,-1 L18,-1 M-16,4 L16,4" stroke="url(#goldFil)" stroke-width="0.4" opacity="0.6"/>
+    <path d="M-10,12 L-10,22 M-4,12 L-4,22 M4,12 L4,22 M10,12 L10,22 M0,12 L0,24" stroke="#d4a020" stroke-width="0.5"/>
+    <path d="M-10,22 L-12,26 M-4,22 L-6,26 M4,22 L6,26 M10,22 L12,26 M0,24 L0,28" stroke="#d4a020" stroke-width="0.5"/>
+    <ellipse cx="-2" cy="-2" rx="3" ry="6" fill="#ff5848" opacity="0.4"/>
+  </g>
+
+  <g id="plumBlossom">
+    <g>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumWhite)" stroke="#8a3050" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumWhite)" transform="rotate(72)" stroke="#8a3050" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumWhite)" transform="rotate(144)" stroke="#8a3050" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumWhite)" transform="rotate(216)" stroke="#8a3050" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumWhite)" transform="rotate(288)" stroke="#8a3050" stroke-width="0.3"/>
+    </g>
+    <circle cx="0" cy="0" r="1.4" fill="#d4a020"/>
+    <path d="M0,0 L0,-3 M0,0 L2.9,-1 M0,0 L1.8,2.4 M0,0 L-1.8,2.4 M0,0 L-2.9,-1" stroke="#503808" stroke-width="0.3"/>
+  </g>
+
+  <g id="plumBlossomPink">
+    <g>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumPink)" stroke="#8a3050" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumPink)" transform="rotate(72)" stroke="#8a3050" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumPink)" transform="rotate(144)" stroke="#8a3050" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumPink)" transform="rotate(216)" stroke="#8a3050" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#plumPink)" transform="rotate(288)" stroke="#8a3050" stroke-width="0.3"/>
+    </g>
+    <circle cx="0" cy="0" r="1.4" fill="#d4a020"/>
+  </g>
+
+  <g id="plumBranchG">
+    <path d="M0,0 C20,-4 40,4 60,-2 C80,-8 100,4 120,0" stroke="url(#branchG)" stroke-width="2.4" fill="none"/>
+    <path d="M15,-4 L20,-12 M40,2 L46,-6 M70,-4 L76,-12 M100,2 L106,-6" stroke="url(#branchG)" stroke-width="1.4" fill="none"/>
+    <use href="#plumBlossom" transform="translate(20,-14)"/>
+    <use href="#plumBlossomPink" transform="translate(46,-8)"/>
+    <use href="#plumBlossom" transform="translate(76,-14)"/>
+    <use href="#plumBlossomPink" transform="translate(106,-8)"/>
+    <use href="#plumBlossom" transform="translate(8,2) scale(0.7)"/>
+    <use href="#plumBlossomPink" transform="translate(58,4) scale(0.7)"/>
+  </g>
+
+  <g id="goldFiligreeH">
+    <path d="M0,0 C12,-12 32,-12 44,0 C56,-12 76,-12 88,0" stroke="url(#goldFil)" stroke-width="2.4" fill="none"/>
+    <path d="M22,-7 C20,-12 24,-12 22,-7 M66,-7 C64,-12 68,-12 66,-7" stroke="url(#goldFil)" stroke-width="1.4" fill="none"/>
+    <circle cx="22" cy="-10" r="2" fill="url(#gold)"/>
+    <circle cx="66" cy="-10" r="2" fill="url(#gold)"/>
+    <path d="M0,0 C4,4 0,8 -4,4 M88,0 C84,4 88,8 92,4" stroke="url(#goldFil)" stroke-width="1.2" fill="none"/>
+  </g>
+
+  <g id="goldFiligreeV">
+    <path d="M0,0 C-12,12 -12,32 0,44 C-12,56 -12,76 0,88" stroke="url(#goldFil)" stroke-width="2.4" fill="none"/>
+    <path d="M-7,22 C-12,20 -12,24 -7,22 M-7,66 C-12,64 -12,68 -7,66" stroke="url(#goldFil)" stroke-width="1.4" fill="none"/>
+    <circle cx="-10" cy="22" r="2" fill="url(#gold)"/>
+    <circle cx="-10" cy="66" r="2" fill="url(#gold)"/>
+  </g>
+
+  <g id="firecracker">
+    <rect x="-3" y="0" width="6" height="20" fill="url(#vermilion)" stroke="#5a0408" stroke-width="0.4"/>
+    <rect x="-3" y="0" width="6" height="3" fill="url(#gold)" stroke="#503808" stroke-width="0.3"/>
+    <rect x="-3" y="17" width="6" height="3" fill="url(#gold)" stroke="#503808" stroke-width="0.3"/>
+    <path d="M0,-2 C-2,-6 -4,-8 -2,-12 C0,-14 -2,-16 -4,-20" stroke="url(#branchG)" stroke-width="0.6" fill="none"/>
+    <circle cx="-4" cy="-20" r="1.4" fill="#ff5848"/>
+    <path d="M-3,8 L3,8 M-3,12 L3,12" stroke="#503808" stroke-width="0.3"/>
+    <ellipse cx="-1" cy="6" rx="0.6" ry="3" fill="#ff5848" opacity="0.4"/>
+  </g>
+
+  <g id="goldTassel">
+    <path d="M0,0 L0,12" stroke="url(#goldFil)" stroke-width="1"/>
+    <ellipse cx="0" cy="12" rx="4" ry="2" fill="url(#gold)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-3,14 L-3,22 M-1,14 L-1,24 M1,14 L1,24 M3,14 L3,22" stroke="url(#gold)" stroke-width="0.6"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#goldFiligreeH" transform="translate(60,42)"/>
+  <use href="#goldFiligreeH" transform="translate(180,42)"/>
+  <use href="#goldFiligreeH" transform="translate(300,42)"/>
+  <use href="#goldFiligreeH" transform="translate(420,42)"/>
+  <use href="#goldFiligreeH" transform="translate(540,42)"/>
+  <use href="#goldFiligreeH" transform="translate(660,42)"/>
+  <use href="#goldFiligreeH" transform="translate(780,42)"/>
+  <use href="#goldFiligreeH" transform="translate(852,42)"/>
+  <use href="#plumBranchG" transform="translate(120,52)"/>
+  <use href="#plumBranchG" transform="translate(300,52)"/>
+  <use href="#plumBranchG" transform="translate(480,52)"/>
+  <use href="#plumBranchG" transform="translate(660,52)"/>
+  <use href="#plumBranchG" transform="translate(820,52)"/>
+  <use href="#lantern" transform="translate(140,38) scale(0.85)"/>
+  <use href="#lantern" transform="translate(340,38) scale(0.85)"/>
+  <use href="#lantern" transform="translate(540,38) scale(0.85)"/>
+  <use href="#lantern" transform="translate(740,38) scale(0.85)"/>
+  <use href="#lantern" transform="translate(900,38) scale(0.85)"/>
+
+  <!-- BOTTOM -->
+  <use href="#goldFiligreeH" transform="translate(60,1458) scale(1,-1)"/>
+  <use href="#goldFiligreeH" transform="translate(180,1458) scale(1,-1)"/>
+  <use href="#goldFiligreeH" transform="translate(300,1458) scale(1,-1)"/>
+  <use href="#goldFiligreeH" transform="translate(420,1458) scale(1,-1)"/>
+  <use href="#goldFiligreeH" transform="translate(540,1458) scale(1,-1)"/>
+  <use href="#goldFiligreeH" transform="translate(660,1458) scale(1,-1)"/>
+  <use href="#goldFiligreeH" transform="translate(780,1458) scale(1,-1)"/>
+  <use href="#goldFiligreeH" transform="translate(852,1458) scale(1,-1)"/>
+  <use href="#plumBranchG" transform="translate(120,1450)"/>
+  <use href="#plumBranchG" transform="translate(300,1450)"/>
+  <use href="#plumBranchG" transform="translate(480,1450)"/>
+  <use href="#plumBranchG" transform="translate(660,1450)"/>
+  <use href="#plumBranchG" transform="translate(820,1450)"/>
+  <use href="#firecracker" transform="translate(180,1462)"/>
+  <use href="#firecracker" transform="translate(380,1462)"/>
+  <use href="#firecracker" transform="translate(580,1462)"/>
+  <use href="#firecracker" transform="translate(780,1462)"/>
+  <use href="#firecracker" transform="translate(880,1462)"/>
+  <use href="#firecracker" transform="translate(220,1462) rotate(5)"/>
+  <use href="#firecracker" transform="translate(420,1462) rotate(-5)"/>
+  <use href="#firecracker" transform="translate(620,1462) rotate(5)"/>
+  <use href="#firecracker" transform="translate(820,1462) rotate(-5)"/>
+
+  <!-- LEFT -->
+  <use href="#goldFiligreeV" transform="translate(42,60)"/>
+  <use href="#goldFiligreeV" transform="translate(42,180)"/>
+  <use href="#goldFiligreeV" transform="translate(42,300)"/>
+  <use href="#goldFiligreeV" transform="translate(42,420)"/>
+  <use href="#goldFiligreeV" transform="translate(42,540)"/>
+  <use href="#goldFiligreeV" transform="translate(42,660)"/>
+  <use href="#goldFiligreeV" transform="translate(42,780)"/>
+  <use href="#goldFiligreeV" transform="translate(42,900)"/>
+  <use href="#goldFiligreeV" transform="translate(42,1020)"/>
+  <use href="#goldFiligreeV" transform="translate(42,1140)"/>
+  <use href="#goldFiligreeV" transform="translate(42,1260)"/>
+  <use href="#goldFiligreeV" transform="translate(42,1352)"/>
+  <use href="#plumBranchG" transform="translate(52,120) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(52,300) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(52,480) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(52,660) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(52,840) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(52,1020) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(52,1200) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(52,1380) rotate(90)"/>
+  <use href="#lantern" transform="translate(38,150) scale(0.85)"/>
+  <use href="#lantern" transform="translate(38,350) scale(0.85)"/>
+  <use href="#lantern" transform="translate(38,550) scale(0.85)"/>
+  <use href="#lantern" transform="translate(38,750) scale(0.85)"/>
+  <use href="#lantern" transform="translate(38,950) scale(0.85)"/>
+  <use href="#lantern" transform="translate(38,1150) scale(0.85)"/>
+  <use href="#lantern" transform="translate(38,1350) scale(0.85)"/>
+
+  <!-- RIGHT -->
+  <use href="#goldFiligreeV" transform="translate(958,60) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,180) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,300) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,420) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,540) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,660) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,780) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,900) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,1020) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,1140) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,1260) scale(-1,1)"/>
+  <use href="#goldFiligreeV" transform="translate(958,1352) scale(-1,1)"/>
+  <use href="#plumBranchG" transform="translate(948,120) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(948,300) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(948,480) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(948,660) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(948,840) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(948,1020) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(948,1200) rotate(90)"/>
+  <use href="#plumBranchG" transform="translate(948,1380) rotate(90)"/>
+  <use href="#lantern" transform="translate(962,150) scale(0.85)"/>
+  <use href="#lantern" transform="translate(962,350) scale(0.85)"/>
+  <use href="#lantern" transform="translate(962,550) scale(0.85)"/>
+  <use href="#lantern" transform="translate(962,750) scale(0.85)"/>
+  <use href="#lantern" transform="translate(962,950) scale(0.85)"/>
+  <use href="#lantern" transform="translate(962,1150) scale(0.85)"/>
+  <use href="#lantern" transform="translate(962,1350) scale(0.85)"/>
+
+  <!-- CORNERS: big lanterns -->
+  <g transform="translate(40,40)">
+    <use href="#lantern" transform="translate(28,32) scale(1.2)"/>
+    <use href="#goldTassel" transform="translate(28,60)"/>
+    <use href="#plumBlossom" transform="translate(60,16) scale(1.6)"/>
+    <use href="#plumBlossomPink" transform="translate(16,60) scale(1.6)"/>
+    <use href="#firecracker" transform="translate(70,40) scale(0.9)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#lantern" transform="translate(-28,32) scale(1.2)"/>
+    <use href="#goldTassel" transform="translate(-28,60)"/>
+    <use href="#plumBlossom" transform="translate(-60,16) scale(1.6)"/>
+    <use href="#plumBlossomPink" transform="translate(-16,60) scale(1.6)"/>
+    <use href="#firecracker" transform="translate(-70,40) scale(0.9)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#plumBlossom" transform="translate(60,-16) scale(1.6)"/>
+    <use href="#plumBlossomPink" transform="translate(16,-60) scale(1.6)"/>
+    <use href="#firecracker" transform="translate(28,-30)"/>
+    <use href="#firecracker" transform="translate(48,-30) rotate(8)"/>
+    <use href="#firecracker" transform="translate(70,-30) rotate(-8)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#plumBlossom" transform="translate(-60,-16) scale(1.6)"/>
+    <use href="#plumBlossomPink" transform="translate(-16,-60) scale(1.6)"/>
+    <use href="#firecracker" transform="translate(-28,-30)"/>
+    <use href="#firecracker" transform="translate(-48,-30) rotate(-8)"/>
+    <use href="#firecracker" transform="translate(-70,-30) rotate(8)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldFil)" stroke-width="1.4" fill="none"/>
+</svg>

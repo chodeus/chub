@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0a"/>
+      <stop offset="50%" stop-color="#050505"/>
+      <stop offset="100%" stop-color="#020202"/>
+    </linearGradient>
+    <linearGradient id="rainbowH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e0282a"/>
+      <stop offset="16%" stop-color="#f08818"/>
+      <stop offset="33%" stop-color="#f4d040"/>
+      <stop offset="50%" stop-color="#48b840"/>
+      <stop offset="66%" stop-color="#3878d8"/>
+      <stop offset="83%" stop-color="#8038c8"/>
+      <stop offset="100%" stop-color="#e0282a"/>
+    </linearGradient>
+    <linearGradient id="rainbowV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e0282a"/>
+      <stop offset="16%" stop-color="#f08818"/>
+      <stop offset="33%" stop-color="#f4d040"/>
+      <stop offset="50%" stop-color="#48b840"/>
+      <stop offset="66%" stop-color="#3878d8"/>
+      <stop offset="83%" stop-color="#8038c8"/>
+      <stop offset="100%" stop-color="#e0282a"/>
+    </linearGradient>
+    <linearGradient id="redBand" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a01020"/>
+      <stop offset="100%" stop-color="#e0282a"/>
+    </linearGradient>
+    <linearGradient id="orangeBand" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b04810"/>
+      <stop offset="100%" stop-color="#f08818"/>
+    </linearGradient>
+    <linearGradient id="yellowBand" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a08820"/>
+      <stop offset="100%" stop-color="#f4d040"/>
+    </linearGradient>
+    <linearGradient id="greenBand" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#185020"/>
+      <stop offset="100%" stop-color="#48b840"/>
+    </linearGradient>
+    <linearGradient id="blueBand" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#103860"/>
+      <stop offset="100%" stop-color="#3878d8"/>
+    </linearGradient>
+    <linearGradient id="violetBand" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#401860"/>
+      <stop offset="100%" stop-color="#8038c8"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="rainbowSwagH">
+    <path d="M0,0 C60,-24 120,-24 180,0 C240,24 300,24 360,0" stroke="url(#redBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M0,7 C60,-17 120,-17 180,7 C240,31 300,31 360,7" stroke="url(#orangeBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M0,14 C60,-10 120,-10 180,14 C240,38 300,38 360,14" stroke="url(#yellowBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M0,21 C60,-3 120,-3 180,21 C240,45 300,45 360,21" stroke="url(#greenBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M0,28 C60,4 120,4 180,28 C240,52 300,52 360,28" stroke="url(#blueBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M0,35 C60,11 120,11 180,35 C240,59 300,59 360,35" stroke="url(#violetBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <g id="rainbowSwagV">
+    <path d="M0,0 C-24,60 -24,120 0,180 C24,240 24,300 0,360" stroke="url(#redBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M7,0 C-17,60 -17,120 7,180 C31,240 31,300 7,360" stroke="url(#orangeBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M14,0 C-10,60 -10,120 14,180 C38,240 38,300 14,360" stroke="url(#yellowBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M21,0 C-3,60 -3,120 21,180 C45,240 45,300 21,360" stroke="url(#greenBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M28,0 C4,60 4,120 28,180 C52,240 52,300 28,360" stroke="url(#blueBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M35,0 C11,60 11,120 35,180 C59,240 59,300 35,360" stroke="url(#violetBand)" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <g id="rainbowSpiral">
+    <path d="M0,0 C-10,-10 -10,10 0,10 C10,10 10,-10 0,-10 C-12,-12 -16,12 0,16 C16,16 20,-16 0,-20" stroke="url(#rainbowH)" stroke-width="3" fill="none"/>
+  </g>
+
+  <g id="rainbowArc">
+    <path d="M-30,0 A30,30 0 0,1 30,0" stroke="url(#redBand)" stroke-width="3" fill="none"/>
+    <path d="M-25,0 A25,25 0 0,1 25,0" stroke="url(#orangeBand)" stroke-width="3" fill="none"/>
+    <path d="M-20,0 A20,20 0 0,1 20,0" stroke="url(#yellowBand)" stroke-width="3" fill="none"/>
+    <path d="M-15,0 A15,15 0 0,1 15,0" stroke="url(#greenBand)" stroke-width="3" fill="none"/>
+    <path d="M-10,0 A10,10 0 0,1 10,0" stroke="url(#blueBand)" stroke-width="3" fill="none"/>
+    <path d="M-5,0 A5,5 0 0,1 5,0" stroke="url(#violetBand)" stroke-width="3" fill="none"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#rainbowSwagH" transform="translate(60,18)"/>
+  <use href="#rainbowSwagH" transform="translate(420,18)"/>
+  <use href="#rainbowSwagH" transform="translate(780,18)"/>
+  <use href="#rainbowArc" transform="translate(160,52)"/>
+  <use href="#rainbowArc" transform="translate(320,52)"/>
+  <use href="#rainbowArc" transform="translate(500,52)"/>
+  <use href="#rainbowArc" transform="translate(660,52)"/>
+  <use href="#rainbowArc" transform="translate(840,52)"/>
+  <use href="#rainbowSpiral" transform="translate(240,30)"/>
+  <use href="#rainbowSpiral" transform="translate(400,30)"/>
+  <use href="#rainbowSpiral" transform="translate(580,30)"/>
+  <use href="#rainbowSpiral" transform="translate(740,30)"/>
+  <use href="#rainbowSpiral" transform="translate(900,30)"/>
+
+  <!-- BOTTOM -->
+  <use href="#rainbowSwagH" transform="translate(60,1482) scale(1,-1)"/>
+  <use href="#rainbowSwagH" transform="translate(420,1482) scale(1,-1)"/>
+  <use href="#rainbowSwagH" transform="translate(780,1482) scale(1,-1)"/>
+  <use href="#rainbowArc" transform="translate(160,1448) scale(1,-1)"/>
+  <use href="#rainbowArc" transform="translate(320,1448) scale(1,-1)"/>
+  <use href="#rainbowArc" transform="translate(500,1448) scale(1,-1)"/>
+  <use href="#rainbowArc" transform="translate(660,1448) scale(1,-1)"/>
+  <use href="#rainbowArc" transform="translate(840,1448) scale(1,-1)"/>
+  <use href="#rainbowSpiral" transform="translate(240,1470)"/>
+  <use href="#rainbowSpiral" transform="translate(400,1470)"/>
+  <use href="#rainbowSpiral" transform="translate(580,1470)"/>
+  <use href="#rainbowSpiral" transform="translate(740,1470)"/>
+  <use href="#rainbowSpiral" transform="translate(900,1470)"/>
+
+  <!-- LEFT -->
+  <use href="#rainbowSwagV" transform="translate(18,60)"/>
+  <use href="#rainbowSwagV" transform="translate(18,420)"/>
+  <use href="#rainbowSwagV" transform="translate(18,780)"/>
+  <use href="#rainbowSwagV" transform="translate(18,1140)"/>
+  <use href="#rainbowArc" transform="translate(52,160) rotate(90)"/>
+  <use href="#rainbowArc" transform="translate(52,320) rotate(90)"/>
+  <use href="#rainbowArc" transform="translate(52,500) rotate(90)"/>
+  <use href="#rainbowArc" transform="translate(52,660) rotate(90)"/>
+  <use href="#rainbowArc" transform="translate(52,840) rotate(90)"/>
+  <use href="#rainbowArc" transform="translate(52,1020) rotate(90)"/>
+  <use href="#rainbowArc" transform="translate(52,1200) rotate(90)"/>
+  <use href="#rainbowArc" transform="translate(52,1380) rotate(90)"/>
+  <use href="#rainbowSpiral" transform="translate(30,240)"/>
+  <use href="#rainbowSpiral" transform="translate(30,400)"/>
+  <use href="#rainbowSpiral" transform="translate(30,580)"/>
+  <use href="#rainbowSpiral" transform="translate(30,740)"/>
+  <use href="#rainbowSpiral" transform="translate(30,900)"/>
+  <use href="#rainbowSpiral" transform="translate(30,1060)"/>
+  <use href="#rainbowSpiral" transform="translate(30,1220)"/>
+  <use href="#rainbowSpiral" transform="translate(30,1380)"/>
+
+  <!-- RIGHT -->
+  <use href="#rainbowSwagV" transform="translate(982,60) scale(-1,1)"/>
+  <use href="#rainbowSwagV" transform="translate(982,420) scale(-1,1)"/>
+  <use href="#rainbowSwagV" transform="translate(982,780) scale(-1,1)"/>
+  <use href="#rainbowSwagV" transform="translate(982,1140) scale(-1,1)"/>
+  <use href="#rainbowArc" transform="translate(948,160) rotate(270)"/>
+  <use href="#rainbowArc" transform="translate(948,320) rotate(270)"/>
+  <use href="#rainbowArc" transform="translate(948,500) rotate(270)"/>
+  <use href="#rainbowArc" transform="translate(948,660) rotate(270)"/>
+  <use href="#rainbowArc" transform="translate(948,840) rotate(270)"/>
+  <use href="#rainbowArc" transform="translate(948,1020) rotate(270)"/>
+  <use href="#rainbowArc" transform="translate(948,1200) rotate(270)"/>
+  <use href="#rainbowArc" transform="translate(948,1380) rotate(270)"/>
+  <use href="#rainbowSpiral" transform="translate(970,240)"/>
+  <use href="#rainbowSpiral" transform="translate(970,400)"/>
+  <use href="#rainbowSpiral" transform="translate(970,580)"/>
+  <use href="#rainbowSpiral" transform="translate(970,740)"/>
+  <use href="#rainbowSpiral" transform="translate(970,900)"/>
+  <use href="#rainbowSpiral" transform="translate(970,1060)"/>
+  <use href="#rainbowSpiral" transform="translate(970,1220)"/>
+  <use href="#rainbowSpiral" transform="translate(970,1380)"/>
+
+  <!-- CORNERS: big rainbow arc -->
+  <g transform="translate(36,36)">
+    <use href="#rainbowArc" transform="translate(36,36) scale(1.6) rotate(45)"/>
+    <use href="#rainbowSpiral" transform="translate(64,18)"/>
+    <use href="#rainbowSpiral" transform="translate(18,64)"/>
+  </g>
+  <g transform="translate(964,36)">
+    <use href="#rainbowArc" transform="translate(-36,36) scale(1.6) rotate(-45)"/>
+    <use href="#rainbowSpiral" transform="translate(-64,18)"/>
+    <use href="#rainbowSpiral" transform="translate(-18,64)"/>
+  </g>
+  <g transform="translate(36,1464)">
+    <use href="#rainbowArc" transform="translate(36,-36) scale(1.6) rotate(135)"/>
+    <use href="#rainbowSpiral" transform="translate(64,-18)"/>
+    <use href="#rainbowSpiral" transform="translate(18,-64)"/>
+  </g>
+  <g transform="translate(964,1464)">
+    <use href="#rainbowArc" transform="translate(-36,-36) scale(1.6) rotate(-135)"/>
+    <use href="#rainbowSpiral" transform="translate(-64,-18)"/>
+    <use href="#rainbowSpiral" transform="translate(-18,-64)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#rainbowH)" stroke-width="1.4" fill="none"/>
+</svg>

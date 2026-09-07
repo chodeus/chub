@@ -1,0 +1,68 @@
+# Node and frontend build
+*/node_modules/*
+*/dist/*
+*/.vite/*
+*/.cache/*
+*/coverage/*
+
+# Backend build output (static assets)
+templates/*
+
+# Python artifacts and test output
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+env/
+ENV/
+.venv/
+.archives/
+/logs/
+tests/local/
+tests/private/
+tests/fixtures/private/
+screenshots/
+.extra_scripts/
+*.log
+*.ruff_cache
+*.pytest_cache
+/config/
+/.claude
+/.playwright-mcp
+
+# Files
+test.*
+TODO.*
+*.db
+*.db-journal
+CLAUDE.md
+
+
+# Misc editor junk
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*.swn
+*.bak
+
+# OS/IDE and temp files
+Thumbs.db
+*~
+/.local
+*.backup*
+transformation/
+.env
+**/.DS_Store
+
+# Build artifacts — rasterized from backend/assets/borders/**/*.svg
+# at Docker build time. Don't commit; rebuild via scripts/rasterize_borders.py.
+backend/assets/borders/**/*.png
+
+# Local reference posters / PSDs (copyrighted — local only)
+refs/
+
+# Agent-generated planning docs — working notes, not project documentation
+docs/superpowers/
+design_handoff*/

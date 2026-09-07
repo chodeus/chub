@@ -1,0 +1,220 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#200410"/>
+      <stop offset="50%" stop-color="#100208"/>
+      <stop offset="100%" stop-color="#080104"/>
+    </linearGradient>
+    <radialGradient id="matRoseOuter" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#ffd0d8"/>
+      <stop offset="50%" stop-color="#e486a0"/>
+      <stop offset="100%" stop-color="#5a1a30"/>
+    </radialGradient>
+    <radialGradient id="matRoseMid" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffeae0"/>
+      <stop offset="60%" stop-color="#daa0b8"/>
+      <stop offset="100%" stop-color="#6a2440"/>
+    </radialGradient>
+    <radialGradient id="matRoseInner" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f0a0b8"/>
+      <stop offset="100%" stop-color="#3a0820"/>
+    </radialGradient>
+    <linearGradient id="thornStemG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a3a28"/>
+      <stop offset="50%" stop-color="#3a2418"/>
+      <stop offset="100%" stop-color="#1a100a"/>
+    </linearGradient>
+    <radialGradient id="medallionGrad" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#daa0b8"/>
+      <stop offset="50%" stop-color="#7a1432"/>
+      <stop offset="100%" stop-color="#2a0410"/>
+    </radialGradient>
+    <linearGradient id="goldTrim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6b4f15"/>
+      <stop offset="50%" stop-color="#f0d05a"/>
+      <stop offset="100%" stop-color="#8a6520"/>
+    </linearGradient>
+    <radialGradient id="darkLeaf" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#4a4a3a"/>
+      <stop offset="55%" stop-color="#2a2a1a"/>
+      <stop offset="100%" stop-color="#0a0a04"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="matureRose">
+    <circle cx="0" cy="0" r="32" fill="url(#matRoseOuter)" stroke="#5a1a30" stroke-width="0.8"/>
+    <path d="M-32,0 C-30,-22 -16,-32 0,-32 C16,-32 30,-22 32,0 C30,22 16,32 0,32 C-16,32 -30,22 -32,0 Z" fill="none" stroke="#6a2440" stroke-width="0.6"/>
+    <path d="M-26,-4 C-24,-20 -12,-26 0,-26 C12,-26 24,-20 26,-4 C24,12 12,22 0,22 C-12,22 -24,12 -26,-4 Z" fill="url(#matRoseMid)" opacity="0.85"/>
+    <path d="M-20,-6 C-18,-16 -8,-20 0,-20 C8,-20 18,-16 20,-6 C18,8 8,16 0,16 C-8,16 -18,8 -20,-6 Z" fill="url(#matRoseMid)"/>
+    <path d="M-14,-4 C-12,-12 -6,-14 0,-14 C6,-14 12,-12 14,-4 C12,6 6,12 0,12 C-6,12 -12,6 -14,-4 Z" fill="url(#matRoseOuter)"/>
+    <path d="M-8,-2 C-7,-8 -4,-10 0,-10 C4,-10 7,-8 8,-2 C7,4 4,8 0,8 C-4,8 -7,4 -8,-2 Z" fill="url(#matRoseInner)"/>
+    <path d="M-4,0 C-3,-3 -1,-4 0,-4 C1,-4 3,-3 4,0 C3,3 1,4 0,4 C-1,4 -3,3 -4,0 Z" fill="#3a0820"/>
+    <path d="M-30,-2 Q-15,8 0,2 Q15,8 30,-2 M0,-30 Q4,-15 0,0 Q4,15 0,30" stroke="#6a2440" stroke-width="0.4" fill="none" opacity="0.5"/>
+    <path d="M-22,-12 Q-10,-4 0,-12 M22,-12 Q10,-4 0,-12 M-22,12 Q-10,4 0,12 M22,12 Q10,4 0,12" stroke="#7a1432" stroke-width="0.3" fill="none"/>
+  </g>
+
+  <g id="thornStem">
+    <path d="M0,0 C8,-20 22,-12 30,-30 C38,-48 52,-40 60,-58 C68,-76 82,-68 90,-86" stroke="url(#thornStemG)" stroke-width="3.5" fill="none"/>
+    <path d="M6,-8 L0,-14 L8,-12 Z" fill="#1a100a"/>
+    <path d="M14,-18 L20,-14 L18,-22 Z" fill="#1a100a"/>
+    <path d="M24,-26 L18,-32 L26,-30 Z" fill="#1a100a"/>
+    <path d="M34,-38 L40,-34 L38,-42 Z" fill="#1a100a"/>
+    <path d="M44,-48 L38,-54 L46,-52 Z" fill="#1a100a"/>
+    <path d="M54,-58 L60,-54 L58,-62 Z" fill="#1a100a"/>
+    <path d="M64,-68 L58,-74 L66,-72 Z" fill="#1a100a"/>
+    <path d="M74,-78 L80,-74 L78,-82 Z" fill="#1a100a"/>
+    <path d="M14,-12 C20,-22 30,-18 32,-26" stroke="#1a100a" stroke-width="0.5" fill="none"/>
+    <path d="M34,-32 C40,-42 50,-38 52,-46" stroke="#1a100a" stroke-width="0.5" fill="none"/>
+    <path d="M16,-16 Q22,-18 24,-14 Q22,-10 16,-12 Z" fill="url(#darkLeaf)" stroke="#1a100a" stroke-width="0.3"/>
+    <path d="M36,-36 Q42,-38 44,-34 Q42,-30 36,-32 Z" fill="url(#darkLeaf)" stroke="#1a100a" stroke-width="0.3"/>
+    <path d="M56,-56 Q62,-58 64,-54 Q62,-50 56,-52 Z" fill="url(#darkLeaf)" stroke="#1a100a" stroke-width="0.3"/>
+    <path d="M76,-76 Q82,-78 84,-74 Q82,-70 76,-72 Z" fill="url(#darkLeaf)" stroke="#1a100a" stroke-width="0.3"/>
+  </g>
+
+  <g id="heartMedallion">
+    <circle cx="0" cy="0" r="42" fill="none" stroke="url(#goldTrim)" stroke-width="1.6"/>
+    <circle cx="0" cy="0" r="36" fill="url(#medallionGrad)" stroke="#2a0410" stroke-width="0.8"/>
+    <circle cx="0" cy="0" r="36" fill="none" stroke="url(#goldTrim)" stroke-width="0.6"/>
+    <path d="M0,-6 C-8,-26 -34,-30 -34,-6 C-34,16 -8,28 0,38 C8,28 34,16 34,-6 C34,-30 8,-26 0,-6 Z" fill="url(#matRoseInner)" stroke="url(#goldTrim)" stroke-width="0.8"/>
+    <path d="M-4,-10 C-8,-20 -22,-22 -22,-8 C-22,8 -8,20 -4,24" stroke="#ffeae0" stroke-width="0.6" fill="none" opacity="0.5"/>
+    <g stroke="url(#goldTrim)" stroke-width="0.6" fill="none">
+      <circle cx="0" cy="-42" r="2.5"/>
+      <circle cx="0" cy="42" r="2.5"/>
+      <circle cx="-42" cy="0" r="2.5"/>
+      <circle cx="42" cy="0" r="2.5"/>
+      <circle cx="-29.7" cy="-29.7" r="2"/>
+      <circle cx="29.7" cy="29.7" r="2"/>
+      <circle cx="-29.7" cy="29.7" r="2"/>
+      <circle cx="29.7" cy="-29.7" r="2"/>
+    </g>
+    <path d="M0,-46 L-2,-50 L2,-50 Z M0,46 L-2,50 L2,50 Z M-46,0 L-50,-2 L-50,2 Z M46,0 L50,-2 L50,2 Z" fill="url(#goldTrim)"/>
+  </g>
+
+  <g id="darkLeafG">
+    <path d="M0,0 C-4,-5 -10,-7 -14,-12 C-12,-18 -8,-22 -4,-26 C-8,-30 -10,-34 -8,-38 C-4,-36 -2,-32 0,-30 C2,-32 4,-36 8,-38 C10,-34 8,-30 4,-26 C8,-22 12,-18 14,-12 C10,-7 4,-5 0,0 Z" fill="url(#darkLeaf)" stroke="#0a0a04" stroke-width="0.6"/>
+    <path d="M0,-2 L0,-34" stroke="#0a0a04" stroke-width="0.5"/>
+  </g>
+
+  <!-- TOP: thorny stems winding, large roses, medallion at center -->
+  <use href="#thornStem" transform="translate(70,55) rotate(80)"/>
+  <use href="#thornStem" transform="translate(220,55) rotate(80)"/>
+  <use href="#thornStem" transform="translate(370,55) rotate(80)"/>
+  <use href="#thornStem" transform="translate(610,55) rotate(80)"/>
+  <use href="#thornStem" transform="translate(760,55) rotate(80)"/>
+  <use href="#thornStem" transform="translate(900,55) rotate(80)"/>
+  <use href="#matureRose" transform="translate(150,32) scale(0.55)"/>
+  <use href="#matureRose" transform="translate(300,32) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(700,32) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(850,32) scale(0.55)"/>
+  <use href="#darkLeafG" transform="translate(220,50) rotate(180)"/>
+  <use href="#darkLeafG" transform="translate(380,50) rotate(180)"/>
+  <use href="#darkLeafG" transform="translate(620,50) rotate(180)"/>
+  <use href="#darkLeafG" transform="translate(780,50) rotate(180)"/>
+  <use href="#heartMedallion" transform="translate(500,40) scale(0.42)"/>
+
+  <!-- BOTTOM -->
+  <use href="#thornStem" transform="translate(70,1445) rotate(280)"/>
+  <use href="#thornStem" transform="translate(220,1445) rotate(280)"/>
+  <use href="#thornStem" transform="translate(370,1445) rotate(280)"/>
+  <use href="#thornStem" transform="translate(610,1445) rotate(280)"/>
+  <use href="#thornStem" transform="translate(760,1445) rotate(280)"/>
+  <use href="#thornStem" transform="translate(900,1445) rotate(280)"/>
+  <use href="#matureRose" transform="translate(150,1468) scale(0.55)"/>
+  <use href="#matureRose" transform="translate(300,1468) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(700,1468) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(850,1468) scale(0.55)"/>
+  <use href="#darkLeafG" transform="translate(220,1450)"/>
+  <use href="#darkLeafG" transform="translate(380,1450)"/>
+  <use href="#darkLeafG" transform="translate(620,1450)"/>
+  <use href="#darkLeafG" transform="translate(780,1450)"/>
+  <use href="#heartMedallion" transform="translate(500,1460) scale(0.42)"/>
+
+  <!-- LEFT -->
+  <use href="#thornStem" transform="translate(55,80) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,230) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,380) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,530) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,680) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,830) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,980) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,1130) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,1280) rotate(170)"/>
+  <use href="#thornStem" transform="translate(55,1430) rotate(170)"/>
+  <use href="#matureRose" transform="translate(30,160) scale(0.5)"/>
+  <use href="#matureRose" transform="translate(30,310) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(30,460) scale(0.5)"/>
+  <use href="#matureRose" transform="translate(30,610) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(30,910) scale(0.5)"/>
+  <use href="#matureRose" transform="translate(30,1060) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(30,1210) scale(0.5)"/>
+  <use href="#matureRose" transform="translate(30,1360) scale(0.6)"/>
+  <use href="#darkLeafG" transform="translate(50,200) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(50,360) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(50,520) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(50,680) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(50,840) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(50,1000) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(50,1160) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(50,1320) rotate(90)"/>
+  <use href="#heartMedallion" transform="translate(38,760) scale(0.42)"/>
+
+  <!-- RIGHT -->
+  <use href="#thornStem" transform="translate(945,80) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,230) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,380) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,530) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,680) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,830) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,980) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,1130) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,1280) rotate(10)"/>
+  <use href="#thornStem" transform="translate(945,1430) rotate(10)"/>
+  <use href="#matureRose" transform="translate(970,160) scale(0.5)"/>
+  <use href="#matureRose" transform="translate(970,310) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(970,460) scale(0.5)"/>
+  <use href="#matureRose" transform="translate(970,610) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(970,910) scale(0.5)"/>
+  <use href="#matureRose" transform="translate(970,1060) scale(0.6)"/>
+  <use href="#matureRose" transform="translate(970,1210) scale(0.5)"/>
+  <use href="#matureRose" transform="translate(970,1360) scale(0.6)"/>
+  <use href="#darkLeafG" transform="translate(950,200) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(950,360) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(950,520) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(950,680) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(950,840) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(950,1000) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(950,1160) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(950,1320) rotate(270)"/>
+  <use href="#heartMedallion" transform="translate(962,760) scale(0.42)"/>
+
+  <!-- CORNERS: thorn cluster + large rose -->
+  <g transform="translate(34,34)">
+    <use href="#matureRose" transform="translate(8,8) scale(0.75)"/>
+    <use href="#thornStem" transform="translate(0,40) rotate(-50)"/>
+    <use href="#thornStem" transform="translate(40,0) rotate(40)"/>
+    <use href="#darkLeafG" transform="translate(48,18) rotate(120)"/>
+  </g>
+  <g transform="translate(966,34)">
+    <use href="#matureRose" transform="translate(-8,8) scale(0.75)"/>
+    <use href="#thornStem" transform="translate(0,40) rotate(-130)"/>
+    <use href="#thornStem" transform="translate(-40,0) rotate(140)"/>
+    <use href="#darkLeafG" transform="translate(-48,18) rotate(240)"/>
+  </g>
+  <g transform="translate(34,1466)">
+    <use href="#matureRose" transform="translate(8,-8) scale(0.75)"/>
+    <use href="#thornStem" transform="translate(0,-40) rotate(50)"/>
+    <use href="#thornStem" transform="translate(40,0) rotate(-40)"/>
+    <use href="#darkLeafG" transform="translate(48,-18) rotate(60)"/>
+  </g>
+  <g transform="translate(966,1466)">
+    <use href="#matureRose" transform="translate(-8,-8) scale(0.75)"/>
+    <use href="#thornStem" transform="translate(0,-40) rotate(130)"/>
+    <use href="#thornStem" transform="translate(-40,0) rotate(-140)"/>
+    <use href="#darkLeafG" transform="translate(-48,-18) rotate(300)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#6a2440" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#e486a0" stroke-width="0.5" fill="none" opacity="0.7"/>
+</svg>

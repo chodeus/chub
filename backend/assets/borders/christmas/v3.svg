@@ -1,0 +1,333 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a2530"/>
+      <stop offset="50%" stop-color="#0e1822"/>
+      <stop offset="100%" stop-color="#050a10"/>
+    </linearGradient>
+    <radialGradient id="sageLeaf" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#dde6d4"/>
+      <stop offset="55%" stop-color="#94a989"/>
+      <stop offset="100%" stop-color="#475a44"/>
+    </radialGradient>
+    <radialGradient id="frostBerry" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#c8e0ec"/>
+      <stop offset="100%" stop-color="#5d7c8e"/>
+    </radialGradient>
+    <linearGradient id="silverV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a4c5c"/>
+      <stop offset="25%" stop-color="#9ab3c4"/>
+      <stop offset="50%" stop-color="#eaf3f9"/>
+      <stop offset="75%" stop-color="#9ab3c4"/>
+      <stop offset="100%" stop-color="#3a4c5c"/>
+    </linearGradient>
+    <linearGradient id="silverH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3a4c5c"/>
+      <stop offset="25%" stop-color="#9ab3c4"/>
+      <stop offset="50%" stop-color="#eaf3f9"/>
+      <stop offset="75%" stop-color="#9ab3c4"/>
+      <stop offset="100%" stop-color="#3a4c5c"/>
+    </linearGradient>
+    <radialGradient id="snowflakeShine" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#b8d2e2"/>
+      <stop offset="100%" stop-color="#5d7c8e"/>
+    </radialGradient>
+    <radialGradient id="frostConeG" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#eaf3f9"/>
+      <stop offset="55%" stop-color="#8aa3b3"/>
+      <stop offset="100%" stop-color="#2a3c4c"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="frostSprig">
+    <path d="M0,0 C-2,-18 -10,-32 -22,-44 C-12,-40 -4,-30 0,-20 C4,-30 12,-40 22,-44 C10,-32 2,-18 0,0 Z" fill="url(#sageLeaf)" stroke="#475a44" stroke-width="0.6"/>
+    <path d="M0,0 L0,-44" stroke="#2c3a2a" stroke-width="0.5" fill="none"/>
+    <path d="M-6,-12 L-2,-22 M6,-12 L2,-22 M-8,-22 L-3,-30 M8,-22 L3,-30 M-9,-30 L-4,-36 M9,-30 L4,-36" stroke="#dde6d4" stroke-width="0.5" fill="none" opacity="0.9"/>
+    <path d="M-4,-8 L0,-14 M4,-8 L0,-14" stroke="#ffffff" stroke-width="0.4" fill="none" opacity="0.7"/>
+  </g>
+
+  <g id="snowflake">
+    <g stroke="url(#snowflakeShine)" stroke-width="1.2" fill="none">
+      <path d="M0,-14 L0,14 M-12.1,-7 L12.1,7 M-12.1,7 L12.1,-7"/>
+      <path d="M0,-10 L-2,-12 M0,-10 L2,-12 M0,10 L-2,12 M0,10 L2,12"/>
+      <path d="M-8.7,-5 L-11,-4 M-8.7,-5 L-10,-7 M8.7,5 L11,4 M8.7,5 L10,7"/>
+      <path d="M-8.7,5 L-11,4 M-8.7,5 L-10,7 M8.7,-5 L11,-4 M8.7,-5 L10,-7"/>
+    </g>
+    <circle cx="0" cy="0" r="1.8" fill="url(#snowflakeShine)"/>
+    <circle cx="0" cy="-7" r="0.9" fill="#ffffff"/>
+    <circle cx="0" cy="7" r="0.9" fill="#ffffff"/>
+    <circle cx="-6" cy="-3.5" r="0.9" fill="#ffffff"/>
+    <circle cx="6" cy="3.5" r="0.9" fill="#ffffff"/>
+    <circle cx="-6" cy="3.5" r="0.9" fill="#ffffff"/>
+    <circle cx="6" cy="-3.5" r="0.9" fill="#ffffff"/>
+  </g>
+
+  <g id="iceBerry">
+    <circle cx="0" cy="0" r="5.5" fill="url(#frostBerry)" stroke="#5d7c8e" stroke-width="0.4"/>
+    <circle cx="9" cy="3" r="4.5" fill="url(#frostBerry)" stroke="#5d7c8e" stroke-width="0.4"/>
+    <circle cx="-7" cy="5" r="5" fill="url(#frostBerry)" stroke="#5d7c8e" stroke-width="0.4"/>
+    <circle cx="4" cy="-7" r="4" fill="url(#frostBerry)" stroke="#5d7c8e" stroke-width="0.4"/>
+    <circle cx="-1" cy="-1" r="1.2" fill="#ffffff"/>
+    <circle cx="8" cy="2" r="1" fill="#ffffff"/>
+    <circle cx="-8" cy="4" r="1" fill="#ffffff"/>
+  </g>
+
+  <g id="frostHolly">
+    <path d="M0,0 C-4,-5 -10,-7 -14,-12 C-12,-18 -8,-22 -4,-26 C-8,-30 -10,-34 -8,-38 C-4,-36 -2,-32 0,-30 C2,-32 4,-36 8,-38 C10,-34 8,-30 4,-26 C8,-22 12,-18 14,-12 C10,-7 4,-5 0,0 Z" fill="url(#sageLeaf)" stroke="#2c3a2a" stroke-width="0.7"/>
+    <path d="M0,-2 L0,-34" stroke="#1a2418" stroke-width="0.5"/>
+    <path d="M-6,-12 Q-2,-14 0,-20 M6,-12 Q2,-14 0,-20" stroke="#dde6d4" stroke-width="0.4" fill="none"/>
+    <path d="M-10,-15 L-6,-13 M10,-15 L6,-13" stroke="#ffffff" stroke-width="0.4" opacity="0.7"/>
+  </g>
+
+  <g id="frostCone">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#frostConeG)"/>
+    <path d="M-12,-16 Q-6,-12 0,-14 Q6,-12 12,-16 M-13,-8 Q-6,-4 0,-6 Q6,-4 13,-8 M-13,0 Q-6,4 0,2 Q6,4 13,0 M-12,8 Q-6,12 0,10 Q6,12 12,8 M-10,16 Q-5,20 0,18 Q5,20 10,16" stroke="#2a3c4c" stroke-width="0.8" fill="none"/>
+    <path d="M-13,-7 Q-6,-3 0,-5 M-13,1 Q-6,5 0,3" stroke="#ffffff" stroke-width="0.6" fill="none" opacity="0.85"/>
+  </g>
+
+  <path d="M60,30 Q150,12 250,30 Q350,48 450,28 Q550,8 650,30 Q750,52 850,30 Q920,18 940,30" stroke="url(#silverH)" stroke-width="7" fill="none"/>
+  <use href="#frostSprig" transform="translate(120,52) rotate(180)"/>
+  <use href="#frostSprig" transform="translate(160,48) rotate(170)"/>
+  <use href="#frostSprig" transform="translate(220,54) rotate(195)"/>
+  <use href="#frostSprig" transform="translate(280,46) rotate(175)"/>
+  <use href="#frostSprig" transform="translate(340,52) rotate(185)"/>
+  <use href="#frostSprig" transform="translate(400,48) rotate(170)"/>
+  <use href="#frostSprig" transform="translate(460,54) rotate(195)"/>
+  <use href="#frostSprig" transform="translate(520,48) rotate(175)"/>
+  <use href="#frostSprig" transform="translate(580,52) rotate(190)"/>
+  <use href="#frostSprig" transform="translate(640,46) rotate(170)"/>
+  <use href="#frostSprig" transform="translate(700,52) rotate(200)"/>
+  <use href="#frostSprig" transform="translate(760,48) rotate(180)"/>
+  <use href="#frostSprig" transform="translate(820,52) rotate(195)"/>
+  <use href="#frostSprig" transform="translate(880,48) rotate(170)"/>
+  <use href="#frostHolly" transform="translate(200,40) rotate(200)"/>
+  <use href="#frostHolly" transform="translate(210,42) rotate(150)"/>
+  <use href="#frostHolly" transform="translate(380,42) rotate(195)"/>
+  <use href="#frostHolly" transform="translate(390,40) rotate(155)"/>
+  <use href="#frostHolly" transform="translate(560,42) rotate(200)"/>
+  <use href="#frostHolly" transform="translate(570,40) rotate(150)"/>
+  <use href="#frostHolly" transform="translate(740,40) rotate(195)"/>
+  <use href="#frostHolly" transform="translate(750,42) rotate(155)"/>
+  <use href="#iceBerry" transform="translate(180,32)"/>
+  <use href="#iceBerry" transform="translate(310,28)"/>
+  <use href="#iceBerry" transform="translate(440,32)"/>
+  <use href="#iceBerry" transform="translate(560,30)"/>
+  <use href="#iceBerry" transform="translate(680,28)"/>
+  <use href="#iceBerry" transform="translate(800,32)"/>
+  <use href="#snowflake" transform="translate(240,22) scale(1.2)"/>
+  <use href="#snowflake" transform="translate(420,18) scale(0.9)"/>
+  <use href="#snowflake" transform="translate(600,22) scale(1.1)"/>
+  <use href="#snowflake" transform="translate(780,18) scale(0.95)"/>
+  <use href="#snowflake" transform="translate(140,12) scale(0.7)"/>
+  <use href="#snowflake" transform="translate(870,14) scale(0.7)"/>
+
+  <path d="M60,1470 Q150,1488 250,1470 Q350,1452 450,1472 Q550,1492 650,1470 Q750,1448 850,1470 Q920,1482 940,1470" stroke="url(#silverH)" stroke-width="7" fill="none"/>
+  <use href="#frostSprig" transform="translate(120,1448)"/>
+  <use href="#frostSprig" transform="translate(160,1452) rotate(10)"/>
+  <use href="#frostSprig" transform="translate(220,1446) rotate(-15)"/>
+  <use href="#frostSprig" transform="translate(280,1454) rotate(5)"/>
+  <use href="#frostSprig" transform="translate(340,1448)"/>
+  <use href="#frostSprig" transform="translate(400,1452) rotate(10)"/>
+  <use href="#frostSprig" transform="translate(460,1446) rotate(-15)"/>
+  <use href="#frostSprig" transform="translate(520,1452) rotate(5)"/>
+  <use href="#frostSprig" transform="translate(580,1448) rotate(-10)"/>
+  <use href="#frostSprig" transform="translate(640,1454) rotate(10)"/>
+  <use href="#frostSprig" transform="translate(700,1448) rotate(-20)"/>
+  <use href="#frostSprig" transform="translate(760,1452)"/>
+  <use href="#frostSprig" transform="translate(820,1448) rotate(15)"/>
+  <use href="#frostSprig" transform="translate(880,1452) rotate(-10)"/>
+  <use href="#frostHolly" transform="translate(200,1460) rotate(20)"/>
+  <use href="#frostHolly" transform="translate(210,1458) rotate(-30)"/>
+  <use href="#frostHolly" transform="translate(380,1458) rotate(15)"/>
+  <use href="#frostHolly" transform="translate(390,1460) rotate(-25)"/>
+  <use href="#frostHolly" transform="translate(560,1460) rotate(20)"/>
+  <use href="#frostHolly" transform="translate(570,1458) rotate(-30)"/>
+  <use href="#frostHolly" transform="translate(740,1458) rotate(15)"/>
+  <use href="#frostHolly" transform="translate(750,1460) rotate(-25)"/>
+  <use href="#iceBerry" transform="translate(180,1468)"/>
+  <use href="#iceBerry" transform="translate(310,1472)"/>
+  <use href="#iceBerry" transform="translate(440,1468)"/>
+  <use href="#iceBerry" transform="translate(560,1470)"/>
+  <use href="#iceBerry" transform="translate(680,1472)"/>
+  <use href="#iceBerry" transform="translate(800,1468)"/>
+  <use href="#snowflake" transform="translate(240,1478) scale(1.2)"/>
+  <use href="#snowflake" transform="translate(420,1482) scale(0.9)"/>
+  <use href="#snowflake" transform="translate(600,1478) scale(1.1)"/>
+  <use href="#snowflake" transform="translate(780,1482) scale(0.95)"/>
+
+  <path d="M30,60 Q12,150 30,250 Q48,350 28,450 Q8,550 30,650 Q52,750 30,850 Q18,920 30,940 Q42,1050 30,1150 Q12,1250 30,1350 Q48,1420 30,1440" stroke="url(#silverV)" stroke-width="7" fill="none"/>
+  <use href="#frostSprig" transform="translate(48,120) rotate(90)"/>
+  <use href="#frostSprig" transform="translate(52,180) rotate(80)"/>
+  <use href="#frostSprig" transform="translate(46,240) rotate(105)"/>
+  <use href="#frostSprig" transform="translate(54,300) rotate(85)"/>
+  <use href="#frostSprig" transform="translate(48,360) rotate(95)"/>
+  <use href="#frostSprig" transform="translate(52,420) rotate(80)"/>
+  <use href="#frostSprig" transform="translate(46,480) rotate(105)"/>
+  <use href="#frostSprig" transform="translate(54,540) rotate(85)"/>
+  <use href="#frostSprig" transform="translate(48,600) rotate(100)"/>
+  <use href="#frostSprig" transform="translate(52,660) rotate(80)"/>
+  <use href="#frostSprig" transform="translate(46,720) rotate(110)"/>
+  <use href="#frostSprig" transform="translate(54,780) rotate(85)"/>
+  <use href="#frostSprig" transform="translate(48,840) rotate(95)"/>
+  <use href="#frostSprig" transform="translate(52,900) rotate(80)"/>
+  <use href="#frostSprig" transform="translate(46,960) rotate(105)"/>
+  <use href="#frostSprig" transform="translate(54,1020) rotate(85)"/>
+  <use href="#frostSprig" transform="translate(48,1080) rotate(100)"/>
+  <use href="#frostSprig" transform="translate(52,1140) rotate(80)"/>
+  <use href="#frostSprig" transform="translate(46,1200) rotate(110)"/>
+  <use href="#frostSprig" transform="translate(54,1260) rotate(85)"/>
+  <use href="#frostSprig" transform="translate(48,1320) rotate(95)"/>
+  <use href="#frostSprig" transform="translate(52,1380) rotate(80)"/>
+  <use href="#frostHolly" transform="translate(40,200) rotate(110)"/>
+  <use href="#frostHolly" transform="translate(42,210) rotate(60)"/>
+  <use href="#frostHolly" transform="translate(40,380) rotate(105)"/>
+  <use href="#frostHolly" transform="translate(42,390) rotate(65)"/>
+  <use href="#frostHolly" transform="translate(40,560) rotate(110)"/>
+  <use href="#frostHolly" transform="translate(42,570) rotate(60)"/>
+  <use href="#frostHolly" transform="translate(40,740) rotate(105)"/>
+  <use href="#frostHolly" transform="translate(42,750) rotate(65)"/>
+  <use href="#frostHolly" transform="translate(40,920) rotate(110)"/>
+  <use href="#frostHolly" transform="translate(42,930) rotate(60)"/>
+  <use href="#frostHolly" transform="translate(40,1100) rotate(105)"/>
+  <use href="#frostHolly" transform="translate(42,1110) rotate(65)"/>
+  <use href="#frostHolly" transform="translate(40,1280) rotate(110)"/>
+  <use href="#frostHolly" transform="translate(42,1290) rotate(60)"/>
+  <use href="#iceBerry" transform="translate(32,160)"/>
+  <use href="#iceBerry" transform="translate(28,290)"/>
+  <use href="#iceBerry" transform="translate(32,420)"/>
+  <use href="#iceBerry" transform="translate(30,560)"/>
+  <use href="#iceBerry" transform="translate(28,680)"/>
+  <use href="#iceBerry" transform="translate(32,800)"/>
+  <use href="#iceBerry" transform="translate(28,920)"/>
+  <use href="#iceBerry" transform="translate(32,1060)"/>
+  <use href="#iceBerry" transform="translate(28,1200)"/>
+  <use href="#iceBerry" transform="translate(32,1320)"/>
+  <use href="#snowflake" transform="translate(20,260) scale(1.1)"/>
+  <use href="#snowflake" transform="translate(22,460) scale(0.9)"/>
+  <use href="#snowflake" transform="translate(20,660) scale(1.2)"/>
+  <use href="#snowflake" transform="translate(22,860) scale(0.9)"/>
+  <use href="#snowflake" transform="translate(20,1060) scale(1.1)"/>
+  <use href="#snowflake" transform="translate(22,1260) scale(0.95)"/>
+
+  <path d="M970,60 Q988,150 970,250 Q952,350 972,450 Q992,550 970,650 Q948,750 970,850 Q982,920 970,940 Q958,1050 970,1150 Q988,1250 970,1350 Q952,1420 970,1440" stroke="url(#silverV)" stroke-width="7" fill="none"/>
+  <use href="#frostSprig" transform="translate(952,120) rotate(270)"/>
+  <use href="#frostSprig" transform="translate(948,180) rotate(280)"/>
+  <use href="#frostSprig" transform="translate(954,240) rotate(255)"/>
+  <use href="#frostSprig" transform="translate(946,300) rotate(275)"/>
+  <use href="#frostSprig" transform="translate(952,360) rotate(265)"/>
+  <use href="#frostSprig" transform="translate(948,420) rotate(280)"/>
+  <use href="#frostSprig" transform="translate(954,480) rotate(255)"/>
+  <use href="#frostSprig" transform="translate(946,540) rotate(275)"/>
+  <use href="#frostSprig" transform="translate(952,600) rotate(260)"/>
+  <use href="#frostSprig" transform="translate(948,660) rotate(280)"/>
+  <use href="#frostSprig" transform="translate(954,720) rotate(250)"/>
+  <use href="#frostSprig" transform="translate(946,780) rotate(275)"/>
+  <use href="#frostSprig" transform="translate(952,840) rotate(265)"/>
+  <use href="#frostSprig" transform="translate(948,900) rotate(280)"/>
+  <use href="#frostSprig" transform="translate(954,960) rotate(255)"/>
+  <use href="#frostSprig" transform="translate(946,1020) rotate(275)"/>
+  <use href="#frostSprig" transform="translate(952,1080) rotate(260)"/>
+  <use href="#frostSprig" transform="translate(948,1140) rotate(280)"/>
+  <use href="#frostSprig" transform="translate(954,1200) rotate(250)"/>
+  <use href="#frostSprig" transform="translate(946,1260) rotate(275)"/>
+  <use href="#frostSprig" transform="translate(952,1320) rotate(265)"/>
+  <use href="#frostSprig" transform="translate(948,1380) rotate(280)"/>
+  <use href="#frostHolly" transform="translate(960,200) rotate(290)"/>
+  <use href="#frostHolly" transform="translate(958,210) rotate(240)"/>
+  <use href="#frostHolly" transform="translate(960,380) rotate(285)"/>
+  <use href="#frostHolly" transform="translate(958,390) rotate(245)"/>
+  <use href="#frostHolly" transform="translate(960,560) rotate(290)"/>
+  <use href="#frostHolly" transform="translate(958,570) rotate(240)"/>
+  <use href="#frostHolly" transform="translate(960,740) rotate(285)"/>
+  <use href="#frostHolly" transform="translate(958,750) rotate(245)"/>
+  <use href="#frostHolly" transform="translate(960,920) rotate(290)"/>
+  <use href="#frostHolly" transform="translate(958,930) rotate(240)"/>
+  <use href="#frostHolly" transform="translate(960,1100) rotate(285)"/>
+  <use href="#frostHolly" transform="translate(958,1110) rotate(245)"/>
+  <use href="#frostHolly" transform="translate(960,1280) rotate(290)"/>
+  <use href="#frostHolly" transform="translate(958,1290) rotate(240)"/>
+  <use href="#iceBerry" transform="translate(968,160)"/>
+  <use href="#iceBerry" transform="translate(972,290)"/>
+  <use href="#iceBerry" transform="translate(968,420)"/>
+  <use href="#iceBerry" transform="translate(970,560)"/>
+  <use href="#iceBerry" transform="translate(972,680)"/>
+  <use href="#iceBerry" transform="translate(968,800)"/>
+  <use href="#iceBerry" transform="translate(972,920)"/>
+  <use href="#iceBerry" transform="translate(968,1060)"/>
+  <use href="#iceBerry" transform="translate(972,1200)"/>
+  <use href="#iceBerry" transform="translate(968,1320)"/>
+  <use href="#snowflake" transform="translate(980,260) scale(1.1)"/>
+  <use href="#snowflake" transform="translate(978,460) scale(0.9)"/>
+  <use href="#snowflake" transform="translate(980,660) scale(1.2)"/>
+  <use href="#snowflake" transform="translate(978,860) scale(0.9)"/>
+  <use href="#snowflake" transform="translate(980,1060) scale(1.1)"/>
+  <use href="#snowflake" transform="translate(978,1260) scale(0.95)"/>
+
+  <g transform="translate(38,38)">
+    <use href="#frostCone" transform="rotate(225)"/>
+    <use href="#frostHolly" transform="translate(18,4) rotate(120)"/>
+    <use href="#frostHolly" transform="translate(4,18) rotate(210)"/>
+    <use href="#iceBerry" transform="translate(18,18)"/>
+    <use href="#snowflake" transform="translate(8,8) scale(1.4)"/>
+  </g>
+  <g transform="translate(962,38)">
+    <use href="#frostCone" transform="rotate(135)"/>
+    <use href="#frostHolly" transform="translate(-18,4) rotate(240)"/>
+    <use href="#frostHolly" transform="translate(-4,18) rotate(150)"/>
+    <use href="#iceBerry" transform="translate(-18,18)"/>
+    <use href="#snowflake" transform="translate(-8,8) scale(1.4)"/>
+  </g>
+  <g transform="translate(38,1462)">
+    <use href="#frostCone" transform="rotate(315)"/>
+    <use href="#frostHolly" transform="translate(18,-4) rotate(60)"/>
+    <use href="#frostHolly" transform="translate(4,-18) rotate(330)"/>
+    <use href="#iceBerry" transform="translate(18,-18)"/>
+    <use href="#snowflake" transform="translate(8,-8) scale(1.4)"/>
+  </g>
+  <g transform="translate(962,1462)">
+    <use href="#frostCone" transform="rotate(45)"/>
+    <use href="#frostHolly" transform="translate(-18,-4) rotate(300)"/>
+    <use href="#frostHolly" transform="translate(-4,-18) rotate(30)"/>
+    <use href="#iceBerry" transform="translate(-18,-18)"/>
+    <use href="#snowflake" transform="translate(-8,-8) scale(1.4)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#silverH)" stroke-width="1.4" fill="none"/>
+
+  <g fill="#ffffff" opacity="0.85">
+    <circle cx="150" cy="18" r="1.4"/>
+    <circle cx="280" cy="14" r="1.2"/>
+    <circle cx="380" cy="22" r="1.4"/>
+    <circle cx="500" cy="12" r="1.2"/>
+    <circle cx="620" cy="20" r="1.4"/>
+    <circle cx="730" cy="14" r="1.2"/>
+    <circle cx="850" cy="22" r="1.4"/>
+    <circle cx="150" cy="1486" r="1.4"/>
+    <circle cx="280" cy="1492" r="1.2"/>
+    <circle cx="380" cy="1484" r="1.4"/>
+    <circle cx="500" cy="1494" r="1.2"/>
+    <circle cx="620" cy="1486" r="1.4"/>
+    <circle cx="730" cy="1492" r="1.2"/>
+    <circle cx="850" cy="1484" r="1.4"/>
+    <circle cx="14" cy="220" r="1.2"/>
+    <circle cx="18" cy="380" r="1.4"/>
+    <circle cx="14" cy="540" r="1.2"/>
+    <circle cx="18" cy="700" r="1.4"/>
+    <circle cx="14" cy="860" r="1.2"/>
+    <circle cx="18" cy="1020" r="1.4"/>
+    <circle cx="14" cy="1180" r="1.2"/>
+    <circle cx="18" cy="1340" r="1.4"/>
+    <circle cx="986" cy="220" r="1.2"/>
+    <circle cx="982" cy="380" r="1.4"/>
+    <circle cx="986" cy="540" r="1.2"/>
+    <circle cx="982" cy="700" r="1.4"/>
+    <circle cx="986" cy="860" r="1.2"/>
+    <circle cx="982" cy="1020" r="1.4"/>
+    <circle cx="986" cy="1180" r="1.2"/>
+    <circle cx="982" cy="1340" r="1.4"/>
+  </g>
+</svg>

@@ -1,0 +1,296 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e14"/>
+      <stop offset="50%" stop-color="#04060a"/>
+      <stop offset="100%" stop-color="#020306"/>
+    </linearGradient>
+    <radialGradient id="iceSparkle" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#c8d8e8"/>
+      <stop offset="100%" stop-color="#5a6a7a"/>
+    </radialGradient>
+    <linearGradient id="prismSilver" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a8b8c8"/>
+      <stop offset="50%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#5a6a7a"/>
+    </linearGradient>
+    <linearGradient id="silverH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3a4858"/>
+      <stop offset="50%" stop-color="#eef3f8"/>
+      <stop offset="100%" stop-color="#3a4858"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="prismShard">
+    <path d="M0,0 L8,-22 L16,0 L8,8 Z" fill="url(#prismSilver)" stroke="#3a4858" stroke-width="0.4"/>
+    <path d="M0,0 L8,-22 L8,8 Z" fill="#a8b8c8" opacity="0.6"/>
+    <path d="M8,-22 L16,0 M8,-22 L8,8" stroke="#ffffff" stroke-width="0.4" opacity="0.7"/>
+  </g>
+
+  <g id="snowCrystal">
+    <g stroke="url(#iceSparkle)" stroke-width="1.2" fill="none">
+      <path d="M0,-14 L0,14 M-12.1,-7 L12.1,7 M-12.1,7 L12.1,-7"/>
+      <path d="M0,-10 L-2,-12 M0,-10 L2,-12 M0,10 L-2,12 M0,10 L2,12"/>
+      <path d="M-8.7,-5 L-11,-4 M-8.7,-5 L-10,-7 M8.7,5 L11,4 M8.7,5 L10,7"/>
+      <path d="M-8.7,5 L-11,4 M-8.7,5 L-10,7 M8.7,-5 L11,-4 M8.7,-5 L10,-7"/>
+    </g>
+    <circle cx="0" cy="0" r="1.8" fill="url(#iceSparkle)"/>
+    <circle cx="0" cy="-7" r="0.9" fill="#ffffff"/>
+    <circle cx="0" cy="7" r="0.9" fill="#ffffff"/>
+    <circle cx="-6" cy="-3.5" r="0.9" fill="#ffffff"/>
+    <circle cx="6" cy="3.5" r="0.9" fill="#ffffff"/>
+    <circle cx="-6" cy="3.5" r="0.9" fill="#ffffff"/>
+    <circle cx="6" cy="-3.5" r="0.9" fill="#ffffff"/>
+  </g>
+
+  <g id="sparkleStar">
+    <path d="M0,-10 L2,-2 L10,0 L2,2 L0,10 L-2,2 L-10,0 L-2,-2 Z" fill="url(#prismSilver)"/>
+    <path d="M0,-4 L0,4 M-4,0 L4,0" stroke="#ffffff" stroke-width="0.5"/>
+    <circle cx="0" cy="0" r="1" fill="#ffffff"/>
+  </g>
+
+  <g id="iceConfetti">
+    <path d="M0,0 L4,-3 L8,0 L4,3 Z" fill="url(#prismSilver)" stroke="#5a6a7a" stroke-width="0.3"/>
+  </g>
+
+  <g id="silverDot">
+    <circle cx="0" cy="0" r="1.4" fill="url(#iceSparkle)"/>
+    <circle cx="0" cy="0" r="0.6" fill="#ffffff"/>
+  </g>
+
+  <g id="frostBurst">
+    <g stroke="url(#iceSparkle)" stroke-width="0.8" fill="none">
+      <path d="M0,0 L0,-22 M0,0 L0,22 M0,0 L-22,0 M0,0 L22,0"/>
+      <path d="M0,0 L15.6,-15.6 M0,0 L-15.6,-15.6 M0,0 L15.6,15.6 M0,0 L-15.6,15.6"/>
+    </g>
+    <use href="#sparkleStar" transform="translate(0,-22) scale(0.5)"/>
+    <use href="#sparkleStar" transform="translate(0,22) scale(0.5)"/>
+    <use href="#sparkleStar" transform="translate(-22,0) scale(0.5)"/>
+    <use href="#sparkleStar" transform="translate(22,0) scale(0.5)"/>
+    <circle cx="15.6" cy="-15.6" r="1" fill="#ffffff"/>
+    <circle cx="-15.6" cy="-15.6" r="1" fill="#ffffff"/>
+    <circle cx="15.6" cy="15.6" r="1" fill="#ffffff"/>
+    <circle cx="-15.6" cy="15.6" r="1" fill="#ffffff"/>
+    <use href="#snowCrystal" transform="translate(0,0) scale(0.7)"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#prismShard" transform="translate(80,52)"/>
+  <use href="#prismShard" transform="translate(160,52) rotate(15)"/>
+  <use href="#prismShard" transform="translate(240,52) rotate(-15)"/>
+  <use href="#prismShard" transform="translate(320,52)"/>
+  <use href="#prismShard" transform="translate(400,52) rotate(15)"/>
+  <use href="#prismShard" transform="translate(480,52) rotate(-15)"/>
+  <use href="#prismShard" transform="translate(560,52)"/>
+  <use href="#prismShard" transform="translate(640,52) rotate(15)"/>
+  <use href="#prismShard" transform="translate(720,52) rotate(-15)"/>
+  <use href="#prismShard" transform="translate(800,52)"/>
+  <use href="#prismShard" transform="translate(880,52) rotate(15)"/>
+  <use href="#snowCrystal" transform="translate(140,30) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(300,30)"/>
+  <use href="#snowCrystal" transform="translate(460,30) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(620,30)"/>
+  <use href="#snowCrystal" transform="translate(780,30) scale(1.2)"/>
+  <use href="#sparkleStar" transform="translate(220,28)"/>
+  <use href="#sparkleStar" transform="translate(380,28)"/>
+  <use href="#sparkleStar" transform="translate(540,28)"/>
+  <use href="#sparkleStar" transform="translate(700,28)"/>
+  <use href="#sparkleStar" transform="translate(860,28)"/>
+  <use href="#iceConfetti" transform="translate(120,16) rotate(10)"/>
+  <use href="#iceConfetti" transform="translate(200,18) rotate(-15)"/>
+  <use href="#iceConfetti" transform="translate(280,16) rotate(25)"/>
+  <use href="#iceConfetti" transform="translate(360,18) rotate(-10)"/>
+  <use href="#iceConfetti" transform="translate(440,16) rotate(15)"/>
+  <use href="#iceConfetti" transform="translate(520,18) rotate(-25)"/>
+  <use href="#iceConfetti" transform="translate(600,16) rotate(20)"/>
+  <use href="#iceConfetti" transform="translate(680,18) rotate(-10)"/>
+  <use href="#iceConfetti" transform="translate(760,16) rotate(15)"/>
+  <use href="#iceConfetti" transform="translate(840,18) rotate(-20)"/>
+  <use href="#silverDot" transform="translate(100,42)"/>
+  <use href="#silverDot" transform="translate(180,42)"/>
+  <use href="#silverDot" transform="translate(260,42)"/>
+  <use href="#silverDot" transform="translate(340,42)"/>
+  <use href="#silverDot" transform="translate(420,42)"/>
+  <use href="#silverDot" transform="translate(500,42)"/>
+  <use href="#silverDot" transform="translate(580,42)"/>
+  <use href="#silverDot" transform="translate(660,42)"/>
+  <use href="#silverDot" transform="translate(740,42)"/>
+  <use href="#silverDot" transform="translate(820,42)"/>
+  <use href="#silverDot" transform="translate(900,42)"/>
+
+  <!-- BOTTOM -->
+  <use href="#prismShard" transform="translate(80,1448) scale(1,-1)"/>
+  <use href="#prismShard" transform="translate(160,1448) scale(1,-1) rotate(15)"/>
+  <use href="#prismShard" transform="translate(240,1448) scale(1,-1) rotate(-15)"/>
+  <use href="#prismShard" transform="translate(320,1448) scale(1,-1)"/>
+  <use href="#prismShard" transform="translate(400,1448) scale(1,-1) rotate(15)"/>
+  <use href="#prismShard" transform="translate(480,1448) scale(1,-1) rotate(-15)"/>
+  <use href="#prismShard" transform="translate(560,1448) scale(1,-1)"/>
+  <use href="#prismShard" transform="translate(640,1448) scale(1,-1) rotate(15)"/>
+  <use href="#prismShard" transform="translate(720,1448) scale(1,-1) rotate(-15)"/>
+  <use href="#prismShard" transform="translate(800,1448) scale(1,-1)"/>
+  <use href="#prismShard" transform="translate(880,1448) scale(1,-1) rotate(15)"/>
+  <use href="#snowCrystal" transform="translate(140,1470) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(300,1470)"/>
+  <use href="#snowCrystal" transform="translate(460,1470) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(620,1470)"/>
+  <use href="#snowCrystal" transform="translate(780,1470) scale(1.2)"/>
+  <use href="#sparkleStar" transform="translate(220,1472)"/>
+  <use href="#sparkleStar" transform="translate(380,1472)"/>
+  <use href="#sparkleStar" transform="translate(540,1472)"/>
+  <use href="#sparkleStar" transform="translate(700,1472)"/>
+  <use href="#sparkleStar" transform="translate(860,1472)"/>
+  <use href="#iceConfetti" transform="translate(120,1484) rotate(10)"/>
+  <use href="#iceConfetti" transform="translate(200,1482) rotate(-15)"/>
+  <use href="#iceConfetti" transform="translate(280,1484) rotate(25)"/>
+  <use href="#iceConfetti" transform="translate(360,1482) rotate(-10)"/>
+  <use href="#iceConfetti" transform="translate(440,1484) rotate(15)"/>
+  <use href="#iceConfetti" transform="translate(520,1482) rotate(-25)"/>
+  <use href="#iceConfetti" transform="translate(600,1484) rotate(20)"/>
+  <use href="#iceConfetti" transform="translate(680,1482) rotate(-10)"/>
+  <use href="#iceConfetti" transform="translate(760,1484) rotate(15)"/>
+  <use href="#iceConfetti" transform="translate(840,1482) rotate(-20)"/>
+
+  <!-- LEFT -->
+  <use href="#prismShard" transform="translate(55,80) rotate(90)"/>
+  <use href="#prismShard" transform="translate(55,160) rotate(75)"/>
+  <use href="#prismShard" transform="translate(55,240) rotate(105)"/>
+  <use href="#prismShard" transform="translate(55,320) rotate(90)"/>
+  <use href="#prismShard" transform="translate(55,400) rotate(75)"/>
+  <use href="#prismShard" transform="translate(55,480) rotate(105)"/>
+  <use href="#prismShard" transform="translate(55,560) rotate(90)"/>
+  <use href="#prismShard" transform="translate(55,640) rotate(75)"/>
+  <use href="#prismShard" transform="translate(55,720) rotate(105)"/>
+  <use href="#prismShard" transform="translate(55,800) rotate(90)"/>
+  <use href="#prismShard" transform="translate(55,880) rotate(75)"/>
+  <use href="#prismShard" transform="translate(55,960) rotate(105)"/>
+  <use href="#prismShard" transform="translate(55,1040) rotate(90)"/>
+  <use href="#prismShard" transform="translate(55,1120) rotate(75)"/>
+  <use href="#prismShard" transform="translate(55,1200) rotate(105)"/>
+  <use href="#prismShard" transform="translate(55,1280) rotate(90)"/>
+  <use href="#prismShard" transform="translate(55,1360) rotate(75)"/>
+  <use href="#snowCrystal" transform="translate(28,140) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(28,300)"/>
+  <use href="#snowCrystal" transform="translate(28,460) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(28,620)"/>
+  <use href="#snowCrystal" transform="translate(28,780) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(28,940)"/>
+  <use href="#snowCrystal" transform="translate(28,1100) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(28,1260)"/>
+  <use href="#snowCrystal" transform="translate(28,1400) scale(1.2)"/>
+  <use href="#sparkleStar" transform="translate(38,220)"/>
+  <use href="#sparkleStar" transform="translate(38,380)"/>
+  <use href="#sparkleStar" transform="translate(38,540)"/>
+  <use href="#sparkleStar" transform="translate(38,700)"/>
+  <use href="#sparkleStar" transform="translate(38,860)"/>
+  <use href="#sparkleStar" transform="translate(38,1020)"/>
+  <use href="#sparkleStar" transform="translate(38,1180)"/>
+  <use href="#sparkleStar" transform="translate(38,1340)"/>
+  <use href="#iceConfetti" transform="translate(18,180) rotate(45)"/>
+  <use href="#iceConfetti" transform="translate(18,340) rotate(75)"/>
+  <use href="#iceConfetti" transform="translate(18,500) rotate(60)"/>
+  <use href="#iceConfetti" transform="translate(18,660) rotate(90)"/>
+  <use href="#iceConfetti" transform="translate(18,820) rotate(50)"/>
+  <use href="#iceConfetti" transform="translate(18,980) rotate(70)"/>
+  <use href="#iceConfetti" transform="translate(18,1140) rotate(55)"/>
+  <use href="#iceConfetti" transform="translate(18,1300) rotate(85)"/>
+  <use href="#silverDot" transform="translate(46,100)"/>
+  <use href="#silverDot" transform="translate(46,200)"/>
+  <use href="#silverDot" transform="translate(46,300)"/>
+  <use href="#silverDot" transform="translate(46,400)"/>
+  <use href="#silverDot" transform="translate(46,500)"/>
+  <use href="#silverDot" transform="translate(46,600)"/>
+  <use href="#silverDot" transform="translate(46,700)"/>
+  <use href="#silverDot" transform="translate(46,800)"/>
+  <use href="#silverDot" transform="translate(46,900)"/>
+  <use href="#silverDot" transform="translate(46,1000)"/>
+  <use href="#silverDot" transform="translate(46,1100)"/>
+  <use href="#silverDot" transform="translate(46,1200)"/>
+  <use href="#silverDot" transform="translate(46,1300)"/>
+  <use href="#silverDot" transform="translate(46,1400)"/>
+
+  <!-- RIGHT -->
+  <use href="#prismShard" transform="translate(945,80) rotate(270)"/>
+  <use href="#prismShard" transform="translate(945,160) rotate(255)"/>
+  <use href="#prismShard" transform="translate(945,240) rotate(285)"/>
+  <use href="#prismShard" transform="translate(945,320) rotate(270)"/>
+  <use href="#prismShard" transform="translate(945,400) rotate(255)"/>
+  <use href="#prismShard" transform="translate(945,480) rotate(285)"/>
+  <use href="#prismShard" transform="translate(945,560) rotate(270)"/>
+  <use href="#prismShard" transform="translate(945,640) rotate(255)"/>
+  <use href="#prismShard" transform="translate(945,720) rotate(285)"/>
+  <use href="#prismShard" transform="translate(945,800) rotate(270)"/>
+  <use href="#prismShard" transform="translate(945,880) rotate(255)"/>
+  <use href="#prismShard" transform="translate(945,960) rotate(285)"/>
+  <use href="#prismShard" transform="translate(945,1040) rotate(270)"/>
+  <use href="#prismShard" transform="translate(945,1120) rotate(255)"/>
+  <use href="#prismShard" transform="translate(945,1200) rotate(285)"/>
+  <use href="#prismShard" transform="translate(945,1280) rotate(270)"/>
+  <use href="#prismShard" transform="translate(945,1360) rotate(255)"/>
+  <use href="#snowCrystal" transform="translate(972,140) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(972,300)"/>
+  <use href="#snowCrystal" transform="translate(972,460) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(972,620)"/>
+  <use href="#snowCrystal" transform="translate(972,780) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(972,940)"/>
+  <use href="#snowCrystal" transform="translate(972,1100) scale(1.2)"/>
+  <use href="#snowCrystal" transform="translate(972,1260)"/>
+  <use href="#snowCrystal" transform="translate(972,1400) scale(1.2)"/>
+  <use href="#sparkleStar" transform="translate(962,220)"/>
+  <use href="#sparkleStar" transform="translate(962,380)"/>
+  <use href="#sparkleStar" transform="translate(962,540)"/>
+  <use href="#sparkleStar" transform="translate(962,700)"/>
+  <use href="#sparkleStar" transform="translate(962,860)"/>
+  <use href="#sparkleStar" transform="translate(962,1020)"/>
+  <use href="#sparkleStar" transform="translate(962,1180)"/>
+  <use href="#sparkleStar" transform="translate(962,1340)"/>
+  <use href="#silverDot" transform="translate(954,100)"/>
+  <use href="#silverDot" transform="translate(954,200)"/>
+  <use href="#silverDot" transform="translate(954,300)"/>
+  <use href="#silverDot" transform="translate(954,400)"/>
+  <use href="#silverDot" transform="translate(954,500)"/>
+  <use href="#silverDot" transform="translate(954,600)"/>
+  <use href="#silverDot" transform="translate(954,700)"/>
+  <use href="#silverDot" transform="translate(954,800)"/>
+  <use href="#silverDot" transform="translate(954,900)"/>
+  <use href="#silverDot" transform="translate(954,1000)"/>
+  <use href="#silverDot" transform="translate(954,1100)"/>
+  <use href="#silverDot" transform="translate(954,1200)"/>
+  <use href="#silverDot" transform="translate(954,1300)"/>
+  <use href="#silverDot" transform="translate(954,1400)"/>
+
+  <!-- CORNERS: frost bursts + clustered shards -->
+  <g transform="translate(40,40)">
+    <use href="#frostBurst" transform="translate(30,30) scale(1.2)"/>
+    <use href="#prismShard" transform="translate(56,8) scale(1.3)"/>
+    <use href="#prismShard" transform="translate(8,56) scale(1.3) rotate(45)"/>
+    <use href="#sparkleStar" transform="translate(70,42)"/>
+    <use href="#sparkleStar" transform="translate(42,70)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#frostBurst" transform="translate(-30,30) scale(1.2)"/>
+    <use href="#prismShard" transform="translate(-56,8) scale(1.3) scale(-1,1)"/>
+    <use href="#prismShard" transform="translate(-8,56) scale(1.3) rotate(-45)"/>
+    <use href="#sparkleStar" transform="translate(-70,42)"/>
+    <use href="#sparkleStar" transform="translate(-42,70)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#frostBurst" transform="translate(30,-30) scale(1.2)"/>
+    <use href="#prismShard" transform="translate(56,-8) scale(1.3) scale(1,-1)"/>
+    <use href="#prismShard" transform="translate(8,-56) scale(1.3) rotate(135)"/>
+    <use href="#sparkleStar" transform="translate(70,-42)"/>
+    <use href="#sparkleStar" transform="translate(42,-70)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#frostBurst" transform="translate(-30,-30) scale(1.2)"/>
+    <use href="#prismShard" transform="translate(-56,-8) scale(1.3) scale(-1,-1)"/>
+    <use href="#prismShard" transform="translate(-8,-56) scale(1.3) rotate(-135)"/>
+    <use href="#sparkleStar" transform="translate(-70,-42)"/>
+    <use href="#sparkleStar" transform="translate(-42,-70)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#silverH)" stroke-width="1.4" fill="none"/>
+</svg>

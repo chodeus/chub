@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#14181f"/>
+      <stop offset="50%" stop-color="#0a0c10"/>
+      <stop offset="100%" stop-color="#040608"/>
+    </linearGradient>
+    <linearGradient id="lightBlueWave" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3a6090"/>
+      <stop offset="50%" stop-color="#90c8e8"/>
+      <stop offset="100%" stop-color="#3a6090"/>
+    </linearGradient>
+    <linearGradient id="lightPinkWave" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a06070"/>
+      <stop offset="50%" stop-color="#fac8d4"/>
+      <stop offset="100%" stop-color="#a06070"/>
+    </linearGradient>
+    <linearGradient id="whiteWave" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#90989c"/>
+      <stop offset="50%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#90989c"/>
+    </linearGradient>
+    <linearGradient id="lightBlueV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a6090"/>
+      <stop offset="50%" stop-color="#90c8e8"/>
+      <stop offset="100%" stop-color="#3a6090"/>
+    </linearGradient>
+    <linearGradient id="lightPinkV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a06070"/>
+      <stop offset="50%" stop-color="#fac8d4"/>
+      <stop offset="100%" stop-color="#a06070"/>
+    </linearGradient>
+    <linearGradient id="whiteV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#90989c"/>
+      <stop offset="50%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#90989c"/>
+    </linearGradient>
+    <radialGradient id="cloudG" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#90c8e8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softblur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="pastelWaveH">
+    <path d="M0,0 C40,-10 80,-10 120,0 C160,10 200,10 240,0" stroke="url(#lightBlueWave)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M0,9 C40,-1 80,-1 120,9 C160,19 200,19 240,9" stroke="url(#lightPinkWave)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M0,18 C40,8 80,8 120,18 C160,28 200,28 240,18" stroke="url(#whiteWave)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.95"/>
+    <path d="M0,27 C40,17 80,17 120,27 C160,37 200,37 240,27" stroke="url(#lightPinkWave)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M0,36 C40,26 80,26 120,36 C160,46 200,46 240,36" stroke="url(#lightBlueWave)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  <g id="pastelWaveV">
+    <path d="M0,0 C-10,40 -10,80 0,120 C10,160 10,200 0,240" stroke="url(#lightBlueV)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M9,0 C-1,40 -1,80 9,120 C19,160 19,200 9,240" stroke="url(#lightPinkV)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M18,0 C8,40 8,80 18,120 C28,160 28,200 18,240" stroke="url(#whiteV)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.95"/>
+    <path d="M27,0 C17,40 17,80 27,120 C37,160 37,200 27,240" stroke="url(#lightPinkV)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M36,0 C26,40 26,80 36,120 C46,160 46,200 36,240" stroke="url(#lightBlueV)" stroke-width="9" fill="none" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  <g id="softCloud">
+    <ellipse cx="0" cy="0" rx="16" ry="6" fill="url(#cloudG)" filter="url(#softblur)"/>
+    <ellipse cx="-8" cy="-2" rx="8" ry="4" fill="url(#cloudG)" filter="url(#softblur)"/>
+    <ellipse cx="8" cy="2" rx="8" ry="4" fill="url(#cloudG)" filter="url(#softblur)"/>
+  </g>
+
+  <g id="softHeart">
+    <path d="M0,-1 C-3,-7 -12,-9 -12,-1 C-12,6 -3,11 0,14 C3,11 12,6 12,-1 C12,-9 3,-7 0,-1 Z" fill="url(#lightPinkWave)" opacity="0.7"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#pastelWaveH" transform="translate(60,12)"/>
+  <use href="#pastelWaveH" transform="translate(300,12)"/>
+  <use href="#pastelWaveH" transform="translate(540,12)"/>
+  <use href="#pastelWaveH" transform="translate(780,12)"/>
+  <use href="#softCloud" transform="translate(160,32)"/>
+  <use href="#softCloud" transform="translate(340,30) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(520,32)"/>
+  <use href="#softCloud" transform="translate(700,30) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(880,32)"/>
+  <use href="#softHeart" transform="translate(220,42) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(400,42) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(580,42) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(760,42) scale(0.7)"/>
+
+  <!-- BOTTOM -->
+  <use href="#pastelWaveH" transform="translate(60,1488) scale(1,-1)"/>
+  <use href="#pastelWaveH" transform="translate(300,1488) scale(1,-1)"/>
+  <use href="#pastelWaveH" transform="translate(540,1488) scale(1,-1)"/>
+  <use href="#pastelWaveH" transform="translate(780,1488) scale(1,-1)"/>
+  <use href="#softCloud" transform="translate(160,1468)"/>
+  <use href="#softCloud" transform="translate(340,1470) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(520,1468)"/>
+  <use href="#softCloud" transform="translate(700,1470) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(880,1468)"/>
+  <use href="#softHeart" transform="translate(220,1458) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(400,1458) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(580,1458) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(760,1458) scale(0.7)"/>
+
+  <!-- LEFT -->
+  <use href="#pastelWaveV" transform="translate(12,60)"/>
+  <use href="#pastelWaveV" transform="translate(12,300)"/>
+  <use href="#pastelWaveV" transform="translate(12,540)"/>
+  <use href="#pastelWaveV" transform="translate(12,780)"/>
+  <use href="#pastelWaveV" transform="translate(12,1020)"/>
+  <use href="#pastelWaveV" transform="translate(12,1260)"/>
+  <use href="#softCloud" transform="translate(32,160)"/>
+  <use href="#softCloud" transform="translate(30,340) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(32,520)"/>
+  <use href="#softCloud" transform="translate(30,700) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(32,880)"/>
+  <use href="#softCloud" transform="translate(30,1060) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(32,1240)"/>
+  <use href="#softCloud" transform="translate(30,1400) scale(1.2)"/>
+  <use href="#softHeart" transform="translate(42,220) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(42,400) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(42,580) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(42,760) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(42,940) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(42,1120) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(42,1300) scale(0.7)"/>
+
+  <!-- RIGHT -->
+  <use href="#pastelWaveV" transform="translate(988,60) scale(-1,1)"/>
+  <use href="#pastelWaveV" transform="translate(988,300) scale(-1,1)"/>
+  <use href="#pastelWaveV" transform="translate(988,540) scale(-1,1)"/>
+  <use href="#pastelWaveV" transform="translate(988,780) scale(-1,1)"/>
+  <use href="#pastelWaveV" transform="translate(988,1020) scale(-1,1)"/>
+  <use href="#pastelWaveV" transform="translate(988,1260) scale(-1,1)"/>
+  <use href="#softCloud" transform="translate(968,160)"/>
+  <use href="#softCloud" transform="translate(970,340) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(968,520)"/>
+  <use href="#softCloud" transform="translate(970,700) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(968,880)"/>
+  <use href="#softCloud" transform="translate(970,1060) scale(1.2)"/>
+  <use href="#softCloud" transform="translate(968,1240)"/>
+  <use href="#softCloud" transform="translate(970,1400) scale(1.2)"/>
+  <use href="#softHeart" transform="translate(958,220) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(958,400) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(958,580) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(958,760) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(958,940) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(958,1120) scale(0.7)"/>
+  <use href="#softHeart" transform="translate(958,1300) scale(0.7)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(30,30)">
+    <use href="#softCloud" transform="translate(36,36) scale(1.8)"/>
+    <use href="#softHeart" transform="translate(60,18)"/>
+    <use href="#softHeart" transform="translate(18,60)"/>
+  </g>
+  <g transform="translate(970,30)">
+    <use href="#softCloud" transform="translate(-36,36) scale(1.8)"/>
+    <use href="#softHeart" transform="translate(-60,18)"/>
+    <use href="#softHeart" transform="translate(-18,60)"/>
+  </g>
+  <g transform="translate(30,1470)">
+    <use href="#softCloud" transform="translate(36,-36) scale(1.8)"/>
+    <use href="#softHeart" transform="translate(60,-18)"/>
+    <use href="#softHeart" transform="translate(18,-60)"/>
+  </g>
+  <g transform="translate(970,1470)">
+    <use href="#softCloud" transform="translate(-36,-36) scale(1.8)"/>
+    <use href="#softHeart" transform="translate(-60,-18)"/>
+    <use href="#softHeart" transform="translate(-18,-60)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#lightPinkWave)" stroke-width="1.4" fill="none"/>
+</svg>

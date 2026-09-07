@@ -1,0 +1,623 @@
+import React, { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import { ToastProvider } from './contexts/ToastContext.jsx';
+import { ThemeProvider } from './contexts/ThemeContext.jsx';
+import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
+import { ErrorProvider } from './components/error/ErrorContext.jsx';
+import { UIStateProvider } from './contexts/UIStateContext.jsx';
+import { SearchCoordinatorProvider } from './contexts/SearchCoordinatorContext.jsx';
+import { PageErrorBoundary } from './components/error';
+import { extensionRoutes } from './extensions/index.js';
+import Layout from './components/Layout.jsx';
+import Spinner from './components/ui/Spinner.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+
+// Lazy-loaded pages - settings
+const ModulesHubPage = React.lazy(() => import('./pages/settings/modules/ModulesHubPage.jsx'));
+const ModuleSettingsPage = React.lazy(
+    () => import('./pages/settings/modules/ModuleSettingsPage.jsx')
+);
+const GeneralSettingsPage = React.lazy(() => import('./pages/settings/GeneralSettingsPage.jsx'));
+const SchedulePage = React.lazy(() =>
+    import('./pages/settings/SchedulePage.jsx').then(m => ({ default: m.SchedulePage }))
+);
+const InstancesPage = React.lazy(() =>
+    import('./pages/settings/InstancesPage.jsx').then(m => ({ default: m.InstancesPage }))
+);
+const NotificationsPage = React.lazy(() =>
+    import('./pages/settings/NotificationsPage.jsx').then(m => ({ default: m.NotificationsPage }))
+);
+const JobsPage = React.lazy(() =>
+    import('./pages/settings/JobsPage.jsx').then(m => ({ default: m.JobsPage }))
+);
+const WebhooksPage = React.lazy(() =>
+    import('./pages/settings/WebhooksPage.jsx').then(m => ({ default: m.WebhooksPage }))
+);
+const SystemSettingsPage = React.lazy(() =>
+    import('./pages/settings/SystemSettingsPage.jsx').then(m => ({
+        default: m.SystemSettingsPage,
+    }))
+);
+
+// Lazy-loaded pages - other
+const Logs = React.lazy(() => import('./pages/Logs.jsx'));
+const SetupWizardPage = React.lazy(() => import('./pages/SetupWizardPage.jsx'));
+
+// Lazy-loaded pages - media
+const MediaSearchPage = React.lazy(() => import('./pages/media/MediaSearchPage.jsx'));
+const MediaManagePage = React.lazy(() => import('./pages/media/MediaManagePage.jsx'));
+const MediaStatsPage = React.lazy(() => import('./pages/media/MediaStatsPage.jsx'));
+const LabelarrPage = React.lazy(() => import('./pages/media/LabelarrPage.jsx'));
+
+// Lazy-loaded pages - poster
+const PosterGDriveSearchPage = React.lazy(
+    () => import('./pages/poster/PosterGDriveSearchPage.jsx')
+);
+const PosterAssetsSearchPage = React.lazy(
+    () => import('./pages/poster/PosterAssetsSearchPage.jsx')
+);
+const PosterCleanarrPage = React.lazy(() => import('./pages/poster/PosterCleanarrPage.jsx'));
+const BorderPreviewPage = React.lazy(() => import('./pages/poster/BorderPreviewPage.jsx'));
+const UnmatchedAssetsPage = React.lazy(() => import('./pages/poster/UnmatchedAssetsPage.jsx'));
+const PosterStatsPage = React.lazy(() => import('./pages/poster/PosterStatsPage.jsx'));
+
+// Dev-only pages. The React.lazy() calls MUST stay inside this conditional —
+// DEV is statically false in prod, so vite drops the routes AND their chunks.
+const devRoutes = import.meta.env.DEV
+    ? [
+          {
+              path: 'dev/error',
+              pageName: 'Error Test',
+              pageDescription: 'Error handling demonstration page',
+              Component: React.lazy(() => import('./pages/dev/ErrorTestPage.jsx')),
+          },
+          {
+              path: 'dev/fields',
+              pageName: 'Field Test',
+              pageDescription: 'Field system development testing interface',
+              Component: React.lazy(() => import('./pages/dev/FieldTestPage.jsx')),
+          },
+          {
+              path: 'dev/api',
+              pageName: 'API Test',
+              pageDescription: 'API Testing',
+              Component: React.lazy(() => import('./pages/dev/ApiTestPage.jsx')),
+          },
+          {
+              path: 'dev/toolbar',
+              pageName: 'Toolbar Test',
+              pageDescription: 'Toolbar overflow testing',
+              Component: React.lazy(() => import('./pages/dev/ToolbarTestPage.jsx')),
+          },
+          {
+              path: 'dev/toolbar-compound',
+              pageName: 'Toolbar Compound Pattern Test',
+              pageDescription: 'Toolbar compound component pattern testing',
+              Component: React.lazy(() => import('./pages/dev/ToolbarCompoundTest.jsx')),
+          },
+          {
+              path: 'dev/spinner',
+              pageName: 'Spinner Test',
+              pageDescription: 'Spinner component testing and development',
+              Component: React.lazy(() => import('./pages/dev/SpinnerTestPage.jsx')),
+          },
+          {
+              path: 'dev/settings',
+              pageName: 'Settings Mock',
+              pageDescription: 'Settings accordion interface mockup and design exploration',
+              Component: React.lazy(() => import('./pages/dev/SettingsMockPage.jsx')),
+          },
+          {
+              path: 'dev/array-object-field',
+              pageName: 'Array Object Field',
+              pageDescription: 'Unified ArrayObjectField component demonstration',
+              Component: React.lazy(() => import('./pages/dev/ArrayObjectFieldPage.jsx')),
+          },
+          {
+              path: 'dev/accordion',
+              pageName: 'Accordion Test',
+              pageDescription: 'AccordionItem compound component validation and testing',
+              Component: React.lazy(() => import('./pages/dev/AccordionTestPage.jsx')),
+          },
+          {
+              path: 'dev/stats',
+              pageName: 'Statistics Primitives Test',
+              pageDescription: 'Statistics System primitive composition and layout testing',
+              Component: React.lazy(() => import('./pages/dev/StatsPrimitivesTestPage.jsx')),
+          },
+          {
+              path: 'dev/buttons',
+              pageName: 'Button Primitives Test',
+              pageDescription: 'Button System primitive composition and component testing',
+              Component: React.lazy(() => import('./pages/dev/ButtonPrimitivesTestPage.jsx')),
+          },
+          {
+              path: 'dev/card',
+              pageName: 'Card Primitives Test',
+              pageDescription: 'Card System primitive composition and variant testing',
+              Component: React.lazy(() => import('./pages/dev/CardPrimitivesTestPage.jsx')),
+          },
+          {
+              path: 'dev/form-compounds',
+              pageName: 'Form Compounds Test',
+              pageDescription:
+                  'Form System compound composition validation (Header, Section, Actions)',
+              Component: React.lazy(() => import('./pages/dev/FormCompoundsTest.jsx')),
+          },
+          {
+              path: 'dev/modals',
+              pageName: 'Modal Test',
+              pageDescription: 'Modal System comprehensive testing and real-world examples',
+              Component: React.lazy(() => import('./pages/dev/ModalsTestPage.jsx')),
+          },
+          {
+              path: 'dev/log-performance',
+              pageName: 'Log Performance Test',
+              pageDescription: 'Phase 2 Log Output component performance validation',
+              Component: React.lazy(() => import('./pages/dev/LogPerformance.jsx')),
+          },
+      ]
+    : [];
+
+const SuspenseFallback = () => <Spinner size="large" text="Loading..." center />;
+
+/**
+ * Auth gate — redirects to /login when auth is configured but user is not authenticated.
+ * Renders children directly when auth is not yet configured (first-run) or user is logged in.
+ */
+const RequireAuth = ({ children }) => {
+    const { loading, authConfigured, isAuthenticated, setupComplete } = useAuth();
+    if (loading) return <SuspenseFallback />;
+    // First-run gate: a fresh install (setup not complete) goes to the wizard.
+    // Existing installs are backfilled complete, so they skip straight past.
+    if (setupComplete === false) return <Navigate to="/setup" replace />;
+    if (authConfigured && !isAuthenticated) return <Navigate to="/login" replace />;
+    return children;
+};
+
+/**
+ * Login route gate — redirects authenticated users away from login page.
+ */
+const LoginRoute = () => {
+    const { loading, authConfigured, isAuthenticated, setupComplete } = useAuth();
+    if (loading) return <SuspenseFallback />;
+    // On a fresh install the wizard owns account creation, so send first-run
+    // visitors there instead of the bare login screen.
+    if (setupComplete === false) return <Navigate to="/setup" replace />;
+    if (isAuthenticated && authConfigured) return <Navigate to="/dashboard" replace />;
+    return <LoginPage />;
+};
+
+/**
+ * CHUB Application Root - Phase 5 Complete
+ *
+ * Clean provider hierarchy with primitive composition error system:
+ * 1. ToastProvider (outermost)
+ * 2. ThemeProvider
+ * 3. ErrorProvider (new primitive composition system)
+ * 4. UIStateProvider
+ * 5. Router
+ * 6. SearchCoordinatorProvider
+ * 7. RouteErrorProvider (innermost)
+ *
+ * Error boundaries now use atomic primitive composition pattern.
+ * All context providers maintained in exact order.
+ */
+
+/**
+ * Route Error Boundary - Catches route-specific errors with sophisticated recovery
+ */
+const RouteErrorBoundary = ({ children }) => {
+    return (
+        <PageErrorBoundary
+            pageName="Application"
+            pageDescription="Main application routing"
+            showNavigation={true}
+            showRetry={true}
+        >
+            {children}
+        </PageErrorBoundary>
+    );
+};
+
+/**
+ * Main Application Component - Phase 5 Complete
+ * Provider hierarchy with primitive composition error system
+ */
+const App = () => {
+    return (
+        // Provider hierarchy:
+        // 1. ToastProvider (outermost)
+        // 2. ThemeProvider
+        // 3. AuthProvider
+        // 4. ErrorProvider
+        // 5. UIStateProvider
+        // 6. Router
+        // 7. SearchCoordinatorProvider
+        // 8. RouteErrorProvider (innermost)
+        <ToastProvider>
+            <ThemeProvider>
+                <AuthProvider>
+                    <ErrorProvider>
+                        <UIStateProvider>
+                            <BrowserRouter>
+                                <SearchCoordinatorProvider>
+                                    <RouteErrorBoundary>
+                                        <Suspense fallback={<SuspenseFallback />}>
+                                            <Routes>
+                                                <Route path="/login" element={<LoginRoute />} />
+                                                <Route
+                                                    path="/setup"
+                                                    element={
+                                                        <PageErrorBoundary
+                                                            pageName="Setup Wizard"
+                                                            pageDescription="First-run configuration"
+                                                        >
+                                                            <SetupWizardPage />
+                                                        </PageErrorBoundary>
+                                                    }
+                                                />
+                                                <Route
+                                                    path="/"
+                                                    element={
+                                                        <RequireAuth>
+                                                            <Layout />
+                                                        </RequireAuth>
+                                                    }
+                                                >
+                                                    <Route
+                                                        index
+                                                        element={
+                                                            <Navigate to="/dashboard" replace />
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="dashboard"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Dashboard"
+                                                                pageDescription="Main dashboard overview"
+                                                            >
+                                                                <DashboardPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+
+                                                    {/* Media Section - Hierarchical Routes */}
+                                                    <Route
+                                                        path="media"
+                                                        element={
+                                                            <Navigate to="/media/search" replace />
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="media/search"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Media Search"
+                                                                pageDescription="Search media collection"
+                                                            >
+                                                                <MediaSearchPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="media/manage"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Media Management"
+                                                                pageDescription="Manage media library"
+                                                            >
+                                                                <MediaManagePage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="media/statistics"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Media Statistics"
+                                                                pageDescription="Media library statistics"
+                                                            >
+                                                                <MediaStatsPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+
+                                                    <Route
+                                                        path="media/labelarr"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Label Sync"
+                                                                pageDescription="Sync labels between services"
+                                                            >
+                                                                <LabelarrPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+
+                                                    {/* Poster Section - Hierarchical Routes (note: /poster not /posters) */}
+                                                    <Route
+                                                        path="poster"
+                                                        element={
+                                                            <Navigate
+                                                                to="/poster/search/gdrive"
+                                                                replace
+                                                            />
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/search/gdrive"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="GDrive Poster Search"
+                                                                pageDescription="Search GDrive for posters"
+                                                            >
+                                                                <PosterGDriveSearchPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/search/assets"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Assets Poster Search"
+                                                                pageDescription="Search local poster assets"
+                                                            >
+                                                                <PosterAssetsSearchPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/cleanarr"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Poster Cleanarr"
+                                                                pageDescription="Review and clean up unused Plex poster variants"
+                                                            >
+                                                                <PosterCleanarrPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/border-replacerr"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Border Replacerr"
+                                                                pageDescription="Pick colors and themed border art, with live preview on a sample of your matched posters"
+                                                            >
+                                                                <BorderPreviewPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    {/* Back-compat redirect for any bookmarks still pointing at /poster/manage. */}
+                                                    <Route
+                                                        path="poster/manage"
+                                                        element={
+                                                            <Navigate
+                                                                to="/poster/cleanarr"
+                                                                replace
+                                                            />
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/unmatched"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Unmatched Assets"
+                                                                pageDescription="Media with no matched poster"
+                                                            >
+                                                                <UnmatchedAssetsPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/statistics"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Poster Statistics"
+                                                                pageDescription="Poster collection statistics"
+                                                            >
+                                                                <PosterStatsPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+
+                                                    {/* Extension routes (src/extensions) — none on main */}
+                                                    {extensionRoutes().map(
+                                                        ({
+                                                            path,
+                                                            pageName,
+                                                            pageDescription,
+                                                            Component,
+                                                        }) => (
+                                                            <Route
+                                                                key={path}
+                                                                path={path}
+                                                                element={
+                                                                    <PageErrorBoundary
+                                                                        pageName={pageName}
+                                                                        pageDescription={
+                                                                            pageDescription
+                                                                        }
+                                                                    >
+                                                                        <Component />
+                                                                    </PageErrorBoundary>
+                                                                }
+                                                            />
+                                                        )
+                                                    )}
+
+                                                    {/* Settings Section - Direct Routes */}
+                                                    <Route
+                                                        path="settings"
+                                                        element={
+                                                            <Navigate
+                                                                to="/settings/general"
+                                                                replace
+                                                            />
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/general"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="General Settings"
+                                                                pageDescription="General CHUB application settings"
+                                                            >
+                                                                <GeneralSettingsPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    {/* Back-compat redirect — the Interface page merged into General. */}
+                                                    <Route
+                                                        path="settings/interface"
+                                                        element={
+                                                            <Navigate
+                                                                to="/settings/general"
+                                                                replace
+                                                            />
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/modules"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Modules"
+                                                                pageDescription="Module overview and enable toggles"
+                                                            >
+                                                                <ModulesHubPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/modules/:moduleKey"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Module Settings"
+                                                                pageDescription="Module-specific configuration settings"
+                                                            >
+                                                                <ModuleSettingsPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/schedule"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Schedule Settings"
+                                                                pageDescription="Module scheduling and automation configuration"
+                                                            >
+                                                                <SchedulePage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/instances"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Instance Management"
+                                                                pageDescription="Service instance configuration and connection testing"
+                                                            >
+                                                                <InstancesPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/notifications"
+                                                        element={
+                                                            <PageErrorBoundary routeName="Notification Settings">
+                                                                <NotificationsPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/jobs"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Job Queue"
+                                                                pageDescription="Background job management"
+                                                            >
+                                                                <JobsPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/webhooks"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Webhooks"
+                                                                pageDescription="Webhook processors and cleanup operations"
+                                                            >
+                                                                <WebhooksPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/system"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="System"
+                                                                pageDescription="Database statistics and maintenance actions"
+                                                            >
+                                                                <SystemSettingsPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    {/* Logs Route */}
+                                                    <Route
+                                                        path="logs"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="System Logs"
+                                                                pageDescription="Real-time log viewer with search and download"
+                                                            >
+                                                                <Logs />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+
+                                                    {/* Development routes — dev builds only */}
+                                                    {devRoutes.map(
+                                                        ({
+                                                            path,
+                                                            pageName,
+                                                            pageDescription,
+                                                            Component,
+                                                        }) => (
+                                                            <Route
+                                                                key={path}
+                                                                path={path}
+                                                                element={
+                                                                    <PageErrorBoundary
+                                                                        pageName={pageName}
+                                                                        pageDescription={
+                                                                            pageDescription
+                                                                        }
+                                                                    >
+                                                                        <Component />
+                                                                    </PageErrorBoundary>
+                                                                }
+                                                            />
+                                                        )
+                                                    )}
+                                                </Route>
+                                                <Route
+                                                    path="*"
+                                                    element={<Navigate to="/dashboard" replace />}
+                                                />
+                                            </Routes>
+                                        </Suspense>
+                                    </RouteErrorBoundary>
+                                </SearchCoordinatorProvider>
+                            </BrowserRouter>
+                        </UIStateProvider>
+                    </ErrorProvider>
+                </AuthProvider>
+            </ThemeProvider>
+        </ToastProvider>
+    );
+};
+
+export default App;

@@ -1,0 +1,287 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#14180c"/>
+      <stop offset="50%" stop-color="#0a0c06"/>
+      <stop offset="100%" stop-color="#040603"/>
+    </linearGradient>
+    <radialGradient id="sageDust" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#c4d0b4"/>
+      <stop offset="55%" stop-color="#80906c"/>
+      <stop offset="100%" stop-color="#3a4830"/>
+    </radialGradient>
+    <radialGradient id="russetMute" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#d4a888"/>
+      <stop offset="55%" stop-color="#a06440"/>
+      <stop offset="100%" stop-color="#4a2c18"/>
+    </radialGradient>
+    <radialGradient id="creamSoft" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#f4ead4"/>
+      <stop offset="55%" stop-color="#c8b890"/>
+      <stop offset="100%" stop-color="#807058"/>
+    </radialGradient>
+    <linearGradient id="twigG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6a5a40"/>
+      <stop offset="50%" stop-color="#4a3a24"/>
+      <stop offset="100%" stop-color="#2a1c10"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="pampasGrass">
+    <path d="M0,0 L0,40" stroke="url(#twigG)" stroke-width="1.2" fill="none"/>
+    <path d="M0,0 C-2,-4 -4,-10 -3,-18 C-2,-26 -2,-34 0,-40 C2,-34 2,-26 3,-18 C4,-10 2,-4 0,0 Z" fill="url(#creamSoft)" stroke="#807058" stroke-width="0.4"/>
+    <path d="M-3,-2 L-5,-6 M3,-2 L5,-6 M-3,-10 L-6,-14 M3,-10 L6,-14 M-2,-18 L-5,-22 M2,-18 L5,-22 M-2,-28 L-4,-32 M2,-28 L4,-32 M0,-38 L-1,-42 M0,-38 L1,-42" stroke="url(#creamSoft)" stroke-width="0.6"/>
+    <ellipse cx="-1" cy="-30" rx="1" ry="2" fill="#f4ead4" opacity="0.6"/>
+  </g>
+
+  <g id="driedWheat">
+    <path d="M0,0 L0,30" stroke="url(#twigG)" stroke-width="1" fill="none"/>
+    <g fill="url(#sageDust)" stroke="#3a4830" stroke-width="0.3">
+      <ellipse cx="-2" cy="-2" rx="1.2" ry="2.8" transform="rotate(-30,-2,-2)"/>
+      <ellipse cx="2" cy="-4" rx="1.2" ry="2.8" transform="rotate(30,2,-4)"/>
+      <ellipse cx="-2" cy="-9" rx="1.2" ry="2.8" transform="rotate(-30,-2,-9)"/>
+      <ellipse cx="2" cy="-11" rx="1.2" ry="2.8" transform="rotate(30,2,-11)"/>
+      <ellipse cx="-2" cy="-16" rx="1.2" ry="2.8" transform="rotate(-30,-2,-16)"/>
+      <ellipse cx="2" cy="-18" rx="1.2" ry="2.8" transform="rotate(30,2,-18)"/>
+      <ellipse cx="0" cy="-22" rx="1.4" ry="3.2"/>
+    </g>
+    <path d="M0,-24 L-2,-26 M0,-24 L2,-26 M0,-23 L0,-28" stroke="#3a4830" stroke-width="0.4"/>
+  </g>
+
+  <g id="twigStick">
+    <path d="M0,0 C4,-8 -4,-18 2,-28 C6,-36 -2,-42 4,-50" stroke="url(#twigG)" stroke-width="1.4" fill="none"/>
+    <path d="M2,-12 L-2,-16 M3,-20 L-1,-24 M3,-32 L7,-36 M2,-40 L-2,-44" stroke="url(#twigG)" stroke-width="0.6" fill="none"/>
+  </g>
+
+  <g id="driedMapleSage">
+    <path d="M0,16 L0,4 L-5,7 L-10,2 L-12,-7 L-18,-5 L-15,-14 L-8,-15 L-5,-22 L0,-18 L5,-22 L8,-15 L15,-14 L18,-5 L12,-7 L10,2 L5,7 L0,4 Z" fill="url(#sageDust)" stroke="#3a4830" stroke-width="0.4"/>
+    <path d="M0,4 L0,16 M0,4 L-10,2 M0,4 L10,2 M0,4 L-8,-15 M0,4 L8,-15 M0,4 L0,-18" stroke="#3a4830" stroke-width="0.3"/>
+  </g>
+
+  <g id="driedMapleRusset">
+    <path d="M0,16 L0,4 L-5,7 L-10,2 L-12,-7 L-18,-5 L-15,-14 L-8,-15 L-5,-22 L0,-18 L5,-22 L8,-15 L15,-14 L18,-5 L12,-7 L10,2 L5,7 L0,4 Z" fill="url(#russetMute)" stroke="#4a2c18" stroke-width="0.4"/>
+    <path d="M0,4 L0,16 M0,4 L-10,2 M0,4 L-8,-15 M0,4 L8,-15 M0,4 L0,-18" stroke="#4a2c18" stroke-width="0.3"/>
+  </g>
+
+  <g id="seedHead">
+    <ellipse cx="0" cy="0" rx="3.5" ry="5" fill="url(#russetMute)" stroke="#4a2c18" stroke-width="0.3"/>
+    <path d="M-3,-3 L-5,-6 M3,-3 L5,-6 M-3,3 L-5,6 M3,3 L5,6 M0,-5 L0,-8 M0,5 L0,8" stroke="#4a2c18" stroke-width="0.4"/>
+  </g>
+
+  <g id="creamBerry">
+    <circle cx="0" cy="0" r="3" fill="url(#creamSoft)" stroke="#807058" stroke-width="0.3"/>
+    <circle cx="5" cy="2" r="2.6" fill="url(#creamSoft)" stroke="#807058" stroke-width="0.3"/>
+    <circle cx="-4" cy="3" r="2.8" fill="url(#creamSoft)" stroke="#807058" stroke-width="0.3"/>
+    <circle cx="2" cy="-4" r="2.2" fill="url(#creamSoft)" stroke="#807058" stroke-width="0.3"/>
+    <circle cx="-1" cy="-1" r="0.6" fill="#fff" opacity="0.7"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#twigStick" transform="translate(80,55) rotate(180)"/>
+  <use href="#twigStick" transform="translate(220,55) rotate(180)"/>
+  <use href="#twigStick" transform="translate(360,55) rotate(180)"/>
+  <use href="#twigStick" transform="translate(500,55) rotate(180)"/>
+  <use href="#twigStick" transform="translate(640,55) rotate(180)"/>
+  <use href="#twigStick" transform="translate(780,55) rotate(180)"/>
+  <use href="#twigStick" transform="translate(900,55) rotate(180)"/>
+  <use href="#pampasGrass" transform="translate(140,55) rotate(180)"/>
+  <use href="#pampasGrass" transform="translate(280,55) rotate(180)"/>
+  <use href="#pampasGrass" transform="translate(420,55) rotate(180)"/>
+  <use href="#pampasGrass" transform="translate(560,55) rotate(180)"/>
+  <use href="#pampasGrass" transform="translate(700,55) rotate(180)"/>
+  <use href="#pampasGrass" transform="translate(840,55) rotate(180)"/>
+  <use href="#driedWheat" transform="translate(180,55) rotate(180)"/>
+  <use href="#driedWheat" transform="translate(320,55) rotate(180)"/>
+  <use href="#driedWheat" transform="translate(460,55) rotate(180)"/>
+  <use href="#driedWheat" transform="translate(600,55) rotate(180)"/>
+  <use href="#driedWheat" transform="translate(740,55) rotate(180)"/>
+  <use href="#driedWheat" transform="translate(880,55) rotate(180)"/>
+  <use href="#driedMapleSage" transform="translate(120,30) rotate(180)"/>
+  <use href="#driedMapleRusset" transform="translate(240,30) rotate(170)"/>
+  <use href="#driedMapleSage" transform="translate(380,30) rotate(190)"/>
+  <use href="#driedMapleRusset" transform="translate(520,30) rotate(175)"/>
+  <use href="#driedMapleSage" transform="translate(660,30) rotate(185)"/>
+  <use href="#driedMapleRusset" transform="translate(800,30) rotate(170)"/>
+  <use href="#creamBerry" transform="translate(220,16)"/>
+  <use href="#creamBerry" transform="translate(380,18)"/>
+  <use href="#creamBerry" transform="translate(540,16)"/>
+  <use href="#creamBerry" transform="translate(700,18)"/>
+  <use href="#creamBerry" transform="translate(860,16)"/>
+  <use href="#seedHead" transform="translate(160,42)"/>
+  <use href="#seedHead" transform="translate(320,42)"/>
+  <use href="#seedHead" transform="translate(480,42)"/>
+  <use href="#seedHead" transform="translate(640,42)"/>
+  <use href="#seedHead" transform="translate(800,42)"/>
+
+  <!-- BOTTOM -->
+  <use href="#twigStick" transform="translate(80,1450) scale(1,-1)"/>
+  <use href="#twigStick" transform="translate(220,1450) scale(1,-1)"/>
+  <use href="#twigStick" transform="translate(360,1450) scale(1,-1)"/>
+  <use href="#twigStick" transform="translate(500,1450) scale(1,-1)"/>
+  <use href="#twigStick" transform="translate(640,1450) scale(1,-1)"/>
+  <use href="#twigStick" transform="translate(780,1450) scale(1,-1)"/>
+  <use href="#twigStick" transform="translate(900,1450) scale(1,-1)"/>
+  <use href="#pampasGrass" transform="translate(140,1450) scale(1,-1)"/>
+  <use href="#pampasGrass" transform="translate(280,1450) scale(1,-1)"/>
+  <use href="#pampasGrass" transform="translate(420,1450) scale(1,-1)"/>
+  <use href="#pampasGrass" transform="translate(560,1450) scale(1,-1)"/>
+  <use href="#pampasGrass" transform="translate(700,1450) scale(1,-1)"/>
+  <use href="#pampasGrass" transform="translate(840,1450) scale(1,-1)"/>
+  <use href="#driedWheat" transform="translate(180,1450) scale(1,-1)"/>
+  <use href="#driedWheat" transform="translate(320,1450) scale(1,-1)"/>
+  <use href="#driedWheat" transform="translate(460,1450) scale(1,-1)"/>
+  <use href="#driedWheat" transform="translate(600,1450) scale(1,-1)"/>
+  <use href="#driedWheat" transform="translate(740,1450) scale(1,-1)"/>
+  <use href="#driedWheat" transform="translate(880,1450) scale(1,-1)"/>
+  <use href="#driedMapleSage" transform="translate(120,1470)"/>
+  <use href="#driedMapleRusset" transform="translate(240,1470) rotate(10)"/>
+  <use href="#driedMapleSage" transform="translate(380,1470) rotate(-10)"/>
+  <use href="#driedMapleRusset" transform="translate(520,1470) rotate(5)"/>
+  <use href="#driedMapleSage" transform="translate(660,1470) rotate(-5)"/>
+  <use href="#driedMapleRusset" transform="translate(800,1470) rotate(15)"/>
+  <use href="#creamBerry" transform="translate(220,1486)"/>
+  <use href="#creamBerry" transform="translate(380,1484)"/>
+  <use href="#creamBerry" transform="translate(540,1486)"/>
+  <use href="#creamBerry" transform="translate(700,1484)"/>
+  <use href="#creamBerry" transform="translate(860,1486)"/>
+
+  <!-- LEFT -->
+  <use href="#twigStick" transform="translate(55,80) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,220) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,360) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,500) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,640) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,780) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,920) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,1060) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,1200) rotate(90)"/>
+  <use href="#twigStick" transform="translate(55,1340) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,140) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,280) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,420) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,560) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,700) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,840) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,980) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,1120) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,1260) rotate(90)"/>
+  <use href="#pampasGrass" transform="translate(55,1400) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,180) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,320) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,460) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,600) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,740) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,880) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,1020) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,1160) rotate(90)"/>
+  <use href="#driedWheat" transform="translate(55,1300) rotate(90)"/>
+  <use href="#driedMapleSage" transform="translate(30,120) rotate(90)"/>
+  <use href="#driedMapleRusset" transform="translate(30,260) rotate(80)"/>
+  <use href="#driedMapleSage" transform="translate(30,400) rotate(100)"/>
+  <use href="#driedMapleRusset" transform="translate(30,540) rotate(85)"/>
+  <use href="#driedMapleSage" transform="translate(30,680) rotate(95)"/>
+  <use href="#driedMapleRusset" transform="translate(30,820) rotate(80)"/>
+  <use href="#driedMapleSage" transform="translate(30,960) rotate(105)"/>
+  <use href="#driedMapleRusset" transform="translate(30,1100) rotate(85)"/>
+  <use href="#driedMapleSage" transform="translate(30,1240) rotate(95)"/>
+  <use href="#driedMapleRusset" transform="translate(30,1380) rotate(80)"/>
+  <use href="#creamBerry" transform="translate(16,200)"/>
+  <use href="#creamBerry" transform="translate(16,360)"/>
+  <use href="#creamBerry" transform="translate(16,520)"/>
+  <use href="#creamBerry" transform="translate(16,680)"/>
+  <use href="#creamBerry" transform="translate(16,840)"/>
+  <use href="#creamBerry" transform="translate(16,1000)"/>
+  <use href="#creamBerry" transform="translate(16,1160)"/>
+  <use href="#creamBerry" transform="translate(16,1320)"/>
+
+  <!-- RIGHT -->
+  <use href="#twigStick" transform="translate(945,80) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,220) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,360) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,500) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,640) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,780) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,920) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,1060) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,1200) rotate(270)"/>
+  <use href="#twigStick" transform="translate(945,1340) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,140) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,280) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,420) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,560) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,700) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,840) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,980) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,1120) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,1260) rotate(270)"/>
+  <use href="#pampasGrass" transform="translate(945,1400) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,180) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,320) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,460) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,600) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,740) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,880) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,1020) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,1160) rotate(270)"/>
+  <use href="#driedWheat" transform="translate(945,1300) rotate(270)"/>
+  <use href="#driedMapleSage" transform="translate(970,120) rotate(270)"/>
+  <use href="#driedMapleRusset" transform="translate(970,260) rotate(280)"/>
+  <use href="#driedMapleSage" transform="translate(970,400) rotate(260)"/>
+  <use href="#driedMapleRusset" transform="translate(970,540) rotate(275)"/>
+  <use href="#driedMapleSage" transform="translate(970,680) rotate(265)"/>
+  <use href="#driedMapleRusset" transform="translate(970,820) rotate(280)"/>
+  <use href="#driedMapleSage" transform="translate(970,960) rotate(255)"/>
+  <use href="#driedMapleRusset" transform="translate(970,1100) rotate(275)"/>
+  <use href="#driedMapleSage" transform="translate(970,1240) rotate(265)"/>
+  <use href="#driedMapleRusset" transform="translate(970,1380) rotate(280)"/>
+  <use href="#creamBerry" transform="translate(984,200)"/>
+  <use href="#creamBerry" transform="translate(984,360)"/>
+  <use href="#creamBerry" transform="translate(984,520)"/>
+  <use href="#creamBerry" transform="translate(984,680)"/>
+  <use href="#creamBerry" transform="translate(984,840)"/>
+  <use href="#creamBerry" transform="translate(984,1000)"/>
+  <use href="#creamBerry" transform="translate(984,1160)"/>
+  <use href="#creamBerry" transform="translate(984,1320)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(40,40)">
+    <use href="#pampasGrass" transform="translate(20,60) rotate(-30)"/>
+    <use href="#pampasGrass" transform="translate(40,60) rotate(0)"/>
+    <use href="#pampasGrass" transform="translate(60,60) rotate(30)"/>
+    <use href="#twigStick" transform="translate(50,60) rotate(-30)"/>
+    <use href="#driedMapleSage" transform="translate(64,24)"/>
+    <use href="#creamBerry" transform="translate(24,24)"/>
+    <use href="#seedHead" transform="translate(50,40)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#pampasGrass" transform="translate(-20,60) rotate(30)"/>
+    <use href="#pampasGrass" transform="translate(-40,60) rotate(0)"/>
+    <use href="#pampasGrass" transform="translate(-60,60) rotate(-30)"/>
+    <use href="#twigStick" transform="translate(-50,60) rotate(30) scale(-1,1)"/>
+    <use href="#driedMapleRusset" transform="translate(-64,24)"/>
+    <use href="#creamBerry" transform="translate(-24,24)"/>
+    <use href="#seedHead" transform="translate(-50,40)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#pampasGrass" transform="translate(20,-20) rotate(-150)"/>
+    <use href="#pampasGrass" transform="translate(40,-20) rotate(180)"/>
+    <use href="#pampasGrass" transform="translate(60,-20) rotate(150)"/>
+    <use href="#twigStick" transform="translate(50,-10) rotate(150)"/>
+    <use href="#driedMapleSage" transform="translate(64,-24)"/>
+    <use href="#creamBerry" transform="translate(24,-24)"/>
+    <use href="#seedHead" transform="translate(50,-40)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#pampasGrass" transform="translate(-20,-20) rotate(150)"/>
+    <use href="#pampasGrass" transform="translate(-40,-20) rotate(180)"/>
+    <use href="#pampasGrass" transform="translate(-60,-20) rotate(-150)"/>
+    <use href="#twigStick" transform="translate(-50,-10) rotate(-150) scale(-1,1)"/>
+    <use href="#driedMapleRusset" transform="translate(-64,-24)"/>
+    <use href="#creamBerry" transform="translate(-24,-24)"/>
+    <use href="#seedHead" transform="translate(-50,-40)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#80906c" stroke-width="1.4" fill="none" opacity="0.8"/>
+</svg>

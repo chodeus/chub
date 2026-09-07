@@ -1,0 +1,250 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a0408"/>
+      <stop offset="50%" stop-color="#0a0204"/>
+      <stop offset="100%" stop-color="#040102"/>
+    </linearGradient>
+    <radialGradient id="bloodRose" cx="40%" cy="35%" r="80%">
+      <stop offset="0%" stop-color="#ff5050"/>
+      <stop offset="40%" stop-color="#b80000"/>
+      <stop offset="100%" stop-color="#3a0000"/>
+    </radialGradient>
+    <radialGradient id="bloodRoseCenter" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#5a0000"/>
+      <stop offset="100%" stop-color="#1a0000"/>
+    </radialGradient>
+    <radialGradient id="darkLeaf" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#2a1a1a"/>
+      <stop offset="50%" stop-color="#1a0a0a"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </radialGradient>
+    <linearGradient id="brassG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a3a18"/>
+      <stop offset="50%" stop-color="#c8a04c"/>
+      <stop offset="100%" stop-color="#7a5a20"/>
+    </linearGradient>
+    <linearGradient id="waxRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff5060"/>
+      <stop offset="50%" stop-color="#a01020"/>
+      <stop offset="100%" stop-color="#3a0408"/>
+    </linearGradient>
+    <radialGradient id="flame" cx="50%" cy="60%" r="50%">
+      <stop offset="0%" stop-color="#fff8c0"/>
+      <stop offset="40%" stop-color="#ffa018"/>
+      <stop offset="100%" stop-color="#7a2400" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="flameGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="rose">
+    <circle cx="0" cy="0" r="14" fill="url(#bloodRose)"/>
+    <path d="M-14,0 C-14,-10 -8,-14 0,-14 C8,-14 14,-10 14,0 C14,10 8,14 0,14 C-8,14 -14,10 -14,0 Z" fill="none" stroke="#3a0000" stroke-width="0.6"/>
+    <path d="M0,-12 C-6,-10 -10,-6 -10,0 C-10,6 -6,10 0,12 C6,10 10,6 10,0 C10,-6 6,-10 0,-12 Z" fill="url(#bloodRose)" opacity="0.85"/>
+    <path d="M0,-9 C-4,-7 -7,-4 -7,0 C-7,4 -4,7 0,9 C4,7 7,4 7,0 C7,-4 4,-7 0,-9 Z" fill="url(#bloodRose)"/>
+    <path d="M0,-6 C-3,-5 -5,-3 -5,0 C-5,3 -3,5 0,6 C3,5 5,3 5,0 C5,-3 3,-5 0,-6 Z" fill="url(#bloodRoseCenter)"/>
+  </g>
+
+  <g id="darkLeafG">
+    <path d="M0,0 C-4,-5 -10,-7 -14,-12 C-12,-18 -8,-22 -4,-26 C-8,-30 -10,-34 -8,-38 C-4,-36 -2,-32 0,-30 C2,-32 4,-36 8,-38 C10,-34 8,-30 4,-26 C8,-22 12,-18 14,-12 C10,-7 4,-5 0,0 Z" fill="url(#darkLeaf)" stroke="#000000" stroke-width="0.6"/>
+    <path d="M0,-2 L0,-34" stroke="#000000" stroke-width="0.4"/>
+  </g>
+
+  <g id="meltedCandle">
+    <rect x="-4" y="-22" width="8" height="22" fill="url(#waxRed)" stroke="#3a0408" stroke-width="0.4"/>
+    <path d="M-4,0 Q-6,4 -5,8 Q-4,12 -7,12 L-7,-2 Z" fill="url(#waxRed)" stroke="#3a0408" stroke-width="0.4"/>
+    <path d="M4,0 Q6,4 5,8 Q4,12 7,12 L7,-2 Z" fill="url(#waxRed)" stroke="#3a0408" stroke-width="0.4"/>
+    <path d="M-3,-22 Q-2,-26 0,-24 Q2,-26 3,-22" stroke="#3a0408" stroke-width="0.4" fill="url(#waxRed)"/>
+    <ellipse cx="0" cy="-28" rx="3" ry="5" fill="url(#flame)" filter="url(#flameGlow)"/>
+    <path d="M0,-28 Q-1,-32 0,-34 Q1,-32 0,-28 Z" fill="#fff8c0"/>
+    <path d="M0,-22 L0,-24" stroke="#1a0408" stroke-width="0.6"/>
+  </g>
+
+  <g id="candelabra">
+    <rect x="-2" y="-10" width="4" height="40" fill="url(#brassG)" stroke="#3a2810" stroke-width="0.4"/>
+    <path d="M-30,-2 L-2,-2 L-2,-12 L-30,-12 Q-32,-4 -30,-2 Z" fill="url(#brassG)" stroke="#3a2810" stroke-width="0.4"/>
+    <path d="M30,-2 L2,-2 L2,-12 L30,-12 Q32,-4 30,-2 Z" fill="url(#brassG)" stroke="#3a2810" stroke-width="0.4"/>
+    <use href="#meltedCandle" transform="translate(0,-12)"/>
+    <use href="#meltedCandle" transform="translate(-26,-12) scale(0.8)"/>
+    <use href="#meltedCandle" transform="translate(26,-12) scale(0.8)"/>
+    <ellipse cx="0" cy="32" rx="14" ry="4" fill="url(#brassG)" stroke="#3a2810" stroke-width="0.4"/>
+    <ellipse cx="0" cy="32" rx="8" ry="2" fill="#3a2810"/>
+    <path d="M-2,-10 L-2,-2 M2,-10 L2,-2" stroke="#3a2810" stroke-width="0.4"/>
+  </g>
+
+  <g id="waxDripV">
+    <path d="M0,0 Q-2,8 -1,16 Q0,24 -1,32 Q-2,40 -1,48" stroke="url(#waxRed)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <ellipse cx="-1" cy="48" rx="3" ry="4" fill="url(#waxRed)" stroke="#3a0408" stroke-width="0.4"/>
+    <path d="M-3,-2 L3,-2 L2,4 L-2,4 Z" fill="url(#waxRed)" stroke="#3a0408" stroke-width="0.3"/>
+    <ellipse cx="-1" cy="14" rx="2" ry="3" fill="#ff8080" opacity="0.4"/>
+  </g>
+
+  <g id="bat">
+    <path d="M0,0 C-4,-4 -10,-4 -16,-2 C-22,-6 -28,-4 -30,2 C-26,4 -22,4 -18,4 L-14,2 L-12,4 C-10,2 -8,2 -6,4 L-4,2 L-2,4 C0,2 2,4 4,2 L6,4 C8,2 10,2 12,4 L14,2 L18,4 C22,4 26,4 30,2 C28,-4 22,-6 16,-2 C10,-4 4,-4 0,0 Z" fill="#000000"/>
+    <ellipse cx="0" cy="2" rx="4" ry="3" fill="#000000"/>
+    <circle cx="-1.5" cy="1" r="0.5" fill="#b80000"/>
+    <circle cx="1.5" cy="1" r="0.5" fill="#b80000"/>
+  </g>
+
+  <g id="vineSegment">
+    <path d="M0,0 Q14,-4 28,2 Q42,8 56,0 Q70,-4 84,2 Q98,8 112,0" stroke="#1a0a0a" stroke-width="2.4" fill="none"/>
+    <path d="M14,-4 Q18,-12 22,-6 M42,2 Q40,10 36,4 M70,-4 Q74,-12 78,-6 M98,2 Q96,10 92,4" stroke="#0a0204" stroke-width="0.8" fill="none"/>
+  </g>
+
+  <!-- TOP: alternating candles and roses, melted wax drips down -->
+  <use href="#vineSegment" transform="translate(60,40)"/>
+  <use href="#vineSegment" transform="translate(180,30)"/>
+  <use href="#vineSegment" transform="translate(300,42)"/>
+  <use href="#vineSegment" transform="translate(420,30)"/>
+  <use href="#vineSegment" transform="translate(540,42)"/>
+  <use href="#vineSegment" transform="translate(660,30)"/>
+  <use href="#vineSegment" transform="translate(780,42)"/>
+  <use href="#meltedCandle" transform="translate(180,52) rotate(180) scale(0.8)"/>
+  <use href="#meltedCandle" transform="translate(420,52) rotate(180) scale(0.8)"/>
+  <use href="#meltedCandle" transform="translate(660,52) rotate(180) scale(0.8)"/>
+  <use href="#meltedCandle" transform="translate(880,52) rotate(180) scale(0.8)"/>
+  <use href="#rose" transform="translate(140,30) scale(1.2)"/>
+  <use href="#rose" transform="translate(260,30) scale(1.0)"/>
+  <use href="#rose" transform="translate(360,30) scale(1.2)"/>
+  <use href="#rose" transform="translate(500,30) scale(1.0)"/>
+  <use href="#rose" transform="translate(620,30) scale(1.2)"/>
+  <use href="#rose" transform="translate(740,30) scale(1.0)"/>
+  <use href="#rose" transform="translate(820,30) scale(1.2)"/>
+  <use href="#darkLeafG" transform="translate(200,52) rotate(180)"/>
+  <use href="#darkLeafG" transform="translate(320,52) rotate(180)"/>
+  <use href="#darkLeafG" transform="translate(440,52) rotate(180)"/>
+  <use href="#darkLeafG" transform="translate(560,52) rotate(180)"/>
+  <use href="#darkLeafG" transform="translate(680,52) rotate(180)"/>
+  <use href="#darkLeafG" transform="translate(800,52) rotate(180)"/>
+  <use href="#bat" transform="translate(120,16) scale(1.0)"/>
+  <use href="#bat" transform="translate(880,16) scale(1.0)"/>
+
+  <!-- BOTTOM: candelabra at center, roses, vines -->
+  <use href="#vineSegment" transform="translate(60,1460)"/>
+  <use href="#vineSegment" transform="translate(180,1472)"/>
+  <use href="#vineSegment" transform="translate(300,1458)"/>
+  <use href="#vineSegment" transform="translate(420,1470)"/>
+  <use href="#vineSegment" transform="translate(540,1458)"/>
+  <use href="#vineSegment" transform="translate(660,1470)"/>
+  <use href="#vineSegment" transform="translate(780,1458)"/>
+  <use href="#candelabra" transform="translate(180,1455) scale(0.7)"/>
+  <use href="#candelabra" transform="translate(500,1452) scale(0.85)"/>
+  <use href="#candelabra" transform="translate(820,1455) scale(0.7)"/>
+  <use href="#rose" transform="translate(140,1470) scale(1.2)"/>
+  <use href="#rose" transform="translate(260,1470) scale(1.0)"/>
+  <use href="#rose" transform="translate(360,1470) scale(1.2)"/>
+  <use href="#rose" transform="translate(620,1470) scale(1.2)"/>
+  <use href="#rose" transform="translate(740,1470) scale(1.0)"/>
+  <use href="#rose" transform="translate(880,1470) scale(1.2)"/>
+
+  <!-- LEFT: wax drips down the strip + roses + dark leaves -->
+  <use href="#vineSegment" transform="translate(40,80) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(28,200) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,320) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(30,440) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,560) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(30,680) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,800) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(30,920) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,1040) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(30,1160) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(42,1280) rotate(90)"/>
+  <use href="#waxDripV" transform="translate(54,100)"/>
+  <use href="#waxDripV" transform="translate(54,260)"/>
+  <use href="#waxDripV" transform="translate(54,420)"/>
+  <use href="#waxDripV" transform="translate(54,580)"/>
+  <use href="#waxDripV" transform="translate(54,740)"/>
+  <use href="#waxDripV" transform="translate(54,900)"/>
+  <use href="#waxDripV" transform="translate(54,1060)"/>
+  <use href="#waxDripV" transform="translate(54,1220)"/>
+  <use href="#waxDripV" transform="translate(54,1380)"/>
+  <use href="#rose" transform="translate(30,160) scale(1.2)"/>
+  <use href="#rose" transform="translate(30,320) scale(1.0)"/>
+  <use href="#rose" transform="translate(30,480) scale(1.2)"/>
+  <use href="#rose" transform="translate(30,640) scale(1.0)"/>
+  <use href="#rose" transform="translate(30,800) scale(1.2)"/>
+  <use href="#rose" transform="translate(30,960) scale(1.0)"/>
+  <use href="#rose" transform="translate(30,1120) scale(1.2)"/>
+  <use href="#rose" transform="translate(30,1280) scale(1.0)"/>
+  <use href="#rose" transform="translate(30,1400) scale(1.2)"/>
+  <use href="#darkLeafG" transform="translate(48,210) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(48,370) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(48,530) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(48,690) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(48,850) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(48,1010) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(48,1170) rotate(90)"/>
+  <use href="#darkLeafG" transform="translate(48,1330) rotate(90)"/>
+
+  <!-- RIGHT -->
+  <use href="#vineSegment" transform="translate(960,80) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(972,200) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,320) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(970,440) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,560) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(970,680) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,800) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(970,920) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,1040) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(970,1160) rotate(90)"/>
+  <use href="#vineSegment" transform="translate(958,1280) rotate(90)"/>
+  <use href="#waxDripV" transform="translate(946,100)"/>
+  <use href="#waxDripV" transform="translate(946,260)"/>
+  <use href="#waxDripV" transform="translate(946,420)"/>
+  <use href="#waxDripV" transform="translate(946,580)"/>
+  <use href="#waxDripV" transform="translate(946,740)"/>
+  <use href="#waxDripV" transform="translate(946,900)"/>
+  <use href="#waxDripV" transform="translate(946,1060)"/>
+  <use href="#waxDripV" transform="translate(946,1220)"/>
+  <use href="#waxDripV" transform="translate(946,1380)"/>
+  <use href="#rose" transform="translate(970,160) scale(1.2)"/>
+  <use href="#rose" transform="translate(970,320) scale(1.0)"/>
+  <use href="#rose" transform="translate(970,480) scale(1.2)"/>
+  <use href="#rose" transform="translate(970,640) scale(1.0)"/>
+  <use href="#rose" transform="translate(970,800) scale(1.2)"/>
+  <use href="#rose" transform="translate(970,960) scale(1.0)"/>
+  <use href="#rose" transform="translate(970,1120) scale(1.2)"/>
+  <use href="#rose" transform="translate(970,1280) scale(1.0)"/>
+  <use href="#rose" transform="translate(970,1400) scale(1.2)"/>
+  <use href="#darkLeafG" transform="translate(952,210) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(952,370) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(952,530) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(952,690) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(952,850) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(952,1010) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(952,1170) rotate(270)"/>
+  <use href="#darkLeafG" transform="translate(952,1330) rotate(270)"/>
+
+  <!-- CORNERS: candelabra + roses -->
+  <g transform="translate(40,40)">
+    <use href="#candelabra" transform="translate(20,28) scale(0.75)"/>
+    <use href="#rose" transform="translate(50,16) scale(1.2)"/>
+    <use href="#rose" transform="translate(16,50) scale(1.2)"/>
+    <use href="#bat" transform="translate(60,8) scale(0.9)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#candelabra" transform="translate(-20,28) scale(0.75)"/>
+    <use href="#rose" transform="translate(-50,16) scale(1.2)"/>
+    <use href="#rose" transform="translate(-16,50) scale(1.2)"/>
+    <use href="#bat" transform="translate(-60,8) scale(0.9)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#meltedCandle" transform="translate(20,-28) scale(1.2)"/>
+    <use href="#rose" transform="translate(50,-16) scale(1.2)"/>
+    <use href="#rose" transform="translate(16,-50) scale(1.2)"/>
+    <use href="#waxDripV" transform="translate(40,-12) scale(0.8)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#meltedCandle" transform="translate(-20,-28) scale(1.2)"/>
+    <use href="#rose" transform="translate(-50,-16) scale(1.2)"/>
+    <use href="#rose" transform="translate(-16,-50) scale(1.2)"/>
+    <use href="#waxDripV" transform="translate(-40,-12) scale(0.8)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#1a0a0a" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#b80000" stroke-width="0.5" fill="none"/>
+</svg>

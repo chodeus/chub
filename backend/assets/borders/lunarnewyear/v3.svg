@@ -1,0 +1,265 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#04140a"/>
+      <stop offset="50%" stop-color="#020a05"/>
+      <stop offset="100%" stop-color="#010402"/>
+    </linearGradient>
+    <radialGradient id="vermilionDeep" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#e04030"/>
+      <stop offset="55%" stop-color="#a01828"/>
+      <stop offset="100%" stop-color="#3a0408"/>
+    </radialGradient>
+    <radialGradient id="jadeG" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#a4e8c8"/>
+      <stop offset="55%" stop-color="#2a9078"/>
+      <stop offset="100%" stop-color="#0a3828"/>
+    </radialGradient>
+    <radialGradient id="jadeDark" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#2a9078"/>
+      <stop offset="100%" stop-color="#04200c"/>
+    </radialGradient>
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5a3a08"/>
+      <stop offset="50%" stop-color="#f0d050"/>
+      <stop offset="100%" stop-color="#8a5018"/>
+    </linearGradient>
+    <radialGradient id="gold" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff0a8"/>
+      <stop offset="55%" stop-color="#d4a020"/>
+      <stop offset="100%" stop-color="#503808"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="jadeLantern">
+    <rect x="-3" y="-22" width="6" height="3" fill="url(#gold)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-3,-19 L3,-19 L0,-23 Z" fill="none" stroke="#503808" stroke-width="0.5"/>
+    <path d="M-14,-19 L14,-19 L14,-14 L-14,-14 Z" fill="url(#jadeG)" stroke="#0a3828" stroke-width="0.4"/>
+    <path d="M-18,-14 C-22,0 -22,4 -14,8 L14,8 C22,4 22,0 18,-14 Z" fill="url(#vermilionDeep)" stroke="#3a0408" stroke-width="0.6"/>
+    <path d="M-18,-14 C-22,0 -22,4 -14,8 L14,8 C22,4 22,0 18,-14" fill="none" stroke="url(#goldStroke)" stroke-width="0.8"/>
+    <path d="M-14,8 L14,8 L14,12 L-14,12 Z" fill="url(#jadeG)" stroke="#0a3828" stroke-width="0.4"/>
+    <path d="M-16,-6 L16,-6 M-18,-1 L18,-1 M-16,4 L16,4" stroke="url(#goldStroke)" stroke-width="0.4" opacity="0.6"/>
+    <path d="M-10,12 L-10,22 M-4,12 L-4,22 M4,12 L4,22 M10,12 L10,22 M0,12 L0,24" stroke="url(#jadeG)" stroke-width="0.5"/>
+    <path d="M-10,22 L-12,26 M-4,22 L-6,26 M4,22 L6,26 M10,22 L12,26 M0,24 L0,28" stroke="#2a9078" stroke-width="0.5"/>
+    <ellipse cx="-2" cy="-2" rx="3" ry="6" fill="#e04030" opacity="0.4"/>
+  </g>
+
+  <g id="jadeLeaf">
+    <ellipse cx="0" cy="-10" rx="4" ry="12" fill="url(#jadeG)" stroke="#0a3828" stroke-width="0.4"/>
+    <path d="M0,0 L0,-22" stroke="#0a3828" stroke-width="0.4"/>
+    <path d="M-3,-6 Q0,-8 3,-6 M-3,-14 Q0,-16 3,-14" stroke="#a4e8c8" stroke-width="0.3" fill="none"/>
+  </g>
+
+  <g id="jadeBranch">
+    <path d="M0,0 C12,-4 26,4 38,-2 C50,-8 64,4 76,-2" stroke="#0a3828" stroke-width="1.6" fill="none"/>
+    <use href="#jadeLeaf" transform="translate(12,0) rotate(-30)"/>
+    <use href="#jadeLeaf" transform="translate(24,-2) rotate(20)"/>
+    <use href="#jadeLeaf" transform="translate(38,-4) rotate(-25)"/>
+    <use href="#jadeLeaf" transform="translate(52,0) rotate(15)"/>
+    <use href="#jadeLeaf" transform="translate(64,-4) rotate(-20)"/>
+  </g>
+
+  <g id="jadeMedallion">
+    <circle cx="0" cy="0" r="16" fill="url(#jadeG)" stroke="#0a3828" stroke-width="0.7"/>
+    <circle cx="0" cy="0" r="16" fill="none" stroke="url(#goldStroke)" stroke-width="0.8"/>
+    <circle cx="0" cy="0" r="11" fill="none" stroke="url(#goldStroke)" stroke-width="0.5"/>
+    <circle cx="0" cy="0" r="5" fill="url(#gold)" stroke="#503808" stroke-width="0.4"/>
+    <g stroke="url(#goldStroke)" stroke-width="0.5" fill="none">
+      <path d="M0,-16 L0,-22 M0,16 L0,22 M-16,0 L-22,0 M16,0 L22,0"/>
+      <path d="M-11.3,-11.3 L-15.6,-15.6 M11.3,-11.3 L15.6,-15.6 M-11.3,11.3 L-15.6,15.6 M11.3,11.3 L15.6,15.6"/>
+    </g>
+    <circle cx="0" cy="-22" r="1.4" fill="url(#gold)"/>
+    <circle cx="0" cy="22" r="1.4" fill="url(#gold)"/>
+    <circle cx="-22" cy="0" r="1.4" fill="url(#gold)"/>
+    <circle cx="22" cy="0" r="1.4" fill="url(#gold)"/>
+  </g>
+
+  <g id="jadeTassel">
+    <path d="M0,0 L0,12" stroke="url(#goldStroke)" stroke-width="1"/>
+    <ellipse cx="0" cy="12" rx="4" ry="2" fill="url(#gold)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-3,14 L-3,22 M-1,14 L-1,24 M1,14 L1,24 M3,14 L3,22" stroke="url(#jadeG)" stroke-width="0.7"/>
+    <circle cx="0" cy="12" r="2" fill="url(#jadeG)" stroke="#0a3828" stroke-width="0.3"/>
+  </g>
+
+  <g id="goldRing">
+    <circle cx="0" cy="0" r="10" fill="none" stroke="url(#goldStroke)" stroke-width="2"/>
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#503808" stroke-width="0.4"/>
+    <circle cx="0" cy="0" r="6" fill="none" stroke="url(#jadeG)" stroke-width="0.8"/>
+  </g>
+
+  <g id="jadeBlossom">
+    <g>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#jadeG)" stroke="#0a3828" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#jadeG)" transform="rotate(72)" stroke="#0a3828" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#jadeG)" transform="rotate(144)" stroke="#0a3828" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#jadeG)" transform="rotate(216)" stroke="#0a3828" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#jadeG)" transform="rotate(288)" stroke="#0a3828" stroke-width="0.3"/>
+    </g>
+    <circle cx="0" cy="0" r="1.6" fill="url(#gold)"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#jadeBranch" transform="translate(60,50)"/>
+  <use href="#jadeBranch" transform="translate(220,50)"/>
+  <use href="#jadeBranch" transform="translate(380,50)"/>
+  <use href="#jadeBranch" transform="translate(540,50)"/>
+  <use href="#jadeBranch" transform="translate(700,50)"/>
+  <use href="#jadeBranch" transform="translate(860,50)"/>
+  <use href="#jadeMedallion" transform="translate(140,40)"/>
+  <use href="#jadeMedallion" transform="translate(300,40)"/>
+  <use href="#jadeMedallion" transform="translate(460,40)"/>
+  <use href="#jadeMedallion" transform="translate(620,40)"/>
+  <use href="#jadeMedallion" transform="translate(780,40)"/>
+  <use href="#jadeLantern" transform="translate(220,38) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(380,38) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(540,38) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(700,38) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(900,38) scale(0.85)"/>
+  <use href="#goldRing" transform="translate(180,28)"/>
+  <use href="#goldRing" transform="translate(340,28)"/>
+  <use href="#goldRing" transform="translate(500,28)"/>
+  <use href="#goldRing" transform="translate(660,28)"/>
+  <use href="#goldRing" transform="translate(820,28)"/>
+  <use href="#jadeBlossom" transform="translate(120,20)"/>
+  <use href="#jadeBlossom" transform="translate(280,20)"/>
+  <use href="#jadeBlossom" transform="translate(440,20)"/>
+  <use href="#jadeBlossom" transform="translate(600,20)"/>
+  <use href="#jadeBlossom" transform="translate(760,20)"/>
+  <use href="#jadeBlossom" transform="translate(900,20)"/>
+
+  <!-- BOTTOM -->
+  <use href="#jadeBranch" transform="translate(60,1450)"/>
+  <use href="#jadeBranch" transform="translate(220,1450)"/>
+  <use href="#jadeBranch" transform="translate(380,1450)"/>
+  <use href="#jadeBranch" transform="translate(540,1450)"/>
+  <use href="#jadeBranch" transform="translate(700,1450)"/>
+  <use href="#jadeBranch" transform="translate(860,1450)"/>
+  <use href="#jadeMedallion" transform="translate(140,1460)"/>
+  <use href="#jadeMedallion" transform="translate(300,1460)"/>
+  <use href="#jadeMedallion" transform="translate(460,1460)"/>
+  <use href="#jadeMedallion" transform="translate(620,1460)"/>
+  <use href="#jadeMedallion" transform="translate(780,1460)"/>
+  <use href="#jadeLantern" transform="translate(220,1462) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(380,1462) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(540,1462) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(700,1462) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(900,1462) scale(0.85)"/>
+  <use href="#goldRing" transform="translate(180,1472)"/>
+  <use href="#goldRing" transform="translate(340,1472)"/>
+  <use href="#goldRing" transform="translate(500,1472)"/>
+  <use href="#goldRing" transform="translate(660,1472)"/>
+  <use href="#goldRing" transform="translate(820,1472)"/>
+  <use href="#jadeBlossom" transform="translate(120,1480)"/>
+  <use href="#jadeBlossom" transform="translate(280,1480)"/>
+  <use href="#jadeBlossom" transform="translate(440,1480)"/>
+  <use href="#jadeBlossom" transform="translate(600,1480)"/>
+  <use href="#jadeBlossom" transform="translate(760,1480)"/>
+  <use href="#jadeBlossom" transform="translate(900,1480)"/>
+
+  <!-- LEFT -->
+  <use href="#jadeBranch" transform="translate(50,60) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(50,220) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(50,380) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(50,540) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(50,700) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(50,860) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(50,1020) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(50,1180) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(50,1340) rotate(90)"/>
+  <use href="#jadeMedallion" transform="translate(40,140)"/>
+  <use href="#jadeMedallion" transform="translate(40,300)"/>
+  <use href="#jadeMedallion" transform="translate(40,460)"/>
+  <use href="#jadeMedallion" transform="translate(40,620)"/>
+  <use href="#jadeMedallion" transform="translate(40,780)"/>
+  <use href="#jadeMedallion" transform="translate(40,940)"/>
+  <use href="#jadeMedallion" transform="translate(40,1100)"/>
+  <use href="#jadeMedallion" transform="translate(40,1260)"/>
+  <use href="#jadeMedallion" transform="translate(40,1400)"/>
+  <use href="#jadeLantern" transform="translate(40,220) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(40,380) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(40,540) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(40,700) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(40,860) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(40,1020) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(40,1180) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(40,1340) scale(0.85)"/>
+  <use href="#jadeBlossom" transform="translate(20,180)"/>
+  <use href="#jadeBlossom" transform="translate(20,340)"/>
+  <use href="#jadeBlossom" transform="translate(20,500)"/>
+  <use href="#jadeBlossom" transform="translate(20,660)"/>
+  <use href="#jadeBlossom" transform="translate(20,820)"/>
+  <use href="#jadeBlossom" transform="translate(20,980)"/>
+  <use href="#jadeBlossom" transform="translate(20,1140)"/>
+  <use href="#jadeBlossom" transform="translate(20,1300)"/>
+
+  <!-- RIGHT -->
+  <use href="#jadeBranch" transform="translate(950,60) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(950,220) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(950,380) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(950,540) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(950,700) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(950,860) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(950,1020) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(950,1180) rotate(90)"/>
+  <use href="#jadeBranch" transform="translate(950,1340) rotate(90)"/>
+  <use href="#jadeMedallion" transform="translate(960,140)"/>
+  <use href="#jadeMedallion" transform="translate(960,300)"/>
+  <use href="#jadeMedallion" transform="translate(960,460)"/>
+  <use href="#jadeMedallion" transform="translate(960,620)"/>
+  <use href="#jadeMedallion" transform="translate(960,780)"/>
+  <use href="#jadeMedallion" transform="translate(960,940)"/>
+  <use href="#jadeMedallion" transform="translate(960,1100)"/>
+  <use href="#jadeMedallion" transform="translate(960,1260)"/>
+  <use href="#jadeMedallion" transform="translate(960,1400)"/>
+  <use href="#jadeLantern" transform="translate(960,220) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(960,380) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(960,540) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(960,700) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(960,860) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(960,1020) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(960,1180) scale(0.85)"/>
+  <use href="#jadeLantern" transform="translate(960,1340) scale(0.85)"/>
+  <use href="#jadeBlossom" transform="translate(980,180)"/>
+  <use href="#jadeBlossom" transform="translate(980,340)"/>
+  <use href="#jadeBlossom" transform="translate(980,500)"/>
+  <use href="#jadeBlossom" transform="translate(980,660)"/>
+  <use href="#jadeBlossom" transform="translate(980,820)"/>
+  <use href="#jadeBlossom" transform="translate(980,980)"/>
+  <use href="#jadeBlossom" transform="translate(980,1140)"/>
+  <use href="#jadeBlossom" transform="translate(980,1300)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(40,40)">
+    <use href="#jadeMedallion" transform="translate(28,28) scale(1.4)"/>
+    <use href="#jadeTassel" transform="translate(28,62)"/>
+    <use href="#jadeLeaf" transform="translate(60,24)"/>
+    <use href="#jadeLantern" transform="translate(70,36)"/>
+    <use href="#jadeBlossom" transform="translate(56,56) scale(1.4)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#jadeMedallion" transform="translate(-28,28) scale(1.4)"/>
+    <use href="#jadeTassel" transform="translate(-28,62)"/>
+    <use href="#jadeLeaf" transform="translate(-60,24)"/>
+    <use href="#jadeLantern" transform="translate(-70,36)"/>
+    <use href="#jadeBlossom" transform="translate(-56,56) scale(1.4)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#jadeMedallion" transform="translate(28,-28) scale(1.4)"/>
+    <use href="#jadeLeaf" transform="translate(60,-24)"/>
+    <use href="#jadeLantern" transform="translate(70,-26)"/>
+    <use href="#jadeBlossom" transform="translate(56,-56) scale(1.4)"/>
+    <use href="#goldRing" transform="translate(28,-58)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#jadeMedallion" transform="translate(-28,-28) scale(1.4)"/>
+    <use href="#jadeLeaf" transform="translate(-60,-24)"/>
+    <use href="#jadeLantern" transform="translate(-70,-26)"/>
+    <use href="#jadeBlossom" transform="translate(-56,-56) scale(1.4)"/>
+    <use href="#goldRing" transform="translate(-28,-58)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldStroke)" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#2a9078" stroke-width="0.4" fill="none" opacity="0.6"/>
+</svg>

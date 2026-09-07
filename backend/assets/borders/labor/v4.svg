@@ -1,0 +1,276 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1428"/>
+      <stop offset="50%" stop-color="#050a16"/>
+      <stop offset="100%" stop-color="#02040a"/>
+    </linearGradient>
+    <linearGradient id="navyDeep" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1a2438"/>
+      <stop offset="50%" stop-color="#3a5078"/>
+      <stop offset="100%" stop-color="#1a2438"/>
+    </linearGradient>
+    <linearGradient id="navyDeepV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a2438"/>
+      <stop offset="50%" stop-color="#3a5078"/>
+      <stop offset="100%" stop-color="#1a2438"/>
+    </linearGradient>
+    <linearGradient id="greyAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#5a6478"/>
+      <stop offset="50%" stop-color="#a0a8b8"/>
+      <stop offset="100%" stop-color="#5a6478"/>
+    </linearGradient>
+    <radialGradient id="goldMin" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff0b0"/>
+      <stop offset="55%" stop-color="#d4a020"/>
+      <stop offset="100%" stop-color="#604010"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="progressChevron">
+    <path d="M0,0 L8,-6 L16,0 L16,4 L8,-2 L0,4 Z" fill="url(#navyDeep)" stroke="#0a1024" stroke-width="0.4"/>
+    <path d="M2,0 L8,-4 L14,0" stroke="url(#goldMin)" stroke-width="0.5" fill="none" opacity="0.7"/>
+  </g>
+
+  <g id="progressChevronV">
+    <path d="M0,0 L-6,8 L0,16 L4,16 L-2,8 L4,0 Z" fill="url(#navyDeepV)" stroke="#0a1024" stroke-width="0.4"/>
+    <path d="M0,2 L-4,8 L0,14" stroke="url(#goldMin)" stroke-width="0.5" fill="none" opacity="0.7"/>
+  </g>
+
+  <g id="chevronRow">
+    <use href="#progressChevron" transform="translate(0,0)"/>
+    <use href="#progressChevron" transform="translate(20,0)"/>
+    <use href="#progressChevron" transform="translate(40,0)"/>
+    <use href="#progressChevron" transform="translate(60,0)"/>
+    <use href="#progressChevron" transform="translate(80,0)"/>
+    <use href="#progressChevron" transform="translate(100,0)"/>
+  </g>
+
+  <g id="chevronRowV">
+    <use href="#progressChevronV" transform="translate(0,0)"/>
+    <use href="#progressChevronV" transform="translate(0,20)"/>
+    <use href="#progressChevronV" transform="translate(0,40)"/>
+    <use href="#progressChevronV" transform="translate(0,60)"/>
+    <use href="#progressChevronV" transform="translate(0,80)"/>
+    <use href="#progressChevronV" transform="translate(0,100)"/>
+  </g>
+
+  <g id="minimalCog">
+    <g fill="url(#greyAccent)" stroke="#0a0c14" stroke-width="0.3">
+      <rect x="-2" y="-18" width="4" height="6"/>
+      <rect x="-2" y="12" width="4" height="6"/>
+      <rect x="-18" y="-2" width="6" height="4"/>
+      <rect x="12" y="-2" width="6" height="4"/>
+      <rect x="-14" y="-14" width="4" height="4" transform="rotate(45,-12,-12)"/>
+      <rect x="10" y="-14" width="4" height="4" transform="rotate(45,12,-12)"/>
+      <rect x="-14" y="10" width="4" height="4" transform="rotate(45,-12,12)"/>
+      <rect x="10" y="10" width="4" height="4" transform="rotate(45,12,12)"/>
+    </g>
+    <circle cx="0" cy="0" r="10" fill="url(#navyDeep)" stroke="#0a1024" stroke-width="0.5"/>
+    <circle cx="0" cy="0" r="10" fill="none" stroke="url(#goldMin)" stroke-width="0.5"/>
+    <circle cx="0" cy="0" r="3" fill="url(#goldMin)"/>
+    <circle cx="0" cy="0" r="1.2" fill="#0a1024"/>
+  </g>
+
+  <g id="lineAccent">
+    <path d="M0,0 L60,0" stroke="url(#greyAccent)" stroke-width="1.4" fill="none"/>
+    <circle cx="0" cy="0" r="1.5" fill="url(#goldMin)"/>
+    <circle cx="60" cy="0" r="1.5" fill="url(#goldMin)"/>
+  </g>
+
+  <g id="lineAccentV">
+    <path d="M0,0 L0,60" stroke="url(#greyAccent)" stroke-width="1.4" fill="none"/>
+    <circle cx="0" cy="0" r="1.5" fill="url(#goldMin)"/>
+    <circle cx="0" cy="60" r="1.5" fill="url(#goldMin)"/>
+  </g>
+
+  <g id="goldBar">
+    <rect x="0" y="-1.5" width="40" height="3" fill="url(#goldMin)" stroke="#604010" stroke-width="0.3"/>
+  </g>
+
+  <g id="goldDot">
+    <circle cx="0" cy="0" r="2" fill="url(#goldMin)"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#chevronRow" transform="translate(60,32)"/>
+  <use href="#chevronRow" transform="translate(180,32)"/>
+  <use href="#chevronRow" transform="translate(300,32)"/>
+  <use href="#chevronRow" transform="translate(420,32)"/>
+  <use href="#chevronRow" transform="translate(540,32)"/>
+  <use href="#chevronRow" transform="translate(660,32)"/>
+  <use href="#chevronRow" transform="translate(780,32)"/>
+  <use href="#chevronRow" transform="translate(820,32)"/>
+  <use href="#goldBar" transform="translate(140,52)"/>
+  <use href="#goldBar" transform="translate(260,52)"/>
+  <use href="#goldBar" transform="translate(380,52)"/>
+  <use href="#goldBar" transform="translate(500,52)"/>
+  <use href="#goldBar" transform="translate(620,52)"/>
+  <use href="#goldBar" transform="translate(740,52)"/>
+  <use href="#goldBar" transform="translate(860,52)"/>
+  <use href="#lineAccent" transform="translate(110,18)"/>
+  <use href="#lineAccent" transform="translate(230,18)"/>
+  <use href="#lineAccent" transform="translate(350,18)"/>
+  <use href="#lineAccent" transform="translate(470,18)"/>
+  <use href="#lineAccent" transform="translate(590,18)"/>
+  <use href="#lineAccent" transform="translate(710,18)"/>
+  <use href="#lineAccent" transform="translate(830,18)"/>
+  <use href="#goldDot" transform="translate(160,22)"/>
+  <use href="#goldDot" transform="translate(320,22)"/>
+  <use href="#goldDot" transform="translate(480,22)"/>
+  <use href="#goldDot" transform="translate(640,22)"/>
+  <use href="#goldDot" transform="translate(800,22)"/>
+
+  <!-- BOTTOM -->
+  <use href="#chevronRow" transform="translate(60,1468) scale(1,-1)"/>
+  <use href="#chevronRow" transform="translate(180,1468) scale(1,-1)"/>
+  <use href="#chevronRow" transform="translate(300,1468) scale(1,-1)"/>
+  <use href="#chevronRow" transform="translate(420,1468) scale(1,-1)"/>
+  <use href="#chevronRow" transform="translate(540,1468) scale(1,-1)"/>
+  <use href="#chevronRow" transform="translate(660,1468) scale(1,-1)"/>
+  <use href="#chevronRow" transform="translate(780,1468) scale(1,-1)"/>
+  <use href="#chevronRow" transform="translate(820,1468) scale(1,-1)"/>
+  <use href="#goldBar" transform="translate(140,1448)"/>
+  <use href="#goldBar" transform="translate(260,1448)"/>
+  <use href="#goldBar" transform="translate(380,1448)"/>
+  <use href="#goldBar" transform="translate(500,1448)"/>
+  <use href="#goldBar" transform="translate(620,1448)"/>
+  <use href="#goldBar" transform="translate(740,1448)"/>
+  <use href="#goldBar" transform="translate(860,1448)"/>
+  <use href="#lineAccent" transform="translate(110,1482)"/>
+  <use href="#lineAccent" transform="translate(230,1482)"/>
+  <use href="#lineAccent" transform="translate(350,1482)"/>
+  <use href="#lineAccent" transform="translate(470,1482)"/>
+  <use href="#lineAccent" transform="translate(590,1482)"/>
+  <use href="#lineAccent" transform="translate(710,1482)"/>
+  <use href="#lineAccent" transform="translate(830,1482)"/>
+  <use href="#goldDot" transform="translate(160,1478)"/>
+  <use href="#goldDot" transform="translate(320,1478)"/>
+  <use href="#goldDot" transform="translate(480,1478)"/>
+  <use href="#goldDot" transform="translate(640,1478)"/>
+  <use href="#goldDot" transform="translate(800,1478)"/>
+
+  <!-- LEFT -->
+  <use href="#chevronRowV" transform="translate(32,60)"/>
+  <use href="#chevronRowV" transform="translate(32,180)"/>
+  <use href="#chevronRowV" transform="translate(32,300)"/>
+  <use href="#chevronRowV" transform="translate(32,420)"/>
+  <use href="#chevronRowV" transform="translate(32,540)"/>
+  <use href="#chevronRowV" transform="translate(32,660)"/>
+  <use href="#chevronRowV" transform="translate(32,780)"/>
+  <use href="#chevronRowV" transform="translate(32,900)"/>
+  <use href="#chevronRowV" transform="translate(32,1020)"/>
+  <use href="#chevronRowV" transform="translate(32,1140)"/>
+  <use href="#chevronRowV" transform="translate(32,1260)"/>
+  <use href="#chevronRowV" transform="translate(32,1320)"/>
+  <use href="#goldBar" transform="translate(52,140) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,260) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,380) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,500) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,620) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,740) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,860) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,980) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,1100) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,1220) rotate(90)"/>
+  <use href="#goldBar" transform="translate(52,1340) rotate(90)"/>
+  <use href="#lineAccentV" transform="translate(18,110)"/>
+  <use href="#lineAccentV" transform="translate(18,230)"/>
+  <use href="#lineAccentV" transform="translate(18,350)"/>
+  <use href="#lineAccentV" transform="translate(18,470)"/>
+  <use href="#lineAccentV" transform="translate(18,590)"/>
+  <use href="#lineAccentV" transform="translate(18,710)"/>
+  <use href="#lineAccentV" transform="translate(18,830)"/>
+  <use href="#lineAccentV" transform="translate(18,950)"/>
+  <use href="#lineAccentV" transform="translate(18,1070)"/>
+  <use href="#lineAccentV" transform="translate(18,1190)"/>
+  <use href="#lineAccentV" transform="translate(18,1310)"/>
+  <use href="#goldDot" transform="translate(22,160)"/>
+  <use href="#goldDot" transform="translate(22,320)"/>
+  <use href="#goldDot" transform="translate(22,480)"/>
+  <use href="#goldDot" transform="translate(22,640)"/>
+  <use href="#goldDot" transform="translate(22,800)"/>
+  <use href="#goldDot" transform="translate(22,960)"/>
+  <use href="#goldDot" transform="translate(22,1120)"/>
+  <use href="#goldDot" transform="translate(22,1280)"/>
+  <use href="#goldDot" transform="translate(22,1400)"/>
+
+  <!-- RIGHT -->
+  <use href="#chevronRowV" transform="translate(968,60) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,180) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,300) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,420) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,540) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,660) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,780) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,900) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,1020) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,1140) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,1260) scale(-1,1)"/>
+  <use href="#chevronRowV" transform="translate(968,1320) scale(-1,1)"/>
+  <use href="#goldBar" transform="translate(948,140) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,260) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,380) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,500) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,620) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,740) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,860) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,980) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,1100) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,1220) rotate(90)"/>
+  <use href="#goldBar" transform="translate(948,1340) rotate(90)"/>
+  <use href="#lineAccentV" transform="translate(982,110)"/>
+  <use href="#lineAccentV" transform="translate(982,230)"/>
+  <use href="#lineAccentV" transform="translate(982,350)"/>
+  <use href="#lineAccentV" transform="translate(982,470)"/>
+  <use href="#lineAccentV" transform="translate(982,590)"/>
+  <use href="#lineAccentV" transform="translate(982,710)"/>
+  <use href="#lineAccentV" transform="translate(982,830)"/>
+  <use href="#lineAccentV" transform="translate(982,950)"/>
+  <use href="#lineAccentV" transform="translate(982,1070)"/>
+  <use href="#lineAccentV" transform="translate(982,1190)"/>
+  <use href="#lineAccentV" transform="translate(982,1310)"/>
+  <use href="#goldDot" transform="translate(978,160)"/>
+  <use href="#goldDot" transform="translate(978,320)"/>
+  <use href="#goldDot" transform="translate(978,480)"/>
+  <use href="#goldDot" transform="translate(978,640)"/>
+  <use href="#goldDot" transform="translate(978,800)"/>
+  <use href="#goldDot" transform="translate(978,960)"/>
+  <use href="#goldDot" transform="translate(978,1120)"/>
+  <use href="#goldDot" transform="translate(978,1280)"/>
+  <use href="#goldDot" transform="translate(978,1400)"/>
+
+  <!-- CORNERS: minimal cogs -->
+  <g transform="translate(40,40)">
+    <use href="#minimalCog" transform="translate(30,30) scale(1.4)"/>
+    <use href="#progressChevron" transform="translate(60,16) scale(1.3)"/>
+    <use href="#progressChevron" transform="translate(60,52) scale(1.3)"/>
+    <use href="#lineAccent" transform="translate(14,72)"/>
+    <use href="#goldDot" transform="translate(74,40)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#minimalCog" transform="translate(-30,30) scale(1.4)"/>
+    <use href="#progressChevron" transform="translate(-60,16) scale(1.3) scale(-1,1)"/>
+    <use href="#progressChevron" transform="translate(-60,52) scale(1.3) scale(-1,1)"/>
+    <use href="#lineAccent" transform="translate(-74,72)"/>
+    <use href="#goldDot" transform="translate(-74,40)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#minimalCog" transform="translate(30,-30) scale(1.4)"/>
+    <use href="#progressChevron" transform="translate(60,-16) scale(1.3)"/>
+    <use href="#progressChevron" transform="translate(60,-52) scale(1.3)"/>
+    <use href="#lineAccent" transform="translate(14,-72)"/>
+    <use href="#goldDot" transform="translate(74,-40)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#minimalCog" transform="translate(-30,-30) scale(1.4)"/>
+    <use href="#progressChevron" transform="translate(-60,-16) scale(1.3) scale(-1,1)"/>
+    <use href="#progressChevron" transform="translate(-60,-52) scale(1.3) scale(-1,1)"/>
+    <use href="#lineAccent" transform="translate(-74,-72)"/>
+    <use href="#goldDot" transform="translate(-74,-40)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldMin)" stroke-width="1.4" fill="none"/>
+</svg>

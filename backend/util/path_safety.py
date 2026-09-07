@@ -1,0 +1,313 @@
+"""
+Filesystem path safety utilities for CHUB.
+
+Restricts directory listing, creation, and file access to
+roots derived from application configuration.
+"""
+
+import logging
+import os
+from pathlib import Path
+from typing import List, Optional
+
+from backend.util.config import ChubConfig, has_config_file
+
+_log = logging.getLogger("chub.path_safety")
+
+
+def get_allowed_roots(config: ChubConfig) -> List[Path]:
+    """
+    Build the list of allowed filesystem roots from configuration.
+
+    Includes:
+    - Poster renamerr source, music source and destination directories
+    - Asset renamerr source, music source and destination directories
+    - Border replacerr source and destination directories
+    - Poster cleanarr asset directories
+    - Nohl source directories
+    - Jduparr source directories and hash database location
+    - GDrive source locations
+    - The app config directory itself
+    """
+    roots: List[str] = []
+
+    # Poster renamerr
+    pr = config.poster_renamerr
+    roots.extend(pr.source_dirs)
+    roots.extend(pr.music_source_dirs)
+    if pr.destination_dir:
+        roots.append(pr.destination_dir)
+
+    # Asset renamerr — its own scan set feeds the same poster_cache the
+    # poster file endpoints serve from, so it must be authorized too.
+    ar = config.asset_renamerr
+    roots.extend(ar.source_dirs)
+    roots.extend(ar.music_source_dirs)
+    if ar.destination_dir:
+        roots.append(ar.destination_dir)
+
+    # Poster cleanarr orphan / stale-duplicate asset dirs
+    roots.extend(config.poster_cleanarr.asset_dirs)
+
+    # Border replacerr
+    br = config.border_replacerr
+    roots.extend(br.source_dirs)
+    if br.destination_dir:
+        roots.append(br.destination_dir)
+
+    # Nohl source dirs
+    for src in config.nohl.source_dirs:
+        if isinstance(src, str):
+            roots.append(src)
+        elif hasattr(src, "path"):
+            roots.append(src.path)
+
+    # Jduparr source dirs and optional hash database location
+    roots.extend(config.jduparr.source_dirs)
+    if config.jduparr.hash_database:
+        roots.append(str(Path(config.jduparr.hash_database).expanduser().parent))
+
+    # GDrive locations
+    for entry in config.sync_gdrive.gdrive_list:
+        if entry.location:
+            roots.append(entry.location)
+    if config.sync_gdrive.gdrive_sa_location:
+        roots.append(config.sync_gdrive.gdrive_sa_location)
+
+    # App config directory (so users can browse config location)
+    config_dir = os.environ.get("CONFIG_DIR") or str(
+        Path(__file__).parent.parent.parent / "config"
+    )
+    roots.append(config_dir)
+
+    # Auto-discover bind-mounted host volumes (Linux containers). On Unraid
+    # / docker, the user's template typically binds paths like /kometa,
+    # /media, /data, /plex into the container. Surface them so the picker
+    # works for fresh setups before any config field has been populated.
+    roots.extend(str(p) for p in _discover_container_mounts())
+
+    # Resolve all and deduplicate
+    resolved = []
+    for r in roots:
+        if not r:
+            continue
+        try:
+            p = Path(r).expanduser().resolve()
+            if p.exists():
+                resolved.append(p)
+        except (ValueError, OSError):
+            continue
+
+    return list(set(resolved))
+
+
+# Pseudo / system filesystems we never want to expose via the picker.
+_PSEUDO_FS_TYPES = frozenset(
+    {
+        "proc",
+        "sysfs",
+        "cgroup",
+        "cgroup2",
+        "devpts",
+        "tmpfs",
+        "mqueue",
+        "pstore",
+        "bpf",
+        "tracefs",
+        "securityfs",
+        "debugfs",
+        "fusectl",
+        "configfs",
+        "autofs",
+        "nsfs",
+        "binfmt_misc",
+        "hugetlbfs",
+        "ramfs",
+        "rpc_pipefs",
+        "overlay",
+        "squashfs",
+    }
+)
+
+# Mount points (or prefixes) that are part of the container OS, not user data.
+_SYSTEM_MOUNT_PREFIXES = (
+    "/proc",
+    "/sys",
+    "/dev",
+    "/run",
+    "/etc",
+    "/usr",
+    "/var",
+    "/lib",
+    "/lib64",
+    "/sbin",
+    "/bin",
+    "/boot",
+    "/tmp",
+)
+
+
+def _discover_container_mounts(
+    mountinfo_path: str = "/proc/self/mountinfo",
+) -> List[Path]:
+    """
+    Read mountinfo and return user-data bind mounts.
+
+    Filters out pseudo-filesystems (proc, sysfs, tmpfs, overlay, etc.)
+    and OS-level mount points (/proc, /sys, /dev, /usr, /var, ...). What
+    remains is the set of paths the user explicitly bound into the
+    container — exactly what the directory picker should expose.
+
+    Returns an empty list on non-Linux hosts or if mountinfo is unreadable.
+    The path arg is exposed only so tests can inject a fixture file.
+    """
+    try:
+        with open(mountinfo_path, "r", encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except (OSError, IOError):
+        return []
+
+    discovered: List[Path] = []
+    seen: set = set()
+    for line in lines:
+        # mountinfo format:
+        #   <id> <parent> <maj:min> <root> <mount_point> <opts> [<tags>...] - <fs_type> <source> <super_opts>
+        fields = line.rstrip("\n").split(" ")
+        if len(fields) < 5:
+            continue
+        mount_point = fields[4]
+
+        try:
+            dash_idx = fields.index("-")
+        except ValueError:
+            continue
+        if dash_idx + 1 >= len(fields):
+            continue
+        fs_type = fields[dash_idx + 1]
+
+        if fs_type in _PSEUDO_FS_TYPES:
+            continue
+        if mount_point == "/" or mount_point in seen:
+            continue
+        if any(
+            mount_point == p or mount_point.startswith(p + "/")
+            for p in _SYSTEM_MOUNT_PREFIXES
+        ):
+            continue
+
+        seen.add(mount_point)
+        discovered.append(Path(mount_point))
+
+    return discovered
+
+
+def get_browse_roots(config: ChubConfig) -> List[Path]:
+    """
+    Top-level directory roots suitable for the UI directory picker.
+
+    Built on top of ``get_allowed_roots`` but:
+    - drops file paths (e.g. the gdrive service-account .json), since
+      the picker only navigates directories;
+    - collapses each path to its outermost allowed ancestor, so a
+      configured ``/kometa/posters/MM2K/Mario`` doesn't show up as a
+      separate root when ``/kometa`` is already mounted.
+
+    The full unfiltered list is still used by ``is_path_allowed`` for
+    write-permission checks; this is just what gets surfaced to the user.
+    """
+    all_roots = get_allowed_roots(config)
+    dir_roots = [p for p in all_roots if p.is_dir()]
+    # Shortest paths first so we add ancestors before descendants.
+    dir_roots.sort(key=lambda p: len(p.parts))
+    top_level: List[Path] = []
+    for r in dir_roots:
+        # Skip if this path is already covered by a shorter root.
+        if any(top in r.parents for top in top_level):
+            continue
+        top_level.append(r)
+    return top_level
+
+
+def is_path_allowed(path: str, config: ChubConfig) -> bool:
+    """
+    Check whether *path* falls under one of the allowed roots.
+
+    realpath resolves symlinks and `..` before the comparison, so traversal
+    can't win; the os.sep suffix keeps `/root_evil` out of `/root`.
+    """
+    if not path or not isinstance(path, str):
+        return False
+    # Reject null bytes (path injection vector)
+    if "\x00" in path:
+        return False
+    try:
+        target = os.path.realpath(os.path.expanduser(path))
+    except (ValueError, OSError):
+        return False
+
+    # realpath + os.sep prefix: same verdict relative_to gave, in the shape
+    # CodeQL accepts as a traversal barrier. os.sep stops /root_evil.
+    for root in get_allowed_roots(config):
+        base = str(root)
+        if target == base or target.startswith(base + os.sep):
+            return True
+
+    return False
+
+
+def containing_root(path: str, config: ChubConfig) -> Optional[Path]:
+    """Longest allowed root containing the already-resolved *path*, or None."""
+    # Callers walk down from this root, so the LONGEST match is the tightest
+    # anchor. os.sep suffix stops `/root_evil` matching `/root`, as above.
+    best: Optional[Path] = None
+    for root in get_allowed_roots(config):
+        base = str(root)
+        if path != base and not path.startswith(base + os.sep):
+            continue
+        if best is None or len(base) > len(str(best)):
+            best = root
+    return best
+
+
+def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
+    """Resolve *path* and return it only when the resolved target is inside an allowed root, else None."""
+    if not path or not isinstance(path, str):
+        return None
+    # Serving/deleting a file is privileged, so it needs a config the user
+    # actually wrote — the picker (get_browse_roots) deliberately has no guard.
+    if not has_config_file(config):
+        # CR/LF stripped: `path` is request data, and a newline in it would
+        # otherwise forge a second log line (py/log-injection).
+        _log.warning(
+            "Refusing file access to %s: no config file exists yet, so the "
+            "auto-discovered container mounts are not authorized roots",
+            path.replace("\r", "").replace("\n", ""),
+        )
+        return None
+    try:
+        resolved = os.path.realpath(os.path.expanduser(path))
+    except (ValueError, OSError):
+        return None
+    return Path(resolved) if is_path_allowed(resolved, config) else None
+
+
+def resolve_under_root(location: str, path: str, config: ChubConfig) -> Optional[Path]:
+    """Resolve an absolute *path*, or one under *location*, confined to allowed roots."""
+    if Path(path).is_absolute():
+        # Absolute paths (grid passes item.file; location is a label, not a
+        # root) validate on their own — resolve_confined covers symlink escapes.
+        return resolve_confined(path, config)
+
+    # Relative path — `location` must be an allowed root and the resolved
+    # result must stay inside it. os.sep suffix keeps `/posters_evil/x`
+    # from slipping past a `/posters` prefix.
+    if not is_path_allowed(location, config):
+        return None
+    base_dir = os.path.realpath(location)
+    # Re-confine the resolved root too — location may itself be a link.
+    if not is_path_allowed(base_dir, config):
+        return None
+    resolved = os.path.realpath(os.path.join(base_dir, path))
+    if resolved != base_dir and not resolved.startswith(base_dir + os.sep):
+        return None
+    return Path(resolved)

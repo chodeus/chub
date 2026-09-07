@@ -1,0 +1,287 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1004"/>
+      <stop offset="50%" stop-color="#0c0802"/>
+      <stop offset="100%" stop-color="#040201"/>
+    </linearGradient>
+    <radialGradient id="goldMetal" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffeaa0"/>
+      <stop offset="50%" stop-color="#d4a020"/>
+      <stop offset="100%" stop-color="#5a3a08"/>
+    </radialGradient>
+    <radialGradient id="copperMetal" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffb888"/>
+      <stop offset="50%" stop-color="#c06030"/>
+      <stop offset="100%" stop-color="#5a2008"/>
+    </radialGradient>
+    <radialGradient id="bronzeMetal" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#e8b870"/>
+      <stop offset="50%" stop-color="#9a6018"/>
+      <stop offset="100%" stop-color="#3a2004"/>
+    </radialGradient>
+    <linearGradient id="metalStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5a3a08"/>
+      <stop offset="50%" stop-color="#f0d050"/>
+      <stop offset="100%" stop-color="#7a5018"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="goldMedallion">
+    <circle cx="0" cy="0" r="14" fill="url(#goldMetal)" stroke="#5a3a08" stroke-width="0.6"/>
+    <circle cx="0" cy="0" r="14" fill="none" stroke="url(#metalStroke)" stroke-width="0.4"/>
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#5a3a08" stroke-width="0.4"/>
+    <path d="M0,-10 L0,10 M-10,0 L10,0 M-7,-7 L7,7 M-7,7 L7,-7" stroke="#5a3a08" stroke-width="0.4" opacity="0.6"/>
+    <circle cx="0" cy="0" r="4" fill="url(#goldMetal)" stroke="#5a3a08" stroke-width="0.3"/>
+    <circle cx="-4" cy="-4" r="2" fill="#ffeaa0" opacity="0.6"/>
+  </g>
+
+  <g id="copperLeaf">
+    <path d="M0,18 L0,4 L-6,8 L-12,2 L-14,-8 L-22,-6 L-18,-16 L-10,-18 L-6,-26 L0,-22 L6,-26 L10,-18 L18,-16 L22,-6 L14,-8 L12,2 L6,8 L0,4 Z" fill="url(#copperMetal)" stroke="#5a2008" stroke-width="0.5"/>
+    <path d="M0,4 L0,18 M0,4 L-12,2 M0,4 L12,2 M0,4 L-10,-18 M0,4 L10,-18 M0,4 L0,-22" stroke="#5a2008" stroke-width="0.4"/>
+    <path d="M-4,-4 L4,-4" stroke="#ffb888" stroke-width="0.3" opacity="0.5"/>
+  </g>
+
+  <g id="gildedAcorn">
+    <ellipse cx="0" cy="2" rx="6" ry="9" fill="url(#copperMetal)" stroke="#5a2008" stroke-width="0.5"/>
+    <path d="M-6,-3 Q-6,-10 0,-10 Q6,-10 6,-3 Q4,-1 -4,-1 Q-6,-1 -6,-3 Z" fill="url(#bronzeMetal)" stroke="#3a2004" stroke-width="0.4"/>
+    <path d="M0,-10 L0,-13" stroke="#3a2004" stroke-width="0.8"/>
+    <circle cx="-3" cy="-5" r="0.5" fill="#3a2004"/>
+    <circle cx="2" cy="-4" r="0.5" fill="#3a2004"/>
+    <circle cx="-2" cy="2" r="1.4" fill="#ffb888" opacity="0.5"/>
+  </g>
+
+  <g id="metalSprig">
+    <path d="M0,0 L0,30" stroke="url(#bronzeMetal)" stroke-width="1.5" fill="none"/>
+    <g fill="url(#bronzeMetal)" stroke="#3a2004" stroke-width="0.3">
+      <ellipse cx="-3" cy="-4" rx="3" ry="6" transform="rotate(-30,-3,-4)"/>
+      <ellipse cx="3" cy="-8" rx="3" ry="6" transform="rotate(30,3,-8)"/>
+      <ellipse cx="-3" cy="-14" rx="3" ry="6" transform="rotate(-30,-3,-14)"/>
+      <ellipse cx="3" cy="-18" rx="3" ry="6" transform="rotate(30,3,-18)"/>
+      <ellipse cx="0" cy="-24" rx="3" ry="6"/>
+    </g>
+  </g>
+
+  <g id="metalDamask">
+    <path d="M0,-14 C-8,-10 -10,-4 -8,2 C-4,8 4,8 8,2 C10,-4 8,-10 0,-14 Z" fill="url(#goldMetal)" stroke="#5a3a08" stroke-width="0.4"/>
+    <circle cx="0" cy="-6" r="3" fill="url(#goldMetal)" stroke="#5a3a08" stroke-width="0.3"/>
+    <path d="M-8,2 Q-12,4 -14,8 M8,2 Q12,4 14,8" stroke="#5a3a08" stroke-width="0.5" fill="none"/>
+    <circle cx="-14" cy="8" r="1.4" fill="url(#goldMetal)"/>
+    <circle cx="14" cy="8" r="1.4" fill="url(#goldMetal)"/>
+  </g>
+
+  <g id="hammeredBead">
+    <circle cx="0" cy="0" r="4" fill="url(#goldMetal)" stroke="#5a3a08" stroke-width="0.3"/>
+    <circle cx="-1" cy="-1" r="1" fill="#ffeaa0"/>
+  </g>
+
+  <!-- TOP: alternating medallions, copper leaves, gilded acorns -->
+  <use href="#metalSprig" transform="translate(80,52) rotate(180)"/>
+  <use href="#metalSprig" transform="translate(180,52) rotate(180)"/>
+  <use href="#metalSprig" transform="translate(280,52) rotate(180)"/>
+  <use href="#metalSprig" transform="translate(380,52) rotate(180)"/>
+  <use href="#metalSprig" transform="translate(480,52) rotate(180)"/>
+  <use href="#metalSprig" transform="translate(580,52) rotate(180)"/>
+  <use href="#metalSprig" transform="translate(680,52) rotate(180)"/>
+  <use href="#metalSprig" transform="translate(780,52) rotate(180)"/>
+  <use href="#metalSprig" transform="translate(880,52) rotate(180)"/>
+  <use href="#copperLeaf" transform="translate(130,46) rotate(170)"/>
+  <use href="#copperLeaf" transform="translate(230,46) rotate(185)"/>
+  <use href="#copperLeaf" transform="translate(330,46) rotate(175)"/>
+  <use href="#copperLeaf" transform="translate(430,46) rotate(190)"/>
+  <use href="#copperLeaf" transform="translate(530,46) rotate(170)"/>
+  <use href="#copperLeaf" transform="translate(630,46) rotate(185)"/>
+  <use href="#copperLeaf" transform="translate(730,46) rotate(175)"/>
+  <use href="#copperLeaf" transform="translate(830,46) rotate(190)"/>
+  <use href="#goldMedallion" transform="translate(120,28)"/>
+  <use href="#goldMedallion" transform="translate(300,28)"/>
+  <use href="#goldMedallion" transform="translate(480,28)"/>
+  <use href="#goldMedallion" transform="translate(660,28)"/>
+  <use href="#goldMedallion" transform="translate(840,28)"/>
+  <use href="#gildedAcorn" transform="translate(220,28)"/>
+  <use href="#gildedAcorn" transform="translate(400,28)"/>
+  <use href="#gildedAcorn" transform="translate(580,28)"/>
+  <use href="#gildedAcorn" transform="translate(760,28)"/>
+  <use href="#hammeredBead" transform="translate(170,18)"/>
+  <use href="#hammeredBead" transform="translate(260,18)"/>
+  <use href="#hammeredBead" transform="translate(350,18)"/>
+  <use href="#hammeredBead" transform="translate(440,18)"/>
+  <use href="#hammeredBead" transform="translate(530,18)"/>
+  <use href="#hammeredBead" transform="translate(620,18)"/>
+  <use href="#hammeredBead" transform="translate(710,18)"/>
+  <use href="#hammeredBead" transform="translate(800,18)"/>
+  <use href="#hammeredBead" transform="translate(890,18)"/>
+
+  <!-- BOTTOM -->
+  <use href="#metalSprig" transform="translate(80,1448)"/>
+  <use href="#metalSprig" transform="translate(180,1448)"/>
+  <use href="#metalSprig" transform="translate(280,1448)"/>
+  <use href="#metalSprig" transform="translate(380,1448)"/>
+  <use href="#metalSprig" transform="translate(480,1448)"/>
+  <use href="#metalSprig" transform="translate(580,1448)"/>
+  <use href="#metalSprig" transform="translate(680,1448)"/>
+  <use href="#metalSprig" transform="translate(780,1448)"/>
+  <use href="#metalSprig" transform="translate(880,1448)"/>
+  <use href="#copperLeaf" transform="translate(130,1454) rotate(10)"/>
+  <use href="#copperLeaf" transform="translate(230,1454) rotate(-15)"/>
+  <use href="#copperLeaf" transform="translate(330,1454) rotate(5)"/>
+  <use href="#copperLeaf" transform="translate(430,1454) rotate(-10)"/>
+  <use href="#copperLeaf" transform="translate(530,1454) rotate(10)"/>
+  <use href="#copperLeaf" transform="translate(630,1454) rotate(-15)"/>
+  <use href="#copperLeaf" transform="translate(730,1454) rotate(5)"/>
+  <use href="#copperLeaf" transform="translate(830,1454) rotate(-10)"/>
+  <use href="#goldMedallion" transform="translate(120,1472)"/>
+  <use href="#goldMedallion" transform="translate(300,1472)"/>
+  <use href="#goldMedallion" transform="translate(480,1472)"/>
+  <use href="#goldMedallion" transform="translate(660,1472)"/>
+  <use href="#goldMedallion" transform="translate(840,1472)"/>
+  <use href="#gildedAcorn" transform="translate(220,1472)"/>
+  <use href="#gildedAcorn" transform="translate(400,1472)"/>
+  <use href="#gildedAcorn" transform="translate(580,1472)"/>
+  <use href="#gildedAcorn" transform="translate(760,1472)"/>
+  <use href="#hammeredBead" transform="translate(170,1482)"/>
+  <use href="#hammeredBead" transform="translate(260,1482)"/>
+  <use href="#hammeredBead" transform="translate(350,1482)"/>
+  <use href="#hammeredBead" transform="translate(440,1482)"/>
+  <use href="#hammeredBead" transform="translate(530,1482)"/>
+  <use href="#hammeredBead" transform="translate(620,1482)"/>
+  <use href="#hammeredBead" transform="translate(710,1482)"/>
+  <use href="#hammeredBead" transform="translate(800,1482)"/>
+  <use href="#hammeredBead" transform="translate(890,1482)"/>
+
+  <!-- LEFT -->
+  <use href="#metalSprig" transform="translate(52,80) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,180) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,280) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,380) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,480) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,580) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,680) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,780) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,880) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,980) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,1080) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,1180) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,1280) rotate(90)"/>
+  <use href="#metalSprig" transform="translate(52,1380) rotate(90)"/>
+  <use href="#copperLeaf" transform="translate(46,130) rotate(80)"/>
+  <use href="#copperLeaf" transform="translate(46,230) rotate(105)"/>
+  <use href="#copperLeaf" transform="translate(46,330) rotate(95)"/>
+  <use href="#copperLeaf" transform="translate(46,430) rotate(110)"/>
+  <use href="#copperLeaf" transform="translate(46,530) rotate(80)"/>
+  <use href="#copperLeaf" transform="translate(46,630) rotate(105)"/>
+  <use href="#copperLeaf" transform="translate(46,730) rotate(95)"/>
+  <use href="#copperLeaf" transform="translate(46,830) rotate(110)"/>
+  <use href="#copperLeaf" transform="translate(46,930) rotate(85)"/>
+  <use href="#copperLeaf" transform="translate(46,1030) rotate(100)"/>
+  <use href="#copperLeaf" transform="translate(46,1130) rotate(90)"/>
+  <use href="#copperLeaf" transform="translate(46,1230) rotate(110)"/>
+  <use href="#copperLeaf" transform="translate(46,1330) rotate(80)"/>
+  <use href="#goldMedallion" transform="translate(28,120)"/>
+  <use href="#goldMedallion" transform="translate(28,300)"/>
+  <use href="#goldMedallion" transform="translate(28,480)"/>
+  <use href="#goldMedallion" transform="translate(28,660)"/>
+  <use href="#goldMedallion" transform="translate(28,840)"/>
+  <use href="#goldMedallion" transform="translate(28,1020)"/>
+  <use href="#goldMedallion" transform="translate(28,1200)"/>
+  <use href="#goldMedallion" transform="translate(28,1380)"/>
+  <use href="#gildedAcorn" transform="translate(28,220)"/>
+  <use href="#gildedAcorn" transform="translate(28,400)"/>
+  <use href="#gildedAcorn" transform="translate(28,580)"/>
+  <use href="#gildedAcorn" transform="translate(28,760)"/>
+  <use href="#gildedAcorn" transform="translate(28,940)"/>
+  <use href="#gildedAcorn" transform="translate(28,1120)"/>
+  <use href="#gildedAcorn" transform="translate(28,1300)"/>
+  <use href="#metalDamask" transform="translate(20,170)"/>
+  <use href="#metalDamask" transform="translate(20,350)"/>
+  <use href="#metalDamask" transform="translate(20,530)"/>
+  <use href="#metalDamask" transform="translate(20,710)"/>
+  <use href="#metalDamask" transform="translate(20,890)"/>
+  <use href="#metalDamask" transform="translate(20,1070)"/>
+  <use href="#metalDamask" transform="translate(20,1250)"/>
+
+  <!-- RIGHT -->
+  <use href="#metalSprig" transform="translate(948,80) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,180) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,280) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,380) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,480) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,580) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,680) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,780) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,880) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,980) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,1080) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,1180) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,1280) rotate(270)"/>
+  <use href="#metalSprig" transform="translate(948,1380) rotate(270)"/>
+  <use href="#copperLeaf" transform="translate(954,130) rotate(280)"/>
+  <use href="#copperLeaf" transform="translate(954,230) rotate(255)"/>
+  <use href="#copperLeaf" transform="translate(954,330) rotate(265)"/>
+  <use href="#copperLeaf" transform="translate(954,430) rotate(250)"/>
+  <use href="#copperLeaf" transform="translate(954,530) rotate(280)"/>
+  <use href="#copperLeaf" transform="translate(954,630) rotate(255)"/>
+  <use href="#copperLeaf" transform="translate(954,730) rotate(265)"/>
+  <use href="#copperLeaf" transform="translate(954,830) rotate(250)"/>
+  <use href="#copperLeaf" transform="translate(954,930) rotate(275)"/>
+  <use href="#copperLeaf" transform="translate(954,1030) rotate(260)"/>
+  <use href="#copperLeaf" transform="translate(954,1130) rotate(270)"/>
+  <use href="#copperLeaf" transform="translate(954,1230) rotate(250)"/>
+  <use href="#copperLeaf" transform="translate(954,1330) rotate(280)"/>
+  <use href="#goldMedallion" transform="translate(972,120)"/>
+  <use href="#goldMedallion" transform="translate(972,300)"/>
+  <use href="#goldMedallion" transform="translate(972,480)"/>
+  <use href="#goldMedallion" transform="translate(972,660)"/>
+  <use href="#goldMedallion" transform="translate(972,840)"/>
+  <use href="#goldMedallion" transform="translate(972,1020)"/>
+  <use href="#goldMedallion" transform="translate(972,1200)"/>
+  <use href="#goldMedallion" transform="translate(972,1380)"/>
+  <use href="#gildedAcorn" transform="translate(972,220)"/>
+  <use href="#gildedAcorn" transform="translate(972,400)"/>
+  <use href="#gildedAcorn" transform="translate(972,580)"/>
+  <use href="#gildedAcorn" transform="translate(972,760)"/>
+  <use href="#gildedAcorn" transform="translate(972,940)"/>
+  <use href="#gildedAcorn" transform="translate(972,1120)"/>
+  <use href="#gildedAcorn" transform="translate(972,1300)"/>
+  <use href="#metalDamask" transform="translate(980,170)"/>
+  <use href="#metalDamask" transform="translate(980,350)"/>
+  <use href="#metalDamask" transform="translate(980,530)"/>
+  <use href="#metalDamask" transform="translate(980,710)"/>
+  <use href="#metalDamask" transform="translate(980,890)"/>
+  <use href="#metalDamask" transform="translate(980,1070)"/>
+  <use href="#metalDamask" transform="translate(980,1250)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(40,40)">
+    <use href="#goldMedallion" transform="translate(28,28) scale(1.5)"/>
+    <use href="#copperLeaf" transform="translate(60,18)"/>
+    <use href="#copperLeaf" transform="translate(18,60) rotate(90)"/>
+    <use href="#gildedAcorn" transform="translate(70,60)"/>
+    <use href="#metalDamask" transform="translate(50,50)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#goldMedallion" transform="translate(-28,28) scale(1.5)"/>
+    <use href="#copperLeaf" transform="translate(-60,18)"/>
+    <use href="#copperLeaf" transform="translate(-18,60) rotate(270)"/>
+    <use href="#gildedAcorn" transform="translate(-70,60)"/>
+    <use href="#metalDamask" transform="translate(-50,50)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#goldMedallion" transform="translate(28,-28) scale(1.5)"/>
+    <use href="#copperLeaf" transform="translate(60,-18)"/>
+    <use href="#copperLeaf" transform="translate(18,-60) rotate(90)"/>
+    <use href="#gildedAcorn" transform="translate(70,-60)"/>
+    <use href="#metalDamask" transform="translate(50,-50)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#goldMedallion" transform="translate(-28,-28) scale(1.5)"/>
+    <use href="#copperLeaf" transform="translate(-60,-18)"/>
+    <use href="#copperLeaf" transform="translate(-18,-60) rotate(270)"/>
+    <use href="#gildedAcorn" transform="translate(-70,-60)"/>
+    <use href="#metalDamask" transform="translate(-50,-50)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#metalStroke)" stroke-width="1.4" fill="none"/>
+</svg>

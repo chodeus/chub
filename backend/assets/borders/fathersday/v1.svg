@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1428"/>
+      <stop offset="50%" stop-color="#050a18"/>
+      <stop offset="100%" stop-color="#02040c"/>
+    </linearGradient>
+    <linearGradient id="woodH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3a2410"/>
+      <stop offset="20%" stop-color="#7a4a20"/>
+      <stop offset="50%" stop-color="#a06840"/>
+      <stop offset="80%" stop-color="#7a4a20"/>
+      <stop offset="100%" stop-color="#3a2410"/>
+    </linearGradient>
+    <linearGradient id="woodV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a2410"/>
+      <stop offset="20%" stop-color="#7a4a20"/>
+      <stop offset="50%" stop-color="#a06840"/>
+      <stop offset="80%" stop-color="#7a4a20"/>
+      <stop offset="100%" stop-color="#3a2410"/>
+    </linearGradient>
+    <linearGradient id="navyTie" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#103060"/>
+      <stop offset="50%" stop-color="#1f4a90"/>
+      <stop offset="100%" stop-color="#082040"/>
+    </linearGradient>
+    <linearGradient id="burgTie" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a0820"/>
+      <stop offset="50%" stop-color="#8a1830"/>
+      <stop offset="100%" stop-color="#2a0410"/>
+    </linearGradient>
+    <radialGradient id="brass" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff0b8"/>
+      <stop offset="55%" stop-color="#c89030"/>
+      <stop offset="100%" stop-color="#503808"/>
+    </radialGradient>
+    <radialGradient id="mustacheG" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#5a3818"/>
+      <stop offset="100%" stop-color="#1a0c04"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="woodGrain">
+    <rect x="0" y="-8" width="120" height="16" fill="url(#woodH)"/>
+    <path d="M0,-6 C20,-7 40,-5 60,-6 C80,-7 100,-5 120,-6" stroke="#3a2410" stroke-width="0.5" fill="none" opacity="0.7"/>
+    <path d="M0,-2 C20,-3 40,-1 60,-2 C80,-3 100,-1 120,-2" stroke="#5a2818" stroke-width="0.4" fill="none" opacity="0.6"/>
+    <path d="M0,2 C20,1 40,3 60,2 C80,1 100,3 120,2" stroke="#3a2410" stroke-width="0.4" fill="none" opacity="0.6"/>
+    <path d="M0,6 C20,5 40,7 60,6 C80,5 100,7 120,6" stroke="#5a2818" stroke-width="0.4" fill="none" opacity="0.6"/>
+    <ellipse cx="30" cy="0" rx="4" ry="6" fill="none" stroke="#3a2410" stroke-width="0.4"/>
+    <ellipse cx="80" cy="2" rx="3" ry="5" fill="none" stroke="#3a2410" stroke-width="0.4"/>
+  </g>
+
+  <g id="woodGrainV">
+    <rect x="-8" y="0" width="16" height="120" fill="url(#woodV)"/>
+    <path d="M-6,0 C-7,20 -5,40 -6,60 C-7,80 -5,100 -6,120" stroke="#3a2410" stroke-width="0.5" fill="none" opacity="0.7"/>
+    <path d="M-2,0 C-3,20 -1,40 -2,60 C-3,80 -1,100 -2,120" stroke="#5a2818" stroke-width="0.4" fill="none" opacity="0.6"/>
+    <path d="M2,0 C1,20 3,40 2,60 C1,80 3,100 2,120" stroke="#3a2410" stroke-width="0.4" fill="none" opacity="0.6"/>
+    <path d="M6,0 C5,20 7,40 6,60 C5,80 7,100 6,120" stroke="#5a2818" stroke-width="0.4" fill="none" opacity="0.6"/>
+    <ellipse cx="0" cy="30" rx="6" ry="4" fill="none" stroke="#3a2410" stroke-width="0.4"/>
+    <ellipse cx="2" cy="80" rx="5" ry="3" fill="none" stroke="#3a2410" stroke-width="0.4"/>
+  </g>
+
+  <g id="necktie">
+    <path d="M-5,-12 L5,-12 L7,-8 L-7,-8 Z" fill="url(#navyTie)" stroke="#082040" stroke-width="0.4"/>
+    <path d="M-7,-8 L7,-8 L9,-4 L-9,-4 Z" fill="url(#navyTie)" stroke="#082040" stroke-width="0.4"/>
+    <path d="M-9,-4 L9,-4 L8,18 L0,28 L-8,18 Z" fill="url(#navyTie)" stroke="#082040" stroke-width="0.5"/>
+    <path d="M-7,0 L7,0 M-6,6 L6,6 M-5,12 L5,12 M-3,18 L3,18" stroke="#0a2848" stroke-width="0.3"/>
+    <path d="M-4,-6 L4,-6 L3,-2 L-3,-2 Z" fill="#082040" opacity="0.6"/>
+  </g>
+
+  <g id="necktieBurg">
+    <path d="M-5,-12 L5,-12 L7,-8 L-7,-8 Z" fill="url(#burgTie)" stroke="#2a0410" stroke-width="0.4"/>
+    <path d="M-7,-8 L7,-8 L9,-4 L-9,-4 Z" fill="url(#burgTie)" stroke="#2a0410" stroke-width="0.4"/>
+    <path d="M-9,-4 L9,-4 L8,18 L0,28 L-8,18 Z" fill="url(#burgTie)" stroke="#2a0410" stroke-width="0.5"/>
+    <path d="M-7,2 L7,8 M-7,8 L7,14 M-7,14 L7,20" stroke="#2a0410" stroke-width="0.3"/>
+  </g>
+
+  <g id="mustache">
+    <path d="M-22,0 C-22,-6 -18,-8 -14,-6 C-10,-4 -6,-4 -2,-2 C0,0 2,-2 6,-4 C10,-4 14,-6 18,-8 C22,-8 24,-6 22,0 C20,4 14,4 10,2 C6,0 4,2 2,2 L-2,2 C-4,2 -6,0 -10,2 C-14,4 -20,4 -22,0 Z" fill="url(#mustacheG)" stroke="#1a0c04" stroke-width="0.5"/>
+    <path d="M-20,-2 C-16,-4 -12,-4 -8,-2 M20,-2 C16,-4 12,-4 8,-2" stroke="#3a2410" stroke-width="0.4" fill="none" opacity="0.6"/>
+    <path d="M-22,0 L-26,2 M22,0 L26,2" stroke="#1a0c04" stroke-width="0.6"/>
+  </g>
+
+  <g id="brassButton">
+    <circle cx="0" cy="0" r="5" fill="url(#brass)" stroke="#503808" stroke-width="0.4"/>
+    <circle cx="0" cy="0" r="3" fill="none" stroke="#503808" stroke-width="0.3"/>
+    <circle cx="-1.5" cy="-1.5" r="1.4" fill="#fff0b8" opacity="0.7"/>
+    <circle cx="-1" cy="0" r="0.4" fill="#503808"/>
+    <circle cx="1" cy="0" r="0.4" fill="#503808"/>
+    <circle cx="0" cy="-1" r="0.4" fill="#503808"/>
+    <circle cx="0" cy="1" r="0.4" fill="#503808"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#woodGrain" transform="translate(60,42)"/>
+  <use href="#woodGrain" transform="translate(180,42)"/>
+  <use href="#woodGrain" transform="translate(300,42)"/>
+  <use href="#woodGrain" transform="translate(420,42)"/>
+  <use href="#woodGrain" transform="translate(540,42)"/>
+  <use href="#woodGrain" transform="translate(660,42)"/>
+  <use href="#woodGrain" transform="translate(780,42)"/>
+  <use href="#woodGrain" transform="translate(820,42)"/>
+  <use href="#necktie" transform="translate(140,22)"/>
+  <use href="#necktieBurg" transform="translate(280,22)"/>
+  <use href="#necktie" transform="translate(420,22)"/>
+  <use href="#necktieBurg" transform="translate(560,22)"/>
+  <use href="#necktie" transform="translate(700,22)"/>
+  <use href="#necktieBurg" transform="translate(840,22)"/>
+  <use href="#brassButton" transform="translate(200,42)"/>
+  <use href="#brassButton" transform="translate(340,42)"/>
+  <use href="#brassButton" transform="translate(480,42)"/>
+  <use href="#brassButton" transform="translate(620,42)"/>
+  <use href="#brassButton" transform="translate(760,42)"/>
+  <use href="#brassButton" transform="translate(900,42)"/>
+
+  <!-- BOTTOM -->
+  <use href="#woodGrain" transform="translate(60,1458)"/>
+  <use href="#woodGrain" transform="translate(180,1458)"/>
+  <use href="#woodGrain" transform="translate(300,1458)"/>
+  <use href="#woodGrain" transform="translate(420,1458)"/>
+  <use href="#woodGrain" transform="translate(540,1458)"/>
+  <use href="#woodGrain" transform="translate(660,1458)"/>
+  <use href="#woodGrain" transform="translate(780,1458)"/>
+  <use href="#woodGrain" transform="translate(820,1458)"/>
+  <use href="#necktie" transform="translate(140,1480) scale(1,-1)"/>
+  <use href="#necktieBurg" transform="translate(280,1480) scale(1,-1)"/>
+  <use href="#necktie" transform="translate(420,1480) scale(1,-1)"/>
+  <use href="#necktieBurg" transform="translate(560,1480) scale(1,-1)"/>
+  <use href="#necktie" transform="translate(700,1480) scale(1,-1)"/>
+  <use href="#necktieBurg" transform="translate(840,1480) scale(1,-1)"/>
+  <use href="#brassButton" transform="translate(200,1458)"/>
+  <use href="#brassButton" transform="translate(340,1458)"/>
+  <use href="#brassButton" transform="translate(480,1458)"/>
+  <use href="#brassButton" transform="translate(620,1458)"/>
+  <use href="#brassButton" transform="translate(760,1458)"/>
+  <use href="#brassButton" transform="translate(900,1458)"/>
+
+  <!-- LEFT -->
+  <use href="#woodGrainV" transform="translate(42,60)"/>
+  <use href="#woodGrainV" transform="translate(42,180)"/>
+  <use href="#woodGrainV" transform="translate(42,300)"/>
+  <use href="#woodGrainV" transform="translate(42,420)"/>
+  <use href="#woodGrainV" transform="translate(42,540)"/>
+  <use href="#woodGrainV" transform="translate(42,660)"/>
+  <use href="#woodGrainV" transform="translate(42,780)"/>
+  <use href="#woodGrainV" transform="translate(42,900)"/>
+  <use href="#woodGrainV" transform="translate(42,1020)"/>
+  <use href="#woodGrainV" transform="translate(42,1140)"/>
+  <use href="#woodGrainV" transform="translate(42,1260)"/>
+  <use href="#woodGrainV" transform="translate(42,1320)"/>
+  <use href="#necktie" transform="translate(22,150) rotate(90)"/>
+  <use href="#necktieBurg" transform="translate(22,330) rotate(90)"/>
+  <use href="#necktie" transform="translate(22,510) rotate(90)"/>
+  <use href="#necktieBurg" transform="translate(22,690) rotate(90)"/>
+  <use href="#necktie" transform="translate(22,870) rotate(90)"/>
+  <use href="#necktieBurg" transform="translate(22,1050) rotate(90)"/>
+  <use href="#necktie" transform="translate(22,1230) rotate(90)"/>
+  <use href="#necktieBurg" transform="translate(22,1390) rotate(90)"/>
+  <use href="#brassButton" transform="translate(42,240)"/>
+  <use href="#brassButton" transform="translate(42,420)"/>
+  <use href="#brassButton" transform="translate(42,600)"/>
+  <use href="#brassButton" transform="translate(42,780)"/>
+  <use href="#brassButton" transform="translate(42,960)"/>
+  <use href="#brassButton" transform="translate(42,1140)"/>
+  <use href="#brassButton" transform="translate(42,1320)"/>
+
+  <!-- RIGHT -->
+  <use href="#woodGrainV" transform="translate(958,60)"/>
+  <use href="#woodGrainV" transform="translate(958,180)"/>
+  <use href="#woodGrainV" transform="translate(958,300)"/>
+  <use href="#woodGrainV" transform="translate(958,420)"/>
+  <use href="#woodGrainV" transform="translate(958,540)"/>
+  <use href="#woodGrainV" transform="translate(958,660)"/>
+  <use href="#woodGrainV" transform="translate(958,780)"/>
+  <use href="#woodGrainV" transform="translate(958,900)"/>
+  <use href="#woodGrainV" transform="translate(958,1020)"/>
+  <use href="#woodGrainV" transform="translate(958,1140)"/>
+  <use href="#woodGrainV" transform="translate(958,1260)"/>
+  <use href="#woodGrainV" transform="translate(958,1320)"/>
+  <use href="#necktie" transform="translate(978,150) rotate(270)"/>
+  <use href="#necktieBurg" transform="translate(978,330) rotate(270)"/>
+  <use href="#necktie" transform="translate(978,510) rotate(270)"/>
+  <use href="#necktieBurg" transform="translate(978,690) rotate(270)"/>
+  <use href="#necktie" transform="translate(978,870) rotate(270)"/>
+  <use href="#necktieBurg" transform="translate(978,1050) rotate(270)"/>
+  <use href="#necktie" transform="translate(978,1230) rotate(270)"/>
+  <use href="#necktieBurg" transform="translate(978,1390) rotate(270)"/>
+  <use href="#brassButton" transform="translate(958,240)"/>
+  <use href="#brassButton" transform="translate(958,420)"/>
+  <use href="#brassButton" transform="translate(958,600)"/>
+  <use href="#brassButton" transform="translate(958,780)"/>
+  <use href="#brassButton" transform="translate(958,960)"/>
+  <use href="#brassButton" transform="translate(958,1140)"/>
+  <use href="#brassButton" transform="translate(958,1320)"/>
+
+  <!-- CORNERS: mustache -->
+  <g transform="translate(40,40)">
+    <use href="#mustache" transform="translate(36,36) scale(1.4)"/>
+    <use href="#necktie" transform="translate(64,16) scale(1.1)"/>
+    <use href="#brassButton" transform="translate(72,52)"/>
+    <use href="#brassButton" transform="translate(56,68)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#mustache" transform="translate(-36,36) scale(1.4)"/>
+    <use href="#necktie" transform="translate(-64,16) scale(1.1)"/>
+    <use href="#brassButton" transform="translate(-72,52)"/>
+    <use href="#brassButton" transform="translate(-56,68)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#mustache" transform="translate(36,-36) scale(1.4)"/>
+    <use href="#necktie" transform="translate(64,-16) scale(1.1) scale(1,-1)"/>
+    <use href="#brassButton" transform="translate(72,-52)"/>
+    <use href="#brassButton" transform="translate(56,-68)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#mustache" transform="translate(-36,-36) scale(1.4)"/>
+    <use href="#necktie" transform="translate(-64,-16) scale(1.1) scale(1,-1)"/>
+    <use href="#brassButton" transform="translate(-72,-52)"/>
+    <use href="#brassButton" transform="translate(-56,-68)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#brass)" stroke-width="1.4" fill="none"/>
+</svg>

@@ -1,0 +1,27 @@
+/**
+ * CHUB Theme-Agnostic Tokens
+ *
+ * Radius scale, typography, and other design tokens that don't change
+ * between light and dark themes. Imported before the theme-specific
+ * color files so variables cascade correctly.
+ */
+
+:root {
+    /* Radius scale */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+
+    /* Typography
+       - display: Space Grotesk (headings, wordmark, numeric display)
+       - body:    Hanken Grotesk (UI text, labels)
+       - mono:    JetBrains Mono (ALL machine-derived data — counts, paths,
+                  cron/schedules, IDs, timestamps, sizes). This "mono-for-data"
+                  rule is core to the redesign; apply it everywhere a value is
+                  machine-derived. */
+    --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --font-body: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monaco, 'Cascadia Code', monospace;
+}

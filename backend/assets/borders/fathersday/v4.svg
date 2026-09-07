@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a0e08"/>
+      <stop offset="50%" stop-color="#0c0804"/>
+      <stop offset="100%" stop-color="#040302"/>
+    </linearGradient>
+    <linearGradient id="leatherTan" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a06840"/>
+      <stop offset="50%" stop-color="#7a4a20"/>
+      <stop offset="100%" stop-color="#3a2010"/>
+    </linearGradient>
+    <linearGradient id="leatherDark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a3818"/>
+      <stop offset="50%" stop-color="#3a2410"/>
+      <stop offset="100%" stop-color="#180c04"/>
+    </linearGradient>
+    <radialGradient id="leatherFill" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#a06840"/>
+      <stop offset="60%" stop-color="#5a3818"/>
+      <stop offset="100%" stop-color="#2a1808"/>
+    </radialGradient>
+    <linearGradient id="creamFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fff4d8"/>
+      <stop offset="100%" stop-color="#d4b890"/>
+    </linearGradient>
+    <radialGradient id="redPennant" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#c84028"/>
+      <stop offset="55%" stop-color="#8a2018"/>
+      <stop offset="100%" stop-color="#3a0808"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="baseballStitch">
+    <path d="M0,0 C30,-8 60,-8 90,0" stroke="url(#creamFill)" stroke-width="1.4" fill="none"/>
+    <path d="M0,4 C30,-4 60,-4 90,4" stroke="url(#creamFill)" stroke-width="1.4" fill="none"/>
+    <path d="M6,-3 L4,-7 M14,-5 L12,-9 M22,-6 L20,-10 M30,-6 L28,-10 M38,-6 L36,-10 M46,-6 L44,-10 M54,-6 L52,-10 M62,-5 L60,-9 M70,-3 L68,-7 M78,-1 L76,-5 M86,1 L84,-3" stroke="url(#redPennant)" stroke-width="0.8" fill="none"/>
+    <path d="M6,7 L4,11 M14,5 L12,9 M22,4 L20,8 M30,4 L28,8 M38,4 L36,8 M46,4 L44,8 M54,4 L52,8 M62,5 L60,9 M70,7 L68,11 M78,9 L76,13 M86,11 L84,15" stroke="url(#redPennant)" stroke-width="0.8" fill="none"/>
+  </g>
+
+  <g id="baseballStitchV">
+    <path d="M0,0 C-8,30 -8,60 0,90" stroke="url(#creamFill)" stroke-width="1.4" fill="none"/>
+    <path d="M4,0 C-4,30 -4,60 4,90" stroke="url(#creamFill)" stroke-width="1.4" fill="none"/>
+    <path d="M-3,6 L-7,4 M-5,14 L-9,12 M-6,22 L-10,20 M-6,30 L-10,28 M-6,38 L-10,36 M-6,46 L-10,44 M-6,54 L-10,52 M-5,62 L-9,60 M-3,70 L-7,68 M-1,78 L-5,76 M1,86 L-3,84" stroke="url(#redPennant)" stroke-width="0.8" fill="none"/>
+    <path d="M7,6 L11,4 M5,14 L9,12 M4,22 L8,20 M4,30 L8,28 M4,38 L8,36 M4,46 L8,44 M4,54 L8,52 M5,62 L9,60 M7,70 L11,68 M9,78 L13,76 M11,86 L15,84" stroke="url(#redPennant)" stroke-width="0.8" fill="none"/>
+  </g>
+
+  <g id="leatherPatch">
+    <path d="M-26,-18 L26,-18 L26,18 L-26,18 Z" fill="url(#leatherFill)" stroke="#180c04" stroke-width="0.7"/>
+    <path d="M-22,-14 L22,-14 L22,14 L-22,14 Z" fill="none" stroke="url(#creamFill)" stroke-width="0.4" stroke-dasharray="2,2"/>
+    <ellipse cx="-10" cy="-6" rx="3" ry="2" fill="#a06840" opacity="0.5"/>
+    <ellipse cx="8" cy="4" rx="4" ry="2.4" fill="#3a2010" opacity="0.5"/>
+    <circle cx="-22" cy="-14" r="1.4" fill="url(#leatherDark)"/>
+    <circle cx="22" cy="-14" r="1.4" fill="url(#leatherDark)"/>
+    <circle cx="-22" cy="14" r="1.4" fill="url(#leatherDark)"/>
+    <circle cx="22" cy="14" r="1.4" fill="url(#leatherDark)"/>
+  </g>
+
+  <g id="pennant">
+    <path d="M-22,-10 L22,-10 L18,0 L22,10 L-22,10 Z" fill="url(#redPennant)" stroke="#3a0808" stroke-width="0.5"/>
+    <path d="M-22,-10 L-22,16" stroke="url(#leatherDark)" stroke-width="1.6"/>
+    <path d="M-22,-10 L-26,-12 L-22,-8 L-24,-6 Z" fill="url(#leatherTan)" stroke="#180c04" stroke-width="0.3"/>
+    <ellipse cx="-8" cy="-2" rx="6" ry="3" fill="url(#creamFill)" opacity="0.7"/>
+    <circle cx="-8" cy="-2" r="2" fill="url(#leatherDark)"/>
+  </g>
+
+  <g id="baseballRound">
+    <circle cx="0" cy="0" r="9" fill="url(#creamFill)" stroke="#a06840" stroke-width="0.5"/>
+    <path d="M-7,-4 C-5,-7 5,-7 7,-4" stroke="url(#redPennant)" stroke-width="1" fill="none"/>
+    <path d="M-7,4 C-5,7 5,7 7,4" stroke="url(#redPennant)" stroke-width="1" fill="none"/>
+    <path d="M-6,-4 L-7,-6 M-3,-5 L-3,-7 M0,-5 L0,-7 M3,-5 L3,-7 M6,-4 L7,-6" stroke="url(#redPennant)" stroke-width="0.5"/>
+    <path d="M-6,4 L-7,6 M-3,5 L-3,7 M0,5 L0,7 M3,5 L3,7 M6,4 L7,6" stroke="url(#redPennant)" stroke-width="0.5"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#baseballStitch" transform="translate(60,42)"/>
+  <use href="#baseballStitch" transform="translate(160,42)"/>
+  <use href="#baseballStitch" transform="translate(260,42)"/>
+  <use href="#baseballStitch" transform="translate(360,42)"/>
+  <use href="#baseballStitch" transform="translate(460,42)"/>
+  <use href="#baseballStitch" transform="translate(560,42)"/>
+  <use href="#baseballStitch" transform="translate(660,42)"/>
+  <use href="#baseballStitch" transform="translate(760,42)"/>
+  <use href="#baseballStitch" transform="translate(850,42)"/>
+  <use href="#baseballRound" transform="translate(140,22)"/>
+  <use href="#baseballRound" transform="translate(260,22)"/>
+  <use href="#baseballRound" transform="translate(380,22)"/>
+  <use href="#baseballRound" transform="translate(500,22)"/>
+  <use href="#baseballRound" transform="translate(620,22)"/>
+  <use href="#baseballRound" transform="translate(740,22)"/>
+  <use href="#baseballRound" transform="translate(860,22)"/>
+  <use href="#leatherPatch" transform="translate(200,28) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(440,28) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(680,28) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(900,28) scale(0.7)"/>
+
+  <!-- BOTTOM -->
+  <use href="#baseballStitch" transform="translate(60,1458) scale(1,-1)"/>
+  <use href="#baseballStitch" transform="translate(160,1458) scale(1,-1)"/>
+  <use href="#baseballStitch" transform="translate(260,1458) scale(1,-1)"/>
+  <use href="#baseballStitch" transform="translate(360,1458) scale(1,-1)"/>
+  <use href="#baseballStitch" transform="translate(460,1458) scale(1,-1)"/>
+  <use href="#baseballStitch" transform="translate(560,1458) scale(1,-1)"/>
+  <use href="#baseballStitch" transform="translate(660,1458) scale(1,-1)"/>
+  <use href="#baseballStitch" transform="translate(760,1458) scale(1,-1)"/>
+  <use href="#baseballStitch" transform="translate(850,1458) scale(1,-1)"/>
+  <use href="#baseballRound" transform="translate(140,1478)"/>
+  <use href="#baseballRound" transform="translate(260,1478)"/>
+  <use href="#baseballRound" transform="translate(380,1478)"/>
+  <use href="#baseballRound" transform="translate(500,1478)"/>
+  <use href="#baseballRound" transform="translate(620,1478)"/>
+  <use href="#baseballRound" transform="translate(740,1478)"/>
+  <use href="#baseballRound" transform="translate(860,1478)"/>
+  <use href="#leatherPatch" transform="translate(200,1472) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(440,1472) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(680,1472) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(900,1472) scale(0.7)"/>
+
+  <!-- LEFT -->
+  <use href="#baseballStitchV" transform="translate(42,60)"/>
+  <use href="#baseballStitchV" transform="translate(42,160)"/>
+  <use href="#baseballStitchV" transform="translate(42,260)"/>
+  <use href="#baseballStitchV" transform="translate(42,360)"/>
+  <use href="#baseballStitchV" transform="translate(42,460)"/>
+  <use href="#baseballStitchV" transform="translate(42,560)"/>
+  <use href="#baseballStitchV" transform="translate(42,660)"/>
+  <use href="#baseballStitchV" transform="translate(42,760)"/>
+  <use href="#baseballStitchV" transform="translate(42,860)"/>
+  <use href="#baseballStitchV" transform="translate(42,960)"/>
+  <use href="#baseballStitchV" transform="translate(42,1060)"/>
+  <use href="#baseballStitchV" transform="translate(42,1160)"/>
+  <use href="#baseballStitchV" transform="translate(42,1260)"/>
+  <use href="#baseballStitchV" transform="translate(42,1350)"/>
+  <use href="#baseballRound" transform="translate(22,140)"/>
+  <use href="#baseballRound" transform="translate(22,260)"/>
+  <use href="#baseballRound" transform="translate(22,380)"/>
+  <use href="#baseballRound" transform="translate(22,500)"/>
+  <use href="#baseballRound" transform="translate(22,620)"/>
+  <use href="#baseballRound" transform="translate(22,740)"/>
+  <use href="#baseballRound" transform="translate(22,860)"/>
+  <use href="#baseballRound" transform="translate(22,980)"/>
+  <use href="#baseballRound" transform="translate(22,1100)"/>
+  <use href="#baseballRound" transform="translate(22,1220)"/>
+  <use href="#baseballRound" transform="translate(22,1340)"/>
+  <use href="#leatherPatch" transform="translate(28,200) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(28,440) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(28,680) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(28,920) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(28,1160) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(28,1400) scale(0.7)"/>
+
+  <!-- RIGHT -->
+  <use href="#baseballStitchV" transform="translate(958,60) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,160) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,260) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,360) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,460) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,560) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,660) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,760) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,860) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,960) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,1060) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,1160) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,1260) scale(-1,1)"/>
+  <use href="#baseballStitchV" transform="translate(958,1350) scale(-1,1)"/>
+  <use href="#baseballRound" transform="translate(978,140)"/>
+  <use href="#baseballRound" transform="translate(978,260)"/>
+  <use href="#baseballRound" transform="translate(978,380)"/>
+  <use href="#baseballRound" transform="translate(978,500)"/>
+  <use href="#baseballRound" transform="translate(978,620)"/>
+  <use href="#baseballRound" transform="translate(978,740)"/>
+  <use href="#baseballRound" transform="translate(978,860)"/>
+  <use href="#baseballRound" transform="translate(978,980)"/>
+  <use href="#baseballRound" transform="translate(978,1100)"/>
+  <use href="#baseballRound" transform="translate(978,1220)"/>
+  <use href="#baseballRound" transform="translate(978,1340)"/>
+  <use href="#leatherPatch" transform="translate(972,200) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(972,440) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(972,680) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(972,920) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(972,1160) scale(0.7)"/>
+  <use href="#leatherPatch" transform="translate(972,1400) scale(0.7)"/>
+
+  <!-- CORNERS: pennants -->
+  <g transform="translate(40,40)">
+    <use href="#leatherPatch" transform="translate(36,36) scale(1.2)"/>
+    <use href="#pennant" transform="translate(50,16)"/>
+    <use href="#baseballRound" transform="translate(72,52) scale(1.2)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#leatherPatch" transform="translate(-36,36) scale(1.2)"/>
+    <use href="#pennant" transform="translate(-50,16) scale(-1,1)"/>
+    <use href="#baseballRound" transform="translate(-72,52) scale(1.2)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#leatherPatch" transform="translate(36,-36) scale(1.2)"/>
+    <use href="#pennant" transform="translate(50,-16) scale(1,-1)"/>
+    <use href="#baseballRound" transform="translate(72,-52) scale(1.2)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#leatherPatch" transform="translate(-36,-36) scale(1.2)"/>
+    <use href="#pennant" transform="translate(-50,-16) scale(-1,-1)"/>
+    <use href="#baseballRound" transform="translate(-72,-52) scale(1.2)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#leatherTan)" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="url(#creamFill)" stroke-width="0.5" fill="none" opacity="0.6"/>
+</svg>

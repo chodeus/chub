@@ -1,0 +1,255 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a0a02"/>
+      <stop offset="50%" stop-color="#0c0501"/>
+      <stop offset="100%" stop-color="#050201"/>
+    </linearGradient>
+    <radialGradient id="mapleRed" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#ffa050"/>
+      <stop offset="50%" stop-color="#d04020"/>
+      <stop offset="100%" stop-color="#5a1004"/>
+    </radialGradient>
+    <radialGradient id="mapleOrange" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#ffc870"/>
+      <stop offset="50%" stop-color="#e07a18"/>
+      <stop offset="100%" stop-color="#6a2a00"/>
+    </radialGradient>
+    <radialGradient id="oakBrown" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#d8a060"/>
+      <stop offset="50%" stop-color="#8a5018"/>
+      <stop offset="100%" stop-color="#3a1c04"/>
+    </radialGradient>
+    <radialGradient id="oakYellow" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#f0d870"/>
+      <stop offset="50%" stop-color="#c08818"/>
+      <stop offset="100%" stop-color="#5a3808"/>
+    </radialGradient>
+    <radialGradient id="pumpkinG" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffb14a"/>
+      <stop offset="50%" stop-color="#e07a18"/>
+      <stop offset="100%" stop-color="#6a2a00"/>
+    </radialGradient>
+    <radialGradient id="wheatG" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fae098"/>
+      <stop offset="60%" stop-color="#c88838"/>
+      <stop offset="100%" stop-color="#503810"/>
+    </radialGradient>
+    <radialGradient id="stem" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#4a6022"/>
+      <stop offset="100%" stop-color="#1a2008"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="mapleLeaf">
+    <path d="M0,18 L0,4 L-6,8 L-12,2 L-14,-8 L-22,-6 L-18,-16 L-10,-18 L-6,-26 L0,-22 L6,-26 L10,-18 L18,-16 L22,-6 L14,-8 L12,2 L6,8 L0,4 Z" fill="url(#mapleRed)" stroke="#5a1004" stroke-width="0.5"/>
+    <path d="M0,4 L0,18 M0,4 L-12,2 M0,4 L12,2 M0,4 L-10,-18 M0,4 L10,-18 M0,4 L0,-22" stroke="#5a1004" stroke-width="0.4"/>
+  </g>
+
+  <g id="mapleLeafO">
+    <path d="M0,18 L0,4 L-6,8 L-12,2 L-14,-8 L-22,-6 L-18,-16 L-10,-18 L-6,-26 L0,-22 L6,-26 L10,-18 L18,-16 L22,-6 L14,-8 L12,2 L6,8 L0,4 Z" fill="url(#mapleOrange)" stroke="#6a2a00" stroke-width="0.5"/>
+    <path d="M0,4 L0,18 M0,4 L-12,2 M0,4 L12,2 M0,4 L-10,-18 M0,4 L10,-18 M0,4 L0,-22" stroke="#6a2a00" stroke-width="0.4"/>
+  </g>
+
+  <g id="oakLeaf">
+    <path d="M0,20 L0,8 C-6,8 -10,4 -8,-2 C-12,-4 -14,-10 -8,-12 C-10,-18 -6,-22 -2,-20 C-2,-24 2,-24 2,-20 C6,-22 10,-18 8,-12 C14,-10 12,-4 8,-2 C10,4 6,8 0,8 Z" fill="url(#oakBrown)" stroke="#3a1c04" stroke-width="0.5"/>
+    <path d="M0,8 L0,20 M0,8 L-8,-2 M0,8 L8,-2 M0,8 L0,-20" stroke="#3a1c04" stroke-width="0.4"/>
+  </g>
+
+  <g id="oakLeafY">
+    <path d="M0,20 L0,8 C-6,8 -10,4 -8,-2 C-12,-4 -14,-10 -8,-12 C-10,-18 -6,-22 -2,-20 C-2,-24 2,-24 2,-20 C6,-22 10,-18 8,-12 C14,-10 12,-4 8,-2 C10,4 6,8 0,8 Z" fill="url(#oakYellow)" stroke="#5a3808" stroke-width="0.5"/>
+    <path d="M0,8 L0,20 M0,8 L-8,-2 M0,8 L8,-2 M0,8 L0,-20" stroke="#5a3808" stroke-width="0.4"/>
+  </g>
+
+  <g id="acorn">
+    <ellipse cx="0" cy="2" rx="6" ry="9" fill="url(#oakBrown)" stroke="#3a1c04" stroke-width="0.5"/>
+    <path d="M-6,-3 Q-6,-10 0,-10 Q6,-10 6,-3 Q4,-1 -4,-1 Q-6,-1 -6,-3 Z" fill="#3a1c04" stroke="#1a0c02" stroke-width="0.4"/>
+    <path d="M0,-10 L0,-13" stroke="#3a1c04" stroke-width="0.8"/>
+    <circle cx="-4" cy="-5" r="0.6" fill="#1a0c02"/>
+    <circle cx="2" cy="-4" r="0.6" fill="#1a0c02"/>
+    <circle cx="-2" cy="2" r="1.4" fill="#ffc870" opacity="0.4"/>
+  </g>
+
+  <g id="wheatStalk">
+    <path d="M0,0 L0,30" stroke="url(#wheatG)" stroke-width="1.2" fill="none"/>
+    <g fill="url(#wheatG)" stroke="#503810" stroke-width="0.3">
+      <ellipse cx="-2" cy="0" rx="1.4" ry="3" transform="rotate(-30, -2, 0)"/>
+      <ellipse cx="2" cy="0" rx="1.4" ry="3" transform="rotate(30, 2, 0)"/>
+      <ellipse cx="-2" cy="-6" rx="1.4" ry="3" transform="rotate(-30, -2, -6)"/>
+      <ellipse cx="2" cy="-6" rx="1.4" ry="3" transform="rotate(30, 2, -6)"/>
+      <ellipse cx="-2" cy="-12" rx="1.4" ry="3" transform="rotate(-30, -2, -12)"/>
+      <ellipse cx="2" cy="-12" rx="1.4" ry="3" transform="rotate(30, 2, -12)"/>
+      <ellipse cx="0" cy="-16" rx="1.6" ry="3.6"/>
+    </g>
+    <path d="M0,-20 L-2,-22 M0,-20 L2,-22 M0,-19 L0,-23" stroke="#503810" stroke-width="0.4"/>
+  </g>
+
+  <g id="pumpkinSm">
+    <ellipse cx="-6" cy="0" rx="5" ry="11" fill="url(#pumpkinG)" stroke="#3a1400" stroke-width="0.5"/>
+    <ellipse cx="0" cy="0" rx="5" ry="12" fill="url(#pumpkinG)" stroke="#3a1400" stroke-width="0.5"/>
+    <ellipse cx="6" cy="0" rx="5" ry="11" fill="url(#pumpkinG)" stroke="#3a1400" stroke-width="0.5"/>
+    <path d="M-1,-12 L-1,-16 L1,-16 L1,-12 Z" fill="url(#stem)"/>
+    <path d="M-6,-6 Q-6,0 -6,6 M0,-8 Q0,0 0,8 M6,-6 Q6,0 6,6" stroke="#3a1400" stroke-width="0.3" fill="none"/>
+  </g>
+
+  <g id="gourd">
+    <ellipse cx="0" cy="4" rx="8" ry="10" fill="url(#oakYellow)" stroke="#5a3808" stroke-width="0.5"/>
+    <ellipse cx="0" cy="-6" rx="5" ry="6" fill="url(#oakYellow)" stroke="#5a3808" stroke-width="0.5"/>
+    <path d="M0,-10 L-1,-14 L1,-14 Z" fill="url(#stem)"/>
+    <path d="M-4,-2 Q0,4 4,-2" stroke="#5a3808" stroke-width="0.3" fill="none"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#mapleLeaf" transform="translate(120,46) rotate(180)"/>
+  <use href="#mapleLeafO" transform="translate(200,46) rotate(170)"/>
+  <use href="#oakLeaf" transform="translate(280,46) rotate(185)"/>
+  <use href="#mapleLeaf" transform="translate(360,46) rotate(195)"/>
+  <use href="#oakLeafY" transform="translate(440,46) rotate(170)"/>
+  <use href="#mapleLeafO" transform="translate(520,46) rotate(180)"/>
+  <use href="#oakLeaf" transform="translate(600,46) rotate(190)"/>
+  <use href="#mapleLeaf" transform="translate(680,46) rotate(175)"/>
+  <use href="#mapleLeafO" transform="translate(760,46) rotate(180)"/>
+  <use href="#oakLeafY" transform="translate(840,46) rotate(195)"/>
+  <use href="#acorn" transform="translate(160,28)"/>
+  <use href="#acorn" transform="translate(320,28) scale(0.9)"/>
+  <use href="#acorn" transform="translate(480,28)"/>
+  <use href="#acorn" transform="translate(640,28) scale(0.9)"/>
+  <use href="#acorn" transform="translate(800,28)"/>
+  <use href="#wheatStalk" transform="translate(240,52) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(400,52) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(560,52) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(720,52) rotate(180)"/>
+  <use href="#wheatStalk" transform="translate(880,52) rotate(180)"/>
+
+  <!-- BOTTOM: wheat sheaves heavy -->
+  <use href="#wheatStalk" transform="translate(100,1450)"/>
+  <use href="#wheatStalk" transform="translate(110,1452) rotate(-10)"/>
+  <use href="#wheatStalk" transform="translate(120,1450) rotate(10)"/>
+  <use href="#wheatStalk" transform="translate(220,1450)"/>
+  <use href="#wheatStalk" transform="translate(230,1452) rotate(-10)"/>
+  <use href="#wheatStalk" transform="translate(240,1450) rotate(10)"/>
+  <use href="#wheatStalk" transform="translate(340,1450)"/>
+  <use href="#wheatStalk" transform="translate(350,1452) rotate(-10)"/>
+  <use href="#wheatStalk" transform="translate(360,1450) rotate(10)"/>
+  <use href="#wheatStalk" transform="translate(460,1450)"/>
+  <use href="#wheatStalk" transform="translate(470,1452) rotate(-10)"/>
+  <use href="#wheatStalk" transform="translate(480,1450) rotate(10)"/>
+  <use href="#wheatStalk" transform="translate(580,1450)"/>
+  <use href="#wheatStalk" transform="translate(590,1452) rotate(-10)"/>
+  <use href="#wheatStalk" transform="translate(600,1450) rotate(10)"/>
+  <use href="#wheatStalk" transform="translate(700,1450)"/>
+  <use href="#wheatStalk" transform="translate(710,1452) rotate(-10)"/>
+  <use href="#wheatStalk" transform="translate(720,1450) rotate(10)"/>
+  <use href="#wheatStalk" transform="translate(820,1450)"/>
+  <use href="#wheatStalk" transform="translate(830,1452) rotate(-10)"/>
+  <use href="#wheatStalk" transform="translate(840,1450) rotate(10)"/>
+  <use href="#pumpkinSm" transform="translate(160,1480)"/>
+  <use href="#pumpkinSm" transform="translate(280,1480) scale(1.1)"/>
+  <use href="#pumpkinSm" transform="translate(400,1480)"/>
+  <use href="#pumpkinSm" transform="translate(520,1480) scale(1.1)"/>
+  <use href="#pumpkinSm" transform="translate(640,1480)"/>
+  <use href="#pumpkinSm" transform="translate(760,1480) scale(1.1)"/>
+  <use href="#pumpkinSm" transform="translate(880,1480)"/>
+
+  <!-- LEFT -->
+  <use href="#mapleLeaf" transform="translate(46,120) rotate(90)"/>
+  <use href="#mapleLeafO" transform="translate(46,200) rotate(80)"/>
+  <use href="#oakLeaf" transform="translate(46,280) rotate(95)"/>
+  <use href="#mapleLeaf" transform="translate(46,360) rotate(105)"/>
+  <use href="#oakLeafY" transform="translate(46,440) rotate(80)"/>
+  <use href="#mapleLeafO" transform="translate(46,520) rotate(90)"/>
+  <use href="#oakLeaf" transform="translate(46,600) rotate(100)"/>
+  <use href="#mapleLeaf" transform="translate(46,680) rotate(85)"/>
+  <use href="#mapleLeafO" transform="translate(46,760) rotate(90)"/>
+  <use href="#oakLeafY" transform="translate(46,840) rotate(105)"/>
+  <use href="#mapleLeaf" transform="translate(46,920) rotate(90)"/>
+  <use href="#mapleLeafO" transform="translate(46,1000) rotate(80)"/>
+  <use href="#oakLeaf" transform="translate(46,1080) rotate(95)"/>
+  <use href="#mapleLeaf" transform="translate(46,1160) rotate(105)"/>
+  <use href="#oakLeafY" transform="translate(46,1240) rotate(80)"/>
+  <use href="#mapleLeafO" transform="translate(46,1320) rotate(90)"/>
+  <use href="#oakLeaf" transform="translate(46,1400) rotate(100)"/>
+  <use href="#acorn" transform="translate(28,160)"/>
+  <use href="#acorn" transform="translate(28,320) scale(0.9)"/>
+  <use href="#acorn" transform="translate(28,480)"/>
+  <use href="#acorn" transform="translate(28,640) scale(0.9)"/>
+  <use href="#acorn" transform="translate(28,800)"/>
+  <use href="#acorn" transform="translate(28,960) scale(0.9)"/>
+  <use href="#acorn" transform="translate(28,1120)"/>
+  <use href="#acorn" transform="translate(28,1280) scale(0.9)"/>
+  <use href="#wheatStalk" transform="translate(20,240) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,400) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,560) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,720) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,880) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,1040) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,1200) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(20,1360) rotate(90)"/>
+
+  <!-- RIGHT -->
+  <use href="#mapleLeaf" transform="translate(954,120) rotate(270)"/>
+  <use href="#mapleLeafO" transform="translate(954,200) rotate(280)"/>
+  <use href="#oakLeaf" transform="translate(954,280) rotate(265)"/>
+  <use href="#mapleLeaf" transform="translate(954,360) rotate(255)"/>
+  <use href="#oakLeafY" transform="translate(954,440) rotate(280)"/>
+  <use href="#mapleLeafO" transform="translate(954,520) rotate(270)"/>
+  <use href="#oakLeaf" transform="translate(954,600) rotate(260)"/>
+  <use href="#mapleLeaf" transform="translate(954,680) rotate(275)"/>
+  <use href="#mapleLeafO" transform="translate(954,760) rotate(270)"/>
+  <use href="#oakLeafY" transform="translate(954,840) rotate(255)"/>
+  <use href="#mapleLeaf" transform="translate(954,920) rotate(270)"/>
+  <use href="#mapleLeafO" transform="translate(954,1000) rotate(280)"/>
+  <use href="#oakLeaf" transform="translate(954,1080) rotate(265)"/>
+  <use href="#mapleLeaf" transform="translate(954,1160) rotate(255)"/>
+  <use href="#oakLeafY" transform="translate(954,1240) rotate(280)"/>
+  <use href="#mapleLeafO" transform="translate(954,1320) rotate(270)"/>
+  <use href="#oakLeaf" transform="translate(954,1400) rotate(260)"/>
+  <use href="#acorn" transform="translate(972,160)"/>
+  <use href="#acorn" transform="translate(972,320) scale(0.9)"/>
+  <use href="#acorn" transform="translate(972,480)"/>
+  <use href="#acorn" transform="translate(972,640) scale(0.9)"/>
+  <use href="#acorn" transform="translate(972,800)"/>
+  <use href="#acorn" transform="translate(972,960) scale(0.9)"/>
+  <use href="#acorn" transform="translate(972,1120)"/>
+  <use href="#acorn" transform="translate(972,1280) scale(0.9)"/>
+  <use href="#wheatStalk" transform="translate(980,240) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(980,400) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(980,560) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(980,720) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(980,880) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(980,1040) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(980,1200) rotate(90)"/>
+  <use href="#wheatStalk" transform="translate(980,1360) rotate(90)"/>
+
+  <!-- CORNERS: pumpkin + gourd clusters -->
+  <g transform="translate(40,40)">
+    <use href="#pumpkinSm" transform="translate(20,28) scale(1.4)"/>
+    <use href="#gourd" transform="translate(50,20) scale(1.2)"/>
+    <use href="#mapleLeaf" transform="translate(50,50)"/>
+    <use href="#acorn" transform="translate(70,42)"/>
+    <use href="#wheatStalk" transform="translate(18,60) rotate(-15)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#pumpkinSm" transform="translate(-20,28) scale(1.4)"/>
+    <use href="#gourd" transform="translate(-50,20) scale(1.2)"/>
+    <use href="#mapleLeaf" transform="translate(-50,50)"/>
+    <use href="#acorn" transform="translate(-70,42)"/>
+    <use href="#wheatStalk" transform="translate(-18,60) rotate(15)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#pumpkinSm" transform="translate(20,-22) scale(1.4)"/>
+    <use href="#gourd" transform="translate(50,-20) scale(1.2)"/>
+    <use href="#mapleLeaf" transform="translate(50,-50)"/>
+    <use href="#acorn" transform="translate(70,-42)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#pumpkinSm" transform="translate(-20,-22) scale(1.4)"/>
+    <use href="#gourd" transform="translate(-50,-20) scale(1.2)"/>
+    <use href="#mapleLeaf" transform="translate(-50,-50)"/>
+    <use href="#acorn" transform="translate(-70,-42)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#8a5018" stroke-width="1.4" fill="none"/>
+</svg>

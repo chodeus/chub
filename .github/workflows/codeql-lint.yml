@@ -1,0 +1,440 @@
+name: "CodeQL & Lint"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.jsx'
+      - 'frontend/**'
+      - 'backend/**'
+      - 'main.py'
+      - 'requirements.txt'
+      - 'requirements-*.txt'
+      - 'pyproject.toml'
+      - 'Makefile'
+      - 'deploy/docker/compose.yaml'
+      - 'frontend/package-lock.json'
+      - 'deploy/docker/Dockerfile'
+      - 'deploy/docker/**'
+      - '.dockerignore'
+      - 'scripts/start.sh'
+      - '.release-please-manifest.json'
+      # Deliberately NOT self-referential on push: docker-push runs on push
+      # events only, so a comment-level edit to this file used to rebuild and
+      # republish :latest and :full with a fresh digest (BUILD_NUMBER is baked
+      # in, so identical code still churns the tag). The pull_request trigger
+      # below KEEPS the self-reference, so a workflow edit is still exercised
+      # end to end before it lands — and actionlint (validate-workflows.yml)
+      # runs on it independently. Use workflow_dispatch to force a run.
+  pull_request:
+    branches:
+      - '**'
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.jsx'
+      - 'frontend/**'
+      - 'backend/**'
+      - 'main.py'
+      - 'requirements.txt'
+      - 'requirements-*.txt'
+      - 'pyproject.toml'
+      - 'Makefile'
+      - 'deploy/docker/compose.yaml'
+      - 'frontend/package-lock.json'
+      - 'deploy/docker/Dockerfile'
+      - 'deploy/docker/**'
+      - '.dockerignore'
+      - 'scripts/start.sh'
+      - '.release-please-manifest.json'
+      - '.github/workflows/codeql-lint.yml'
+  schedule:
+    - cron: '25 4 * * 1'  # Weekly on Monday at 04:25 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---- CodeQL Analysis ----
+  codeql-python:
+    name: CodeQL - Python
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          languages: python
+          queries: +security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          category: '/language:python'
+
+  codeql-javascript:
+    name: CodeQL - JavaScript
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          languages: javascript-typescript
+          queries: +security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          category: '/language:javascript-typescript'
+
+  # ---- Backend Lint ----
+  backend-lint:
+    name: Backend Lint (Ruff)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Install linting tools
+        run: pip install ruff==0.15.11
+
+      - name: Run Ruff linter
+        run: ruff check .
+
+  # ---- GDrive preset catalogue ----
+  gdrive-preset-moves:
+    name: GDrive Preset Moves
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # Full history: the check diffs the catalogue against the PR base.
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+
+      - name: Every dropped drive id has a move record
+        # Base ref reaches the shell via env, never ${{ }} interpolation — a
+        # fork PR controls its branch name, which would otherwise be executed.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/check_gdrive_preset_moves.py --base "$BASE_SHA"
+
+  # ---- Backend Smoke Test & Tests ----
+  backend-smoke:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          # pytest + httpx (Starlette's TestClient) — kept out of requirements.txt
+          # so the runtime image never installs a test stack.
+          pip install -r requirements-dev.txt
+          # Extensions keep their extra deps in requirements-*.txt (e.g.
+          # requirements-cl2k.txt), which only the Dockerfile's builder-full
+          # stage installs — requirements.txt stays the lean set both images
+          # share. Install every one: CI has no flavour gate, so it tests :full.
+          for extra in requirements-*.txt; do
+            if [ -e "$extra" ] && [ "$extra" != "requirements-dev.txt" ]; then
+              pip install -r "$extra"
+            fi
+          done
+
+      - name: Verify FastAPI app imports cleanly
+        run: |
+          mkdir -p templates/assets templates/icons templates/img templates/posters
+          python -c "from backend.api.main import app; print('OK: ' + str(len(app.routes)) + ' routes loaded')"
+
+      - name: Run tests
+        run: python -m pytest tests/ -v
+
+  # ---- Frontend Lint (reusable) ----
+  frontend-lint:
+    name: Frontend Lint
+    uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@579feb04e3219248963bd27843298a8c2ea6b2fd # main
+    with:
+      node_version: '24'
+      package_json_dir: frontend
+      run_lint: true
+      run_stylelint: true
+      run_prettier_check: true
+
+  # ---- Frontend tests (Vitest) ----
+  # Not folded into the reusable chodeus-ops node-ci.yml: that workflow has no
+  # test input and is shared fleet-wide, so adding one there would need a
+  # cross-repo change plus a SHA bump here.
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    # Narrower than the workflow-wide grant: this job runs repo-controlled npm
+    # lifecycle scripts and test code, so it gets no token beyond reading.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Vitest
+        working-directory: frontend
+        run: npm run test:run
+
+      # Tailwind silently drops classes it cannot resolve, so the built CSS is
+      # the only place a dead utility shows up — check:classes reads dist/.
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check for used-but-unemitted Tailwind classes
+        working-directory: frontend
+        run: npm run check:classes
+
+  # ---- Docker Build (gated by all quality checks) ----
+  docker-validate:
+    name: Docker Validate (PR)
+    if: github.event_name == 'pull_request'
+    # frontend-tests is deliberately NOT here: it is not a required check, and a
+    # needs-failure SKIPS this job — which GitHub reports as Success for a
+    # required check, turning a hard gate into a free pass. Promote
+    # "Frontend Tests" in branch protection to make it block instead.
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - name: Get branch name
+        id: get_branch
+        run: echo "BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+      - name: Set build number
+        run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
+
+      - name: Build lean image (validation only)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          push: false
+          tags: chub:ci-${{ github.sha }}
+
+      - name: Build full image (validation only)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/amd64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          push: false
+          tags: chub:ci-full-${{ github.sha }}
+
+  docker-push:
+    name: Docker Build & Push
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45  # see release-please.yml docker-version
+    permissions:
+      contents: read
+      packages: write
+    # Serialize with the release-please docker-version job so concurrent pushes
+    # to the same :latest tag don't race on GHCR auth. cancel-in-progress is
+    # false because both jobs publish artifacts we want to keep — they just
+    # need to take turns pushing.
+    concurrency:
+      group: ghcr-push-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - name: Get the current branch name
+        id: get_branch
+        run: |
+          name="${GITHUB_REF#refs/heads/}"
+          # Emit a branch tag only on branch refs; encode it collision-safe to
+          # match on-branch-create/delete (clean names pass through, else digest).
+          if [[ "$GITHUB_REF" == refs/heads/* ]]; then IS_BRANCH=true; else IS_BRANCH=false; fi
+          sanitized="${name//[^A-Za-z0-9_.-]/-}"
+          sanitized="$(printf '%s' "$sanitized" | sed -E 's/^[.-]+//')"
+          if [ "$sanitized" = "$name" ] && [ -n "$sanitized" ] && [ "${#sanitized}" -le 128 ]; then
+            BRANCH_TAG="$sanitized"
+          else
+            hash="$(printf '%s' "$name" | sha256sum | cut -c1-12)"
+            base="${sanitized:0:100}"; [ -n "$base" ] || base="branch"
+            BRANCH_TAG="${base}-${hash}"
+          fi
+          echo "BRANCH_NAME=${name}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_TAG=${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "IS_BRANCH=${IS_BRANCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Set build number
+        run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/chub
+          tags: |
+            type=raw,value=${{ steps.get_branch.outputs.BRANCH_TAG }},enable=${{ steps.get_branch.outputs.IS_BRANCH }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Full tags are release-shaped only: semver with a -full suffix, plus the
+      # default branch's rolling :full and sha-*-full. No branch tags — branch
+      # pushes build lean only (the empty tag list skips the build below).
+      - name: Extract Docker metadata (full)
+        id: meta_full
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/chub
+          tags: |
+            type=semver,pattern={{version}},suffix=-full
+            type=semver,pattern={{major}}.{{minor}},suffix=-full
+            type=semver,pattern={{major}},suffix=-full
+            type=sha,prefix=sha-,suffix=-full,format=short,enable={{is_default_branch}}
+            type=raw,value=full,enable={{is_default_branch}}
+
+      - name: Build and push lean image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # Branch pushes publish lean only (meta_full has no branch tag) — skip the
+      # second build there instead of pushing a tagless manifest.
+      - name: Build and push full image
+        if: steps.meta_full.outputs.tags != ''
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          push: true
+          tags: ${{ steps.meta_full.outputs.tags }}
+          labels: ${{ steps.meta_full.outputs.labels }}
+
+  notify-failure:
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, docker-push]
+    if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@579feb04e3219248963bd27843298a8c2ea6b2fd # main
+    with:
+      event_type: build
+      status: failure
+      title: "❌ Pipeline failed: ${{ github.ref_name }}"
+      commit_sha: ${{ github.sha }}
+    secrets: inherit
