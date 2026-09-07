@@ -704,18 +704,16 @@ class DBWorker(DatabaseBase):
 
         try:
             with self.get_connection() as conn:
-                # Dedupe module_run jobs by module_name. BEGIN IMMEDIATE takes
-                # the write lock before the SELECT: a plain SELECT holds no
-                # lock (in_transaction stays False), so two callers could both
-                # pass the check and both insert. Webhook storms, manual UI
-                # "Run now" overlapping a scheduled fire, and two scheduler
-                # ticks racing past the orchestrator's running-check all
-                # collapse to a single in-flight job per module.
+                # Every dedup check below is check-then-insert; a plain SELECT
+                # holds no write lock, so take one before any of them run.
+                if not conn.in_transaction:
+                    conn.execute("BEGIN IMMEDIATE")
+
+                # One in-flight job per module: webhook storms, "Run now" over a
+                # scheduled fire, and racing scheduler ticks all collapse here.
                 if job_type == "module_run":
                     module_name = (payload or {}).get("module_name")
                     if module_name:
-                        if not conn.in_transaction:
-                            conn.execute("BEGIN IMMEDIATE")
                         existing = conn.execute(
                             f"SELECT id, status FROM {table_name} "
                             f"WHERE type = 'module_run' "
@@ -737,10 +735,8 @@ class DBWorker(DatabaseBase):
                                 "data": {"job_id": existing_id},
                             }
 
-                # The Poster Cleanarr scans are idempotent cache-warmers; only
-                # one of each needs to be in flight. Two scan clicks (or a page
-                # mount racing the scan button) collapse to the same job so the
-                # UI polls a single in-progress scan instead of stacking walks.
+                # Poster Cleanarr scans are idempotent cache-warmers; two scan
+                # clicks collapse to one job instead of stacking full walks.
                 if job_type in ("plex_metadata_scan", "kometa_assets_scan"):
                     existing = conn.execute(
                         f"SELECT id, status FROM {table_name} "

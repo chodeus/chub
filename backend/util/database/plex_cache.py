@@ -1,5 +1,5 @@
 import json
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from .db_base import DatabaseBase
 
@@ -47,12 +47,18 @@ class PlexCache(DatabaseBase):
             WHERE plex_id=? AND instance_name=?
         """
 
-    def _write_in_chunks(self, statements: list, chunk_size: int = 500) -> None:
+    def _write_in_chunks(self, statements: Iterable, chunk_size: int = 500) -> None:
         """Run (sql, params) pairs as one transaction per chunk."""
-        # Mirrors PosterCache.bulk_upsert: chunking keeps WAL growth and
-        # write-lock hold time bounded instead of one giant transaction.
-        for start in range(0, len(statements), chunk_size):
-            self.execute_transaction(statements[start : start + chunk_size])
+        # Consumed lazily so a full library walk never materialises every
+        # operation at once; chunking bounds WAL growth and lock hold time.
+        buffer: list = []
+        for statement in statements:
+            buffer.append(statement)
+            if len(buffer) >= chunk_size:
+                self.execute_transaction(buffer)
+                buffer = []
+        if buffer:
+            self.execute_transaction(buffer)
 
     @staticmethod
     def _prepare_upsert(item: dict) -> tuple:
@@ -311,11 +317,11 @@ class PlexCache(DatabaseBase):
         db_map = {self._canonical_key(row): row for row in db_rows}
         fresh_map = {self._canonical_key(item): item for item in fresh_media}
 
-        # Add/update items that are present in fresh_media. Batched: a per-row
-        # execute_query opens a connection, sets 3 PRAGMAs and commits for every
-        # single row, which dominates a full library walk.
+        # Batched: a per-row execute_query opens a connection, sets 3 PRAGMAs
+        # and commits for every row, which dominates a full library walk.
         self._write_in_chunks(
-            [(self._UPSERT_SQL, self._prepare_upsert(item)) for item in fresh_map.values()]
+            (self._UPSERT_SQL, self._prepare_upsert(item))
+            for item in fresh_map.values()
         )
         if logger:
             for key, item in fresh_map.items():
@@ -328,9 +334,7 @@ class PlexCache(DatabaseBase):
 
         # Remove items that are no longer present
         keys_to_remove = set(db_map.keys()) - set(fresh_map.keys())
-        self._write_in_chunks(
-            [(self._DELETE_SQL, key) for key in keys_to_remove]
-        )
+        self._write_in_chunks((self._DELETE_SQL, key) for key in keys_to_remove)
         if logger:
             for key in keys_to_remove:
                 row = db_map[key]

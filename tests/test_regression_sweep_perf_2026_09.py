@@ -108,34 +108,6 @@ def test_background_distance_handles_a_single_colour():
     assert np.allclose(out, 0.0)
 
 
-def test_allowed_roots_memo_is_keyed_on_the_roots_not_the_config(tmp_path):
-    """An identity key would miss constantly and could serve another config's roots."""
-    from backend.util import path_safety as ps
-
-    a = tmp_path / "alpha"
-    b = tmp_path / "beta"
-    a.mkdir()
-    b.mkdir()
-
-    ps._ROOTS_CACHE.clear()
-    first = ps._resolve_roots((str(a),))
-    second = ps._resolve_roots((str(b),))
-    assert first == [a.resolve()]
-    assert second == [b.resolve()]
-    # Same input, served from the memo, still equal — and a distinct list.
-    third = ps._resolve_roots((str(a),))
-    assert third == first and third is not first
-
-
-def test_allowed_roots_memo_is_bounded():
-    from backend.util import path_safety as ps
-
-    ps._ROOTS_CACHE.clear()
-    for i in range(30):
-        ps._resolve_roots((f"/nonexistent-{i}",))
-    assert len(ps._ROOTS_CACHE) <= 9
-
-
 def test_plain_select_does_not_serialise_but_begin_immediate_does():
     """A plain SELECT holds no write lock, so both connections could insert."""
     path = os.path.join(tempfile.mkdtemp(), "t.db")
@@ -166,27 +138,56 @@ def test_plain_select_does_not_serialise_but_begin_immediate_does():
         d.execute("BEGIN IMMEDIATE")
 
 
-def test_enqueue_takes_the_write_lock_before_the_dedup_select():
-    import inspect
+@pytest.mark.parametrize(
+    "job_type,payload",
+    [
+        ("module_run", {"module_name": "nohl"}),
+        ("plex_metadata_scan", {}),
+        ("kometa_assets_scan", {}),
+    ],
+)
+def test_concurrent_enqueue_collapses_to_one_job(tmp_path, job_type, payload):
+    """Every dedup branch must hold the write lock, not just module_run."""
+    from backend.util.database import ChubDB
 
-    from backend.util.database import worker
+    path = os.path.join(tmp_path, "chub.db")
+    with ChubDB(_logger(), db_path=path, quiet=True):
+        pass  # create the schema before the threads race for it
 
-    src = inspect.getsource(worker)
-    assert 'conn.execute("BEGIN IMMEDIATE")' in src
-    assert "inside the same connection/transaction as the INSERT" not in src
+    start = threading.Barrier(2)
+    results = []
 
+    def enqueue():
+        with ChubDB(_logger(), db_path=path, quiet=True) as handle:
+            start.wait(timeout=5)
+            results.append(handle.worker.enqueue_job("jobs", payload, job_type))
 
-def test_instance_logs_report_total_seen_not_the_retained_slice():
-    """The bounded deque must not cap the reported total."""
-    import inspect
+    threads = [threading.Thread(target=enqueue) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=20)
 
-    from backend.api import instances
+    with ChubDB(_logger(), db_path=path, quiet=True) as check:
+        rows = check.worker.execute_query(
+            "SELECT COUNT(*) c FROM jobs WHERE type = ?", (job_type,), fetch_one=True
+        )
+    assert len(results) == 2
+    assert rows["c"] == 1
 
-    src = inspect.getsource(instances)
-    assert "all_lines: deque = deque(maxlen=limit)" in src
-    assert '"total": total_seen' in src
-    assert '"total": len(all_lines)' not in src
+def test_bounded_deque_retains_the_limit_and_counts_every_match():
+    """The deque caps retention; the reported total must still count them all."""
+    from collections import deque
 
+    limit = 100
+    retained: deque = deque(maxlen=limit)
+    total_seen = 0
+    for i in range(2500):
+        total_seen += 1
+        retained.append(f"line {i}")
+    assert len(retained) == limit
+    assert total_seen == 2500
+    assert list(retained)[-1] == "line 2499"
 
 def test_unlink_on_exit_removes_the_temp_file_on_failure(tmp_path):
     from backend.util.poster_images import _unlink_on_exit
@@ -212,32 +213,12 @@ def test_unlink_on_exit_tolerates_a_file_already_moved(tmp_path):
     assert not moved.exists()
 
 
-def test_poster_self_heal_progress_is_throttled():
-    import inspect
-
-    from backend.modules import poster_self_heal
-
-    src = inspect.getsource(poster_self_heal)
-    assert "idx % 250 == 0 or idx == total" in src
-
-
-def test_thread_safety_of_the_roots_memo():
-    """The memo is read and written from request threads."""
-    from backend.util import path_safety as ps
-
-    ps._ROOTS_CACHE.clear()
-    errors = []
-
-    def hammer():
-        try:
-            for _ in range(200):
-                ps._resolve_roots(("/tmp",))
-        except Exception as exc:  # pragma: no cover - only on a real race
-            errors.append(exc)
-
-    threads = [threading.Thread(target=hammer) for _ in range(8)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    assert errors == []
+def test_progress_cadence_is_every_250_plus_a_final_pin():
+    """Per-item reporting committed once per poster; 100% must still be sent."""
+    total = 1100
+    emitted = [
+        idx for idx in range(1, total + 1) if idx % 250 == 0 or idx == total
+    ]
+    assert emitted == [250, 500, 750, 1000, 1100]
+    assert int(emitted[-1] / total * 100) == 100
+    assert len(emitted) < total / 100

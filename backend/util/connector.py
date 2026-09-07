@@ -974,9 +974,8 @@ class Connector:
                 else:
                     stats["no_match"] += 1
 
-            # Batched: a per-row execute_query opens a connection, sets 3
-            # PRAGMAs and commits for each row. The first sync maps every row
-            # in media_cache, so that cost lands on the whole table.
+            # Batched: per-row execute_query commits once per row, and the
+            # first sync maps every row in media_cache.
             sql = "UPDATE media_cache SET plex_mapping_id = ? WHERE id = ?"
             for start in range(0, len(pending), 500):
                 self.db.media.execute_transaction(

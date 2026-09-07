@@ -2031,13 +2031,12 @@ def get_instance_logs(
                 except (PermissionError, OSError):
                     continue
 
-        # Return the last N lines (most recent). all_lines is a bounded deque:
-        # retaining every match across ~15 module dirs of 10x10MB rotated logs
-        # meant holding hundreds of MB for a request whose default limit is 100.
+        # Bounded deque: the last `limit` matches encountered, not the newest —
+        # the walk order across module dirs is not chronological.
         filtered_lines = list(all_lines)
 
         return ok(
-            f"Found {len(filtered_lines)} log entries for instance '{instance_id}'",
+            f"Found {total_seen} log entries for instance '{instance_id}'",
             {"logs": filtered_lines, "instance": instance_id, "total": total_seen},
         )
 

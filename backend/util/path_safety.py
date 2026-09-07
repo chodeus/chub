@@ -7,9 +7,8 @@ roots derived from application configuration.
 
 import logging
 import os
-import threading
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from backend.util.config import ChubConfig, has_config_file
 
@@ -87,25 +86,8 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     # works for fresh setups before any config field has been populated.
     roots.extend(str(p) for p in _discover_container_mounts())
 
-    return _resolve_roots(tuple(roots))
-
-
-# Resolving ~30 roots costs an expanduser+resolve+exists each, and callers hit
-# this once per file inside whole-library loops. Keyed on the raw strings, not
-# on the config object: load_config returns a fresh deep copy every call, so an
-# identity key would both miss constantly and — after GC recycles an id — risk
-# handing back another config's roots.
-_ROOTS_CACHE: Dict[tuple, List[Path]] = {}
-_ROOTS_CACHE_LOCK = threading.Lock()
-
-
-def _resolve_roots(roots: tuple) -> List[Path]:
-    """Expand, resolve and dedupe raw root strings, memoised on the input."""
-    with _ROOTS_CACHE_LOCK:
-        hit = _ROOTS_CACHE.get(roots)
-        if hit is not None:
-            return list(hit)
-
+    # Deliberately not memoised: callers include destructive confinement
+    # checks, and a cached resolution goes stale if a root is replaced.
     resolved = []
     for r in roots:
         if not r:
@@ -116,13 +98,8 @@ def _resolve_roots(roots: tuple) -> List[Path]:
                 resolved.append(p)
         except (ValueError, OSError):
             continue
-    unique = list(set(resolved))
 
-    with _ROOTS_CACHE_LOCK:
-        if len(_ROOTS_CACHE) > 8:
-            _ROOTS_CACHE.clear()
-        _ROOTS_CACHE[roots] = unique
-    return list(unique)
+    return list(set(resolved))
 
 
 # Pseudo / system filesystems we never want to expose via the picker.

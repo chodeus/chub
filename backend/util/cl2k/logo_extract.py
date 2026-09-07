@@ -281,9 +281,8 @@ def _background_distance(arr: np.ndarray, bg: np.ndarray) -> np.ndarray:
     :func:`_background_colors`) — small where a pixel matches the backdrop, large
     on the title. Lab, not raw RGB: a dark-red title on a dark backdrop is a hue
     flip RGB distance barely scores, while ΔE tracks what the eye separates."""
-    # One colour at a time with a running minimum: broadcasting all N at once
-    # materialises an H×W×N×3 float buffer twice, which at the _MAX_SIDE cap
-    # peaks near a gigabyte for a handful of backdrop colours.
+    # Running minimum, one colour at a time: broadcasting all N materialises an
+    # H×W×N×3 buffer twice, near a gigabyte at the _MAX_SIDE cap.
     lab = _srgb_to_lab(arr)
     bg_lab = _srgb_to_lab(bg)
     best = None
