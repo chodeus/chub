@@ -497,3 +497,67 @@ def test_health_snapshot_reads_live_config_not_the_init_capture(
     assert calls == []  # the removed instance was not probed
     with ChubDB(_Log()) as db:
         assert db.system_health.recent_snapshots() == []  # and nothing was recorded
+
+
+def test_tick_skips_everything_when_config_is_unreadable(monkeypatch):
+    """Fail closed: a config read failure must not empty the disabled set and
+    auto-run every module the admin turned off, destructive ones included."""
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    cfg = SimpleNamespace(
+        schedule={"nohl": "hourly(00)"},
+        upgradinatorr=SimpleNamespace(instances_list=[]),
+    )
+    orch = FakeOrchOK()
+
+    import backend.util.config as config_mod
+
+    def _boom():
+        raise OSError("config.yml is mid-write")
+
+    monkeypatch.setattr(config_mod, "load_config", _boom)
+    s = ChubScheduler(cfg, logger=None, module_orchestrator=orch)
+    s._tick(cfg.schedule)
+    assert orch.calls == []
+
+
+def test_disabled_module_does_not_run_via_schedule_blocks(monkeypatch):
+    """"Hard-disabled modules never auto-run" was enforced only on the plain
+    schedule loop; schedule_blocks and upgradinatorr profiles bypassed it."""
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    cfg = SimpleNamespace(
+        schedule={},
+        schedule_blocks={"nohl": [{"schedule": "hourly(00)", "label": "b1"}]},
+        upgradinatorr=SimpleNamespace(instances_list=[]),
+        general=SimpleNamespace(disabled_modules=["nohl"]),
+        instances=SimpleNamespace(sync_schedule=""),
+    )
+    orch = FakeOrchOK()
+
+    import backend.util.config as config_mod
+
+    monkeypatch.setattr(config_mod, "load_config", lambda: cfg)
+    s = ChubScheduler(cfg, logger=None, module_orchestrator=orch)
+    s._tick(cfg.schedule)
+    assert orch.calls == []
+
+
+def test_disabled_upgradinatorr_does_not_run_via_profile_schedules(monkeypatch):
+    """Same invariant on the third dispatch path."""
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    cfg = SimpleNamespace(
+        schedule={},
+        schedule_blocks={},
+        upgradinatorr=SimpleNamespace(
+            instances_list=[{"enabled": True, "schedule": "hourly(00)", "name": "p1"}]
+        ),
+        general=SimpleNamespace(disabled_modules=["upgradinatorr"]),
+        instances=SimpleNamespace(sync_schedule=""),
+    )
+    orch = FakeOrchOK()
+
+    import backend.util.config as config_mod
+
+    monkeypatch.setattr(config_mod, "load_config", lambda: cfg)
+    s = ChubScheduler(cfg, logger=None, module_orchestrator=orch)
+    s._tick(cfg.schedule)
+    assert orch.calls == []
