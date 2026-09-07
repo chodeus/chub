@@ -1,0 +1,131 @@
+/**
+ * CHUB Logs API Module
+ *
+ * Handles log file access and content retrieval:
+ * - Log module listing
+ * - Log file retrieval for specific modules
+ * - Log content fetching
+ * - Log download URLs
+ */
+
+import { apiCore } from './core.js';
+import { downloadBlob } from '../download.js';
+
+/**
+ * Logs API client for file-based log viewing
+ */
+export const logsAPI = {
+    /**
+     * Fetch available log modules
+     * @param {boolean} forceRefresh - Bypass cache if true
+     * @returns {Promise<Array<string>>} List of module names
+     */
+    fetchLogModules: async (forceRefresh = false) => {
+        const response = await apiCore.get('/logs', {
+            useCache: !forceRefresh,
+            cacheTTL: 5 * 60 * 1000, // 5 minutes
+        });
+        return response.data?.modules || [];
+    },
+
+    /**
+     * Fetch log files for specific module
+     * @param {string} moduleName - Module name
+     * @param {boolean} forceRefresh - Bypass cache if true
+     * @returns {Promise<Array<string>>} List of log file names
+     */
+    fetchLogFiles: async (moduleName, forceRefresh = false) => {
+        if (!moduleName) return [];
+
+        try {
+            const response = await apiCore.get(`/logs/${moduleName}`, {
+                useCache: !forceRefresh,
+                cacheTTL: 5 * 60 * 1000, // 5 minutes
+            });
+            return response.data?.files || [];
+        } catch (error) {
+            console.error('Failed to fetch log files:', error);
+            return [];
+        }
+    },
+
+    /**
+     * Fetch log file content.
+     * Passes `tail=N` to the backend so multi-MB logs only ship the last N
+     * lines rather than the whole file each poll.
+     * @param {string} moduleName - Module name
+     * @param {string} fileName - Log file name
+     * @param {AbortSignal} [signal] - Optional AbortSignal to cancel the request
+     * @param {number} [tail=5000] - Max lines to request from the tail; 0 = full file
+     * @returns {Promise<string>} Log file content as text
+     */
+    fetchLogContent: async (moduleName, fileName, signal, tail = 5000) => {
+        if (!moduleName || !fileName) return '';
+
+        try {
+            const headers = {};
+            try {
+                const token = localStorage.getItem('chub-auth-token');
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+            } catch {
+                /* localStorage unavailable */
+            }
+            const qs = tail > 0 ? `?tail=${tail}` : '';
+            const res = await fetch(`/api/logs/${moduleName}/${fileName}${qs}`, {
+                headers,
+                signal,
+            });
+            if (!res.ok) return '';
+            return await res.text();
+        } catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            console.error('Failed to fetch log content:', error);
+            return '';
+        }
+    },
+
+    /**
+     * Get log download URL
+     * @param {string} moduleName - Module name
+     * @param {string} fileName - Log file name
+     * @returns {string} Download URL for log file
+     */
+    getLogDownloadUrl: (moduleName, fileName) => {
+        if (!moduleName || !fileName) return '';
+        return `/api/logs/${moduleName}/${fileName}`;
+    },
+
+    /**
+     * Download a log file to the user's disk. Fetches with the auth header
+     * so the backend can't reject with 401 (which would otherwise be saved
+     * as the file body).
+     * @param {string} moduleName - Module name
+     * @param {string} fileName - Log file name
+     * @returns {Promise<void>}
+     * @throws {Error} If the fetch fails or the server returns non-OK
+     */
+    downloadLogFile: async (moduleName, fileName) => {
+        if (!moduleName || !fileName) {
+            throw new Error('Module name and file name are required');
+        }
+
+        const headers = {};
+        try {
+            const token = localStorage.getItem('chub-auth-token');
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+        } catch {
+            /* localStorage unavailable */
+        }
+
+        const res = await fetch(`/api/logs/${moduleName}/${fileName}`, { headers });
+        if (!res.ok) {
+            throw new Error(`Download failed with status ${res.status}`);
+        }
+
+        downloadBlob(await res.blob(), fileName);
+    },
+};

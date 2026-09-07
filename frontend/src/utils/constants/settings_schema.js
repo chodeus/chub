@@ -1,0 +1,1926 @@
+// web/static/js/settings/settings_schema.js
+import {
+    withExtensionSettingsSchema,
+    withExtensionSettingsModules,
+} from '../../extensions/index.js';
+
+const CORE_SETTINGS_SCHEMA = [
+    {
+        key: 'tmdb',
+        label: 'TMDB',
+        fields: [
+            {
+                key: 'apikey',
+                label: 'API Key',
+                type: 'password',
+                required: false,
+                placeholder: 'TMDB v3 API key',
+                description:
+                    'TMDB v3 API key. Get one free at themoviedb.org/settings/api. When set, Chub resolves missing TMDB IDs for unmatched assets and improves poster matching across the app.',
+            },
+            {
+                key: 'cache_expiration',
+                label: 'Cache Expiration (days)',
+                type: 'number',
+                required: false,
+                description:
+                    'How long to cache external→TMDB ID lookups before re-querying. TMDB enforces ~50 req/s and per-day quotas, so this cache keeps repeat syncs from burning API budget. Default 60.',
+            },
+        ],
+    },
+    {
+        key: 'fanart',
+        label: 'fanart.tv',
+        fields: [
+            {
+                key: 'client_key',
+                label: 'Personal API Key',
+                type: 'password',
+                required: false,
+                placeholder: 'fanart.tv personal API key',
+                description:
+                    'Your personal fanart.tv API key. Required to use fanart.tv as an Asset Renamerr source for logos + backgrounds — a personal key authenticates on its own, so it is all CHUB needs. It also cuts the delay for newly-added artwork from 7 days to 2 (immediate for VIP accounts). Get one free at fanart.tv/get-an-api-key (Personal API Keys).',
+            },
+            {
+                key: 'cache_expiration',
+                label: 'Cache Expiration (days)',
+                type: 'number',
+                required: false,
+                description:
+                    'How long to cache resolved fanart.tv logo/background URLs before re-querying. fanart.tv asks that apps make no more requests than necessary, so this cache keeps repeat runs from re-hitting their servers. Default 2 — matching the personal key’s own 2-day delay for newly-added art, so a shorter window cannot surface anything newer anyway.',
+            },
+        ],
+    },
+    {
+        key: 'sync_gdrive',
+        label: 'Sync Gdrive',
+        fields: [
+            // ─── Authentication ────────────────────────────────────────
+            {
+                // Not a config key — read-only copy, shown on the server's own
+                // uses_shared_rclone_client_id verdict, not the form's values.
+                key: 'shared_client_id_notice',
+                type: 'notice',
+                variant: 'warning',
+                section: 'Authentication',
+                label: "Using rclone's shared Google Drive credentials",
+                conditional: {
+                    field: 'gdrive_sa_location',
+                    condition: 'api_flag',
+                    api_lookup: 'gdrive_credentials',
+                    value: 'shared_client_id',
+                },
+                description:
+                    'CHUB has no service-account keyfile it can read and no Client ID of ' +
+                    'your own, so rclone falls back to the client_id built into every rclone ' +
+                    'install. rclone is RETIRING that ' +
+                    'client during 2026, after which syncs stop working — and until then it ' +
+                    'shares a single 10 requests/sec Google quota with every other rclone user, ' +
+                    'which throttles large syncs. Point Service Account Location below at a ' +
+                    'readable keyfile — if it is already set, that path is what is wrong. ' +
+                    'Clearing it reveals the Client ID fields instead.',
+                link: 'https://rclone.org/drive/#making-your-own-client-id',
+                link_label: 'How to create your own client ID',
+            },
+            {
+                key: 'client_id',
+                label: 'Client ID',
+                type: 'password',
+                section: 'Authentication',
+                required: false,
+                placeholder: 'Place Client ID Here',
+                conditional: {
+                    field: 'gdrive_sa_location',
+                    condition: 'is_empty',
+                },
+                description:
+                    'OAuth client ID. Used only when there is no readable service-account keyfile.',
+            },
+            {
+                key: 'client_secret',
+                label: 'Client Secret',
+                type: 'password',
+                section: 'Authentication',
+                required: false,
+                conditional: {
+                    field: 'gdrive_sa_location',
+                    condition: 'is_empty',
+                },
+                description:
+                    'OAuth client secret. Used only when there is no readable service-account keyfile.',
+            },
+            {
+                key: 'gdrive_sa_location',
+                label: 'Service Account Location',
+                type: 'text',
+                section: 'Authentication',
+                required: false,
+                description:
+                    'Path to a Google Drive service-account JSON keyfile. Used in preference to the OAuth Client ID / Secret when the file exists; if the path is missing, CHUB falls back to them.',
+            },
+            {
+                key: 'token',
+                label: 'Token (JSON)',
+                type: 'json',
+                section: 'Authentication',
+                required: false,
+                placeholder:
+                    '{\n  "access_token": "ya29.a0AfH6SMBEXAMPLEEXAMPLETOKEN",\n  "refresh_token": "1",\n  "scope": "https://www.googleapis.com/auth/drive",\n  "token_type": "Bearer",\n  "expiry_date": 1712345678901\n}',
+                // Intentionally NOT hidden when a service account is set: you can
+                // sync via the SA (reads need no quota) yet still upload via OAuth
+                // (as you), since an SA can't own files in a personal Drive.
+                description:
+                    'OAuth2 token JSON — authenticates as YOU, so uploaded posters are owned by ' +
+                    'you and can be shared (unlike a service account, which has no storage quota ' +
+                    'and cannot own files in a personal Drive). Used when no service-account file ' +
+                    'is set. To get it: install rclone (rclone.org/install), run ' +
+                    'rclone authorize "drive" (or rclone authorize "drive" "CLIENT_ID" ' +
+                    '"CLIENT_SECRET" with your own OAuth app), sign in + authorize in the browser, ' +
+                    'then paste the entire token JSON (from { to }) here.',
+            },
+            {
+                key: 'gdrive_list',
+                label: 'Google Drive List',
+                type: 'object_array',
+                displayType: 'gdrive',
+                section: 'Authentication',
+                alwaysExpanded: true,
+                required: false,
+                description: 'Each entry contains id, location, and name.',
+                bulkPreset: {
+                    presetUrl: '/api/gdrive-presets',
+                    locationTemplate: '{base}/{style}/{name}',
+                },
+
+                fields: [
+                    {
+                        key: 'preset',
+                        label: 'Gdrive Presets',
+                        type: 'presets',
+                        presetType: 'gdrive',
+                        presetUrl: '/api/gdrive-presets',
+                        identifierField: 'name',
+                        moduleConfigKey: 'gdrive_list',
+                        targetFields: ['name', 'id'],
+                        required: false,
+                        exclude_on_save: true,
+                        description: 'Select a preset configuration for Google Drive.',
+                        presetHandler: true,
+                    },
+                    {
+                        key: 'name',
+                        label: 'Name',
+                        type: 'text',
+                        required: true,
+                        description: 'Friendly name for this Google Drive entry.',
+                    },
+                    {
+                        key: 'id',
+                        label: 'GDrive ID',
+                        type: 'text',
+                        required: true,
+                        description: 'Unique ID of the Google Drive folder or file.',
+                    },
+                    {
+                        key: 'location',
+                        label: 'Location',
+                        type: 'dir',
+                        required: true,
+
+                        description: 'Local directory to sync with the specified Google Drive ID.',
+                    },
+                    {
+                        key: 'search_only',
+                        label: 'Browse only',
+                        type: 'check_box',
+                        required: false,
+                        description:
+                            'Off (default) = this drive is used for poster matching automatically — ' +
+                            'no need to also add its location to Poster Renamerr source dirs. ' +
+                            'On = browse-only: its posters show in Assets Search but are never ' +
+                            'matched or applied (for "Extras" drives).',
+                    },
+                ],
+            },
+            // ─── Options ───────────────────────────────────────────────
+            {
+                key: 'verbose',
+                label: 'Verbose',
+                type: 'check_box',
+                section: 'Options',
+                description:
+                    'Log every file rclone copies, deletes, updates, or renames. Useful for tracing what changed; can be noisy on large syncs.',
+            },
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Options',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for Google Drive sync.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Pass --dry-run to rclone — log every file that would be copied or deleted without touching the local filesystem.',
+            },
+        ],
+    },
+
+    {
+        key: 'poster_renamerr',
+        label: 'Poster Renamerr',
+        columns: [
+            { id: 'in', label: 'Inputs', icon: 'input' },
+            { id: 'out', label: 'Output & pipeline', icon: 'upload' },
+        ],
+        sections: [
+            { id: 'sources', title: 'Source directories', column: 'in', kind: 'form' },
+            { id: 'targets', title: 'Instances & Plex', column: 'in', kind: 'form' },
+            { id: 'music', title: 'Music art', column: 'in', kind: 'form' },
+            {
+                id: 'output',
+                title: 'Output',
+                column: 'out',
+                kind: 'pass',
+                modeField: 'apply_method',
+                actionLabel: 'Apply method',
+                subtitle: 'How matched posters are applied.',
+            },
+            {
+                id: 'chain',
+                title: 'Chained actions',
+                column: 'out',
+                kind: 'form',
+                subtitle: 'Extra steps to run in the same pass.',
+            },
+            { id: 'logging', title: 'Logging', column: 'out', kind: 'form' },
+        ],
+        fields: [
+            // ─── Output (Apply) ────────────────────────────────────────
+            {
+                key: 'apply_method',
+                label: 'Apply Method',
+                type: 'segmented',
+                section: 'output',
+                options: [
+                    { value: 'plex', label: 'Plex' },
+                    { value: 'kometa', label: 'Kometa' },
+                ],
+                required: true,
+                description: 'Plex uploads straight to Plex · Kometa writes to the destination.',
+                helpText:
+                    'Where matched posters go (either/or). "Plex" uploads posters straight to Plex for the instances whose "Upload to this Plex instance" box is ticked below — nothing is written to disk. "Kometa" renames/copies posters into the Destination Directory for Kometa to apply — no Plex upload. The Destination Directory / File Action / Asset folders settings apply to the "Kometa" method.',
+            },
+            {
+                key: 'action_type',
+                label: 'File Action',
+                type: 'dropdown',
+                section: 'output',
+                options: ['copy', 'move', 'hardlink', 'symlink'],
+                required: true,
+                description: 'How Kometa places files at the destination.',
+                helpText:
+                    'Kometa method: how matched posters reach the destination. "hardlink" is fastest and saves disk space when source and destination are on the same filesystem; "copy" is safest if you are unsure.',
+            },
+            {
+                key: 'destination_dir',
+                label: 'Destination Directory',
+                type: 'dir',
+                section: 'output',
+                required: true,
+                description: 'Where Kometa writes renamed posters.',
+                helpText:
+                    'Kometa method: where renamed posters are written. Plex/Kometa-compatible asset folder structure when "Asset folders" is enabled below.',
+            },
+            {
+                key: 'asset_folders',
+                label: 'Asset folders (per-show)',
+                type: 'check_box',
+                section: 'output',
+                description: 'Plex-style per-show folders instead of flat filenames.',
+                helpText:
+                    'Kometa method: enable Plex-style folder layout: destination/<Show Name>/poster.jpg + Season01.jpg. When off, files are flat: destination/<Show Name>_Season01.jpg.',
+            },
+            // ─── Source directories ────────────────────────────────────
+            {
+                key: 'source_dirs',
+                label: 'Source Directories',
+                type: 'dirlist_dragdrop',
+                section: 'sources',
+                required: true,
+                bulkSource: 'gdrive',
+                priorityOrder: true,
+                description: 'Folders scanned for posters — bottom of the list wins on conflicts.',
+                helpText:
+                    'Folders scanned for poster assets. Bulk-add the Google Drives you configured in Sync GDrive, or add directories individually. Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence).',
+            },
+            {
+                key: 'sync_posters',
+                label: 'Sync from Google Drive first',
+                type: 'check_box',
+                section: 'sources',
+                description: 'Run Sync GDrive before each run so sources are current.',
+                helpText:
+                    'Run Sync Gdrive before each Poster Renamerr run so the source directories are up to date. Requires Sync Gdrive to be configured.',
+            },
+            // ─── Instances & Plex scope (Targets) ──────────────────────
+            {
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                section: 'targets',
+                required: true,
+                instance_types: ['radarr', 'sonarr', 'lidarr'],
+                valueFormat: 'string',
+                description:
+                    'Radarr/Sonarr/Lidarr instances supply the media list to match posters against.',
+            },
+            {
+                key: 'plex_scope',
+                label: 'Plex Libraries',
+                type: 'plex_scope',
+                section: 'targets',
+                add_posters_option: true,
+                match_collections_option: true,
+                description: 'Plex instances/libraries to upload to and match collections from.',
+                helpText:
+                    'Plex instances to upload posters to and/or match collections from. ' +
+                    'Pick libraries to scope collection matching (empty = all enabled libraries). ' +
+                    'Enable "Upload posters" per instance for the Plex apply method.',
+            },
+            // ─── Chained actions (Pipeline) ────────────────────────────
+            {
+                key: 'run_border_replacerr',
+                label: 'Run Border Replacerr after rename',
+                type: 'check_box',
+                section: 'chain',
+                description: 'Hand renamed posters to Border Replacerr afterward.',
+                helpText:
+                    'After files are renamed, hand the manifest to Border Replacerr so it can recolor or strip the white TPDB border on just those posters. Configure colors in the Border Replacerr module.',
+            },
+            {
+                key: 'run_asset_renamerr',
+                label: 'Run Asset Renamerr after rename',
+                type: 'check_box',
+                section: 'chain',
+                description: 'Also run Asset Renamerr in the same pass (logos, art, backgrounds).',
+                helpText:
+                    "After posters are processed, run Asset Renamerr in the same pass to apply logos, square art, backgrounds, and banners — reusing this run's Google Drive sync, source scan, and media/Plex data so nothing is fetched twice. Configure the asset types, sources, and apply method in the Asset Renamerr module.",
+            },
+            {
+                key: 'clean_orphan_assets',
+                label: 'Clean orphan assets after rename',
+                type: 'check_box',
+                section: 'chain',
+                description: 'Clean orphaned posters at the destination after renaming.',
+                helpText:
+                    "After renaming, scans the destination for orphan posters — files whose media no longer exists in your instances — and acts on them. A poster is kept if its {tmdb-N}/{tvdb-N} tag or its title still matches the library; it's flagged only when both miss. Source dirs are excluded (gdrive sources re-download on next sync; personal dirs aren't CHUB's to touch). The action (report / move / remove) follows Orphan Assets Mode in Poster Cleanarr.",
+            },
+            {
+                key: 'report_unmatched_assets',
+                label: 'Report unmatched assets',
+                type: 'check_box',
+                section: 'chain',
+                description: 'Log source posters that matched no media.',
+                helpText:
+                    'Log a summary of source posters that could not be matched to any media. Useful for spotting filename typos or missing IDs on the asset side.',
+            },
+            {
+                key: 'upload_delay_ms',
+                label: 'Upload delay (ms)',
+                type: 'number',
+                section: 'chain',
+                description: 'Pause after each Plex upload (ms). 0 = none.',
+                helpText:
+                    'Optional pause after each poster uploaded to Plex, to be gentle on the server during large runs. 0 = no delay (default). Only applied after an actual upload, never after a skip. Try 50 if your Plex struggles under bursts.',
+            },
+            {
+                key: 'skip_unchanged_uploads',
+                label: 'Skip unchanged posters',
+                type: 'check_box',
+                section: 'chain',
+                description: 'Plex only — skip re-processing posters whose source is unchanged.',
+                helpText:
+                    'Plex apply only. Skip re-staging (copy → border → upload) a poster whose source is unchanged since it was last applied, instead of reprocessing every poster each run. Makes a scheduled run a near no-op for a stable library. Note: because it keys on the source file, adding a Plex library or changing border settings won’t re-apply to unchanged posters until their source changes — turn this off (or force a run) once to backfill in that case.',
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'debug = per-file decisions · info = normal.',
+                helpText:
+                    '"debug" prints per-file decisions and is useful when investigating a missing match; "info" is the normal cron-friendly level.',
+            },
+            {
+                key: 'print_only_renames',
+                label: 'Log only renamed files',
+                type: 'check_box',
+                section: 'logging',
+                description: 'Only log newly renamed or copied files.',
+                helpText:
+                    'Quiet the log by suppressing entries for files that are already up to date. Only newly renamed/copied files are logged.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Log every action without writing to disk or uploading.',
+                helpText:
+                    'Walk the full pipeline and log every action that would be taken — but write nothing to disk and upload nothing to Plex.',
+            },
+            // ─── Music (only shown when a Lidarr instance is configured) ──
+            {
+                key: 'music_source_dirs',
+                label: 'Music Art Source Directories',
+                type: 'dirlist_dragdrop',
+                section: 'music',
+                conditional: {
+                    field: 'instances',
+                    condition: 'service_configured',
+                    value: 'lidarr',
+                    api_lookup: 'instances',
+                },
+                description: 'Folders holding your custom artist / album art.',
+                helpText:
+                    'Folders holding your custom ARTIST/ALBUM art. Files here are recognized as music by folder layout (<Artist>/artist.jpg or poster.jpg, <Artist>/<Album>/cover.jpg) or a flat "Artist.jpg" / "Artist - Album.jpg" name; an {mbid-<id>} tag overrides identity (and works in the regular Source Directories too). Kept separate so a flat "Title.jpg" is never mistaken for a movie poster.',
+            },
+            {
+                key: 'music_lock_artist_art',
+                label: 'Lock artist art in Plex',
+                type: 'check_box',
+                section: 'music',
+                conditional: {
+                    field: 'instances',
+                    condition: 'service_configured',
+                    value: 'lidarr',
+                    api_lookup: 'instances',
+                },
+                description: "Lock artist art in Plex so the music agent can't override it.",
+                helpText:
+                    "After uploading an artist poster, lock the artist's thumb/art in Plex so the music agent can't re-derive it from album art on the next refresh. Artist-only — album covers are sticky and never need this. Enable only if you see artist posters revert.",
+            },
+            {
+                key: 'music_lma_sidecars',
+                label: 'Write music art sidecars',
+                type: 'check_box',
+                section: 'music',
+                conditional: {
+                    field: 'instances',
+                    condition: 'service_configured',
+                    value: 'lidarr',
+                    api_lookup: 'instances',
+                },
+                description: 'Write image-only art sidecars into Plex music folders.',
+                helpText:
+                    'Also write image-only sidecar files (cover.jpg for albums, artist-poster.jpg / background.jpg for artists) into your Plex music library folders for refresh-proof art. Writes image files only — never touches audio, so seeded music torrents are unaffected. Requires the Local Media Assets agent prioritized in Plex.',
+            },
+        ],
+    },
+
+    {
+        key: 'asset_renamerr',
+        label: 'Asset Renamerr',
+        columns: [
+            { id: 'in', label: 'Inputs', icon: 'input' },
+            { id: 'out', label: 'Output & pipeline', icon: 'upload' },
+        ],
+        sections: [
+            { id: 'assets', title: 'Asset types', column: 'in', kind: 'form' },
+            { id: 'source', title: 'Source', column: 'in', kind: 'form' },
+            {
+                id: 'apply',
+                title: 'Apply',
+                column: 'out',
+                kind: 'pass',
+                modeField: 'apply_method',
+                actionLabel: 'Apply method',
+                subtitle: 'How matched assets are applied.',
+            },
+            { id: 'targets', title: 'Instances & Plex', column: 'out', kind: 'form' },
+            { id: 'logging', title: 'Logging', column: 'out', kind: 'form' },
+        ],
+        fields: [
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'debug = per-item source & apply decisions · info = normal.',
+                helpText:
+                    'Set the logging verbosity. "debug" prints per-item source resolution and apply decisions.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Log every action without writing to disk or uploading.',
+                helpText:
+                    'Walk the full pipeline and log every action that would be taken — but write nothing to disk and upload nothing to Plex.',
+            },
+            {
+                key: 'print_only_renames',
+                label: 'Log only applied assets',
+                type: 'check_box',
+                section: 'logging',
+                description: 'Only log newly applied assets.',
+                helpText:
+                    'Quiet the log by suppressing entries for assets that were already up to date.',
+            },
+            // ─── Asset types ───────────────────────────────────────────
+            {
+                key: 'asset_types',
+                label: 'Asset Types',
+                type: 'array',
+                section: 'assets',
+                suggestions: ['logo', 'background', 'squareart'],
+                allowCustom: false,
+                placeholder: 'Add asset type…',
+                description: 'Which asset types to manage (logo, background, squareart).',
+                helpText:
+                    'Which additional asset types to manage. Logo, background and square art all work on BOTH apply methods — square art needs Kometa 2.4.5 or newer on the "kometa" path (older versions ignore the file). Seasons are narrower: Kometa reads only season backgrounds, never season logos or square art.',
+            },
+            // ─── Source ────────────────────────────────────────────────
+            {
+                key: 'sources',
+                label: 'Primary Source',
+                type: 'primary_source',
+                section: 'source',
+                options: [
+                    { value: 'local', label: 'Prefer local files (fanart.tv fallback)' },
+                    { value: 'fanart', label: 'Prefer fanart.tv (local fallback)' },
+                ],
+                required: true,
+                description: 'Prefer local files or fanart.tv — the other is the fallback.',
+                helpText:
+                    'Which image source to prefer; the other is automatically used as a fallback when the preferred source has no image for an item. "local" = files scanned from Source Directories (g-drive synced). "fanart" = logos + backgrounds from fanart.tv, ranked by community likes (requires your fanart.tv personal API key below; supplies logo + background only — square art always comes from local files).',
+            },
+            {
+                key: 'source_dirs',
+                label: 'Source Directories',
+                type: 'dirlist_dragdrop',
+                section: 'source',
+                description: 'Folders scanned for local asset files. Bottom of the list wins.',
+                helpText:
+                    'Folders scanned for asset files named like "Title (Year) {tmdb-123} - Logo.png". Drag to set priority — later directories win when multiple sources have the same asset (bottom takes precedence). Used by the "local" source.',
+            },
+            {
+                key: 'sync_assets',
+                label: 'Sync from Google Drive first',
+                type: 'check_box',
+                section: 'source',
+                description: 'Run Sync GDrive before a standalone run.',
+                helpText:
+                    'Run Sync Gdrive before each standalone Asset Renamerr run so the source directories are up to date. Not needed when running via Poster Renamerr\'s "Run Asset Renamerr after rename" (that pass reuses the poster sync).',
+            },
+            {
+                key: 'tmdb_language',
+                label: 'Image Languages (priority order)',
+                type: 'multiselect',
+                section: 'source',
+                placeholder: 'Add language…',
+                options: [
+                    { value: 'en', label: 'English (en)' },
+                    { value: 'es', label: 'Spanish (es)' },
+                    { value: 'fr', label: 'French (fr)' },
+                    { value: 'de', label: 'German (de)' },
+                    { value: 'it', label: 'Italian (it)' },
+                    { value: 'pt', label: 'Portuguese (pt)' },
+                    { value: 'nl', label: 'Dutch (nl)' },
+                    { value: 'ja', label: 'Japanese (ja)' },
+                    { value: 'ko', label: 'Korean (ko)' },
+                    { value: 'zh', label: 'Chinese (zh)' },
+                    { value: 'ru', label: 'Russian (ru)' },
+                    { value: 'hi', label: 'Hindi (hi)' },
+                    { value: 'ar', label: 'Arabic (ar)' },
+                    { value: 'tr', label: 'Turkish (tr)' },
+                    { value: 'pl', label: 'Polish (pl)' },
+                    { value: 'sv', label: 'Swedish (sv)' },
+                    { value: 'da', label: 'Danish (da)' },
+                    { value: 'no', label: 'Norwegian (no)' },
+                    { value: 'fi', label: 'Finnish (fi)' },
+                    { value: 'cs', label: 'Czech (cs)' },
+                    { value: 'el', label: 'Greek (el)' },
+                    { value: 'he', label: 'Hebrew (he)' },
+                    { value: 'th', label: 'Thai (th)' },
+                    { value: 'id', label: 'Indonesian (id)' },
+                    { value: 'uk', label: 'Ukrainian (uk)' },
+                ],
+                description: 'Preferred languages for fanart.tv art, in priority order.',
+                helpText:
+                    'Preferred languages for fanart.tv image selection, in priority order (the order you add them) — the first available language wins, with language-neutral / textless art always allowed as a fallback. Logos prefer your languages then textless; backgrounds prefer textless then your languages. Within a tier, the most-liked image on fanart.tv wins.',
+            },
+            // ─── Apply ─────────────────────────────────────────────────
+            {
+                key: 'apply_method',
+                label: 'Apply Method',
+                type: 'segmented',
+                section: 'apply',
+                options: [
+                    { value: 'plex', label: 'Plex' },
+                    { value: 'kometa', label: 'Kometa' },
+                ],
+                required: true,
+                description: 'Plex uploads straight to Plex · Kometa writes to the destination.',
+                helpText:
+                    '"Plex" uploads images straight to Plex via plexapi — logo, background, and squareart — for the instances whose "Upload to this Plex instance" box is ticked below. "Kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, square.ext, and Season##_background.ext for seasons) for Kometa to apply. Square art needs Kometa 2.4.5+. Keep this module\'s Asset Folders setting identical to Poster Renamerr\'s — Kometa has a single asset_folders toggle, so a mismatch leaves half the tree unread. On the Kometa path, keep dimensional_asset_rename turned OFF in your Kometa config: it classifies unrecognised asset-folder images by aspect ratio, so a wide logo.png gets renamed to background.png and a square one to poster.png.',
+            },
+            {
+                key: 'destination_dir',
+                label: 'Destination Directory',
+                type: 'dir',
+                section: 'apply',
+                description: 'Kometa assets directory for renamed assets.',
+                helpText:
+                    'Kometa assets directory where renamed assets are written. Required when Apply Method is "kometa".',
+            },
+            {
+                key: 'action_type',
+                label: 'File Action',
+                type: 'dropdown',
+                section: 'apply',
+                options: ['copy', 'move', 'hardlink', 'symlink'],
+                required: true,
+                description: 'How Kometa places files at the destination.',
+                helpText:
+                    'How matched assets reach the destination on the "kometa" path. "hardlink" is fastest and saves disk when source and destination share a filesystem; "copy" is safest.',
+            },
+            {
+                key: 'asset_folders',
+                label: 'Asset folders (per-title)',
+                type: 'check_box',
+                section: 'apply',
+                description: 'Kometa-style per-title folders instead of flat filenames.',
+                helpText:
+                    'Kometa-style folder layout: destination/<Title (Year)>/logo.png. When off, files are flat: destination/<Title (Year)>_logo.png. Match this to your Kometa configuration.',
+            },
+            // ─── Targets ───────────────────────────────────────────────
+            {
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                section: 'targets',
+                required: true,
+                instance_types: ['radarr', 'sonarr'],
+                valueFormat: 'string',
+                description:
+                    'Radarr/Sonarr instances supply the media list to match assets against.',
+            },
+            {
+                key: 'plex_scope',
+                label: 'Plex Libraries',
+                type: 'plex_scope',
+                section: 'targets',
+                add_posters_option: true,
+                match_collections_option: true,
+                description:
+                    'Plex instances/libraries to upload assets to and match collections from.',
+                helpText:
+                    'Plex instances to upload assets (logo/background/squareart) to and/or match collections from. ' +
+                    'Pick libraries to scope collection matching (empty = all enabled libraries). ' +
+                    'Enable "Upload posters" per instance for the Plex apply method.',
+            },
+        ],
+    },
+
+    {
+        key: 'border_replacerr',
+        label: 'Border Replacerr',
+        fields: [
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                options: ['debug', 'info'],
+                required: true,
+                description:
+                    '"debug" prints per-poster crop/replace decisions; "info" is the normal cron-friendly level.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Walk the full pipeline and log every poster that would be re-bordered — but write nothing to disk.',
+            },
+            // ─── Paths ─────────────────────────────────────────────────
+            {
+                key: 'source_dirs',
+                label: 'Source Directories',
+                type: 'dirlist_dragdrop',
+                section: 'Paths',
+                description:
+                    'Folders scanned for poster assets when Border Replacerr is run on its own (not via Poster Renamerr). Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence).',
+            },
+            {
+                key: 'destination_dir',
+                label: 'Destination Directory',
+                type: 'dir',
+                section: 'Paths',
+                description:
+                    'Where re-bordered posters are written when Border Replacerr is run on its own. When triggered via Poster Renamerr, the manifest path is used instead and this field is ignored.',
+            },
+            // ─── Border ────────────────────────────────────────────────
+            {
+                key: 'border_width',
+                label: 'Border Width (px)',
+                type: 'number',
+                section: 'Border',
+                required: true,
+                placeholder: '26',
+                description:
+                    'Pixels cropped from each edge before re-bordering. Posters that follow the TPDB standard ship with a 26px white border, so 26 is the right value for almost every library. Posters without a matching border will lose this much real artwork.',
+            },
+            {
+                key: 'border_colors',
+                label: 'Border Colors',
+                type: 'color_list',
+                section: 'Border',
+                description:
+                    'Default border colors used when no holiday window is active. Rotates through the list as posters are processed. Pick richer per-holiday palettes and themed border art on the Border Replacerr page.',
+            },
+            // ─── Holidays ──────────────────────────────────────────────
+            {
+                key: 'holidays',
+                label: 'Holidays',
+                type: 'object_array',
+                section: 'Holidays',
+                displayType: 'replacerr',
+                description:
+                    "Add the holidays you want themed borders for and set their date windows here. Pick colors and themed border art on the Border Replacerr page — when today falls inside a holiday's window, that holiday's styling is used instead of the defaults.",
+                fields: [
+                    {
+                        key: 'preset',
+                        label: 'Holiday Presets',
+                        type: 'presets',
+                        presetType: 'holiday',
+                        identifierField: 'name',
+                        moduleConfigKey: 'holidays',
+                        targetFields: ['name', 'schedule', 'colors'],
+                        description:
+                            'Picking a preset prefills name, date window, and default colors. Customize colors and pick border art on the Border Replacerr page.',
+                        presetHandler: true,
+                    },
+                    {
+                        key: 'name',
+                        label: 'Holiday Name',
+                        type: 'text',
+                        required: true,
+                        description: 'Name of the holiday for color override.',
+                    },
+                    {
+                        key: 'schedule',
+                        label: 'Schedule',
+                        type: 'holiday_schedule',
+                        required: false,
+                        description: 'Schedule for when the holiday override is active.',
+                    },
+                ],
+            },
+            // ─── Filters ───────────────────────────────────────────────
+            {
+                key: 'exclusion_list',
+                label: 'Exclusion List',
+                type: 'textarea',
+                section: 'Filters',
+                description:
+                    "Media titles to skip entirely (one per line). Matched against the poster's associated media title — useful for keeping a few specific shows on their original border.",
+            },
+            {
+                key: 'ignore_folders',
+                label: 'Ignore Folders',
+                type: 'textarea',
+                section: 'Filters',
+                description:
+                    'Source folder names to skip (one per line). Posters whose source folder matches any entry are left untouched.',
+            },
+        ],
+    },
+
+    {
+        key: 'upgradinatorr',
+        label: 'Upgradinatorr',
+        fields: [
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Simulate upgrade actions without making changes.',
+            },
+            {
+                key: 'instances_list',
+                label: 'Instance profiles',
+                type: 'object_array',
+                displayType: 'upgradinatorr',
+                alwaysExpanded: true,
+
+                description:
+                    'Profiles can run with the main Upgradinatorr schedule or on their own schedule.',
+                fields: [
+                    {
+                        key: 'enabled',
+                        label: 'Enabled',
+                        type: 'check_box',
+                        defaultValue: true,
+                        description:
+                            'Uncheck to temporarily opt this profile out without deleting its settings. Disabled profiles are skipped on both scheduled and manual runs.',
+                    },
+                    {
+                        key: 'label',
+                        label: 'Profile Name',
+                        type: 'text',
+                        required: false,
+                        placeholder: 'Movies 4K upgrades',
+                        description:
+                            'Optional display name used in the profile list and scheduler logs.',
+                    },
+                    {
+                        key: 'instance',
+                        label: 'Instance',
+                        type: 'dropdown',
+                        options_source: 'api_instances',
+                        options_filter: ['radarr', 'sonarr', 'lidarr'],
+                        required: true,
+                        description: 'Select the instance to upgrade (Radarr, Sonarr, or Lidarr).',
+                    },
+                    {
+                        key: 'schedule',
+                        label: 'Profile Schedule',
+                        type: 'schedule',
+                        required: false,
+                        description:
+                            'Optional schedule for this profile. Leave empty to run only when the main Upgradinatorr schedule or Run button runs.',
+                    },
+                    {
+                        key: 'search_mode',
+                        label: 'Search Mode',
+                        type: 'dropdown',
+                        options: ['upgrade', 'missing', 'cutoff'],
+                        defaultValue: 'upgrade',
+                        required: false,
+                        description:
+                            'Upgrade: search all untagged items for better quality. Missing: search only items with no files. Cutoff: search items below quality profile cutoff.',
+                    },
+                    {
+                        key: 'count_mode',
+                        label: 'Count Mode',
+                        type: 'dropdown',
+                        options: [
+                            {
+                                value: 'series_artist',
+                                labelByType: {
+                                    sonarr: 'Series',
+                                    lidarr: 'Artist',
+                                    default: 'Series / Artist',
+                                },
+                            },
+                            {
+                                value: 'season_album',
+                                labelByType: {
+                                    sonarr: 'Season',
+                                    lidarr: 'Album',
+                                    default: 'Season / Album',
+                                },
+                            },
+                        ],
+                        defaultValue: 'series_artist',
+                        required: false,
+                        conditional: {
+                            field: 'instance',
+                            condition: 'instance_type_in',
+                            value: ['sonarr', 'lidarr'],
+                            api_lookup: 'instances',
+                        },
+                        descriptionByType: {
+                            sonarr: 'Series: Count caps how many series are processed per run (every monitored season of each gets searched). Season: Count caps the number of season searches — safer for trackers; partially-processed series resume next run.',
+                            lidarr: 'Artist: Count caps how many artists are processed per run (every monitored album of each gets searched). Album: Count caps the number of album searches — safer for trackers; partially-processed artists resume next run.',
+                        },
+                    },
+                    {
+                        key: 'count',
+                        label: 'Count',
+                        type: 'number',
+                        required: true,
+                        descriptionByType: {
+                            sonarr: 'Items per run. Per Count Mode: whole series (Series mode) or individual season searches (Season mode).',
+                            lidarr: 'Items per run. Per Count Mode: whole artists (Artist mode) or individual album searches (Album mode).',
+                            default: 'Items per run.',
+                        },
+                    },
+                    {
+                        key: 'queue_block_hours',
+                        label: 'Skip Items Awaiting Import (hours)',
+                        type: 'number',
+                        required: false,
+                        defaultValue: 72,
+                        min: 0,
+                        description:
+                            'Do not search an item that already has a download sitting in the queue waiting to import, until that download is older than this many hours. Prevents grabbing a second copy of something already on disk. Set to 0 to always search.',
+                    },
+                    {
+                        key: 'tag_name',
+                        label: 'Tag Name',
+                        type: 'text',
+                        required: false,
+                        defaultValue: 'checked',
+                        placeholder: 'checked',
+                        description:
+                            'Marker tag Upgradinatorr adds after searching an item. Leave blank to use "checked".',
+                    },
+                    {
+                        key: 'ignore_tag',
+                        label: 'Ignore Tag',
+                        type: 'text',
+                        placeholder: 'ignore',
+                        description:
+                            'ARR tag used to exclude media from this profile. Leave blank to use "ignore".',
+                    },
+                    {
+                        key: 'unattended',
+                        label: 'Auto reset processed tag',
+                        type: 'check_box',
+                        description:
+                            'When every eligible item has the marker tag, remove that marker tag and start the rotation again.',
+                    },
+                    {
+                        key: 'season_monitored_threshold',
+                        label: 'Season Monitored Threshold',
+                        type: 'float',
+                        required: true,
+                        conditional: {
+                            field: 'instance',
+                            condition: 'instance_type_equals',
+                            value: 'sonarr',
+                            api_lookup: 'instances',
+                        },
+                        description:
+                            'Minimum percentage of monitored seasons required (Sonarr only).',
+                    },
+                ],
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for upgradinatorr.',
+            },
+        ],
+    },
+
+    {
+        key: 'renameinatorr',
+        label: 'Renameinatorr',
+        fields: [
+            // ─── Scope ─────────────────────────────────────────────────
+            {
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                section: 'Scope',
+                required: true,
+                instance_types: ['radarr', 'sonarr'],
+                // Backend: RenameinatorrConfig.instances is List[str].
+                valueFormat: 'string',
+                description: 'List of Radarr and Sonarr instances to rename.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Simulate renaming without making changes.',
+            },
+            // ─── Rename behaviour ──────────────────────────────────────
+            {
+                key: 'rename_folders',
+                label: 'Rename Folders',
+                type: 'check_box',
+                section: 'Rename behaviour',
+                description: 'Enable to rename folders as well as files.',
+            },
+            {
+                key: 'refresh_before_rename',
+                label: 'Refresh Before Rename',
+                type: 'check_box',
+                section: 'Rename behaviour',
+                description:
+                    'Refresh metadata before checking what needs renaming, so renames pick up the latest titles (e.g. Sonarr TBA episodes). Slower; waits for each refresh to finish.',
+            },
+            {
+                key: 'enable_batching',
+                label: 'Enable Batching',
+                type: 'check_box',
+                section: 'Rename behaviour',
+                description: 'Enable batch processing for renaming.',
+            },
+            {
+                key: 'count',
+                label: 'Count',
+                type: 'number',
+                section: 'Rename behaviour',
+                description: 'Number of items to rename per operation.',
+            },
+            {
+                key: 'radarr_count',
+                label: 'Radarr Count',
+                type: 'number',
+                section: 'Rename behaviour',
+                description: 'Number of Radarr items to process per run.',
+            },
+            {
+                key: 'sonarr_count',
+                label: 'Sonarr Count',
+                type: 'number',
+                section: 'Rename behaviour',
+                description: 'Number of Sonarr items to process per run.',
+            },
+            {
+                key: 'tag_name',
+                label: 'Tag Name',
+                type: 'text',
+                section: 'Rename behaviour',
+                description: 'Tag name to filter items for renaming.',
+            },
+            // ─── Ignore filters ────────────────────────────────────────
+            {
+                key: 'ignore_tags',
+                label: 'Ignore Tag',
+                type: 'text',
+                section: 'Ignore filters',
+                description:
+                    'Skip any item carrying this tag. Items with this tag are excluded from renaming.',
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['info', 'debug'],
+                required: true,
+                description: 'Set the logging verbosity for renameinatorr.',
+            },
+        ],
+    },
+
+    {
+        key: 'nohl',
+        label: 'Nohl',
+        fields: [
+            // ─── Paths to scan ─────────────────────────────────────────
+            {
+                key: 'source_dirs',
+                label: 'Source Directories',
+                type: 'dirlist_options',
+                section: 'Paths to scan',
+                options: ['scan', 'resolve'],
+                default_mode: 'resolve',
+                required: true,
+
+                description: 'Directories to scan or resolve for files.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Simulate actions without making changes.',
+            },
+            // ─── Detection ─────────────────────────────────────────────
+            {
+                key: 'print_files',
+                label: 'Print Files',
+                type: 'check_box',
+                section: 'Detection',
+                description: 'Print file paths during operation.',
+            },
+            {
+                key: 'exclude_profiles',
+                label: 'Exclude Profiles',
+                type: 'textarea',
+                section: 'Detection',
+                description: 'Profiles to exclude from processing.',
+            },
+            {
+                key: 'exclude_movies',
+                label: 'Exclude Movies',
+                type: 'textarea',
+                section: 'Detection',
+                description: 'Movies to exclude from processing.',
+            },
+            {
+                key: 'exclude_series',
+                label: 'Exclude Series',
+                type: 'textarea',
+                section: 'Detection',
+                description: 'Series to exclude from processing.',
+            },
+            // ─── When a non-hardlinked file is found ───────────────────
+            {
+                key: 'searches',
+                label: 'Searches',
+                type: 'number',
+                section: 'When a non-hardlinked file is found',
+                required: true,
+                description: 'Number of search operations to perform.',
+            },
+            // ─── Scope ─────────────────────────────────────────────────
+            {
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                section: 'Scope',
+                required: true,
+                add_posters_option: false,
+                instance_types: ['radarr', 'sonarr'],
+                // Backend: NohlConfig.instances is List[str].
+                valueFormat: 'string',
+                description: 'Instances to apply Nohl logic to.',
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for Nohl module.',
+            },
+        ],
+    },
+
+    {
+        key: 'labelarr',
+        label: 'Labelarr',
+        fields: [
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Simulate label management actions without making changes.',
+            },
+            {
+                key: 'mappings',
+                label: 'Mappings',
+                type: 'object_array',
+                displayType: 'labelarr',
+                alwaysExpanded: true,
+
+                description:
+                    'Choose which Sonarr/Radarr tag becomes which Plex label, and on which Plex instance.',
+                fields: [
+                    {
+                        key: 'app_instance',
+                        label: 'App Instance',
+                        type: 'dropdown',
+                        options_source: 'api_instances',
+                        options_filter: ['radarr', 'sonarr', 'lidarr'],
+                        required: true,
+                        description: 'Select the specific app instance for this mapping.',
+                    },
+                    {
+                        key: 'labels',
+                        label: 'Labels',
+                        type: 'array',
+                        required: true,
+                        placeholder: 'Add a label…',
+                        description:
+                            'Plex labels to apply for this mapping (the *arr tags become these labels).',
+                    },
+                    {
+                        key: 'plex_instances',
+                        label: 'Plex Instances',
+                        type: 'instances',
+                        required: true,
+                        instance_types: ['plex'],
+                        add_posters_option: false,
+                        description: 'List of Plex instances to apply the labels to.',
+                    },
+                    {
+                        key: 'enabled',
+                        label: 'Enabled',
+                        type: 'check_box',
+                        defaultValue: true,
+                        description:
+                            'Uncheck to pause this mapping without deleting it — disabled mappings are skipped on every run.',
+                    },
+                ],
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for labelarr.',
+            },
+        ],
+    },
+
+    {
+        key: 'health_checkarr',
+        label: 'Health Checkarr',
+        fields: [
+            // ─── Scope ─────────────────────────────────────────────────
+            {
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                section: 'Scope',
+                required: true,
+                add_posters_option: false,
+                instance_types: ['radarr', 'sonarr'],
+                // Backend: HealthCheckarrConfig.instances is Optional[List[str]].
+                valueFormat: 'string',
+                // description: 'Instances to run health checks on.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Log what would be deleted from Radarr/Sonarr without actually deleting. Turn off to actually clean up media flagged as removed from TMDB/TVDB.',
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['info', 'debug'],
+                required: true,
+                description: 'Set the logging verbosity for health checks.',
+            },
+        ],
+    },
+
+    {
+        key: 'jduparr',
+        label: 'Jduparr',
+        fields: [
+            // ─── Paths to audit ────────────────────────────────────────
+            {
+                key: 'source_dirs',
+                label: 'Source Directories',
+                type: 'dirlist',
+                section: 'Paths to audit',
+                required: true,
+
+                description:
+                    'Directories to scan together for duplicate media files. Duplicates across these directories can be hardlinked.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Simulate duplicate detection without making changes.',
+            },
+            // ─── jdupes options ────────────────────────────────────────
+            {
+                key: 'hash_database',
+                label: 'Hash Database',
+                type: 'text',
+                section: 'jdupes options',
+                description:
+                    'Optional jdupes hash database file path. Leave blank unless you want jdupes to reuse a persistent hash cache.',
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for jduparr.',
+            },
+        ],
+    },
+
+    {
+        key: 'nestarr',
+        label: 'Nestarr',
+        fields: [
+            {
+                key: 'library_mappings',
+                label: 'Library mappings',
+                type: 'object_array',
+                displayType: 'nestarr',
+                alwaysExpanded: true,
+                description:
+                    'Map Plex libraries to ARR instances to enable ARR↔Plex unmatched detection. Only mapped libraries are checked — unmapped libraries (e.g. Music) are excluded. Leave empty to keep unmatched detection off (nested and stray-file detection still run).',
+                fields: [
+                    {
+                        key: 'arr_instance',
+                        label: 'ARR Instance',
+                        type: 'dropdown',
+                        options_source: 'api_instances',
+                        options_filter: ['radarr', 'sonarr', 'lidarr'],
+                        required: true,
+                        description:
+                            'Select the Radarr, Sonarr, or Lidarr instance to compare against.',
+                    },
+                    {
+                        key: 'plex_instances',
+                        label: 'Plex Instances',
+                        type: 'instances',
+                        required: true,
+                        instance_types: ['plex'],
+                        add_posters_option: false,
+                        description:
+                            'Select Plex instances and the specific libraries to compare against this ARR instance.',
+                    },
+                ],
+            },
+            {
+                key: 'path_mapping',
+                label: 'Path mapping',
+                type: 'object_array',
+                displayType: 'path_mapping',
+                alwaysExpanded: true,
+                description:
+                    'Map ARR container paths to CHUB-accessible paths for filesystem scanning. Only needed if containers use different volume mount points. Leave empty if all containers share the same media mounts.',
+                fields: [
+                    {
+                        key: 'arr_path',
+                        label: 'ARR Path Prefix',
+                        type: 'text',
+                        required: true,
+                        placeholder: '/data',
+                        description: 'Path prefix as seen inside the ARR container (e.g. /data).',
+                    },
+                    {
+                        key: 'local_path',
+                        label: 'CHUB Path Prefix',
+                        type: 'text',
+                        required: true,
+                        placeholder: '/mnt/user/data',
+                        description:
+                            'Equivalent path as seen inside the CHUB container (e.g. /mnt/user/data).',
+                    },
+                ],
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['info', 'debug'],
+                required: true,
+                description: 'Set the logging verbosity for nest detection.',
+            },
+        ],
+    },
+
+    {
+        key: 'poster_cleanarr',
+        label: 'Poster Cleanarr',
+        // Redesign layout metadata (read only by ModuleSettingsPage when a
+        // module defines `sections`). `columns` are the two responsive lanes
+        // with their eyebrow labels; `sections` map each `field.section` id to
+        // a card, its lane, and how it renders (form vs pass). Bloat/orphan/
+        // stale are `pass` cards: their `modeField` renders as the full-width
+        // Action row, `enableField` as the header toggle. `modeCollapseAfter`
+        // hides options past N behind a "More…" affordance.
+        columns: [
+            { id: 'left', label: 'Plex metadata', icon: 'dns' },
+            { id: 'right', label: 'Asset folders', icon: 'folder' },
+        ],
+        sections: [
+            { id: 'plex_conn', title: 'Plex connection', column: 'left', kind: 'form' },
+            {
+                id: 'bloat',
+                title: 'Bloat pass',
+                column: 'left',
+                kind: 'pass',
+                modeField: 'mode',
+                modeCollapseAfter: 3,
+                subtitle: "Scans Plex's metadata directory for leftover artwork and acts on it.",
+            },
+            {
+                id: 'sources',
+                title: 'Asset sources',
+                column: 'right',
+                kind: 'form',
+                subtitle:
+                    "Where your renamed posters live — usually Poster Renamerr's destination. Shared by both passes below.",
+            },
+            {
+                id: 'orphan',
+                title: 'Orphan assets',
+                column: 'right',
+                kind: 'pass',
+                enableField: 'orphan_assets_enabled',
+                modeField: 'orphan_assets_mode',
+            },
+            {
+                id: 'stale',
+                title: 'Stale duplicates',
+                column: 'right',
+                kind: 'pass',
+                enableField: 'stale_duplicates_enabled',
+                modeField: 'stale_duplicates_mode',
+                note: 'The canonical folder is always kept — the pass only acts on the stale, renamed copy.',
+            },
+        ],
+        fields: [
+            {
+                key: 'mode',
+                label: 'Mode',
+                type: 'segmented',
+                options: [
+                    { value: 'report', label: 'Report' },
+                    { value: 'move', label: 'Move' },
+                    { value: 'remove', label: 'Remove', danger: true },
+                    { value: 'restore', label: 'Restore' },
+                    { value: 'clear', label: 'Clear', danger: true },
+                    { value: 'nothing', label: 'Nothing' },
+                ],
+                required: true,
+                section: 'bloat',
+                description:
+                    'Report logs only · Move quarantines (recoverable) · Remove deletes · Restore recovers · Clear empties the restore dir · Nothing skips.',
+                helpText:
+                    'Report lists only · Move quarantines (recoverable) · Remove deletes · Restore recovers moved · Clear deletes the restore dir · Nothing skips images.',
+            },
+            {
+                key: 'overlays_only',
+                label: 'Overlays Only',
+                type: 'check_box',
+                section: 'bloat',
+                description: 'Only touch posters carrying a Kometa overlay tag.',
+                helpText:
+                    'Only act on files that carry the Kometa overlay EXIF tag. Custom-uploaded posters/art (which lack the tag) are left alone. Safer for Kometa users — files without the marker are skipped, not deleted.',
+            },
+            {
+                key: 'instances',
+                label: 'Plex Instance(s)',
+                type: 'instances',
+                required: true,
+                instance_types: ['plex'],
+                valueFormat: 'string',
+                section: 'plex_conn',
+                description: 'Server whose metadata is scanned for bloat.',
+                helpText:
+                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here. In-use artwork is protected server-wide; to skip a specific library use Exclude Libraries in the Bloat pass.',
+            },
+            {
+                key: 'excluded_libraries',
+                label: 'Exclude Libraries',
+                type: 'plex_library_exclude',
+                section: 'bloat',
+                description: 'Checked libraries are skipped. Leave all off to scan every library.',
+                helpText:
+                    "Plex libraries to skip in the bloat pass — checked libraries are hidden from the bloat view and never cleaned (handy for Music / Music Videos, whose album art otherwise shows up as '(unknown)'). Safe by design: the in-use protection set stays global, so excluding a library only ever leaves its stale bloat alone — it can never delete a live poster. Empty = every library is scanned. Does not affect the Orphan or Stale-duplicate asset passes.",
+            },
+            {
+                key: 'plex_path',
+                label: 'Plex Path',
+                type: 'text',
+                required: true,
+                section: 'plex_conn',
+                description: 'Container path to the Plex data directory.',
+                helpText:
+                    "Path inside the CHUB container that points at your Plex Media Server's data dir " +
+                    "— the folder that directly contains 'Metadata/', 'Cache/', 'Plug-in Support/', etc. " +
+                    "Typical Docker setup: mount the host's 'Library/Application Support/Plex Media Server/' " +
+                    'to /plex and enter /plex here.',
+            },
+            {
+                key: 'local_db',
+                label: 'Local Database',
+                type: 'check_box',
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Copy the Plex DB locally instead of via API. Requires Plex stopped.',
+            },
+            {
+                key: 'use_existing_db',
+                label: 'Use Existing Database',
+                type: 'check_box',
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Reuse a DB copy less than 2 hours old.',
+            },
+            {
+                key: 'ignore_running',
+                label: 'Ignore Running Check',
+                type: 'check_box',
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Skip the Plex-running check in local-DB mode.',
+            },
+            {
+                key: 'sleep',
+                label: 'Sleep Between Operations',
+                type: 'number',
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Seconds to wait between operations (default: 60).',
+            },
+            {
+                key: 'timeout',
+                label: 'Connection Timeout',
+                type: 'number',
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Plex connection timeout in seconds (default: 600).',
+            },
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                options: ['debug', 'info'],
+                required: true,
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Set the logging verbosity for poster cleanup.',
+            },
+            {
+                key: 'asset_dirs',
+                label: 'Asset Directories',
+                type: 'dirlist_dragdrop',
+                section: 'sources',
+                description: 'Scanned recursively by both asset passes.',
+                helpText:
+                    "Directories scanned by BOTH asset passes below — Orphan and Stale duplicates. Typically poster_renamerr's destination_dir, but you can list any path you want explicitly cleaned — including source dirs or personal folders that the post-rename pass deliberately leaves alone. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.",
+            },
+            {
+                key: 'orphan_instances',
+                label: 'Library Instances (Radarr/Sonarr)',
+                type: 'instances',
+                instance_types: ['radarr', 'sonarr'],
+                valueFormat: 'string',
+                section: 'sources',
+                description: 'Radarr / Sonarr libraries that define which assets are legitimate.',
+                helpText:
+                    "Radarr/Sonarr instances whose libraries define which assets are legitimate — used by BOTH passes below. Orphan flags an asset when it matches none of these libraries (by {tmdb-N}/{tvdb-N} id or title); Stale uses them to resolve each item's canonical folder. Leave empty to fall back to the Plex Bloat 'Plex Instance(s)' selection. The comparison set is read from CHUB's media cache, populated by poster_renamerr — run it first if the cache is stale.",
+            },
+            {
+                key: 'orphan_assets_enabled',
+                label: 'Enable Orphan Asset Cleanup',
+                type: 'check_box',
+                sectionToggle: true,
+                section: 'orphan',
+                description: 'Act on asset files whose title matches no configured library.',
+                helpText:
+                    "Act on poster files in the Asset Directories that have no parent media in the Library Instances — orphan = asset with no parent media. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss. Use Ignore Titles below to exempt specific posters. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.)",
+            },
+            {
+                key: 'orphan_assets_mode',
+                label: 'Orphan Mode',
+                type: 'segmented',
+                options: [
+                    { value: 'report', label: 'Report' },
+                    { value: 'move', label: 'Move' },
+                    { value: 'remove', label: 'Remove', danger: true },
+                ],
+                section: 'orphan',
+                description:
+                    'Report logs · Move quarantines to a recoverable folder · Remove deletes.',
+                helpText:
+                    'report (log only), move (relocate to a hidden .chub_orphan_restore subdir inside each asset_dir, fully recoverable), remove (permanent delete).',
+            },
+            {
+                key: 'include_collections',
+                label: 'Include Collections',
+                type: 'check_box',
+                section: 'orphan',
+                description: 'Treat Plex collection titles as legitimate.',
+                helpText:
+                    "Treat Plex collection titles as part of the comparison set so collection posters aren't flagged as orphans. Default on.",
+            },
+            {
+                key: 'orphan_ignore_titles',
+                label: 'Ignore Titles',
+                type: 'textarea',
+                section: 'orphan',
+                description: 'One title per line — never flagged as orphans.',
+                helpText:
+                    "Titles to never flag as orphans (one per line), even when they don't match a library entry or carry a stale ID tag. Matched on the same normalized key as the scan, so casing/punctuation/year differences are ignored — e.g. 'The Matrix (1999)' and 'the matrix' are equivalent. Useful for personal or manually-placed posters.",
+            },
+            {
+                key: 'stale_duplicates_enabled',
+                label: 'Enable Stale Duplicate Cleanup',
+                type: 'check_box',
+                sectionToggle: true,
+                section: 'stale',
+                description: 'Remove duplicate asset folders left behind after a library rename.',
+                helpText:
+                    'Scans the Asset Directories for Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances to resolve each item’s canonical folder. The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy).',
+            },
+            {
+                key: 'stale_duplicates_mode',
+                label: 'Stale Mode',
+                type: 'segmented',
+                options: [
+                    { value: 'report', label: 'Report' },
+                    { value: 'move', label: 'Move' },
+                    { value: 'remove', label: 'Remove', danger: true },
+                ],
+                section: 'stale',
+                description: 'Report logs · Move to the restore dir (reversible) · Remove deletes.',
+                helpText:
+                    'report (log only) · move (to the restore dir, reversible) · remove (delete).',
+            },
+        ],
+    },
+
+    {
+        key: 'plex_maintenance',
+        label: 'Plex Maintenance',
+        columns: [
+            { id: 'left', label: 'Plex', icon: 'dns' },
+            { id: 'right', label: 'Maintenance', icon: 'cleaning_services' },
+        ],
+        sections: [
+            { id: 'plex_conn', title: 'Plex connection', column: 'left', kind: 'form' },
+            { id: 'logging', title: 'Logging', column: 'left', kind: 'form' },
+            {
+                id: 'tasks',
+                title: 'Maintenance tasks',
+                column: 'right',
+                kind: 'form',
+                subtitle: 'Select the tasks to run.',
+            },
+        ],
+        fields: [
+            // ─── Plex connection ───────────────────────────────────────
+            {
+                key: 'instances',
+                label: 'Plex Instances',
+                type: 'instances',
+                section: 'plex_conn',
+                required: true,
+                instance_types: ['plex'],
+                valueFormat: 'string',
+                description: 'Plex instance to run maintenance tasks against.',
+            },
+            {
+                key: 'plex_path',
+                label: 'Plex Path',
+                type: 'text',
+                section: 'plex_conn',
+                required: true,
+                description: 'Container path to the Plex data directory.',
+                helpText:
+                    "Path inside the CHUB container that points at your Plex Media Server's data dir " +
+                    '(same value as poster_cleanarr). Required for the PhotoTranscoder cache cleanup.',
+            },
+            {
+                key: 'timeout',
+                label: 'Connection Timeout',
+                type: 'number',
+                section: 'plex_conn',
+                description: 'Plex connection timeout in seconds (default: 600).',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Log what each task would do without making changes.',
+                helpText:
+                    'Log what each selected task would do (including which PhotoTranscoder cache files would be deleted) without making any changes.',
+            },
+            // ─── Maintenance tasks ─────────────────────────────────────
+            {
+                key: 'empty_trash',
+                label: 'Empty Trash',
+                type: 'check_box',
+                section: 'tasks',
+                description: "Purge Plex's internal trash (permanent).",
+                helpText:
+                    "Purge Plex's internal trash. Permanently deletes items you've already removed.",
+            },
+            {
+                key: 'clean_bundles',
+                label: 'Clean Bundles',
+                type: 'check_box',
+                section: 'tasks',
+                description: 'Remove orphaned .bundle folders for media that no longer exists.',
+            },
+            {
+                key: 'optimize_db',
+                label: 'Optimize Database',
+                type: 'check_box',
+                section: 'tasks',
+                description: "Run VACUUM on Plex's database. Reclaims space, rebuilds indexes.",
+            },
+            {
+                key: 'photo_transcoder',
+                label: 'Clear PhotoTranscoder Cache',
+                type: 'check_box',
+                section: 'tasks',
+                description: "Clear Plex's transcoded-image cache. Plex regenerates on demand.",
+            },
+            {
+                key: 'sleep',
+                label: 'Sleep Between Tasks',
+                type: 'number',
+                section: 'tasks',
+                description: 'Seconds to wait between Plex maintenance operations (default: 60).',
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Logging verbosity for Plex maintenance.',
+            },
+        ],
+    },
+
+    {
+        key: 'unmatched_assets',
+        label: 'Unmatched Assets',
+        fields: [
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                options: ['info', 'debug'],
+                required: true,
+                description: 'Set the logging verbosity for unmatched asset detection.',
+            },
+            {
+                key: 'ignore_unmonitored',
+                label: 'Ignore Unmonitored',
+                type: 'check_box',
+                description: 'Skip unmonitored media items when scanning for unmatched assets.',
+            },
+            {
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                required: true,
+                add_posters_option: false,
+                instance_types: ['radarr', 'sonarr', 'lidarr'],
+                // Backend: UnmatchedAssetsConfig.instances is List[str].
+                valueFormat: 'string',
+                description: 'Instances to scan for unmatched assets.',
+            },
+            {
+                key: 'plex_scope',
+                label: 'Plex Libraries (collections)',
+                type: 'plex_scope',
+                add_posters_option: false,
+                match_collections_option: false,
+                description:
+                    'Report unmatched Plex collections from these libraries (empty = all ' +
+                    'enabled libraries of the instance). Leave unset to skip collection reporting.',
+            },
+            {
+                key: 'ignore_folders',
+                label: 'Ignore Folders',
+                type: 'textarea',
+                section: 'Ignore rules',
+                description: 'Folder names to skip when scanning (one per line).',
+            },
+            {
+                key: 'ignore_profiles',
+                label: 'Ignore Profiles',
+                type: 'textarea',
+                section: 'Ignore rules',
+                description: 'Quality profile names to exclude from scanning (one per line).',
+            },
+            {
+                key: 'ignore_titles',
+                label: 'Ignore Titles',
+                type: 'textarea',
+                section: 'Ignore rules',
+                description: 'Media titles to skip when scanning (one per line).',
+            },
+            {
+                key: 'ignore_tags',
+                label: 'Ignore Tags',
+                type: 'textarea',
+                section: 'Ignore rules',
+                description: 'Tags to exclude from scanning (one per line).',
+            },
+            {
+                key: 'ignore_collections',
+                label: 'Ignore Collections',
+                type: 'textarea',
+                section: 'Ignore rules',
+                description: 'Collection names to exclude from scanning (one per line).',
+            },
+        ],
+    },
+];
+
+const CORE_SETTINGS_MODULES = [
+    {
+        name: 'TMDB',
+        key: 'tmdb',
+        description:
+            'Look up missing TMDB IDs via the TMDB API. Improves poster matching and request links for unmatched assets.',
+    },
+    {
+        name: 'fanart.tv',
+        key: 'fanart',
+        description:
+            'Source logos and backgrounds for Asset Renamerr from fanart.tv, ranked by community likes. Requires your personal fanart.tv API key.',
+    },
+    {
+        name: 'Sync Gdrive',
+        key: 'sync_gdrive',
+        description: 'Synchronize your Google Drive with CHUB.',
+    },
+    {
+        name: 'Poster Renamerr',
+        key: 'poster_renamerr',
+        description: 'Automate and configure your poster renaming workflow.',
+    },
+    {
+        name: 'Asset Renamerr',
+        key: 'asset_renamerr',
+        description:
+            'Apply additional artwork — logos, square art, and backgrounds — to Plex or into a Kometa assets directory.',
+    },
+    {
+        name: 'Border Replacerr',
+        key: 'border_replacerr',
+        description: 'Replace and manage borders for your posters.',
+    },
+    {
+        name: 'Upgradinatorr',
+        key: 'upgradinatorr',
+        description: 'Send automatic search requests to Radarr/Sonarr/Lidarr instances.',
+    },
+    {
+        name: 'Renameinatorr',
+        key: 'renameinatorr',
+        description: 'Send rename requests to Sonarr/Radarr instances.',
+    },
+    {
+        name: 'Nohl',
+        key: 'nohl',
+        description:
+            'Find items in your media collection that do not have hardlinks and send requests to Radarr/Sonarr to handle them',
+    },
+    {
+        name: 'Labelarr',
+        key: 'labelarr',
+        description: 'Sync labels between Radarr/Sonarr -> Plex instances.',
+    },
+    {
+        name: 'Health Checkarr',
+        key: 'health_checkarr',
+        description: 'Remove Radarr/Sonarr entries that are no longer in sync with TMDb/TVDb',
+    },
+    { name: 'Jduparr', key: 'jduparr', description: 'Find and handle duplicates in your files.' },
+    {
+        name: 'Nestarr',
+        key: 'nestarr',
+        description:
+            'Detect unmatched media between ARR and Plex, incorrectly nested folders, and stray or misplaced files in Radarr/Sonarr/Lidarr.',
+    },
+    {
+        name: 'Poster Cleanarr',
+        key: 'poster_cleanarr',
+        description:
+            'Prune bloat images, orphaned assets, and stale duplicate folders. ' +
+            'Each pass runs independently — choose an action for each one below.',
+    },
+    {
+        name: 'Plex Maintenance',
+        key: 'plex_maintenance',
+        description:
+            'Server-level Plex hygiene: empty trash, clean bundles, optimize database, and clear the PhotoTranscoder cache. ' +
+            'Operates on the entire Plex server, independent of the library opt-in.',
+    },
+    {
+        name: 'Unmatched Assets',
+        key: 'unmatched_assets',
+        description: 'Handle and review assets that couldn\u2019t be matched.',
+    },
+];
+
+// Extension module blocks spliced in (src/extensions) \u2014 identity on main.
+export const SETTINGS_SCHEMA = withExtensionSettingsSchema(CORE_SETTINGS_SCHEMA);
+export const SETTINGS_MODULES = withExtensionSettingsModules(CORE_SETTINGS_MODULES);
+
+// Keys of config-only modules (schema `runnable: false`) — they have nothing to
+// run/schedule (e.g. the CL2K Maker). Empty on main; extension modules opt in.
+// Used to drop them from the Schedule, Notifications, and Dashboard module lists.
+export const CONFIG_ONLY_MODULE_KEYS = new Set(
+    SETTINGS_SCHEMA.filter(m => m.runnable === false).map(m => m.key)
+);
