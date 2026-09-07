@@ -54,7 +54,9 @@ def test_one_library_never_walked_forces_refresh():
         {"Plex": ["Movies", "TV Shows"]},
     )
     assert walked is True
-    Conn.return_value.update_plex_database.assert_called_once()
+    # Entered as a context manager, so the work happens on __enter__'s value.
+    Conn.return_value.__enter__.return_value.update_plex_database.assert_called_once()
+    Conn.return_value.__exit__.assert_called_once()
 
 
 def test_one_library_stale_forces_refresh():
@@ -64,7 +66,9 @@ def test_one_library_stale_forces_refresh():
         ttl=300,
     )
     assert walked is True
-    Conn.return_value.update_plex_database.assert_called_once()
+    # Entered as a context manager, so the work happens on __enter__'s value.
+    Conn.return_value.__enter__.return_value.update_plex_database.assert_called_once()
+    Conn.return_value.__exit__.assert_called_once()
 
 
 def test_empty_library_list_falls_back_to_instance_scope():

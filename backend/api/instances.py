@@ -7,6 +7,7 @@ retrieval for Plex, Radarr, Sonarr, and Lidarr integrations.
 
 import os
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Optional
 
@@ -1999,7 +2000,8 @@ def get_instance_logs(
             )
 
         # Collect all log lines from all module directories
-        all_lines = []
+        all_lines: deque = deque(maxlen=limit)
+        total_seen = 0
         for module_name in os.listdir(LOG_BASE_DIR):
             module_path = os.path.join(LOG_BASE_DIR, module_name)
             if not os.path.isdir(module_path) or module_name == "debug":
@@ -2024,16 +2026,18 @@ def get_instance_logs(
                                 level_upper = level.upper()
                                 if level_upper not in line.upper():
                                     continue
+                            total_seen += 1
                             all_lines.append(line)
                 except (PermissionError, OSError):
                     continue
 
-        # Return the last N lines (most recent)
-        filtered_lines = all_lines[-limit:]
+        # Bounded deque: the last `limit` matches encountered, not the newest —
+        # the walk order across module dirs is not chronological.
+        filtered_lines = list(all_lines)
 
         return ok(
-            f"Found {len(filtered_lines)} log entries for instance '{instance_id}'",
-            {"logs": filtered_lines, "instance": instance_id, "total": len(all_lines)},
+            f"Found {total_seen} log entries for instance '{instance_id}'",
+            {"logs": filtered_lines, "instance": instance_id, "total": total_seen},
         )
 
     except Exception as e:
