@@ -179,12 +179,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Support both header-based auth (normal API calls) and query-param
         # auth (?token=...) for EventSource/SSE which cannot send headers.
         auth_header = request.headers.get("Authorization", "")
-        from_query = False
+        query_token = request.query_params.get("token", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]  # strip "Bearer "
         else:
-            token = request.query_params.get("token", "")
-            from_query = bool(token)
+            token = query_token
 
         if not token:
             self._log_unauthorized(request, "missing Bearer token", path)
@@ -208,12 +207,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        # Query-string auth exists only for EventSource and <img>, so a
-        # URL-embedded token must be stream-scoped — URLs leak via referers.
-        if from_query and payload.get("scope") != "stream":
-            return self._scope_denied(
-                request, "non-stream token in query string", path
+        # A URL-embedded token must be stream-scoped even when a header
+        # authenticated the request — the URL leaks either way.
+        if query_token:
+            query_payload = (
+                payload
+                if query_token == token
+                else decode_access_token(query_token, config.auth.jwt_secret)
             )
+            if query_payload is not None and query_payload.get("scope") != "stream":
+                return self._scope_denied(
+                    request, "non-stream token in query string", path
+                )
 
         # A scope-limited stream token (URL-embedded auth for images/SSE) is only
         # valid for GET requests on the stream allowlist — never for mutations or

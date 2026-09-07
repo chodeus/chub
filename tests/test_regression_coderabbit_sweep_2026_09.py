@@ -97,9 +97,20 @@ def test_full_session_token_in_query_string_is_rejected(monkeypatch):
     full_in_header = client.get(
         "/api/media/1/poster", headers={"Authorization": f"Bearer {full}"}
     )
+    # A header does not excuse a session token sitting in the URL beside it.
+    both = client.get(
+        f"/api/media/1/poster?token={full}",
+        headers={"Authorization": f"Bearer {full}"},
+    )
+    stream_url_plus_header = client.get(
+        f"/api/media/1/poster?token={stream}",
+        headers={"Authorization": f"Bearer {full}"},
+    )
     assert full_in_url.status_code == 403
     assert stream_in_url.status_code == 200
     assert full_in_header.status_code == 200
+    assert both.status_code == 403
+    assert stream_url_plus_header.status_code == 200
 
 
 def test_resolve_duplicates_never_removes_the_kept_id(monkeypatch):
