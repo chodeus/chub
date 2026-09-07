@@ -1,6 +1,7 @@
 # util/database/webhook_cache.py
 
 import datetime
+import sqlite3
 from typing import Optional
 
 from .db_base import DatabaseBase
@@ -57,7 +58,9 @@ class WebhookCache(DatabaseBase):
                 )
                 conn.commit()
                 return False
-            except Exception:
+            except sqlite3.IntegrityError:
+                # Only a UNIQUE clash means "already seen". A locked database
+                # reported as a duplicate would silently drop the webhook.
                 conn.rollback()
                 return True
 

@@ -113,3 +113,22 @@ def test_unresolvable_hostname_fails_closed():
     ):
         ok, _ = is_safe_url("http://unresolvable-host.invalid/")
         assert ok is False
+
+
+# --- safe_external_get re-validates its own second DNS lookup ---
+
+
+def test_safe_external_get_rejects_rebind_on_second_lookup():
+    """The pin the docstring promises: a host that resolves public for the
+    is_safe_url check and internal for the connect must not be fetched."""
+    from backend.util import ssrf_guard
+
+    seen = iter(["93.184.216.34", "169.254.169.254"])
+
+    with patch.object(
+        ssrf_guard,
+        "_resolve_host",
+        lambda host: __import__("ipaddress").ip_address(next(seen)),
+    ):
+        with pytest.raises(ValueError, match="link-local|blocked|private"):
+            ssrf_guard.safe_external_get("http://rebind.example/x")

@@ -41,6 +41,21 @@ def _resolve_host(host: str) -> Optional[ipaddress._BaseAddress]:
     return None
 
 
+def _ip_verdict(
+    ip: "ipaddress._BaseAddress", allow_private: bool
+) -> Tuple[bool, str]:
+    """Address-class verdict for an already-resolved IP."""
+    if ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+        return False, f"disallowed address class: {ip}"
+    if ip.is_link_local:
+        return False, f"link-local address: {ip}"
+    if not allow_private and (ip.is_private or ip.is_loopback):
+        return False, f"private/loopback address: {ip}"
+    if str(ip) in _BLOCKED_HOSTS:
+        return False, f"blocked host: {ip}"
+    return True, "ok"
+
+
 def is_safe_url(url: str, allow_private: bool = True) -> Tuple[bool, str]:
     """
     Return (ok, reason). `allow_private=True` permits RFC1918 / loopback ranges,
@@ -74,15 +89,7 @@ def is_safe_url(url: str, allow_private: bool = True) -> Tuple[bool, str]:
     # would let a rebinding/DNS-blip host through).
     if ip is None:
         return False, f"could not resolve host: {host}"
-    if ip.is_multicast or ip.is_reserved or ip.is_unspecified:
-        return False, f"disallowed address class: {ip}"
-    if ip.is_link_local:
-        return False, f"link-local address: {ip}"
-    if not allow_private and (ip.is_private or ip.is_loopback):
-        return False, f"private/loopback address: {ip}"
-    if str(ip) in _BLOCKED_HOSTS:
-        return False, f"blocked host: {ip}"
-    return True, "ok"
+    return _ip_verdict(ip, allow_private)
 
 
 def safe_external_get(
@@ -102,6 +109,11 @@ def safe_external_get(
     ip = _resolve_host(host)
     if ip is None:
         raise ValueError(f"could not resolve host: {host}")
+    # Re-validate: this is a second lookup, so a rebinding host could return an
+    # internal address that the is_safe_url check above never saw.
+    ok, reason = _ip_verdict(ip, allow_private=False)
+    if not ok:
+        raise ValueError(reason)
 
     target = url
     req_headers = dict(headers or {})
