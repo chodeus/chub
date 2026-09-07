@@ -676,6 +676,16 @@ class PosterUploader:
         asset_title = asset.get("title", "Unknown")
         asset_type = asset.get("asset_type", "unknown")
         poster_path = asset.get("renamed_file")
+        if not poster_path:
+            # Nullable for a matched row whose poster was never staged. The
+            # hash fallback would reach open(None) — and skip it under dry_run.
+            return UploadResult(
+                asset_title=asset_title,
+                asset_type=asset_type,
+                success=False,
+                action="failed",
+                reason="Could not read poster file",
+            )
 
         try:
             # Find matching Plex entry
@@ -772,10 +782,8 @@ class PosterUploader:
             # source of page-cache churn on large libraries.
             current_mtime: Optional[float] = None
             try:
-                # os.stat(None) raises TypeError, not OSError — renamed_file is
-                # nullable for a matched row whose poster was never staged.
                 current_mtime = os.stat(poster_path).st_mtime
-            except (OSError, TypeError):
+            except OSError:
                 current_mtime = None
 
             record_mtime = asset.get("file_mtime")

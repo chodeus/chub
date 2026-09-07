@@ -1,5 +1,8 @@
 """Correctness half of the 2026-09 sweep — one test per confirmed bug."""
 
+import pathlib
+import time
+
 import pytest
 
 
@@ -15,16 +18,39 @@ def test_arr_api_version(service, expected):
     assert arr_api_version(service) == expected
 
 
-def test_arr_api_version_has_no_remaining_copies():
-    """The bug was a missing copy, so the guard is that no copies remain."""
-    import subprocess
+@pytest.mark.parametrize(
+    "module",
+    [
+        "backend.api.instances",
+        "backend.api.media_api",
+        "backend.api.modules",
+        "backend.util.scheduler",
+    ],
+)
+def test_arr_url_builders_delegate_to_the_helper(module):
+    """The bug was a missing copy, so every builder must call the one helper."""
+    import ast
+    import importlib
 
-    hits = subprocess.run(
-        ["grep", "-rn", "--include=*.py", 'if service == "lidarr"', "backend/"],
-        capture_output=True, text=True,
-    ).stdout.strip().splitlines()
-    assert hits == [], hits
-
+    src = pathlib.Path(importlib.import_module(module).__file__).read_text()
+    tree = ast.parse(src)
+    calls = {
+        n.func.id
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+    }
+    assert "arr_api_version" in calls
+    # And no site still decides the version inline.
+    inline = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.IfExp)
+        and any(
+            isinstance(c, ast.Constant) and c.value == "lidarr"
+            for c in ast.walk(n)
+        )
+    ]
+    assert inline == []
 
 def test_upload_endpoints_read_the_payload_key():
     """upload_posters returns "payload"; reading "data" always gave {}."""
@@ -133,8 +159,9 @@ def test_tmdb_transient_failure_is_retried_not_memoised(monkeypatch):
         return None  # transient failure
 
     client._fetch = _fetch
-    assert client.find_tmdb_id("tt1", "imdb_id", "movie") is None
-    assert client.find_tmdb_id("tt1", "imdb_id", "movie") is None
+    first = client.find_tmdb_id("tt1", "imdb_id", "movie")
+    second = client.find_tmdb_id("tt1", "imdb_id", "movie")
+    assert first is None and second is None
     assert len(calls) == 2, "second lookup was served from a poisoned memo"
 
 
@@ -200,3 +227,63 @@ def test_failed_plex_client_is_not_cached():
     src = inspect.getsource(ar.AssetRenamerr._plex_client_for)
     fail_branch = src[src.index("Failed to connect to Plex instance") :]
     assert "return None" in fail_branch.split("self._plex_clients")[0]
+
+
+def test_web_server_startup_failure_is_raised_not_swallowed(monkeypatch):
+    """uvicorn raises SystemExit on a bind failure, and SystemExit is a
+    BaseException — `except Exception` let it vanish into a dead thread."""
+    from types import SimpleNamespace
+
+    import backend.api.server as server_mod
+
+    log = SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    log.get_adapter = lambda *a, **k: log
+
+    class _ExitingServer:
+        started = False
+
+        def __init__(self, config):
+            pass
+
+        def run(self):
+            raise SystemExit(3)  # what uvicorn does when the port is taken
+
+    monkeypatch.setattr(server_mod.uvicorn, "Server", _ExitingServer)
+    monkeypatch.setattr(server_mod.uvicorn, "Config", lambda *a, **k: object())
+    with pytest.raises(RuntimeError, match="failed to start") as exc:
+        server_mod.start_web_server(logger=log, module_orchestrator=None)
+    assert isinstance(exc.value.__cause__, SystemExit)
+
+
+def test_web_server_returns_once_uvicorn_reports_started(monkeypatch):
+    """The caller waits on uvicorn's own signal, not a fixed sleep."""
+    from types import SimpleNamespace
+
+    import backend.api.server as server_mod
+
+    log = SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    log.get_adapter = lambda *a, **k: log
+
+    class _ReadyServer:
+        def __init__(self, config):
+            self.started = False
+
+        def run(self):
+            self.started = True
+            time.sleep(5)  # serve; the caller must not wait for this
+
+    monkeypatch.setattr(server_mod.uvicorn, "Server", _ReadyServer)
+    monkeypatch.setattr(server_mod.uvicorn, "Config", lambda *a, **k: object())
+    began = time.monotonic()
+    server_mod.start_web_server(logger=log, module_orchestrator=None)
+    assert time.monotonic() - began < 2

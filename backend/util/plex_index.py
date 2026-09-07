@@ -247,8 +247,7 @@ class PlexMediaIndex:
             for k in ("tmdb", "imdb", "tvdb"):
                 if values.get(k):
                     values[k] = f"{values[k]}:S{season_number}"
-            # Season rows are indexed as "title:{norm}:S{n}", so the title
-            # fallback has to carry the suffix too. An explicit override
+            # Season keys need the :S{n} suffix; an explicit override already
             # arrives pre-suffixed from the caller.
             if not title_override and values.get("title"):
                 values["title"] = f"{values['title']}:S{season_number}"

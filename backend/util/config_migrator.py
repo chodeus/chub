@@ -37,9 +37,8 @@ ALL_SENTINEL = "__ALL__"
 
 def _section(raw: Dict[str, Any], key: str) -> Dict[str, Any]:
     """A config section as a dict."""
-    # `raw.get(key, {})` is not enough: an empty YAML section ("nohl:" with
-    # nothing under it) is present with the value None, so the default never
-    # applies and the chained .get raises.
+    # An empty YAML section ("nohl:" with nothing under it) is present with
+    # the value None, so raw.get(key, {}) returns None and chained .get raises.
     value = raw.get(key)
     return value if isinstance(value, dict) else {}
 

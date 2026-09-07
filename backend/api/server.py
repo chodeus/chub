@@ -5,9 +5,13 @@ Web server startup with proper dependency injection.
 
 import os
 import threading
+import time
 from typing import TYPE_CHECKING
 
 import uvicorn
+
+# Bounded wait for uvicorn to report listening before the caller moves on.
+STARTUP_TIMEOUT_SECONDS = 15
 
 if TYPE_CHECKING:
     from backend.util.logger import Logger
@@ -26,6 +30,7 @@ def start_web_server(
     """
 
     startup_error: list = []
+    server_holder: list = []
 
     def run_server() -> None:
         try:
@@ -40,23 +45,43 @@ def start_web_server(
 
             logger.get_adapter("SERVER").info(f"Starting web server on {host}:{port}")
 
-            uvicorn.run(
-                app,
-                host=host,
-                port=port,
-                log_config=None,  # Disable uvicorn logging
-                access_log=False,  # Disable access logging
+            # Server, not uvicorn.run: `started` is the readiness signal the
+            # caller waits on, so a bind failure is not a silent no-UI boot.
+            server = uvicorn.Server(
+                uvicorn.Config(
+                    app,
+                    host=host,
+                    port=port,
+                    log_config=None,  # Disable uvicorn logging
+                    access_log=False,  # Disable access logging
+                )
             )
-        except Exception as e:
+            server_holder.append(server)
+            server.run()
+        except (Exception, SystemExit) as e:
+            # uvicorn raises SystemExit(3) on a bind failure, and SystemExit is
+            # a BaseException — `except Exception` would let it vanish here.
             logger.get_adapter("SERVER").error(f"Web server error: {e}", exc_info=True)
             startup_error.append(e)
 
     # Start server in background thread
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
-    # A bind failure (port in use, bad PORT) kills only this thread, leaving a
-    # container that is up, scheduling, and serving nothing. Give it a moment
-    # to fail and surface it to the caller instead of logging "started".
-    server_thread.join(timeout=1.0)
-    if not server_thread.is_alive() and startup_error:
-        raise RuntimeError(f"Web server failed to start: {startup_error[0]}")
+
+    # Wait for a real verdict: a bind failure kills only this thread, leaving a
+    # container that is up, scheduling, and serving nothing.
+    deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        if server_holder and server_holder[0].started:
+            return
+        if startup_error or not server_thread.is_alive():
+            break
+        time.sleep(0.05)
+
+    if startup_error:
+        raise RuntimeError("Web server failed to start") from startup_error[0]
+    if not server_thread.is_alive():
+        raise RuntimeError("Web server thread exited before it began listening")
+    logger.get_adapter("SERVER").warning(
+        f"Web server not confirmed listening after {STARTUP_TIMEOUT_SECONDS}s"
+    )
