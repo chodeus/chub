@@ -288,7 +288,10 @@ class PosterSelfHeal(ChubModule):
                         stale = prop.get("poster_file") or ""
                         if os.path.isabs(stale):
                             drop_stale_row(db, stale, self.logger)
-                if total:
+                # Throttled to the documented 250-2500 cadence (base_module):
+                # _report_progress commits, and >99% of these wrote the same
+                # percentage. The final pin keeps completion at 100%.
+                if total and (idx % 250 == 0 or idx == total):
                     self._report_progress(int(idx / total * 100))
 
             self.logger.info(

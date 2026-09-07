@@ -23,28 +23,7 @@ class PlexCache(DatabaseBase):
             norm_str(item.get("instance_name")),
         )
 
-    def upsert(self, item: dict) -> None:
-        """
-        Insert/update a single media item into plex_media_cache.
-        The item must include all required fields.
-        """
-        expected_cols = [
-            "plex_id",
-            "instance_name",
-            "asset_type",
-            "library_name",
-            "title",
-            "normalized_title",
-            "year",
-            "guids",
-            "labels",
-            "season_number",
-        ]
-        missing = [k for k in expected_cols if k not in item]
-        assert not missing, f"Missing columns in cache_plex_data: {missing}"
-
-        self.execute_query(
-            """
+    _UPSERT_SQL = """
             INSERT INTO plex_media_cache
                 (plex_id, instance_name, asset_type, library_name, title, normalized_title, parent_title, parent_normalized_title, season_number, year, guids, labels, file_paths, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -61,23 +40,59 @@ class PlexCache(DatabaseBase):
                 labels = excluded.labels,
                 file_paths = excluded.file_paths,
                 updated_at = CURRENT_TIMESTAMP
-            """,
-            (
-                item["plex_id"],
-                item["instance_name"],
-                item["asset_type"],
-                item["library_name"],
-                item["title"],
-                item["normalized_title"],
-                item.get("parent_title"),
-                item.get("parent_normalized_title"),
-                item["season_number"],
-                item["year"],
-                json.dumps(item["guids"]),
-                json.dumps(item["labels"]),
-                json.dumps(item.get("file_paths") or []),
-            ),
+            """
+
+    _DELETE_SQL = """
+            DELETE FROM plex_media_cache
+            WHERE plex_id=? AND instance_name=?
+        """
+
+    def _write_in_chunks(self, statements: list, chunk_size: int = 500) -> None:
+        """Run (sql, params) pairs as one transaction per chunk."""
+        # Mirrors PosterCache.bulk_upsert: chunking keeps WAL growth and
+        # write-lock hold time bounded instead of one giant transaction.
+        for start in range(0, len(statements), chunk_size):
+            self.execute_transaction(statements[start : start + chunk_size])
+
+    @staticmethod
+    def _prepare_upsert(item: dict) -> tuple:
+        """Validate an item and flatten it to _UPSERT_SQL's parameter tuple."""
+        expected_cols = [
+            "plex_id",
+            "instance_name",
+            "asset_type",
+            "library_name",
+            "title",
+            "normalized_title",
+            "year",
+            "guids",
+            "labels",
+            "season_number",
+        ]
+        missing = [k for k in expected_cols if k not in item]
+        assert not missing, f"Missing columns in cache_plex_data: {missing}"
+        return (
+            item["plex_id"],
+            item["instance_name"],
+            item["asset_type"],
+            item["library_name"],
+            item["title"],
+            item["normalized_title"],
+            item.get("parent_title"),
+            item.get("parent_normalized_title"),
+            item["season_number"],
+            item["year"],
+            json.dumps(item["guids"]),
+            json.dumps(item["labels"]),
+            json.dumps(item.get("file_paths") or []),
         )
+
+    def upsert(self, item: dict) -> None:
+        """
+        Insert/update a single media item into plex_media_cache.
+        The item must include all required fields.
+        """
+        self.execute_query(self._UPSERT_SQL, self._prepare_upsert(item))
 
     def get_by_id(self, id: int) -> Optional[dict]:
         """Return a single plex_media_cache row by its unique integer ID."""
@@ -265,12 +280,7 @@ class PlexCache(DatabaseBase):
         Delete a single record from plex_media_cache using the canonical key (plex_id, instance_name).
         """
         key = self._canonical_key(item)
-        sql = """
-            DELETE FROM plex_media_cache
-            WHERE plex_id=? AND instance_name=?
-        """
-
-        self.execute_query(sql, key)
+        self.execute_query(self._DELETE_SQL, key)
         if logger:
             season = item.get("season_number")
             season_str = f" Season: {season}," if season is not None else ""
@@ -301,21 +311,34 @@ class PlexCache(DatabaseBase):
         db_map = {self._canonical_key(row): row for row in db_rows}
         fresh_map = {self._canonical_key(item): item for item in fresh_media}
 
-        # Add/update items that are present in fresh_media
-        for key, item in fresh_map.items():
-            self.upsert(item)
-            if key not in db_map and logger:
-                season = item.get("season_number")
-                season_str = f" Season: {season}," if season is not None else ""
-                logger.debug(
-                    f"[ADD] Title: {item.get('title')} ({item.get('year')}),{season_str} from {instance_name}"
-                )
+        # Add/update items that are present in fresh_media. Batched: a per-row
+        # execute_query opens a connection, sets 3 PRAGMAs and commits for every
+        # single row, which dominates a full library walk.
+        self._write_in_chunks(
+            [(self._UPSERT_SQL, self._prepare_upsert(item)) for item in fresh_map.values()]
+        )
+        if logger:
+            for key, item in fresh_map.items():
+                if key not in db_map:
+                    season = item.get("season_number")
+                    season_str = f" Season: {season}," if season is not None else ""
+                    logger.debug(
+                        f"[ADD] Title: {item.get('title')} ({item.get('year')}),{season_str} from {instance_name}"
+                    )
 
         # Remove items that are no longer present
         keys_to_remove = set(db_map.keys()) - set(fresh_map.keys())
-        for key in keys_to_remove:
-            row = db_map[key]
-            self.delete(row, logger=logger, instance_name=instance_name)
+        self._write_in_chunks(
+            [(self._DELETE_SQL, key) for key in keys_to_remove]
+        )
+        if logger:
+            for key in keys_to_remove:
+                row = db_map[key]
+                season = row.get("season_number")
+                season_str = f" Season: {season}," if season is not None else ""
+                logger.info(
+                    f"[DELETE] Title: {row.get('title')} ({row.get('year')}),{season_str} from {instance_name}"
+                )
 
         if logger:
             logger.debug(

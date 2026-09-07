@@ -962,20 +962,26 @@ class Connector:
             prepared_index = self._prepare_plex_index(plex_items)
 
             # Process each media item for mapping using direct database-to-database matching
+            pending: list = []
             for media_item in media_items:
                 plex_mapping_id = self._find_plex_match(
                     media_item, plex_items, prepared_index
                 )
 
                 if plex_mapping_id:
-                    # Update the media_cache record with the mapping
-                    self.db.media.execute_query(
-                        "UPDATE media_cache SET plex_mapping_id = ? WHERE id = ?",
-                        (plex_mapping_id, media_item["id"]),
-                    )
+                    pending.append((plex_mapping_id, media_item["id"]))
                     stats["updated"] += 1
                 else:
                     stats["no_match"] += 1
+
+            # Batched: a per-row execute_query opens a connection, sets 3
+            # PRAGMAs and commits for each row. The first sync maps every row
+            # in media_cache, so that cost lands on the whole table.
+            sql = "UPDATE media_cache SET plex_mapping_id = ? WHERE id = ?"
+            for start in range(0, len(pending), 500):
+                self.db.media.execute_transaction(
+                    [(sql, params) for params in pending[start : start + 500]]
+                )
 
             if self.logger:
                 self.logger.info(

@@ -704,17 +704,18 @@ class DBWorker(DatabaseBase):
 
         try:
             with self.get_connection() as conn:
-                # Dedupe module_run jobs by module_name. The SELECT runs
-                # inside the same connection/transaction as the INSERT, so
-                # two callers racing to enqueue the same module can't both
-                # win — SQLite serialises writes and the second SELECT
-                # will see the first INSERT. Webhook storms, manual UI
+                # Dedupe module_run jobs by module_name. BEGIN IMMEDIATE takes
+                # the write lock before the SELECT: a plain SELECT holds no
+                # lock (in_transaction stays False), so two callers could both
+                # pass the check and both insert. Webhook storms, manual UI
                 # "Run now" overlapping a scheduled fire, and two scheduler
                 # ticks racing past the orchestrator's running-check all
                 # collapse to a single in-flight job per module.
                 if job_type == "module_run":
                     module_name = (payload or {}).get("module_name")
                     if module_name:
+                        if not conn.in_transaction:
+                            conn.execute("BEGIN IMMEDIATE")
                         existing = conn.execute(
                             f"SELECT id, status FROM {table_name} "
                             f"WHERE type = 'module_run' "
