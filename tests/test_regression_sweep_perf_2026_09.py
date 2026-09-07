@@ -151,8 +151,8 @@ def test_concurrent_enqueue_collapses_to_one_job(tmp_path, job_type, payload):
     from backend.util.database import ChubDB
 
     path = os.path.join(tmp_path, "chub.db")
-    with ChubDB(_logger(), db_path=path, quiet=True):
-        pass  # create the schema before the threads race for it
+    with ChubDB(_logger(), db_path=path, quiet=True) as setup:
+        setup.worker  # schema is built on interface access, not on __enter__
 
     start = threading.Barrier(2)
     results = []
