@@ -208,9 +208,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        # Query-string auth exists only for EventSource and <img>, which cannot
-        # send headers, so a URL-embedded token must BE a stream token. A full
-        # session token in a URL is logged, cached and sent as a referer.
+        # Query-string auth exists only for EventSource and <img>, so a
+        # URL-embedded token must be stream-scoped — URLs leak via referers.
         if from_query and payload.get("scope") != "stream":
             return self._scope_denied(
                 request, "non-stream token in query string", path

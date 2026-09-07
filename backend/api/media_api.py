@@ -2092,6 +2092,15 @@ def get_import_exclusion(
                 code="INSTANCE_NOT_FOUND",
                 status_code=404,
             )
+        # Guard before the factory: create_arr_client probes ARR with
+        # X-Api-Key, so validating only the later request left that unprotected.
+        safe, reason = is_safe_url(inst_cfg.url, allow_private=True)
+        if not safe:
+            return error(
+                f"Unsafe instance URL: {reason}",
+                code="UNSAFE_INSTANCE_URL",
+                status_code=400,
+            )
         client = create_arr_client(inst_cfg.url, inst_cfg.api, logger)
         if not (client and client.connect_status):
             return error(
@@ -2101,15 +2110,6 @@ def get_import_exclusion(
             )
         api_ver = "v1" if service == "lidarr" else "v3"
         exclusion_url = f"{inst_cfg.url.rstrip('/')}/api/{api_ver}/importlistexclusion"
-        # This request carries X-Api-Key, so guard the target and refuse
-        # redirects — every sibling ARR call in the repo does the same.
-        safe, reason = is_safe_url(exclusion_url, allow_private=True)
-        if not safe:
-            return error(
-                f"Unsafe instance URL: {reason}",
-                code="UNSAFE_INSTANCE_URL",
-                status_code=400,
-            )
         import requests as _rq
 
         resp = _rq.get(

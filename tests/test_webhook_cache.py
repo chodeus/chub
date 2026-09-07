@@ -98,9 +98,7 @@ def _conn_failing_insert(exc):
 
 
 def test_locked_database_is_not_reported_as_duplicate(db, monkeypatch):
-    """A locked DB must propagate, not masquerade as "already seen" — reporting
-    it as a duplicate silently drops the webhook instead of letting the
-    sender's retry through."""
+    """A locked database must propagate, not masquerade as "already seen"."""
     import sqlite3
 
     cache = db.webhook_cache
@@ -114,8 +112,7 @@ def test_locked_database_is_not_reported_as_duplicate(db, monkeypatch):
 
 
 def test_unique_clash_is_still_reported_as_duplicate(db, monkeypatch):
-    """Control for the above: the documented IntegrityError race still
-    coalesces two concurrent webhooks for the same item."""
+    """Control: the documented IntegrityError race still coalesces duplicates."""
     import sqlite3
 
     cache = db.webhook_cache
@@ -124,4 +121,5 @@ def test_unique_clash_is_still_reported_as_duplicate(db, monkeypatch):
         "get_connection",
         _conn_failing_insert(sqlite3.IntegrityError("UNIQUE constraint failed")),
     )
-    assert cache.is_duplicate("movie", "Some Movie", 600) is True
+    verdict = cache.is_duplicate("movie", "Some Movie", 600)
+    assert verdict is True

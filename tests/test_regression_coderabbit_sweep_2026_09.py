@@ -1,8 +1,4 @@
-"""Regression tests for the 2026-09 CodeRabbit full-codebase sweep.
-
-One focused test per confirmed backend bug so these can't silently come back.
-Findings that were refuted on inspection are deliberately not represented here.
-"""
+"""Regression tests for the 2026-09 review sweep — one per confirmed bug."""
 
 from types import SimpleNamespace
 
@@ -21,12 +17,8 @@ def _logger():
     )
 
 
-# --- webhook secret comparison ---
-
-
 def _request_with_secret(secret: str):
-    """Secret via ?secret= — HTTP headers are latin-1, so a unicode secret can
-    only realistically arrive percent-encoded in the query string."""
+    """Secret via ?secret= — HTTP headers are latin-1, so unicode needs the query."""
     from urllib.parse import urlencode
 
     from starlette.requests import Request
@@ -44,8 +36,7 @@ def _request_with_secret(secret: str):
 
 @pytest.mark.parametrize("supplied", ["ünïcode", "naïve", "日本語"])
 def test_non_ascii_supplied_secret_is_rejected_not_a_crash(monkeypatch, supplied):
-    """hmac.compare_digest raises TypeError on non-ASCII str. The ingest route
-    is unauthenticated, so that turned any unicode ?secret= into a 500."""
+    """A unicode ?secret= must 401, not 500 — the ingest route is unauthenticated."""
     import backend.api.webhooks as webhooks
 
     monkeypatch.setattr(
@@ -67,15 +58,12 @@ def test_non_ascii_configured_secret_still_authenticates(monkeypatch):
         "load_config",
         lambda: SimpleNamespace(general=SimpleNamespace(webhook_secret="ünïcode")),
     )
-    assert webhooks.verify_webhook_secret(_request_with_secret("ünïcode")) is None
-
-
-# --- URL-embedded tokens must be stream-scoped ---
+    verdict = webhooks.verify_webhook_secret(_request_with_secret("ünïcode"))
+    assert verdict is None
 
 
 def test_full_session_token_in_query_string_is_rejected(monkeypatch):
-    """Query-param auth exists only for EventSource and <img>. A full session
-    token in a URL is logged, cached and sent as a referer."""
+    """A full session token in a URL must be refused — URLs leak via referers."""
     import backend.api.main as apimain
     from backend.util.auth import (
         create_access_token,
@@ -103,25 +91,19 @@ def test_full_session_token_in_query_string_is_rejected(monkeypatch):
     full = create_access_token("u", secret)
     stream = create_stream_token("u", secret)
 
-    # A full session token in the query string is refused even on a stream route.
-    assert client.get(f"/api/media/1/poster?token={full}").status_code == 403
-    # The stream token it exists for still works.
-    assert client.get(f"/api/media/1/poster?token={stream}").status_code == 200
-    # And the header path is untouched.
-    assert (
-        client.get(
-            "/api/media/1/poster", headers={"Authorization": f"Bearer {full}"}
-        ).status_code
-        == 200
+    # Bound first: -O strips asserts, taking the request with them.
+    full_in_url = client.get(f"/api/media/1/poster?token={full}")
+    stream_in_url = client.get(f"/api/media/1/poster?token={stream}")
+    full_in_header = client.get(
+        "/api/media/1/poster", headers={"Authorization": f"Bearer {full}"}
     )
-
-
-# --- duplicate resolution must never remove the kept item ---
+    assert full_in_url.status_code == 403
+    assert stream_in_url.status_code == 200
+    assert full_in_header.status_code == 200
 
 
 def test_resolve_duplicates_never_removes_the_kept_id(monkeypatch):
-    """With deleteFiles the kept item would be taken off disk while the
-    response still reported it as kept."""
+    """The kept item must survive even when named in remove_ids."""
     import backend.api.media_api as media_api
 
     removed_ids = []
@@ -145,9 +127,6 @@ def test_resolve_duplicates_never_removes_the_kept_id(monkeypatch):
     assert removed_ids == [8, 9]
 
 
-# --- destructive body flags must be coerced ---
-
-
 @pytest.mark.parametrize(
     "raw,expected",
     [
@@ -163,8 +142,7 @@ def test_resolve_duplicates_never_removes_the_kept_id(monkeypatch):
     ],
 )
 def test_body_flag_coerces_string_booleans(raw, expected):
-    """FastAPI coerces declared params; a raw JSON body value does not, so
-    "false" and "0" were truthy and deleted files they were told to keep."""
+    """A raw JSON body value is not coerced, so "false" and "0" were truthy."""
     from backend.api.utils import body_flag
 
     assert body_flag({"deleteFiles": raw}, "deleteFiles") is expected
