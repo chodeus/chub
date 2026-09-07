@@ -1,0 +1,31 @@
+/* Log block styles - colored left border per log level */
+.log-block {
+    padding: 1px 0;
+    border-left: 3px solid transparent;
+    padding-left: 8px;
+    margin-bottom: 1px;
+}
+
+.log-block--critical {
+    border-left-color: var(--error);
+    background: color-mix(in srgb, var(--error) 6%, transparent);
+}
+
+.log-block--error {
+    border-left-color: var(--error);
+    background: color-mix(in srgb, var(--error) 4%, transparent);
+}
+
+.log-block--warning {
+    border-left-color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 4%, transparent);
+}
+
+.log-block--info {
+    border-left-color: var(--primary);
+}
+
+.log-block--debug {
+    border-left-color: var(--text-tertiary);
+    opacity: 0.75;
+}

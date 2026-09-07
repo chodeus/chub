@@ -1,0 +1,180 @@
+# .coderabbit.yaml — CHUB (Chodeus' Media Script Hub)
+# FastAPI + SQLite Python backend (main.py, backend/) + React 19 / Vite / Tailwind v4 frontend (frontend/).
+# One branch: main. Everything PRs into it (#577 retired develop).
+language: "en-US"
+
+reviews:
+  # assertive: chill passed a diff clean that assertive flagged with two Major findings (2026-09-03); the "**" rule keeps style nits out
+  profile: "assertive"
+  request_changes_workflow: false
+  pre_merge_checks:
+    # off: the 80% docstring-coverage warning contradicts the one-line-docstring rule under "**"
+    docstrings:
+      mode: "off"
+    title:
+      mode: warning
+      requirements: |-
+        Conventional Commits, `type(scope)?: subject`. release-please reads the
+        squash-merge title to pick the next version: feat bumps minor, fix bumps
+        patch, a `!` after the type or a BREAKING CHANGE footer bumps major, and
+        chore/ci/test/build are hidden from the changelog and never release on
+        their own. Flag a title whose type understates the diff (a behaviour
+        change labelled chore or ci ships unversioned) or overstates it.
+  auto_review:
+    enabled: true
+    drafts: false
+    # No base_branches: main is the default branch and is always auto-reviewed.
+    # The old "^develop$" entry matched nothing once #577 retired that branch.
+
+  path_filters:
+    - "!**/*.db"
+    - "!**/*.png"
+    - "!assets/**"
+    - "!docs/**"
+    - "!wikiscreens/**"
+    - "!design_handoff*/**"
+    - "!logs/**"
+    - "!refs/**"
+    - "!templates/**"
+    - "!frontend/dist/**"
+    - "!**/node_modules/**"
+    - "!**/__pycache__/**"
+    - "!frontend/package-lock.json"
+    - "!CHANGELOG.md"
+
+  path_instructions:
+    - path: "backend/**/*.py"
+      instructions: |-
+        CHUB Python backend review rules — flag any of these failure modes:
+        - FAIL CLOSED: any auth / webhook-secret / API-key / config-load / DNS / DB guard that returns None/empty, skips, or calls the next handler on error MUST deny (401/403/503), never pass through. `if config and not allowed(): deny` is a bug — it skips the check when config is falsy. An `except ...: config = None` branch must reject the request, not continue with defaults.
+        - Read LIVE config each pass: long-lived threads, schedulers, job processors and request handlers must re-read config every iteration/request, not capture a config object at startup — config is REPLACED (not mutated) on reload, so a snapshot goes stale.
+        - No long-lived token in a URL: image/SSE/EventSource/webhook URLs that can't send an Authorization header must use a short-lived, scope-limited token (see create_stream_token / STREAM_SCOPE), never the full session JWT or an admin token.
+        - Don't cache a transient failure as a negative result: distinguish genuine not-found (cacheable) from network/5xx/timeout/rate-limit/breaker-open (never cache) — a blip must not suppress a valid answer later.
+        - Redact secrets on EVERY read path (per-module, per-section, per-instance, export, diagnostics), not just GET /config. Make redaction STRUCTURAL — mask by sensitive leaf-key name — so a newly added secret field is covered automatically, not per-endpoint.
+        - Confirm the recovery before the destructive step: delete-then-refetch / delete-then-research must guarantee the recovery runs even if the confirm times out, or a transient failure becomes permanent loss.
+        - Destructive filesystem ops (unlink/rmtree/rm -rf): re-confine the RESOLVED physical target (os.path.realpath) and re-assert it is inside the allowed root before deleting — a string-only under-root/".." check is defeated by a symlinked path component. When two delete branches exist (soft vs hard, file vs tree), diff their guards: a check present on one branch and missing on its sibling is the bug. An empty "in-use"/"keep" set means a FAILED READ, not "delete everything" — fail closed.
+        - Validate the NORMALIZED path for allowlist/traversal checks (../ collapse defeats string-only checks).
+        - Comments: navigational/instructional only (1-2 line what/gotcha), no why/history essays; match existing density.
+    - path: "main.py"
+      instructions: |-
+        HTTP entrypoint / middleware wiring:
+        - FAIL CLOSED auth: any authentication / webhook-secret / API-key middleware that can't load its config or secret must return 401/503 — never `except ...: await call_next(request)`, which silently disables auth for the whole API when config is unparseable.
+        - Read live config per request; do not snapshot a config object at import/startup that goes stale when config is replaced on reload.
+        - Never mount an endpoint that accepts a long-lived session JWT in the query string; URL-embedded auth must be the short-lived, stream-scoped token only.
+    - path: "backend/util/database/**/*.py"
+      instructions: |-
+        SQLite cache/data layer:
+        - Escape % and _ in SQL LIKE patterns with an explicit ESCAPE clause — especially delete-by-prefix / clear-by-prefix — or a value containing % or _ wildcard-matches sibling rows and deletes/returns too much.
+        - Invalidate the LIST and SEARCH caches on mutation, not just the single item: a delete/patch/insert of /x/{id} must also drop the /x list cache and any search-result cache, or lists show stale or deleted rows.
+        - Don't persist a transient failure (network/5xx/timeout/rate-limit) as a negative/empty cache entry — only cache genuine not-found; a blip must not suppress a valid value on later reads.
+        - Parameterize every query; never string-format user/config values into SQL.
+    - path: "backend/util/logger.py"
+      instructions: |-
+        Log redaction:
+        - Redaction must run at the formatter on the FULLY RENDERED line (msg, args AND the exc_info traceback), on every handler — HTTP-client exceptions embed secret-bearing URLs in the traceback.
+        - Cover URL PATH-SEGMENT secrets, not just query params: e.g. ?X-Plex-Token=, ?apikey=, /passthrough/<key>, bearer tokens. A regex that only masks query strings misses path-embedded secrets.
+        - Mask by sensitive key name structurally so new secret fields are redacted automatically.
+    - path: "backend/api/posters/**/*.py"
+      instructions: |-
+        Poster / GDrive endpoints — high-stakes local-delete path:
+        - /gdrive/delete-local must authorize by gdrive_list MEMBERSHIP (realpath-match against a currently-configured gdrive_list entry), NOT is_path_allowed — is_path_allowed keys off roots that exist on disk and would wrongly refuse (and skip the row purge for) a drive whose folder was already deleted. Do NOT add an is_path_allowed gate to this handler.
+        - Fail closed: if config can't be loaded, return 503 and delete nothing.
+        - Re-confine the RESOLVED path (os.path.realpath) and re-assert membership before any unlink/rmtree; reject a resolve to filesystem root. A string-only ".." check is defeated by a symlinked component.
+        - Invalidate the poster LIST + search caches after a delete/mutation, not just the touched row.
+    - path: "frontend/src/**/*.{js,jsx}"
+      instructions: |-
+        React 19 / Vite frontend:
+        - 0 and "" are FALSY: use ?? / Number.isFinite / explicit null checks (not ||) for any value where 0 or "" is legitimate (counts, offsets, timeouts, indices, ratings) — `value || fallback` silently replaces a real 0.
+        - useEffect/useMemo/useCallback deps: follow exhaustive-deps — include EVERY reactive value the effect/callback reads. To control excess re-runs, memoize the object/callback at its source (useMemo/useCallback) or depend on a stable identity field (e.g. item.id) ONLY when that field fully determines the work; never drop a value the body reads just to silence a re-run (that is a stale-closure bug). A non-memoized object/callback gets a new identity every parent render so `[obj]`/`[onDone]` re-runs then — a memoized one does not.
+        - Clean up on unmount: clear timers/intervals, abort fetches, close EventSource/WebSocket and stop polling loops in the effect's cleanup return.
+        - Never embed the full session JWT in an <img>/EventSource/link URL — use the short-lived stream token (useStreamToken) for URL-embedded auth.
+
+    - path: "deploy/docker/**"
+      instructions: |-
+        Container build — every layer ships in the published image:
+        - A recursive `chown -R` / `chmod -R` over a tree a previous COPY wrote re-materialises EVERY file in a new layer, duplicating the tree in the image (45MB of /app here). Set ownership with `COPY --chown=uid:gid`; when a later RUN creates files, it must chown them inside that same RUN, never in a fresh layer. Prefer a build-time assertion over a tree-wide chmod.
+        - Pin base images by digest (FROM image:tag@sha256:...) and pin apt/pip/npm versions — an unpinned tag silently changes the runtime between builds.
+        - Never bake a secret into ARG/ENV or into a RUN's argv: both persist in image history, and /proc/<pid>/cmdline is world-readable in-container. Pass credentials as runtime env instead.
+        - Don't pipe a remote script into a shell (curl ... | sh). Fetch it, verify against a published checksum, then run it.
+        - Multi-stage: the runtime stage must not inherit compilers, headers or -dev packages from the builder. Copy artefacts, not toolchains.
+        - A path added or renamed here must stay in step with the paths filters in .github/workflows/* — otherwise the image silently stops being built and validated on PRs that touch it.
+    - path: "requirements*.txt"
+      instructions: |-
+        Python dependency manifest:
+        - An extra ([composite], [all], [security]) pulls that extra's whole transitive set. Confirm the code path needing it still EXISTS: deleting a feature leaves its dependency behind. psd-tools[composite] carried scipy + scikit-image (107MB) for a PSD-flatten path that was removed three days after the extra was added, and survived 2.5 months.
+        - A pin whose comment says it exists only to lift a transitive floor out of a CVE is a smell — check whether the consumer is still reachable at all, and drop the dependency rather than maintain the pin.
+        - Removing a feature must remove its dependency in the same change: flag a PR deleting a module, route or config field that touches no manifest.
+        - Runtime vs dev: a test-only or build-only package must not land in the manifest the runtime image installs.
+    - path: "tests/**/*.py"
+      instructions: |-
+        Test suite:
+        - No side-effecting call inside an assert — python -O strips assert statements, taking the call with them. Bind to a local first, then assert on the local.
+        - A guard that cannot fail is worse than no guard. If an assertion is reachable only when some list is non-empty, or keys off a symbol that may be renamed, it passes vacuously. Pair it with a control that fails when the defect is injected.
+        - A static/AST check over source must resolve helper calls, not only direct ones: keying on a direct call name misses a handler that reaches the behaviour through a helper, which is exactly the case such a check exists to catch.
+        - Assert the observable contract (resulting state), not incidental ordering or a mock's call count, unless the call count IS the invariant.
+    - path: ".github/workflows/**"
+      instructions: |-
+        CI, CodeQL, dep-audit and the GHCR publish:
+        - A gate that stops blocking (a lint/CVE/test step made non-blocking or
+          continue-on-error) must have every downstream step that relied on it
+          audited in the same change. dep-audit runs with fail-on-vuln: true —
+          flag anything that softens that.
+        - A job listed in `needs:` that FAILS makes the dependent job SKIP, and
+          GitHub reports a skipped required check as success — that is why
+          frontend-tests is deliberately not in docker-validate's needs. Flag a
+          `needs:` edit that reintroduces the trap.
+        - Enumerate allowed states positively (== 'success' || == 'skipped'),
+          never by negation — a third state slips through `!= 'failure'`.
+        - Untrusted input (base SHA, PR title, branch name) reaches `run:` only
+          via `env:`, never `${{ }}` interpolation — the gdrive-preset-moves job
+          is the pattern.
+        - The push trigger must not be self-referential, or a workflow edit
+          republishes :latest. Pin third-party actions by commit SHA.
+    - path: "{scripts/start.sh,build_frontend.sh}"
+      instructions: |-
+        Container entrypoint and frontend staging:
+        - start.sh fails closed on the OUTCOME: the runuser write probe on
+          CONFIG_DIR must stay a hard exit 1, /app is never chowned, and the
+          chmod -R 777 path stays behind CHUB_LEGACY_CHMOD=1. Flag a change that
+          makes the probe advisory or chowns /app again.
+        - Rootless (id -u != 0) overrides PUID/PGID from the real uid/gid; keep
+          that, never pretend.
+        - build_frontend.sh rm -rf's templates/{assets,icons,img,posters} before
+          copying — a missing posters dir must stay a hard exit 1, and the copy
+          targets must remain inside templates/.
+        - Quote every path expansion; never echo a secret, including under set -x.
+    - path: "deploy/unraid/chub.xml"
+      instructions: |-
+        Published Unraid CA template: <Network> stays bridge (the personal
+        network belongs only in the user's my-*.xml), the port stays 8000, and
+        every <Config> (PUID/PGID/UMASK/TZ, /config, /kometa, /media, /data,
+        /plex) must match scripts/start.sh, the Dockerfile and README. Flag a
+        Mask="true" omission on any new credential-shaped variable.
+    - path: "**"
+      instructions: |-
+        Applies to every file, whatever the language:
+        - Comments are navigational or instructional only and capped at 1-2 lines:
+          what a non-obvious block does, or the gotcha it guards. No why/history
+          essays, no before/after narrative, no restating the code, no section
+          banners. Docstrings: one line unless the signature genuinely cannot
+          carry it. Never ask for a docstring to be added; a missing docstring
+          is not a finding.
+        - The 1-2 line cap wins even inside an already heavily-commented file —
+          matching local density is not licence to exceed it.
+        - A comment, docstring, help text, column header, log message or UI label
+          that disagrees with what the code does is a correctness finding, not a
+          stale-comment nit: report it and say which side is wrong.
+        - Do not flag stylistic preferences that are consistent across the file
+          (naming, quoting, import order, formatting, line length). Report
+          correctness, security, data-loss and the classes named above.
+
+  tools:
+    # ruff + eslint left to CI (codeql-lint.yml runs Ruff, ESLint, stylelint,
+    # prettier, CodeQL). Every CodeRabbit tool defaults ON, so they must be
+    # switched off explicitly or they run here too and double-post CI findings.
+    ruff:
+      enabled: false
+    eslint:
+      enabled: false
+    gitleaks:
+      enabled: true
