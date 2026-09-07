@@ -30,6 +30,7 @@ def _unlink_on_exit(path: str):
             if os.path.exists(path):
                 os.unlink(path)
         except OSError:
+            # Best effort: cleanup must never mask the original failure.
             pass
 
 

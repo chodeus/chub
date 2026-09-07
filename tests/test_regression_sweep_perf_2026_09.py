@@ -1,8 +1,4 @@
-"""Regression tests for the performance half of the 2026-09 review sweep.
-
-These changes are meant to be cost-only, so most of these assert that behaviour
-is unchanged — that is where a silent regression would hide.
-"""
+"""Perf half of the 2026-09 sweep — these assert behaviour is unchanged."""
 
 import os
 import sqlite3
@@ -48,12 +44,8 @@ def db():
         yield handle
 
 
-# --- batched plex cache sync writes exactly what the per-row loop did ---
-
-
 def test_batched_sync_writes_the_same_rows_as_per_row_upsert(db):
-    """sync_for_library now batches into one transaction per chunk instead of
-    a connect+commit per row. It must still add, update and delete the same."""
+    """Batched sync must add, update and delete exactly what per-row did."""
     pc = db.plex
     for item in [_plex_item(i, "A") for i in range(5)]:
         pc.upsert(item)
@@ -83,18 +75,14 @@ def test_batched_sync_updates_changed_rows(db):
 
 
 def test_chunking_crosses_the_chunk_boundary(db):
-    """Chunk size is 500; a sync larger than that must not drop the remainder."""
+    """Chunk size is 500; a larger sync must not drop the remainder."""
     pc = db.plex
     pc.sync_for_library("A", "Movies", [_plex_item(i, "A") for i in range(1201)])
     assert len([r for r in pc.get_all() if r["instance_name"] == "A"]) == 1201
 
 
-# --- the background-distance rewrite is bit-comparable ---
-
-
 def test_background_distance_matches_the_broadcast_form():
-    """Looping the backdrop colours with a running minimum replaced an
-    H x W x N x 3 broadcast. Same numbers, a fraction of the memory."""
+    """The running-minimum rewrite must return the same numbers."""
     np = pytest.importorskip("numpy")
     from backend.util.cl2k import logo_extract as le
 
@@ -120,12 +108,8 @@ def test_background_distance_handles_a_single_colour():
     assert np.allclose(out, 0.0)
 
 
-# --- the allowed-roots memo must not leak between configs ---
-
-
 def test_allowed_roots_memo_is_keyed_on_the_roots_not_the_config(tmp_path):
-    """load_config returns a fresh deep copy each call, so an identity key
-    would both miss constantly and risk serving another config's roots."""
+    """An identity key would miss constantly and could serve another config's roots."""
     from backend.util import path_safety as ps
 
     a = tmp_path / "alpha"
@@ -152,26 +136,25 @@ def test_allowed_roots_memo_is_bounded():
     assert len(ps._ROOTS_CACHE) <= 9
 
 
-# --- the job dedup SELECT must hold the write lock ---
-
-
 def test_plain_select_does_not_serialise_but_begin_immediate_does():
-    """The old comment claimed the dedup SELECT shared a transaction with the
-    INSERT. It did not: two connections both passed the check and both wrote."""
+    """A plain SELECT holds no write lock, so both connections could insert."""
     path = os.path.join(tempfile.mkdtemp(), "t.db")
     setup = sqlite3.connect(path)
     setup.execute("CREATE TABLE j (id INTEGER PRIMARY KEY, name TEXT)")
     setup.commit()
 
     a, b = sqlite3.connect(path), sqlite3.connect(path)
-    assert a.execute("SELECT id FROM j WHERE name=?", ("m",)).fetchone() is None
-    assert a.in_transaction is False  # no write lock held by a SELECT
-    assert b.execute("SELECT id FROM j WHERE name=?", ("m",)).fetchone() is None
+    seen_by_a = a.execute("SELECT id FROM j WHERE name=?", ("m",)).fetchone()
+    a_locked = a.in_transaction
+    seen_by_b = b.execute("SELECT id FROM j WHERE name=?", ("m",)).fetchone()
+    assert seen_by_a is None and seen_by_b is None
+    assert a_locked is False  # a plain SELECT holds no write lock
     a.execute("INSERT INTO j (name) VALUES (?)", ("m",))
     a.commit()
     b.execute("INSERT INTO j (name) VALUES (?)", ("m",))
     b.commit()
-    assert setup.execute("SELECT COUNT(*) FROM j").fetchone()[0] == 2
+    rows = setup.execute("SELECT COUNT(*) FROM j").fetchone()[0]
+    assert rows == 2
 
     # BEGIN IMMEDIATE is what actually serialises the check with the insert.
     setup.execute("DELETE FROM j")
@@ -193,12 +176,8 @@ def test_enqueue_takes_the_write_lock_before_the_dedup_select():
     assert "inside the same connection/transaction as the INSERT" not in src
 
 
-# --- bounded log retention keeps the reported total honest ---
-
-
 def test_instance_logs_report_total_seen_not_the_retained_slice():
-    """all_lines became a bounded deque; without a separate counter the
-    reported total would silently cap at the limit."""
+    """The bounded deque must not cap the reported total."""
     import inspect
 
     from backend.api import instances
@@ -209,17 +188,18 @@ def test_instance_logs_report_total_seen_not_the_retained_slice():
     assert '"total": len(all_lines)' not in src
 
 
-# --- a failed optimize must not leave a temp file in the poster folder ---
-
-
 def test_unlink_on_exit_removes_the_temp_file_on_failure(tmp_path):
     from backend.util.poster_images import _unlink_on_exit
 
     victim = tmp_path / "tmpXXXX.jpg"
     victim.write_bytes(b"x")
-    with pytest.raises(ValueError):
+    raised = False
+    try:
         with _unlink_on_exit(str(victim)):
             raise ValueError("save failed")
+    except ValueError:
+        raised = True
+    assert raised
     assert not victim.exists()
 
 
@@ -230,9 +210,6 @@ def test_unlink_on_exit_tolerates_a_file_already_moved(tmp_path):
     with _unlink_on_exit(str(moved)):
         pass  # shutil.move consumed it on the success path
     assert not moved.exists()
-
-
-# --- progress writes are throttled, not per-item ---
 
 
 def test_poster_self_heal_progress_is_throttled():
