@@ -16,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 
 from backend.api.utils import (
     BODY_TOO_LARGE,
+    body_flag,
     body_too_large_error,
     error,
     get_database,
@@ -54,7 +55,11 @@ def verify_webhook_secret(request: Request) -> None:
     provided = request.headers.get("X-Webhook-Secret") or request.query_params.get(
         "secret", ""
     )
-    if not provided or not hmac.compare_digest(expected, provided):
+    # compare_digest raises TypeError on non-ASCII str; compare bytes so a
+    # unicode secret (configured or supplied) can't 500 the ingest endpoint.
+    if not provided or not hmac.compare_digest(
+        expected.encode("utf-8"), provided.encode("utf-8")
+    ):
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
 
@@ -556,8 +561,8 @@ async def provision_webhooks(
             cfg,
             base_url,
             secret,
-            include_upgrade=bool(body.get("include_upgrade")),
-            force_save=bool(body.get("force_save")),
+            include_upgrade=body_flag(body, "include_upgrade"),
+            force_save=body_flag(body, "force_save"),
             only=_normalize_only(body.get("instances")),
             logger=logger,
         )

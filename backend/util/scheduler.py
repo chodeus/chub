@@ -413,7 +413,15 @@ class ChubScheduler:
                 disabled = set(getattr(cfg.general, "disabled_modules", None) or [])
                 inst_sync_schedule = getattr(cfg.instances, "sync_schedule", "") or ""
             except Exception:
-                disabled = set()
+                # Fail closed: an empty disabled set would auto-run every module
+                # the admin turned off, destructive ones included. Skip the tick.
+                if self.logger:
+                    self.logger.get_adapter("SCHEDULER").error(
+                        "Config unreadable this tick; skipping to avoid running "
+                        "disabled modules",
+                        exc_info=True,
+                    )
+                return
 
             queued_modules = set()
             for name, sched in schedule.items():
@@ -464,8 +472,8 @@ class ChubScheduler:
                     else:
                         queued_modules.add(name)
 
-            self._tick_upgradinatorr_profiles(queued_modules)
-            self._tick_schedule_blocks(queued_modules)
+            self._tick_upgradinatorr_profiles(queued_modules, disabled)
+            self._tick_schedule_blocks(queued_modules, disabled)
             self._tick_media_sync(inst_sync_schedule)
 
         except Exception as e:
@@ -509,9 +517,15 @@ class ChubScheduler:
             if log_adapter:
                 log_adapter.error(f"media_sync tick failed: {e}", exc_info=True)
 
-    def _tick_upgradinatorr_profiles(self, queued_modules: set) -> None:
+    def _tick_upgradinatorr_profiles(
+        self, queued_modules: set, disabled: Optional[set] = None
+    ) -> None:
         """Queue Upgradinatorr profile-specific schedules."""
         if "upgradinatorr" in queued_modules:
+            return
+        # Same gate as the plain schedule loop: a module hard-disabled on the
+        # Modules page must not reach dispatch by any other path.
+        if "upgradinatorr" in (disabled or set()):
             return
 
         upgradinatorr_config = getattr(self.config, "upgradinatorr", None)
@@ -569,7 +583,9 @@ class ChubScheduler:
                     f"[SCHEDULER] Failed to queue Upgradinatorr profiles: {result['message']}"
                 )
 
-    def _tick_schedule_blocks(self, queued_modules: set) -> None:
+    def _tick_schedule_blocks(
+        self, queued_modules: set, disabled: Optional[set] = None
+    ) -> None:
         """Queue module runs from multi-block schedules (config.schedule_blocks).
 
         Each block fires on its own schedule string and injects its `overrides`
@@ -587,6 +603,9 @@ class ChubScheduler:
 
         for module_name, blocks in blocks_by_module.items():
             if module_name in queued_modules or not blocks:
+                continue
+            # Same gate as the plain schedule loop — see _tick.
+            if module_name in (disabled or set()):
                 continue
 
             status = self.module_orchestrator.get_module_status(module_name)

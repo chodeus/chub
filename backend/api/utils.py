@@ -150,6 +150,18 @@ async def read_json_object(
     return payload if isinstance(payload, dict) else {}
 
 
+def body_flag(body: dict, key: str, default: bool = False) -> bool:
+    """Read a boolean flag from a raw JSON body."""
+    # FastAPI coerces declared query/model params; a raw dict value does not go
+    # through that, so "false" and "0" would otherwise both be truthy.
+    if not isinstance(body, dict) or key not in body:
+        return default
+    raw = body[key]
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() in ("1", "true", "yes")
+
+
 def body_too_large_error() -> JSONResponse:
     """The single 413 response for a body past the cap."""
     return error("Request body too large", code="BODY_TOO_LARGE", status_code=413)

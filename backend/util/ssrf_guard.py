@@ -9,7 +9,7 @@ this is about where *we* connect, not where we read on disk.
 
 import ipaddress
 import socket
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import requests
@@ -26,6 +26,25 @@ _BLOCKED_HOSTS = frozenset(
 )
 
 
+def _resolve_all(host: str) -> List["ipaddress._BaseAddress"]:
+    """Every address a host resolves to, or [] if it can't be resolved."""
+    try:
+        return [ipaddress.ip_address(host)]
+    except ValueError:
+        pass
+    try:
+        info = socket.getaddrinfo(host, None)
+    except (socket.gaierror, ValueError):
+        return []
+    out = []
+    for entry in info:
+        try:
+            out.append(ipaddress.ip_address(entry[4][0]))
+        except (ValueError, IndexError):
+            continue
+    return out
+
+
 def _resolve_host(host: str) -> Optional[ipaddress._BaseAddress]:
     try:
         ip = ipaddress.ip_address(host)
@@ -39,6 +58,21 @@ def _resolve_host(host: str) -> Optional[ipaddress._BaseAddress]:
     except (socket.gaierror, ValueError, IndexError):
         return None
     return None
+
+
+def _ip_verdict(
+    ip: "ipaddress._BaseAddress", allow_private: bool
+) -> Tuple[bool, str]:
+    """Address-class verdict for an already-resolved IP."""
+    if ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+        return False, f"disallowed address class: {ip}"
+    if ip.is_link_local:
+        return False, f"link-local address: {ip}"
+    if not allow_private and (ip.is_private or ip.is_loopback):
+        return False, f"private/loopback address: {ip}"
+    if str(ip) in _BLOCKED_HOSTS:
+        return False, f"blocked host: {ip}"
+    return True, "ok"
 
 
 def is_safe_url(url: str, allow_private: bool = True) -> Tuple[bool, str]:
@@ -74,15 +108,7 @@ def is_safe_url(url: str, allow_private: bool = True) -> Tuple[bool, str]:
     # would let a rebinding/DNS-blip host through).
     if ip is None:
         return False, f"could not resolve host: {host}"
-    if ip.is_multicast or ip.is_reserved or ip.is_unspecified:
-        return False, f"disallowed address class: {ip}"
-    if ip.is_link_local:
-        return False, f"link-local address: {ip}"
-    if not allow_private and (ip.is_private or ip.is_loopback):
-        return False, f"private/loopback address: {ip}"
-    if str(ip) in _BLOCKED_HOSTS:
-        return False, f"blocked host: {ip}"
-    return True, "ok"
+    return _ip_verdict(ip, allow_private)
 
 
 def safe_external_get(
@@ -99,9 +125,16 @@ def safe_external_get(
         raise ValueError(reason)
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
-    ip = _resolve_host(host)
-    if ip is None:
+    addresses = _resolve_all(host)
+    if not addresses:
         raise ValueError(f"could not resolve host: {host}")
+    # Every address, not just the first: requests re-resolves and may pick any
+    # record, so a mixed public/private RRset would otherwise slip through.
+    for candidate in addresses:
+        ok, reason = _ip_verdict(candidate, allow_private=False)
+        if not ok:
+            raise ValueError(reason)
+    ip = addresses[0]
 
     target = url
     req_headers = dict(headers or {})

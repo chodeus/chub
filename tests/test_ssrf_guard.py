@@ -113,3 +113,41 @@ def test_unresolvable_hostname_fails_closed():
     ):
         ok, _ = is_safe_url("http://unresolvable-host.invalid/")
         assert ok is False
+
+
+def test_safe_external_get_rejects_rebind_on_second_lookup():
+    """A host that resolves public for the check and internal for the connect."""
+    import ipaddress
+
+    from backend.util import ssrf_guard
+
+    seen = iter([ipaddress.ip_address("93.184.216.34")])
+    with patch.object(
+        ssrf_guard, "_resolve_host", lambda host: next(seen)
+    ), patch.object(
+        ssrf_guard,
+        "_resolve_all",
+        lambda host: [ipaddress.ip_address("169.254.169.254")],
+    ), patch.object(ssrf_guard, "requests") as fake_requests:
+        with pytest.raises(ValueError, match="link-local|blocked|private"):
+            ssrf_guard.safe_external_get("http://rebind.example/x")
+    # The rejected target must never reach the HTTP client at all.
+    fake_requests.get.assert_not_called()
+
+
+def test_safe_external_get_rejects_a_mixed_public_private_rrset():
+    """requests re-resolves and may pick any record, so one bad A is enough."""
+    import ipaddress
+
+    from backend.util import ssrf_guard
+
+    public = ipaddress.ip_address("93.184.216.34")
+    mixed = [public, ipaddress.ip_address("10.0.0.5")]
+    with patch.object(
+        ssrf_guard, "_resolve_host", lambda host: public
+    ), patch.object(ssrf_guard, "_resolve_all", lambda host: mixed), patch.object(
+        ssrf_guard, "requests"
+    ) as fake_requests:
+        with pytest.raises(ValueError, match="private"):
+            ssrf_guard.safe_external_get("https://mixed.example/x")
+    fake_requests.get.assert_not_called()

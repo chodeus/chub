@@ -65,3 +65,61 @@ def test_clear_and_last_seen(db):
     db.webhook_cache.clear()
     assert db.webhook_cache.count() == 0
     assert db.webhook_cache.last_seen("movie", "Dune") is None
+
+
+def _conn_failing_insert(exc):
+    """Connection whose DELETE/SELECT succeed and whose INSERT raises `exc`."""
+
+    class _Cur:
+        @staticmethod
+        def fetchone():
+            return None
+
+    class _Conn:
+        def execute(self, sql, *a, **k):
+            if sql.strip().upper().startswith("INSERT"):
+                raise exc
+            return _Cur()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+    class _Ctx:
+        def __enter__(self):
+            return _Conn()
+
+        def __exit__(self, *a):
+            return False
+
+    return lambda *a, **k: _Ctx()
+
+
+def test_locked_database_is_not_reported_as_duplicate(db, monkeypatch):
+    """A locked database must propagate, not masquerade as "already seen"."""
+    import sqlite3
+
+    cache = db.webhook_cache
+    monkeypatch.setattr(
+        cache,
+        "get_connection",
+        _conn_failing_insert(sqlite3.OperationalError("database is locked")),
+    )
+    with pytest.raises(sqlite3.OperationalError):
+        cache.is_duplicate("movie", "Some Movie", 600)
+
+
+def test_unique_clash_is_still_reported_as_duplicate(db, monkeypatch):
+    """Control: the documented IntegrityError race still coalesces duplicates."""
+    import sqlite3
+
+    cache = db.webhook_cache
+    monkeypatch.setattr(
+        cache,
+        "get_connection",
+        _conn_failing_insert(sqlite3.IntegrityError("UNIQUE constraint failed")),
+    )
+    verdict = cache.is_duplicate("movie", "Some Movie", 600)
+    assert verdict is True
