@@ -16,7 +16,6 @@ from .media_asset_matches import MediaAssetMatches
 from .media_cache import MediaCache
 from .media_metadata import (
     INCOMPLETE_METADATA_FIELDS,
-    INCOMPLETE_METADATA_INT_FIELDS,
     NEVER_POPULATED_FIELDS,
     is_missing_value,
 )
@@ -445,7 +444,6 @@ __all__ = [
     "MediaAssetMatches",
     "WebhookCache",
     "INCOMPLETE_METADATA_FIELDS",
-    "INCOMPLETE_METADATA_INT_FIELDS",
     "NEVER_POPULATED_FIELDS",
     "is_missing_value",
     "escape_like",

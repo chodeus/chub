@@ -10,6 +10,7 @@ from croniter import croniter
 from dateutil import tz
 
 from backend.util.helper import create_table
+from backend.util.arr import arr_api_version
 
 # Scheduler configuration constants
 SCHEDULER_POLL_INTERVAL_SECONDS = 5
@@ -697,7 +698,7 @@ class ChubScheduler:
                     test_url = f"{url}/library/sections"
                     headers = {"X-Plex-Token": api} if api else {}
                 else:
-                    api_ver = "v1" if service == "lidarr" else "v3"
+                    api_ver = arr_api_version(service)
                     test_url = f"{url}/api/{api_ver}/system/status"
                     headers = {"X-Api-Key": api} if api else {}
 

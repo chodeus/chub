@@ -772,8 +772,10 @@ class PosterUploader:
             # source of page-cache churn on large libraries.
             current_mtime: Optional[float] = None
             try:
+                # os.stat(None) raises TypeError, not OSError — renamed_file is
+                # nullable for a matched row whose poster was never staged.
                 current_mtime = os.stat(poster_path).st_mtime
-            except OSError:
+            except (OSError, TypeError):
                 current_mtime = None
 
             record_mtime = asset.get("file_mtime")

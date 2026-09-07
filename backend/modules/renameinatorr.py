@@ -390,7 +390,9 @@ class Renameinatorr(ChubModule):
                 total_renamed = sum(
                     len(i["file_info"]) for i in media_dict if i.get("file_info")
                 )
-                total_folder_renamed = sum(bool(i["new_path_name"]) for i in media_dict)
+                total_folder_renamed = sum(
+                    bool(i.get("new_path_name")) for i in media_dict
+                )
                 logger.info(
                     f"Chunk completed in {time.time() - chunk_start_time:.2f} seconds | "
                     f"Files renamed: {total_renamed} | Folders renamed: {total_folder_renamed}"

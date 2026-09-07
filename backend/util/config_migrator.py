@@ -35,6 +35,15 @@ ALL_SENTINEL = "__ALL__"
 # ─── Detection ──────────────────────────────────────────────────────────
 
 
+def _section(raw: Dict[str, Any], key: str) -> Dict[str, Any]:
+    """A config section as a dict."""
+    # `raw.get(key, {})` is not enough: an empty YAML section ("nohl:" with
+    # nothing under it) is present with the value None, so the default never
+    # applies and the chained .get raises.
+    value = raw.get(key)
+    return value if isinstance(value, dict) else {}
+
+
 def _has_path(raw: Any, *path: str) -> bool:
     """Return True iff every key in ``path`` resolves to a non-missing value."""
     d = raw
@@ -99,9 +108,9 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
             return True
 
     # Legacy-only value-types on the same key name
-    if isinstance(raw.get("poster_cleanarr", {}).get("dry_run"), bool):
+    if isinstance(_section(raw, "poster_cleanarr").get("dry_run"), bool):
         return True
-    if isinstance(raw.get("border_replacerr", {}).get("holidays"), dict):
+    if isinstance(_section(raw, "border_replacerr").get("holidays"), dict):
         return True
 
     # poster_renamerr / asset_renamerr / unmatched_assets: any non-string entry
@@ -110,7 +119,7 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     # supersedes the old "deliberately NOT a legacy signal" note — the dict form
     # is now always migrated to plex_scope on load.
     for _mod in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
-        _inst = raw.get(_mod, {}).get("instances")
+        _inst = _section(raw, _mod).get("instances")
         if isinstance(_inst, list) and any(not isinstance(i, str) for i in _inst):
             return True
 
@@ -121,7 +130,7 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     _plex_only = _plex_names - _arr_names
     if _plex_only:
         for _mod in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
-            _inst = raw.get(_mod, {}).get("instances")
+            _inst = _section(raw, _mod).get("instances")
             if isinstance(_inst, list) and any(
                 isinstance(i, str) and i in _plex_only for i in _inst
             ):
@@ -130,7 +139,7 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     # `poster_cleanarr.instances` likewise accepted `{plex_name: {...}}` dict
     # entries in the legacy schema (same shape as poster_renamerr). The current
     # schema is `List[str]`, so any non-string element is a legacy shape signal.
-    cleanarr_instances = raw.get("poster_cleanarr", {}).get("instances")
+    cleanarr_instances = _section(raw, "poster_cleanarr").get("instances")
     if isinstance(cleanarr_instances, list) and any(
         not isinstance(item, str) for item in cleanarr_instances
     ):
@@ -248,7 +257,7 @@ def _rule_rename_nested_key_in_labelarr(
     raw: Dict[str, Any], notes: List[MigrationNote]
 ) -> None:
     """`labelarr.mappings[].plex_instances[].plex_instance` → `instance`."""
-    mappings = raw.get("labelarr", {}).get("mappings")
+    mappings = _section(raw, "labelarr").get("mappings")
     if not isinstance(mappings, list):
         return
     renamed = 0

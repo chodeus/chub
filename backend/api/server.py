@@ -25,6 +25,8 @@ def start_web_server(
         module_orchestrator: ModuleOrchestrator instance for handling module execution
     """
 
+    startup_error: list = []
+
     def run_server() -> None:
         try:
             from backend.api.main import app
@@ -47,8 +49,14 @@ def start_web_server(
             )
         except Exception as e:
             logger.get_adapter("SERVER").error(f"Web server error: {e}", exc_info=True)
-            raise
+            startup_error.append(e)
 
     # Start server in background thread
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
+    # A bind failure (port in use, bad PORT) kills only this thread, leaving a
+    # container that is up, scheduling, and serving nothing. Give it a moment
+    # to fail and surface it to the caller instead of logging "started".
+    server_thread.join(timeout=1.0)
+    if not server_thread.is_alive() and startup_error:
+        raise RuntimeError(f"Web server failed to start: {startup_error[0]}")
