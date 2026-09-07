@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import threading
 
@@ -71,6 +72,20 @@ def json_stdout(*match_sets):
     )
 
 
+def make_dupes(*paths, content=b"identical video bytes"):
+    """Create real files with identical content, each on its own inode."""
+    for path in paths:
+        path.write_bytes(content)
+
+
+def hardlink_onto_first(*paths):
+    """Stand in for the filesystem effect of ``jdupes -L``."""
+    master = paths[0]
+    for path in paths[1:]:
+        path.unlink(missing_ok=True)  # also used to seed a pre-existing link
+        os.link(master, path)
+
+
 def has_record(logger, needle):
     return any(needle in message for _level, message in logger.records)
 
@@ -130,6 +145,7 @@ def test_dry_run_scans_all_source_dirs_once_and_does_not_link(tmp_path, monkeypa
     source_b.mkdir()
     duplicate_a = source_a / "Movie.mkv"
     duplicate_b = source_b / "Movie.mkv"
+    make_dupes(duplicate_a, duplicate_b)
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -175,6 +191,7 @@ def test_non_dry_run_links_only_after_successful_scan(tmp_path, monkeypatch):
     source_b.mkdir()
     duplicate_a = source_a / "Movie.mkv"
     duplicate_b = source_b / "Movie.mkv"
+    make_dupes(duplicate_a, duplicate_b)
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -183,6 +200,7 @@ def test_non_dry_run_links_only_after_successful_scan(tmp_path, monkeypatch):
             return completed(
                 cmd, stdout=json_stdout([str(duplicate_a), str(duplicate_b)])
             )
+        hardlink_onto_first(duplicate_a, duplicate_b)
         # jdupes -L is silent on success.
         return completed(cmd, stdout="")
 
@@ -203,16 +221,18 @@ def test_non_dry_run_links_only_after_successful_scan(tmp_path, monkeypatch):
     assert scan_item["status"] == "ok"
 
 
-def test_silent_link_success_reports_all_candidates_relinked(tmp_path, monkeypatch):
-    # A 3-file set => 2 relink candidates. jdupes -L prints nothing on success,
-    # so linked_count must equal the candidate count derived from the scan.
+def test_silent_link_success_counts_every_file_that_moved_inode(tmp_path, monkeypatch):
+    # A 3-file set on 3 inodes => 2 relink candidates. jdupes -L prints nothing
+    # on success, so the count comes from the inodes, not from the exit code.
     source = tmp_path / "movies"
     source.mkdir()
     a, b, c = (source / "a.mkv"), (source / "b.mkv"), (source / "c.mkv")
+    make_dupes(a, b, c)
 
     def fake_run(cmd, **kwargs):
         if "--json" in cmd:
             return completed(cmd, stdout=json_stdout([str(a), str(b), str(c)]))
+        hardlink_onto_first(a, b, c)
         return completed(cmd, stdout="")  # silent success
 
     monkeypatch.setattr(jduparr_module.subprocess, "run", fake_run)
@@ -252,6 +272,120 @@ def test_no_duplicates_skips_link_command(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Relink accounting (measured from inodes, never assumed)
+# ---------------------------------------------------------------------------
+
+
+def test_already_linked_files_are_not_relink_candidates(tmp_path, monkeypatch):
+    # jdupes reports a whole match set once any member is unlinked, already-
+    # linked members included, so len(group) - 1 over-counts the work.
+    source = tmp_path / "movies"
+    source.mkdir()
+    a, b, c = (source / "a.mkv"), (source / "b.mkv"), (source / "c.mkv")
+    make_dupes(a, b)
+    hardlink_onto_first(a, c)  # c already shares a's inode; only b is broken
+
+    def fake_run(cmd, **kwargs):
+        if "--json" in cmd:
+            return completed(cmd, stdout=json_stdout([str(a), str(b), str(c)]))
+        hardlink_onto_first(a, b, c)
+        return completed(cmd, stdout="")
+
+    monkeypatch.setattr(jduparr_module.subprocess, "run", fake_run)
+    config = ChubConfig(jduparr=JduparrConfig(source_dirs=[str(source)]))
+    module, _logger = make_module(monkeypatch, config)
+
+    module.run()
+
+    scan_item = CapturingNotificationManager.sent[0][-1]
+    assert scan_item["sub_count"] == 1
+    assert scan_item["linked_count"] == 1
+    assert scan_item["failed"] == []
+    assert scan_item["status"] == "ok"
+
+
+def test_link_that_silently_skips_a_file_is_reported_not_hidden(tmp_path, monkeypatch):
+    # jdupes exits 0, but one file never moved inode. Reporting the candidate
+    # count here would claim work that did not happen.
+    source = tmp_path / "movies"
+    source.mkdir()
+    a, b, c = (source / "a.mkv"), (source / "b.mkv"), (source / "c.mkv")
+    make_dupes(a, b, c)
+
+    def fake_run(cmd, **kwargs):
+        if "--json" in cmd:
+            return completed(cmd, stdout=json_stdout([str(a), str(b), str(c)]))
+        hardlink_onto_first(a, b)  # c is left behind
+        return completed(cmd, stdout="")
+
+    monkeypatch.setattr(jduparr_module.subprocess, "run", fake_run)
+    config = ChubConfig(jduparr=JduparrConfig(source_dirs=[str(source)]))
+    module, logger = make_module(monkeypatch, config)
+
+    module.run()
+
+    scan_item = CapturingNotificationManager.sent[0][-1]
+    assert scan_item["sub_count"] == 2
+    assert scan_item["linked_count"] == 1
+    assert scan_item["failed"] == [str(c)]
+    assert "1 still unlinked" in scan_item["field_message"]
+    assert has_record(logger, f"[NOT RELINKED] {c}")
+
+
+def test_partial_link_failure_still_counts_the_files_that_linked(tmp_path, monkeypatch):
+    # A non-zero exit does not mean nothing happened: jdupes links what it can.
+    source = tmp_path / "movies"
+    source.mkdir()
+    a, b, c = (source / "a.mkv"), (source / "b.mkv"), (source / "c.mkv")
+    make_dupes(a, b, c)
+
+    def fake_run(cmd, **kwargs):
+        if "--json" in cmd:
+            return completed(cmd, stdout=json_stdout([str(a), str(b), str(c)]))
+        hardlink_onto_first(a, b)
+        return completed(cmd, returncode=1, stderr="cannot move link target")
+
+    monkeypatch.setattr(jduparr_module.subprocess, "run", fake_run)
+    config = ChubConfig(jduparr=JduparrConfig(source_dirs=[str(source)]))
+    module, _logger = make_module(monkeypatch, config)
+
+    module.run()
+
+    scan_item = CapturingNotificationManager.sent[0][-1]
+    assert scan_item["status"] == "error"
+    assert scan_item["linked_count"] == 1
+    assert scan_item["failed"] == [str(c)]
+    assert "1 of 2 files" in scan_item["field_message"]
+
+
+def test_paths_that_cannot_be_stat_are_skipped_not_guessed(tmp_path, monkeypatch):
+    # A path that vanished between the scan and the link pass has no inode to
+    # compare, so it must drop out of both counts rather than be assumed linked.
+    source = tmp_path / "movies"
+    source.mkdir()
+    a, b = (source / "a.mkv"), (source / "b.mkv")
+    ghost = source / "ghost.mkv"
+    make_dupes(a, b)
+
+    def fake_run(cmd, **kwargs):
+        if "--json" in cmd:
+            return completed(cmd, stdout=json_stdout([str(a), str(b), str(ghost)]))
+        hardlink_onto_first(a, b)
+        return completed(cmd, stdout="")
+
+    monkeypatch.setattr(jduparr_module.subprocess, "run", fake_run)
+    config = ChubConfig(jduparr=JduparrConfig(source_dirs=[str(source)]))
+    module, _logger = make_module(monkeypatch, config)
+
+    module.run()
+
+    scan_item = CapturingNotificationManager.sent[0][-1]
+    assert scan_item["sub_count"] == 1
+    assert scan_item["linked_count"] == 1
+    assert scan_item["failed"] == []
+
+
+# ---------------------------------------------------------------------------
 # Error / failure paths
 # ---------------------------------------------------------------------------
 
@@ -283,6 +417,7 @@ def test_link_failure_reports_error_and_preserves_scan_results(tmp_path, monkeyp
     source = tmp_path / "movies"
     source.mkdir()
     a, b = (source / "a.mkv"), (source / "b.mkv")
+    make_dupes(a, b)
 
     def fake_run(cmd, **kwargs):
         if "--json" in cmd:
@@ -328,6 +463,7 @@ def test_jdupes_not_found_on_link_preserves_scan_and_notifies(tmp_path, monkeypa
     source = tmp_path / "movies"
     source.mkdir()
     a, b = (source / "a.mkv"), (source / "b.mkv")
+    make_dupes(a, b)
 
     def fake_run(cmd, **kwargs):
         if "--json" in cmd:
