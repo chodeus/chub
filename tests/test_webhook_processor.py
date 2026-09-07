@@ -1,0 +1,650 @@
+"""Tests for backend/util/webhook_processor.py — webhook parsing & instance routing."""
+
+from types import SimpleNamespace
+
+import pytest
+
+from backend.util.config import ChubConfig, InstanceDetail, InstancesConfig
+from backend.util.webhook_processor import (
+    WebhookProcessor,
+    _peer_is_trusted,
+    resolve_client_host,
+)
+
+
+class StubLogger:
+    def debug(self, *a, **kw):
+        pass
+
+    def info(self, *a, **kw):
+        pass
+
+    def warning(self, *a, **kw):
+        pass
+
+    def error(self, *a, **kw):
+        pass
+
+    def get_adapter(self, *_a, **_kw):
+        return self
+
+
+@pytest.fixture
+def wp(monkeypatch):
+    """A processor with a known instance config."""
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            radarr={"main": InstanceDetail(url="http://192.168.1.10:7878", api="x")},
+            sonarr={"main": InstanceDetail(url="http://192.168.1.11:8989", api="y")},
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    return WebhookProcessor(logger=StubLogger())
+
+
+# --- _extract_media_block ---
+
+
+def test_extract_media_block_series(wp):
+    payload = {"series": {"id": 42, "title": "Show"}}
+    block, type_, id_ = wp._extract_media_block(payload)
+    assert type_ == "series"
+    assert id_ == 42
+
+
+def test_processor_fallback_retry_defaults_match_general_config(monkeypatch):
+    cfg = SimpleNamespace(instances=InstancesConfig())
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+
+    processor = WebhookProcessor(logger=StubLogger())
+
+    assert processor.initial_delay == 30
+    assert processor.retry_delay == 30
+    assert processor.max_retries == 10
+
+
+def test_extract_media_block_movie(wp):
+    payload = {"movie": {"id": 99, "title": "Movie"}}
+    block, type_, id_ = wp._extract_media_block(payload)
+    assert type_ == "movie"
+    assert id_ == 99
+
+
+def test_extract_media_block_unknown_returns_none(wp):
+    block, type_, id_ = wp._extract_media_block({"foo": "bar"})
+    assert (block, type_, id_) == (None, None, None)
+
+
+# --- _extract_season_number ---
+
+
+def test_extract_season_number_from_episodes():
+    assert (
+        WebhookProcessor._extract_season_number({"episodes": [{"seasonNumber": 3}]})
+        == 3
+    )
+
+
+def test_extract_season_number_no_episodes():
+    assert WebhookProcessor._extract_season_number({}) is None
+    assert WebhookProcessor._extract_season_number({"episodes": []}) is None
+
+
+def test_extract_season_number_invalid_value():
+    assert (
+        WebhookProcessor._extract_season_number(
+            {"episodes": [{"seasonNumber": "not-a-number"}]}
+        )
+        is None
+    )
+
+
+def test_extract_season_number_zero_valid():
+    # Specials = 0; valid integer
+    assert (
+        WebhookProcessor._extract_season_number({"episodes": [{"seasonNumber": 0}]})
+        == 0
+    )
+
+
+# --- _find_arr_instance ---
+
+
+def test_find_arr_instance_matches_radarr(wp):
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.1.10", "scheme": "http"}, "movie"
+    )
+    assert result["found"] is True
+    assert result["type"] == "radarr"
+    assert result["name"] == "main"
+
+
+def test_find_arr_instance_matches_sonarr(wp):
+    result = wp._find_arr_instance({"client_host": "192.168.1.11"}, "series")
+    assert result["found"] is True
+    assert result["type"] == "sonarr"
+
+
+def test_find_arr_instance_ignores_source_port(wp):
+    # The connection's source port is never the arr's listen port, so a
+    # non-8989 port must NOT block a peer-IP match (the old host+port check did).
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.1.11", "client_port": 51234}, "series"
+    )
+    assert result["found"] is True
+    assert result["type"] == "sonarr"
+
+
+def test_find_arr_instance_normalizes_localhost(monkeypatch):
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            radarr={
+                "main": InstanceDetail(url="http://localhost:7878", api="x"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    wp = WebhookProcessor(logger=StubLogger())
+
+    # 127.0.0.1 normalizes to localhost -> matches
+    result = wp._find_arr_instance({"client_host": "127.0.0.1"}, "movie")
+    assert result["found"] is True
+
+
+def test_find_arr_instance_no_client_info_returns_not_found(wp):
+    result = wp._find_arr_instance(None)
+    assert result["found"] is False
+
+
+def test_find_arr_instance_unknown_host_no_match(wp):
+    # Two candidate buckets, a peer IP matching neither -> fail closed rather
+    # than guess (the single-instance fallback only applies when exactly one
+    # instance of the media type exists).
+    result = wp._find_arr_instance({"client_host": "10.0.0.99"}, media_type=None)
+    assert result["found"] is False
+
+
+def _two_sonarr_wp(monkeypatch, resolver):
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={
+                "Shows": InstanceDetail(url="http://sonarr:8989", api="a"),
+                "Anime": InstanceDetail(url="http://sonarr-anime:8989", api="b"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    monkeypatch.setattr(
+        "backend.util.webhook_processor._resolve_ips",
+        lambda host: frozenset(resolver.get(host, set())),
+    )
+    return WebhookProcessor(logger=StubLogger())
+
+
+def test_find_arr_instance_resolves_docker_service_name(monkeypatch):
+    # The reported case: instances configured by Docker service name, webhook
+    # arrives from the container's IP with no usable port. DNS resolution of the
+    # service name disambiguates the two Sonarr instances by IP.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance({"client_host": "10.200.10.26"}, "series")
+    assert result["found"] is True
+    assert result["name"] == "Shows"
+
+
+def test_find_arr_instance_ambiguous_shared_ip_fails_closed(monkeypatch):
+    # Host networking: both service names resolve to the same IP -> can't tell
+    # them apart -> must fail closed rather than mis-route.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.26"}},
+    )
+    result = wp._find_arr_instance({"client_host": "10.200.10.26"}, "series")
+    assert result["found"] is False
+
+
+def _same_host_two_sonarr_wp(monkeypatch, labels=("Shows", "Anime")):
+    # Two Sonarr instances on the SAME host IP, different listen ports.
+    a, b = labels
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={
+                a: InstanceDetail(url="http://192.168.2.206:8989", api="a"),
+                b: InstanceDetail(url="http://192.168.2.206:8990", api="b"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    return WebhookProcessor(logger=StubLogger())
+
+
+def test_find_arr_instance_same_ip_diff_port_by_label(monkeypatch):
+    # Same host IP, different ports: the listen port is unrecoverable, so the
+    # payload instanceName (== the CHUB label here) breaks the tie with no
+    # network call.
+    wp = _same_host_two_sonarr_wp(monkeypatch)
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.2.206"},
+        "series",
+        instance_name="Anime",
+    )
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+def test_find_arr_instance_same_ip_diff_port_by_live_name(monkeypatch):
+    # The CHUB labels differ from the arr instance names, so the tie is broken by
+    # each candidate's live /system/status instanceName.
+    wp = _same_host_two_sonarr_wp(monkeypatch, labels=("A", "B"))
+
+    def fake_client(url, api, logger):
+        name = "ShowsArr" if url.endswith(":8989") else "AnimeArr"
+        return SimpleNamespace(
+            instance_name=name,
+            get_instance_name=lambda: name,
+            session=SimpleNamespace(close=lambda: None),
+        )
+
+    monkeypatch.setattr("backend.util.arr.create_arr_client", fake_client)
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.2.206"}, "series", instance_name="AnimeArr"
+    )
+    assert result["found"] is True
+    assert result["name"] == "B"
+
+
+def test_find_arr_instance_same_ip_same_name_fails_closed(monkeypatch):
+    # Same IP and both report the same instanceName -> genuinely ambiguous ->
+    # fail closed (the explicit ?instance= override is the remedy).
+    wp = _same_host_two_sonarr_wp(monkeypatch, labels=("A", "B"))
+
+    def fake_client(url, api, logger):
+        return SimpleNamespace(
+            instance_name="Sonarr",
+            get_instance_name=lambda: "Sonarr",
+            session=SimpleNamespace(close=lambda: None),
+        )
+
+    monkeypatch.setattr("backend.util.arr.create_arr_client", fake_client)
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.2.206"}, "series", instance_name="Sonarr"
+    )
+    assert result["found"] is False
+
+
+def test_find_arr_instance_same_ip_no_name_fails_closed(monkeypatch):
+    # Same IP, no instanceName in the payload -> nothing to disambiguate on.
+    wp = _same_host_two_sonarr_wp(monkeypatch)
+    result = wp._find_arr_instance({"client_host": "192.168.2.206"}, "series")
+    assert result["found"] is False
+
+
+def test_find_arr_instance_override_wins(monkeypatch):
+    # Explicit ?instance= selector routes deterministically, even when the peer
+    # IP would auto-match a different instance.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "10.200.10.26", "instance_override": "Anime"}, "series"
+    )
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+def test_find_arr_instance_override_unknown_fails_closed(monkeypatch):
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "10.200.10.26", "instance_override": "Nope"}, "series"
+    )
+    assert result["found"] is False
+
+
+def test_find_arr_instance_single_instance_fallback(monkeypatch):
+    # One Sonarr behind a reverse proxy: peer IP is the proxy (matches nothing),
+    # but a series webhook can only be the one configured Sonarr.
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={"Shows": InstanceDetail(url="http://sonarr:8989", api="a")},
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    monkeypatch.setattr(
+        "backend.util.webhook_processor._resolve_ips",
+        lambda host: frozenset({"10.200.10.26"}),
+    )
+    wp = WebhookProcessor(logger=StubLogger())
+    result = wp._find_arr_instance({"client_host": "172.20.0.5"}, "series")
+    assert result["found"] is True
+    assert result["name"] == "Shows"
+
+
+def test_find_arr_instance_disabled_instance_skipped(monkeypatch):
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={
+                "Shows": InstanceDetail(
+                    url="http://sonarr:8989", api="a", enabled=False
+                ),
+            },
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    monkeypatch.setattr(
+        "backend.util.webhook_processor._resolve_ips",
+        lambda host: frozenset({"10.200.10.26"}),
+    )
+    wp = WebhookProcessor(logger=StubLogger())
+    result = wp._find_arr_instance({"client_host": "10.200.10.26"}, "series")
+    assert result["found"] is False
+
+
+# --- reverse proxy: trusted proxies + X-Forwarded-For ---
+
+
+def test_peer_is_trusted_private_token():
+    assert _peer_is_trusted("192.168.1.5", ["private"]) is True
+    assert _peer_is_trusted("10.20.30.40", ["private"]) is True
+    assert _peer_is_trusted("127.0.0.1", ["private"]) is True
+    # Public IP is NOT private -> not trusted by the token.
+    assert _peer_is_trusted("8.8.8.8", ["private"]) is False
+
+
+def test_peer_is_trusted_cidr_and_exact():
+    assert _peer_is_trusted("172.20.0.9", ["172.20.0.0/16"]) is True
+    assert _peer_is_trusted("172.21.0.9", ["172.20.0.0/16"]) is False
+    assert _peer_is_trusted("10.0.0.5", ["10.0.0.5"]) is True
+
+
+def test_peer_is_trusted_empty_never_trusts():
+    assert _peer_is_trusted("192.168.1.5", []) is False
+    assert _peer_is_trusted("192.168.1.5", None) is False
+    assert _peer_is_trusted(None, ["private"]) is False
+
+
+def test_resolve_client_host_no_forwarded_returns_peer():
+    assert resolve_client_host("172.20.0.2", None, ["private"]) == "172.20.0.2"
+    assert resolve_client_host("172.20.0.2", "", ["private"]) == "172.20.0.2"
+
+
+def test_resolve_client_host_trusted_proxy_uses_xff():
+    # Traefik (private peer) forwards the arr's real IP.
+    assert (
+        resolve_client_host("172.20.0.2", "10.200.10.26", ["private"]) == "10.200.10.26"
+    )
+    # Chain: left-most is the original client.
+    assert (
+        resolve_client_host("172.20.0.2", "10.200.10.26, 172.20.0.5", ["private"])
+        == "10.200.10.26"
+    )
+
+
+def test_resolve_client_host_untrusted_peer_ignores_xff():
+    # A forged XFF from a public (untrusted) caller must be ignored.
+    assert resolve_client_host("8.8.8.8", "10.200.10.26", ["private"]) == "8.8.8.8"
+    # Empty trusted list -> never honor XFF.
+    assert resolve_client_host("172.20.0.2", "10.200.10.26", []) == "172.20.0.2"
+
+
+def test_find_arr_instance_via_reverse_proxy(monkeypatch):
+    # End to end: proxy peer IP + XFF(real arr IP) -> effective host resolves
+    # to the arr, so peer-IP matching picks the right instance behind Traefik.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    effective = resolve_client_host("172.20.0.2", "10.200.10.27", ["private"])
+    result = wp._find_arr_instance({"client_host": effective}, "series")
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+# --- _validate_webhook ---
+
+
+def test_validate_webhook_no_media_block(wp):
+    result = wp._validate_webhook({"eventType": "Test"}, client_info={})
+    assert result["success"] is False
+    assert result["error_code"] == "INVALID_WEBHOOK_DATA"
+
+
+def test_validate_webhook_no_instance(monkeypatch):
+    # Two Sonarr instances, a peer IP matching neither -> ambiguous -> the
+    # single-instance fallback does not apply, so validation fails closed.
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={
+                "Shows": InstanceDetail(url="http://192.168.1.11:8989", api="a"),
+                "Anime": InstanceDetail(url="http://192.168.1.12:8989", api="b"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    wp = WebhookProcessor(logger=StubLogger())
+
+    payload = {"series": {"id": 1, "title": "Show"}}
+    result = wp._validate_webhook(payload, client_info={"client_host": "10.0.0.50"})
+    assert result["success"] is False
+    assert result["error_code"] == "NO_INSTANCE"
+
+
+def test_validate_webhook_success(wp):
+    payload = {
+        "series": {"id": 1, "title": "Show"},
+        "episodes": [{"seasonNumber": 2}],
+    }
+    client = {"client_host": "192.168.1.11", "scheme": "http"}
+    result = wp._validate_webhook(payload, client_info=client)
+    assert result["success"] is True
+    assert result["media_type"] == "series"
+    assert result["media_id"] == 1
+    assert result["season_number"] == 2
+    assert result["instance_info"]["type"] == "sonarr"
+
+
+# --- season-aware wait_for_plex_availability (consolidated season retry) ---
+
+
+def _plex_with(season_index, episodes, show_title="The Show", show_year=2020):
+    season = SimpleNamespace(index=season_index, episodes=lambda: episodes)
+    show = SimpleNamespace(title=show_title, year=show_year, seasons=lambda: [season])
+    section = SimpleNamespace(type="show", search=lambda **k: [show])
+    return SimpleNamespace(library=SimpleNamespace(sections=lambda: [section]))
+
+
+def test_season_present_true_when_scanned():
+    plex = _plex_with(2, [object()])
+    assert WebhookProcessor._season_present(plex, "The Show", 2020, 2) is True
+
+
+def test_season_present_false_when_other_season_only():
+    plex = _plex_with(1, [object()])  # season 1 present, asked for 2
+    assert WebhookProcessor._season_present(plex, "The Show", 2020, 2) is False
+
+
+def test_season_present_false_when_season_has_no_episodes():
+    plex = _plex_with(2, [])  # folder seen but not scanned yet
+    assert WebhookProcessor._season_present(plex, "The Show", 2020, 2) is False
+
+
+def test_season_present_false_when_show_absent():
+    section = SimpleNamespace(type="show", search=lambda **k: [])
+    plex = SimpleNamespace(library=SimpleNamespace(sections=lambda: [section]))
+    assert WebhookProcessor._season_present(plex, "Missing Show", None, 1) is False
+
+
+# --- application_url instance resolution ---
+
+
+def test_find_arr_instance_application_url_same_ip_diff_port(monkeypatch):
+    # Two Sonarr on one host, different ports. The peer IP matches both, but the
+    # payload applicationUrl carries the listen port, so it disambiguates.
+    wp = _same_host_two_sonarr_wp(monkeypatch, labels=("Shows", "Anime"))
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.2.206"},
+        "series",
+        application_url="http://192.168.2.206:8990",
+    )
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+def test_find_arr_instance_application_url_behind_proxy(monkeypatch):
+    # Peer IP is a proxy that matches no instance; applicationUrl (service name)
+    # still identifies the sender.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "172.20.0.2"},
+        "series",
+        application_url="http://sonarr-anime:8989",
+    )
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+# --- Docker published-port NAT: no peer-IP match, route by payload identity ---
+
+
+def _nat_two_radarr_wp(monkeypatch, labels=("Radarr", "Radarr4k")):
+    # Two Radarr instances reachable at the HOST IP on different ports. Inbound
+    # webhooks arrive from the Docker bridge gateway, which matches NEITHER
+    # configured URL host — the published-port NAT case that collapses every
+    # container to one source IP.
+    a, b = labels
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            radarr={
+                a: InstanceDetail(url="http://192.168.2.206:7878", api="a"),
+                b: InstanceDetail(url="http://192.168.2.206:7879", api="b"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    return WebhookProcessor(logger=StubLogger())
+
+
+def test_find_arr_instance_nat_gateway_routes_by_payload_name(monkeypatch):
+    # The reported bug: peer IP is the bridge gateway (matches no configured
+    # instance URL), two same-type instances, applicationUrl empty. The payload's
+    # instanceName still self-identifies the sender, so CHUB must route by it
+    # (case-insensitive against the CHUB label) instead of failing closed.
+    wp = _nat_two_radarr_wp(monkeypatch)
+    result = wp._find_arr_instance(
+        {"client_host": "172.18.0.1"}, "movie", instance_name="radarr4k"
+    )
+    assert result["found"] is True
+    assert result["name"] == "Radarr4k"
+
+
+def test_find_arr_instance_nat_gateway_unknown_name_fails_closed(monkeypatch):
+    # Same NAT topology, but the payload instanceName matches no configured label
+    # and no live lookup succeeds -> genuinely unattributable -> fail closed.
+    wp = _nat_two_radarr_wp(monkeypatch)
+    monkeypatch.setattr(
+        "backend.util.arr.create_arr_client", lambda url, api, logger: None
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "172.18.0.1"}, "movie", instance_name="Nope"
+    )
+    assert result["found"] is False
+
+
+def test_find_arr_instance_ip_match_wins_over_payload_name(monkeypatch):
+    # Regression guard: when the peer IP uniquely matches an instance, that match
+    # wins even if a conflicting payload instanceName is present. The new
+    # payload-name fallback must run ONLY when the IP match found nothing, so
+    # distinct-IP (service-name) setups are unaffected.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "10.200.10.26"}, "series", instance_name="Anime"
+    )
+    assert result["found"] is True
+    assert result["name"] == "Shows"
+
+
+# --- wait_for_plex_availability: early-exit + pre-download skip ---
+
+
+def _wp_with_plex(monkeypatch):
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            plex={"main": InstanceDetail(url="http://plex:32400", api="tok")},
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    monkeypatch.setattr("backend.util.ssrf_guard.is_safe_url", lambda url: (True, "ok"))
+    return WebhookProcessor(logger=StubLogger())
+
+
+def _fake_plex_with_items(items):
+    # items: list of (title, year)
+    def sections():
+        section = SimpleNamespace(
+            type="movie",
+            search=lambda title=None, **k: [
+                SimpleNamespace(title=t, year=y)
+                for (t, y) in items
+                if title is None or t.lower() == title.lower()
+            ],
+        )
+        return [section]
+
+    return SimpleNamespace(library=SimpleNamespace(sections=sections))
+
+
+def _patch_plex(monkeypatch, items, slept):
+    monkeypatch.setattr(
+        "plexapi.server.PlexServer",
+        lambda url, token, timeout=10: _fake_plex_with_items(items),
+    )
+    import time as _time
+
+    monkeypatch.setattr(_time, "sleep", lambda s: slept.append(s))
+
+
+def test_wait_returns_immediately_when_already_present(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    slept = []
+    _patch_plex(monkeypatch, [("The Movie", 2020)], slept)
+    assert wp.wait_for_plex_availability("The Movie", year=2020) is True
+    assert slept == []  # no initial delay, no retries — item was already there
+
+
+def test_wait_skips_for_pre_download_added_event(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    slept = []
+    _patch_plex(monkeypatch, [], slept)  # item NOT in Plex
+    result = wp.wait_for_plex_availability("New Show", year=2024, is_added_event=True)
+    assert result is False
+    assert slept == []  # a pre-download add doesn't wait for a scan
+
+
+def test_wait_retries_for_genuine_import_not_yet_scanned(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    wp.max_retries = 2
+    slept = []
+    _patch_plex(monkeypatch, [], slept)  # never appears
+    result = wp.wait_for_plex_availability("Imported Movie", year=2021)
+    assert result is False
+    # initial delay + 2 retries (all mocked, so instant)
+    assert len(slept) >= 1
+
+
+def test_item_present_direct_match():
+    plex = _fake_plex_with_items([("The Movie", 2020)])
+    assert WebhookProcessor._item_present(plex, "The Movie", 2020) is True
+    assert WebhookProcessor._item_present(plex, "The Movie", None) is True
+    assert WebhookProcessor._item_present(plex, "Other", 2020) is False
+    assert WebhookProcessor._item_present(plex, "The Movie", 1999) is False
