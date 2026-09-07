@@ -179,7 +179,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Support both header-based auth (normal API calls) and query-param
         # auth (?token=...) for EventSource/SSE which cannot send headers.
         auth_header = request.headers.get("Authorization", "")
-        query_token = request.query_params.get("token", "")
+        # .get() returns the LAST value, so a repeated parameter would leave
+        # every earlier token in the URL unexamined. One or none.
+        query_tokens = request.query_params.getlist("token")
+        if len(query_tokens) > 1:
+            return self._scope_denied(request, "repeated token parameter", path)
+        query_token = query_tokens[0] if query_tokens else ""
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]  # strip "Bearer "
         else:

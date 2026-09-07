@@ -109,8 +109,11 @@ def test_full_session_token_in_query_string_is_rejected(monkeypatch):
     assert full_in_url.status_code == 403
     assert stream_in_url.status_code == 200
     assert full_in_header.status_code == 200
+    # Repeated parameters: .get() reads the last, hiding every earlier token.
+    repeated = client.get(f"/api/media/1/poster?token={full}&token={stream}")
     assert both.status_code == 403
     assert stream_url_plus_header.status_code == 200
+    assert repeated.status_code == 403
 
 
 def test_resolve_duplicates_never_removes_the_kept_id(monkeypatch):
