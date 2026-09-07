@@ -10,6 +10,7 @@ from starlette.background import BackgroundTask
 from backend.api.posters._shared import router
 from backend.api.utils import (
     BODY_TOO_LARGE,
+    body_flag,
     body_too_large_error,
     error,
     get_database,
@@ -344,7 +345,7 @@ async def delete_poster(
         body = await read_json_object(request)
         if body is BODY_TOO_LARGE:
             return body_too_large_error()
-        delete_file = body.get("deleteFile", delete_file)
+        delete_file = body_flag(body, "deleteFile", delete_file)
 
         # Authorize BEFORE the irreversible row delete: a malformed config must
         # abort the whole request, not leave the row gone and the file orphaned.

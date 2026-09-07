@@ -118,6 +118,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
     so the setup flow can proceed.
     """
 
+    def _scope_denied(self, request: Request, reason: str, path: str) -> JSONResponse:
+        """The single 403 for a token used outside the scope it was issued for."""
+        self._log_unauthorized(request, reason, path)
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "message": "Token not valid for this route",
+                "error_code": "AUTH_SCOPE_INVALID",
+            },
+        )
+
     @staticmethod
     def _log_unauthorized(request: Request, reason: str, path: str) -> None:
         """Warn (with the request path) on a rejected API call so 401s are
@@ -167,10 +179,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Support both header-based auth (normal API calls) and query-param
         # auth (?token=...) for EventSource/SSE which cannot send headers.
         auth_header = request.headers.get("Authorization", "")
+        # .get() returns the LAST value, so a repeated parameter would leave
+        # every earlier token in the URL unexamined. One or none.
+        query_tokens = request.query_params.getlist("token")
+        if len(query_tokens) > 1:
+            return self._scope_denied(request, "repeated token parameter", path)
+        query_token = query_tokens[0] if query_tokens else ""
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]  # strip "Bearer "
         else:
-            token = request.query_params.get("token", "")
+            token = query_token
 
         if not token:
             self._log_unauthorized(request, "missing Bearer token", path)
@@ -194,6 +212,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 },
             )
 
+        # A URL-embedded token must be stream-scoped even when a header
+        # authenticated the request — the URL leaks either way.
+        if query_token:
+            query_payload = (
+                payload
+                if query_token == token
+                else decode_access_token(query_token, config.auth.jwt_secret)
+            )
+            if query_payload is not None and query_payload.get("scope") != "stream":
+                return self._scope_denied(
+                    request, "non-stream token in query string", path
+                )
+
         # A scope-limited stream token (URL-embedded auth for images/SSE) is only
         # valid for GET requests on the stream allowlist — never for mutations or
         # general API access, so a leaked image/SSE URL can't do more than that.
@@ -201,14 +232,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             request.method != "GET"
             or not path.startswith(STREAM_PATH_PREFIXES + extension_stream_prefixes())
         ):
-            self._log_unauthorized(request, "stream token off stream route", path)
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "success": False,
-                    "message": "Token not valid for this route",
-                    "error_code": "AUTH_SCOPE_INVALID",
-                },
+            return self._scope_denied(
+                request, "stream token off stream route", path
             )
 
         # Attach user info to request state for downstream use
