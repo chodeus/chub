@@ -1,13 +1,6 @@
-"""Regression tests for the correctness half of the 2026-09 review sweep.
-
-One focused test per confirmed bug. Findings that were refuted on inspection
-are deliberately not represented here.
-"""
+"""Correctness half of the 2026-09 sweep — one test per confirmed bug."""
 
 import pytest
-
-
-# --- Lidarr speaks api/v1 ---
 
 
 @pytest.mark.parametrize(
@@ -16,9 +9,7 @@ import pytest
      ("plex", "v3"), (None, "v3"), ("", "v3")],
 )
 def test_arr_api_version(service, expected):
-    """Lidarr is still on v1. This line had been copy-pasted to seven sites and
-    the eighth (the module Test button) simply forgot it, so every Lidarr
-    instance 404'd and was reported unhealthy."""
+    """Lidarr is still on v1."""
     from backend.util.arr import arr_api_version
 
     assert arr_api_version(service) == expected
@@ -35,12 +26,8 @@ def test_arr_api_version_has_no_remaining_copies():
     assert hits == [], hits
 
 
-# --- upload result key ---
-
-
 def test_upload_endpoints_read_the_payload_key():
-    """upload_posters returns {"success","message","error_code","payload"} —
-    reading "data" made both endpoints always return {}."""
+    """upload_posters returns "payload"; reading "data" always gave {}."""
     import inspect
 
     import backend.api.posters.files as files
@@ -53,13 +40,9 @@ def test_upload_endpoints_read_the_payload_key():
     assert 'result.get("data", {})' not in consumed
 
 
-# --- year 0 counts as missing metadata ---
-
-
 @pytest.mark.parametrize("value", [None, "", 0, "0"])
 def test_year_zero_is_missing(value):
-    """Radarr/Sonarr send year 0 for unknown-year items and it is stored in a
-    TEXT column, so an INT/TEXT split kept those rows looking complete."""
+    """year is stored TEXT but the ARRs send 0, so the INT/TEXT split missed it."""
     from backend.util.database.media_metadata import is_missing_value
 
     assert is_missing_value("year", value) is True
@@ -73,8 +56,7 @@ def test_real_values_are_not_missing(value):
 
 
 def test_empty_field_sql_matches_the_python_rule():
-    """The SQL is a hand-written mirror of is_missing_value; drift between them
-    is what let year 0 through."""
+    """SQL mirrors is_missing_value; drift between them let year 0 through."""
     import sqlite3
 
     from backend.util.database.media_metadata import MetadataCompletenessMixin
@@ -87,25 +69,16 @@ def test_empty_field_sql_matches_the_python_rule():
     assert hits == [1, 2, 3]  # '0', '', NULL — but not '2019'
 
 
-# --- an empty YAML section is None, not {} ---
-
-
 def test_empty_config_section_does_not_crash_legacy_detection():
-    """"poster_cleanarr:" with nothing under it parses as None, so
-    raw.get(k, {}) returned None and the chained .get raised AttributeError —
-    outside any try, so it escaped load_config entirely."""
+    """An empty YAML section is None, and the AttributeError escaped load_config."""
     from backend.util.config_migrator import is_legacy_config
 
     for section in ("poster_cleanarr", "border_replacerr", "labelarr"):
         assert is_legacy_config({section: None}) is False
 
 
-# --- an unmapped image_type must not borrow the poster's suffix ---
-
-
 def test_unmapped_image_type_is_refused(monkeypatch):
-    """banner is emitted by asset_type_regex but absent from _ASSET_SUFFIX, so
-    the "" fallback renamed a banner onto the poster's canonical name."""
+    """banner is unmapped, so the "" fallback used the poster's own suffix."""
     import backend.util.poster_self_heal.resolver as resolver
 
     import inspect
@@ -114,17 +87,14 @@ def test_unmapped_image_type_is_refused(monkeypatch):
     assert "banner" not in resolver._ASSET_SUFFIX
     assert resolver._ASSET_SUFFIX.get("poster") == ""
     src = inspect.getsource(resolver)
-    assert 'asset_suffix = _ASSET_SUFFIX.get(poster.get("image_type") or "poster")' in src
+    expected = 'asset_suffix = _ASSET_SUFFIX.get(poster.get("image_type") or "poster")'
+    assert expected in src
     assert "if asset_suffix is None:" in src
     assert '_ASSET_SUFFIX.get(poster.get("image_type") or "poster", "")' not in src
 
 
-# --- cancellation mid-chunk ---
-
-
 def test_folder_rename_count_survives_a_cancelled_chunk():
-    """new_path_name is only set inside the loop that breaks on cancellation,
-    so items after the break have no key at all."""
+    """Items after the cancellation break never reach the assignment."""
     import inspect
 
     import backend.modules.renameinatorr as ren
@@ -138,12 +108,8 @@ def test_folder_rename_count_survives_a_cancelled_chunk():
     assert 'bool(i["new_path_name"])' not in src
 
 
-# --- transient failures must not be cached ---
-
-
 def test_tmdb_transient_failure_is_retried_not_memoised(monkeypatch):
-    """A TMDB blip poisoned that item for the rest of the module run. The
-    comment above the branch already said not to cache transient failures."""
+    """A TMDB blip poisoned that item for the rest of the module run."""
     from backend.util.tmdb import TMDBClient
 
     import threading
@@ -154,7 +120,9 @@ def test_tmdb_transient_failure_is_retried_not_memoised(monkeypatch):
     client._auth_failed = False  # `enabled` is a property over cfg.apikey
     client.cfg = type("_Cfg", (), {"apikey": "k", "cache_expiration": 1})()
     client.db = type(
-        "_DB", (), {"tmdb_id_cache": type("_C", (), {"get": lambda *a: (False, None)})()}
+        "_DB",
+        (),
+        {"tmdb_id_cache": type("_C", (), {"get": lambda *a: (False, None)})()},
     )()
     assert client.enabled
 
@@ -171,8 +139,7 @@ def test_tmdb_transient_failure_is_retried_not_memoised(monkeypatch):
 
 
 def test_dns_failure_is_not_cached(monkeypatch):
-    """A DNS blip cached an empty set for the full TTL, so every webhook for
-    that host was rejected as NO_INSTANCE until it expired."""
+    """A cached DNS failure rejected every webhook for that host until the TTL."""
     import socket
 
     import backend.util.webhook_processor as wp
@@ -185,12 +152,8 @@ def test_dns_failure_is_not_cached(monkeypatch):
     assert "arr.local" not in wp._DNS_CACHE
 
 
-# --- season title fallback ---
-
-
 def test_season_lookup_suffixes_the_title_key():
-    """Season rows are indexed as "title:{norm}:S{n}", but only the guid keys
-    carried the suffix, so the title fallback silently never matched."""
+    """Only the guid keys carried the :S{n} suffix the index is built with."""
     import inspect
 
     import backend.util.plex_index as plex_index
@@ -199,12 +162,8 @@ def test_season_lookup_suffixes_the_title_key():
     assert 'values["title"] = f"{values[\'title\']}:S{season_number}"' in src
 
 
-# --- missing service is a 400, not a 500 ---
-
-
 def test_missing_service_is_rejected_before_lower():
-    """service is Optional on both request models; .lower() on None reached the
-    generic handler as a 500."""
+    """service is Optional, so .lower() on None reached the handler as a 500."""
     import inspect
 
     import backend.api.instances as instances
@@ -215,8 +174,7 @@ def test_missing_service_is_rejected_before_lower():
 
 
 def test_non_model_schema_field_returns_404():
-    """schedule and schedule_blocks are plain dicts; asking them for a JSON
-    schema raised AttributeError and became a 500."""
+    """schedule is a plain dict; asking it for a JSON schema became a 500."""
     import inspect
 
     import backend.api.modules as modules
@@ -226,20 +184,15 @@ def test_non_model_schema_field_returns_404():
 
 
 def test_schedule_field_is_not_a_pydantic_model():
-    """Premise check for the test above — if this ever becomes a model the
-    guard is dead code."""
+    """Premise check — if this becomes a model the guard above is dead code."""
     from backend.util.config import ChubConfig
 
     field = ChubConfig.model_fields["schedule"]
     assert not hasattr(field.annotation, "model_json_schema")
 
 
-# --- a failed Plex client must not be cached for the run ---
-
-
 def test_failed_plex_client_is_not_cached():
-    """Plex briefly unreachable at the start of a run left that instance dead
-    for the entire run, silently applying nothing for it."""
+    """A cached failed client left that instance dead for the whole run."""
     import inspect
 
     import backend.modules.asset_renamerr as ar
