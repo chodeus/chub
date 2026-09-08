@@ -32,6 +32,7 @@ def start_web_server(
 
     startup_error: list = []
     server_holder: list = []
+    startup_aborted = threading.Event()
 
     def run_server() -> None:
         try:
@@ -58,6 +59,10 @@ def start_web_server(
                 )
             )
             server_holder.append(server)
+            # Append before the check: the caller sets the flag before reading
+            # server_holder, so one of the two always sees the other.
+            if startup_aborted.is_set():
+                return
             server.run()
         except (Exception, SystemExit) as e:
             # uvicorn raises SystemExit(3) on a bind failure, and SystemExit is
@@ -83,6 +88,7 @@ def start_web_server(
         raise RuntimeError("Web server failed to start") from startup_error[0]
     if not server_thread.is_alive():
         raise RuntimeError("Web server thread exited before it began listening")
+    startup_aborted.set()
     if server_holder:
         server_holder[0].should_exit = True
     raise RuntimeError(

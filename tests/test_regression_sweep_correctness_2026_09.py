@@ -321,3 +321,41 @@ def test_web_server_readiness_timeout_fails_the_boot(monkeypatch):
     with pytest.raises(RuntimeError, match="did not begin listening"):
         server_mod.start_web_server(logger=log, module_orchestrator=None)
     assert built and built[0].should_exit
+
+
+def test_web_server_built_after_the_deadline_never_binds(monkeypatch):
+    """A server finished after the caller gave up must not serve anyway."""
+    import threading
+    from types import SimpleNamespace
+
+    # Pre-imported: the thread's own app import must not eat the patched deadline.
+    import backend.api.main  # noqa: F401
+    import backend.api.server as server_mod
+
+    log = SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    log.get_adapter = lambda *a, **k: log
+
+    bound = threading.Event()
+
+    class _SlowServer:
+        started = False
+
+        def __init__(self, config):
+            self.should_exit = False
+            time.sleep(0.5)  # still building when the deadline expires
+
+        def run(self):
+            bound.set()
+
+    monkeypatch.setattr(server_mod.uvicorn, "Server", _SlowServer)
+    monkeypatch.setattr(server_mod.uvicorn, "Config", lambda *a, **k: object())
+    monkeypatch.setattr(server_mod, "STARTUP_TIMEOUT_SECONDS", 0.2)
+    with pytest.raises(RuntimeError, match="did not begin listening"):
+        server_mod.start_web_server(logger=log, module_orchestrator=None)
+    served = bound.wait(1.5)
+    assert not served
