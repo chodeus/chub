@@ -230,8 +230,7 @@ def test_failed_plex_client_is_not_cached():
 
 
 def test_web_server_startup_failure_is_raised_not_swallowed(monkeypatch):
-    """uvicorn raises SystemExit on a bind failure, and SystemExit is a
-    BaseException — `except Exception` let it vanish into a dead thread."""
+    """uvicorn's SystemExit bind failure vanished past `except Exception`."""
     from types import SimpleNamespace
 
     import backend.api.server as server_mod
@@ -287,3 +286,38 @@ def test_web_server_returns_once_uvicorn_reports_started(monkeypatch):
     began = time.monotonic()
     server_mod.start_web_server(logger=log, module_orchestrator=None)
     assert time.monotonic() - began < 2
+
+
+def test_web_server_readiness_timeout_fails_the_boot(monkeypatch):
+    """A server that never reports listening must not let the boot continue."""
+    from types import SimpleNamespace
+
+    # Pre-imported: the thread's own app import must not eat the patched deadline.
+    import backend.api.main  # noqa: F401
+    import backend.api.server as server_mod
+
+    log = SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    log.get_adapter = lambda *a, **k: log
+
+    built: list = []
+
+    class _WedgedServer:
+        def __init__(self, config):
+            self.started = False  # never flips: uvicorn hung in startup
+            self.should_exit = False
+            built.append(self)
+
+        def run(self):
+            time.sleep(2)
+
+    monkeypatch.setattr(server_mod.uvicorn, "Server", _WedgedServer)
+    monkeypatch.setattr(server_mod.uvicorn, "Config", lambda *a, **k: object())
+    monkeypatch.setattr(server_mod, "STARTUP_TIMEOUT_SECONDS", 0.3)
+    with pytest.raises(RuntimeError, match="did not begin listening"):
+        server_mod.start_web_server(logger=log, module_orchestrator=None)
+    assert built and built[0].should_exit

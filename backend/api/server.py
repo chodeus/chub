@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING
 
 import uvicorn
 
-# Bounded wait for uvicorn to report listening before the caller moves on.
-STARTUP_TIMEOUT_SECONDS = 15
+# Readiness deadline, matched to the container health-check start period in
+# deploy/docker/Dockerfile; exceeding it fails the boot.
+STARTUP_TIMEOUT_SECONDS = 45
 
 if TYPE_CHECKING:
     from backend.util.logger import Logger
@@ -82,6 +83,8 @@ def start_web_server(
         raise RuntimeError("Web server failed to start") from startup_error[0]
     if not server_thread.is_alive():
         raise RuntimeError("Web server thread exited before it began listening")
-    logger.get_adapter("SERVER").warning(
-        f"Web server not confirmed listening after {STARTUP_TIMEOUT_SECONDS}s"
+    if server_holder:
+        server_holder[0].should_exit = True
+    raise RuntimeError(
+        f"Web server did not begin listening within {STARTUP_TIMEOUT_SECONDS}s"
     )
