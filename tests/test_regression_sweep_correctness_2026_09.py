@@ -341,13 +341,14 @@ def test_web_server_built_after_the_deadline_never_binds(monkeypatch):
     log.get_adapter = lambda *a, **k: log
 
     bound = threading.Event()
+    release = threading.Event()
 
     class _SlowServer:
         started = False
 
         def __init__(self, config):
             self.should_exit = False
-            time.sleep(0.5)  # still building when the deadline expires
+            release.wait(5)  # construction finishes only after the caller gave up
 
         def run(self):
             bound.set()
@@ -357,5 +358,6 @@ def test_web_server_built_after_the_deadline_never_binds(monkeypatch):
     monkeypatch.setattr(server_mod, "STARTUP_TIMEOUT_SECONDS", 0.2)
     with pytest.raises(RuntimeError, match="did not begin listening"):
         server_mod.start_web_server(logger=log, module_orchestrator=None)
+    release.set()
     served = bound.wait(1.5)
     assert not served
