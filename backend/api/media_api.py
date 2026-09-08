@@ -28,7 +28,7 @@ from backend.api.utils import (
     read_json_object,
     read_request_json,
 )
-from backend.util.arr import create_arr_client
+from backend.util.arr import arr_api_version, create_arr_client
 from backend.util.config import ConfigError, load_config
 from backend.util.database import (
     INCOMPLETE_METADATA_FIELDS,
@@ -2108,7 +2108,7 @@ def get_import_exclusion(
                 code="INSTANCE_UNREACHABLE",
                 status_code=502,
             )
-        api_ver = "v1" if service == "lidarr" else "v3"
+        api_ver = arr_api_version(service)
         exclusion_url = f"{inst_cfg.url.rstrip('/')}/api/{api_ver}/importlistexclusion"
         import requests as _rq
 

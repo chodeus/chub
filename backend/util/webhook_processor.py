@@ -54,7 +54,9 @@ def _resolve_ips(host: Optional[str]) -> frozenset:
     try:
         ips = frozenset(info[4][0] for info in socket.getaddrinfo(host, None))
     except (socket.gaierror, OSError):
-        ips = frozenset()
+        # Don't cache the failure — a blip would reject every webhook for this
+        # host as NO_INSTANCE until the TTL expired.
+        return frozenset()
     _DNS_CACHE[host] = (now + _DNS_TTL_SECONDS, ips)
     return ips
 

@@ -304,6 +304,11 @@ def resolve_poster(
     # build_poster_filename re-emits ` - Season NN` / ` - Specials` (0 = Specials,
     # which is why _season_int keeps 0). Otherwise the tag would be dropped.
     season = _season_int(poster.get("season_number"))
+    # An unmapped image_type must not fall back to "" — that is the poster's own
+    # suffix, so auto-apply would rename e.g. a banner onto the poster's name.
+    asset_suffix = _ASSET_SUFFIX.get(poster.get("image_type") or "poster")
+    if asset_suffix is None:
+        return None
     new_name = build_poster_filename(
         kind="season" if season is not None else resolved_type,
         title=title_new or title_old,
@@ -313,7 +318,7 @@ def resolve_poster(
         imdb_id=new_imdb or None,
         season_number=season,
         ext=ext or ".jpg",
-        asset_suffix=_ASSET_SUFFIX.get(poster.get("image_type") or "poster", ""),
+        asset_suffix=asset_suffix,
     )
     if new_name == cur_name:
         return None  # already canonical

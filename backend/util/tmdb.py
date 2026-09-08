@@ -124,8 +124,6 @@ class TMDBClient:
         # Never cache a transient failure (None) as a negative "no match" — it
         # would suppress a valid id for days. Only cache a real answer.
         if result is None:
-            with self._memo_lock:
-                self._memo[key] = None
             return None
 
         tmdb_id = None if result is _TMDB_NOT_FOUND else result

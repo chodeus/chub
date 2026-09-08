@@ -20,14 +20,12 @@ INCOMPLETE_METADATA_FIELDS = frozenset(
         "year",
     }
 )
-INCOMPLETE_METADATA_INT_FIELDS = frozenset({"tmdb_id", "tvdb_id", "runtime"})
-
 
 def is_missing_value(field: str, value) -> bool:
-    """True when `value` is missing for `field` (INT fields: None/0; else None/'')."""
-    if field in INCOMPLETE_METADATA_INT_FIELDS:
-        return value is None or value == 0
-    return value is None or value == ""
+    """True when `value` is missing for `field`."""
+    # One rule for every field: year is stored TEXT but arrives as 0 from the
+    # ARRs when unknown, so an INT/TEXT split silently kept those rows complete.
+    return value is None or value in ("", "0", 0)
 
 
 # Fields the ARR normalize layer never populates for a given asset_type, so
@@ -57,13 +55,11 @@ class MetadataCompletenessMixin(DatabaseBase):
 
     @staticmethod
     def _empty_field_clauses(fields: List[str]) -> str:
-        """OR-joined "is null or blank" test for each field, INTEGER-aware."""
-        # SQL mirror of is_missing_value — keep in sync.
+        """OR-joined "is null or blank" test for each field."""
+        # SQL mirror of is_missing_value — keep in sync. `= 0` also matches the
+        # text '0' by column affinity, which is how year arrives.
         return " OR ".join(
-            f"({f} IS NULL OR {f} = 0)"
-            if f in INCOMPLETE_METADATA_INT_FIELDS
-            else f"({f} IS NULL OR {f} = '')"
-            for f in fields
+            f"({f} IS NULL OR {f} = '' OR {f} = 0)" for f in fields
         )
 
     def find_incomplete_metadata(
