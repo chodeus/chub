@@ -265,6 +265,7 @@ def transcode_poster(
             try:
                 os.unlink(tmp.name)
             except OSError:
+                # Best effort: cleanup must never mask the save failure below.
                 pass
             raise
         finally:
