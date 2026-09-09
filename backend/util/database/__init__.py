@@ -74,11 +74,8 @@ class ChubDB:
             config_dir = get_config_dir()
             self.db_path = os.path.join(config_dir, "chub.db")
 
-        # Database interfaces (lazy-loaded). The lock guards the check-then-set
-        # in _get_interface: a single ChubDB is shared between async API
-        # handlers and worker threads, and constructing an interface re-runs
-        # init_schema (blocking I/O that releases the GIL), so two threads could
-        # otherwise both miss the cache and double-construct.
+        # The lock guards the check-then-set in _get_interface: API handlers and
+        # worker threads share one ChubDB, and constructing re-runs init_schema.
         self._interfaces = {}
         self._interfaces_lock = threading.Lock()
 
