@@ -223,7 +223,7 @@ class ModuleOrchestrator:
             self._log("info", "All CLI modules completed.", "cli")
 
         except Exception as e:
-            self._log("error", f"Error in run_modules_cli: {e}", "cli", exc_info=True)
+            self._log("error", f"Error in run_module_cli: {e}", "cli", exc_info=True)
             raise
 
     def get_module_status(

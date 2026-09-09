@@ -196,11 +196,8 @@ async def update_config(
             current_config = load_config()
             config_dict = current_config.model_dump(mode="python")
 
-            # The auth section (username / password_hash / jwt_secret) must never
-            # be mutated through the generic config-save path: an authenticated
-            # caller could otherwise blank the credentials (reopening the no-auth
-            # first-run state) or overwrite the password hash. Credential changes
-            # go through the dedicated auth endpoints only, so strip it here.
+            # Strip auth: a generic config save must not touch credentials, or a
+            # caller could blank them and reopen the no-auth first-run state.
             if isinstance(incoming, dict) and "auth" in incoming:
                 incoming.pop("auth", None)
                 logger.warning(

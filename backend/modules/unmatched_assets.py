@@ -15,7 +15,6 @@ class UnmatchedAssets(ChubModule):
         Standard constructor using dependency injection.
 
         Args:
-            config: Complete CHUB configuration object
             logger: Logger instance
         """
         super().__init__(logger=logger)

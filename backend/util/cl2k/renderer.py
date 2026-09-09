@@ -1006,14 +1006,8 @@ def _framed_inset_base(backdrop_bytes: bytes, framing: geo.Framing) -> Image:
     creator poster in refs/ agrees: their POSTER group is (0, 0, 1000, 1500) —
     one is even (0, 0, 1000, 1502) — under a BORDER LAYER of (-2, 0, 1000, 1500).
 
-    This used to inset the art to a 948x1448 inner rect on the theory that the
-    border would otherwise clip it. It does clip it, and that is the intent: the
-    art is meant to run under the frame at full scale, not be shrunk 5% to fit
-    inside it. Insetting also broke the framing UI's contract, since CropFramer
-    offers a 2:3 crop box while the inner rect is not 2:3.
-
-    render_cl2k and frame_backdrop both go through here, so they stay
-    pixel-identical (the PSD POSTER-layer parity the exporter relies on).
+    Do not inset the art: the border is meant to clip it, and an inner rect
+    breaks CropFramer's 2:3 crop box. Both render paths go through here.
 
     ``mirror`` flips the artwork HERE, at the end of framing — never on the source
     bytes: the AI mask and extend outpaint are built in source space.

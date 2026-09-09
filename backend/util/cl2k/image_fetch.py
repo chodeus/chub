@@ -252,7 +252,8 @@ def _plex_token_for(origin: tuple) -> Optional[str]:
 
 def _with_plex_token(url: str) -> str:
     """Re-mint the X-Plex-Token for a tokenless Plex-server URL; no-op otherwise.
-    Scheme-matched, so the admin token never rides an ``http://`` URL in cleartext."""
+    Origin is (scheme, host:port), so a token minted for an https instance never
+    rides that host's http URL — but an http-configured instance still gets one."""
     if "x-plex-token" in url.lower():
         return url
     token = _plex_token_for(_plex_origin(url))
