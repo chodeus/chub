@@ -537,6 +537,10 @@ class ChubScheduler:
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
         due_profiles: List[Dict[str, Any]] = []
         due_labels: List[str] = []
+        # Same per-minute guard as the plain module loop in _tick: check_schedule
+        # stays True for the whole matched minute and the tick runs every 5s.
+        minute_now = datetime.now().replace(second=0, microsecond=0)
+        due_keys: List[str] = []
 
         for index, profile in enumerate(profiles):
             if not _profile_value(profile, "enabled", True):
@@ -547,9 +551,12 @@ class ChubScheduler:
 
             label = _upgradinatorr_profile_label(profile, index)
             schedule_key = f"upgradinatorr:{index}:{label}"
+            if _last_fired.get(schedule_key) == minute_now:
+                continue
             if check_schedule(schedule_key, sched, log_adapter):
                 due_profiles.append(_profile_to_dict(profile))
                 due_labels.append(label)
+                due_keys.append(schedule_key)
 
         if not due_profiles:
             return
@@ -573,6 +580,10 @@ class ChubScheduler:
             "scheduled:upgradinatorr_profiles",
             overrides={"instances_list": due_profiles},
         )
+
+        if result["success"]:
+            for key in due_keys:
+                _last_fired[key] = minute_now
 
         if not result["success"]:
             if self.logger:
@@ -601,6 +612,8 @@ class ChubScheduler:
             return
 
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
+        # See the same guard in _tick — the 5s tick re-enters a matched minute.
+        minute_now = datetime.now().replace(second=0, microsecond=0)
 
         for module_name, blocks in blocks_by_module.items():
             if module_name in queued_modules or not blocks:
@@ -615,6 +628,7 @@ class ChubScheduler:
 
             merged_overrides: Dict[str, Any] = {}
             due_labels: List[str] = []
+            due_keys: List[str] = []
             for index, block in enumerate(blocks):
                 if not _profile_value(block, "enabled", True):
                     continue
@@ -623,11 +637,14 @@ class ChubScheduler:
                     continue
                 label = _profile_value(block, "label", "") or f"block {index + 1}"
                 schedule_key = f"{module_name}:block:{index}:{label}"
+                if _last_fired.get(schedule_key) == minute_now:
+                    continue
                 if check_schedule(schedule_key, sched, log_adapter):
                     overrides = _profile_value(block, "overrides", {}) or {}
                     if isinstance(overrides, dict):
                         merged_overrides.update(overrides)
                     due_labels.append(label)
+                    due_keys.append(schedule_key)
 
             if not due_labels:
                 continue
@@ -659,6 +676,8 @@ class ChubScheduler:
                         f"{result['message']}"
                     )
                 continue
+            for key in due_keys:
+                _last_fired[key] = minute_now
             queued_modules.add(module_name)
 
     def _system_tick(self) -> None:
