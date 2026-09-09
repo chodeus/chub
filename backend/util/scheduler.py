@@ -613,12 +613,7 @@ class ChubScheduler:
     ) -> None:
         """Queue module runs from multi-block schedules (config.schedule_blocks).
 
-        Each block fires on its own schedule string and injects its `overrides`
-        into the run (e.g. one block reports daily, another removes weekly).
-        Blocks for a module already queued this tick — or already running — are
-        skipped; if several blocks for one module are due at the same minute,
-        their overrides are merged (later blocks win). The per-block schedule
-        key keeps each block's cron next-run cache independent.
+        Blocks due in the same minute merge their overrides, later wins.
         """
         blocks_by_module = getattr(self.config, "schedule_blocks", None) or {}
         if not blocks_by_module:
