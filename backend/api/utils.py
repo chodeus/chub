@@ -25,6 +25,11 @@ def get_logger(request: Request) -> Any:
     return request.app.state.logger.get_adapter("WEB")
 
 
+def get_error_logger(request: Request) -> Any:
+    """Adapter for the global exception handlers. Not a Depends()."""
+    return request.app.state.logger.get_adapter("ERROR")
+
+
 def _apply_log_settings(module_logger: Logger, log_level: str, max_logs: int) -> None:
     """Push live log_level/max_logs onto a built logger, keeping its file handle."""
     # Attribute access delegates to the underlying stdlib logger (Logger.__getattr__).
@@ -81,6 +86,28 @@ def ok(
     if data is not None:
         payload["data"] = data
     return JSONResponse(status_code=status_code, content=payload)
+
+
+def require_bool_field(payload: dict, field: str) -> Optional[JSONResponse]:
+    """400 response when `field` is absent or not a bool, else None.
+
+    A missing key read as false and cleared stored state; a string like "false"
+    read as true. Both toggle endpoints share this.
+    """
+    value = payload.get(field)
+    if value is None:
+        return error(
+            f"Missing '{field}' field in request body",
+            code="MISSING_FIELD",
+            status_code=400,
+        )
+    if not isinstance(value, bool):
+        return error(
+            f"'{field}' must be a boolean",
+            code="INVALID_FIELD",
+            status_code=400,
+        )
+    return None
 
 
 def error(

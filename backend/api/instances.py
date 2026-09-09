@@ -16,7 +16,13 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, model_validator
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import (
+    error,
+    get_database,
+    get_logger,
+    ok,
+    require_bool_field,
+)
 from backend.util.config import (
     config_write,
     REDACTED_PLACEHOLDER,
@@ -1909,20 +1915,10 @@ def toggle_instance(
         if body is None:
             body = {}
 
-        enabled = body.get("enabled")
-        if enabled is None:
-            return error(
-                "Missing 'enabled' field in request body",
-                code="MISSING_FIELD",
-                status_code=400,
-            )
-
-        if not isinstance(enabled, bool):
-            return error(
-                "'enabled' must be a boolean",
-                code="INVALID_FIELD",
-                status_code=400,
-            )
+        bad = require_bool_field(body, "enabled")
+        if bad is not None:
+            return bad
+        enabled = body["enabled"]
 
         # Load current config
         config = load_config()

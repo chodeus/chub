@@ -174,3 +174,25 @@ def test_missing_config_still_shows_the_wizard(monkeypatch):
 
     monkeypatch.setattr(setup, "load_config", lambda *a, **k: ChubConfig())
     assert setup._is_setup_completed() is False
+
+
+# ---------------------------------------------------------------------------
+# Both toggle endpoints share one validator, so both need coverage
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("body", [None, {}, {"other": 1}, {"enabled": "false"}])
+def test_instance_toggle_rejects_a_missing_or_non_boolean_enabled(body):
+    """Uncovered before the shared validator landed — a regression here was silent."""
+    import json
+
+    from backend.api.instances import toggle_instance
+
+    logger = type("L", (), {"debug": lambda *a: None, "error": lambda *a: None})()
+    resp = toggle_instance(instance_id="radarr:Main", body=body, logger=logger)
+
+    assert resp.status_code == 400
+    assert json.loads(bytes(resp.body))["error_code"] in (
+        "MISSING_FIELD",
+        "INVALID_FIELD",
+    )

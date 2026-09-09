@@ -23,6 +23,7 @@ from backend.api.utils import (
     get_logger,
     ok,
     read_request_json,
+    require_bool_field,
 )
 from backend.util.config import ConfigError, config_write_lock
 from backend.util.database import ChubDB
@@ -1049,22 +1050,10 @@ async def toggle_module(
                 code="MODULE_TOGGLE_ERROR",
                 status_code=500,
             )
-        enabled = payload.get("enabled")
-        # Without these, a body carrying only other keys read as `enabled: false`
-        # and cleared the stored schedule; "false" read as true. Mirrors
-        # instances.toggle_instance.
-        if enabled is None:
-            return error(
-                "Missing 'enabled' field in request body",
-                code="MISSING_FIELD",
-                status_code=400,
-            )
-        if not isinstance(enabled, bool):
-            return error(
-                "'enabled' must be a boolean",
-                code="INVALID_FIELD",
-                status_code=400,
-            )
+        bad = require_bool_field(payload, "enabled")
+        if bad is not None:
+            return bad
+        enabled = payload["enabled"]
         logger.debug(f"Serving PATCH /api/modules/{name} enabled={enabled}")
         from backend.util.config import load_config, save_config
 

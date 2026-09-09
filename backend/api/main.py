@@ -33,7 +33,7 @@ from backend.api import (
     system as system_router,
     webhooks as webhooks_router,
 )
-from backend.api.utils import error
+from backend.api.utils import error, get_error_logger
 from backend.extensions import extension_routers, extension_stream_prefixes
 from backend.util.auth import decode_access_token
 from backend.util.config import (
@@ -511,7 +511,7 @@ async def handle_config_error(request: Request, exc: ConfigError) -> JSONRespons
     both the log and the response so a malformed/ported config is diagnosable
     from the logs rather than appearing as an opaque internal error.
     """
-    logger = request.app.state.logger.get_adapter("ERROR")
+    logger = get_error_logger(request)
     # exc_info carries the __cause__ the curated message deliberately omits
     logger.error(f"Configuration error: {exc}", exc_info=True)
     public_lines = []
@@ -532,7 +532,7 @@ async def handle_config_error(request: Request, exc: ConfigError) -> JSONRespons
 @app.exception_handler(Exception)
 async def handle_exception(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all exception handler with standardized payload."""
-    logger = request.app.state.logger.get_adapter("ERROR")
+    logger = get_error_logger(request)
     logger.error(f"Unhandled Exception: {exc}", exc_info=True)
     response = error("Internal server error", code="INTERNAL_ERROR", status_code=500)
     # ServerErrorMiddleware owns this path, outside SecurityHeadersMiddleware.
@@ -545,7 +545,7 @@ async def handle_http_exception(
     request: Request, exc: StarletteHTTPException
 ) -> JSONResponse:
     """Standardize HTTPException responses into the common error envelope."""
-    logger = request.app.state.logger.get_adapter("ERROR")
+    logger = get_error_logger(request)
     logger.warning(f"HTTP {exc.status_code}: {exc.detail}")
 
     detail = exc.detail
@@ -566,7 +566,7 @@ async def handle_validation_exception(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     """Return a normalized 422 for validation errors."""
-    logger = request.app.state.logger.get_adapter("ERROR")
+    logger = get_error_logger(request)
     logger.warning(f"Validation error: {exc.errors()}")
     return error(
         "Validation error", code="VALIDATION_ERROR", data=exc.errors(), status_code=422
@@ -606,7 +606,7 @@ def root(request: Request) -> HTMLResponse:
     try:
         return HTMLResponse(content=html_path.read_text(), status_code=200)
     except Exception as e:
-        request.app.state.logger.get_adapter("ERROR").error(f"Error serving index page: {e}")
+        get_error_logger(request).error(f"Error serving index page: {e}")
         return error(
             "Error serving index page",
             code="INDEX_PAGE_ERROR",
