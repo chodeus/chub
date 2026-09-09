@@ -22,9 +22,10 @@ def test_get_logger_takes_no_client_controlled_source():
 def test_notifications_reuses_the_shared_get_logger():
     """A second copy would keep the injectable parameter alive on its own routes."""
     import backend.api.notifications as notifications
-    import backend.api.utils as utils
 
-    assert notifications.get_logger is utils.get_logger
+    from backend.api.utils import get_logger
+
+    assert notifications.get_logger is get_logger
 
 
 def test_source_is_not_a_query_param_on_a_depends_route():
@@ -128,9 +129,10 @@ def test_patch_with_non_boolean_enabled_is_rejected(monkeypatch):
 
 def test_same_name_in_two_services_does_not_overwrite(monkeypatch):
     """Names are unique per service, so "Main" existed twice and one vanished."""
-    import backend.api.instances as instances
-
     import backend.util.ssrf_guard as ssrf  # imported inside the route
+
+    from backend.api.instances import check_all_health  # noqa: I001
+
     monkeypatch.setattr(ssrf, "is_safe_url", lambda url: (False, "refused"))
 
     cfg = type("C", (), {})()
@@ -142,7 +144,7 @@ def test_same_name_in_two_services_does_not_overwrite(monkeypatch):
     cfg.instances.lidarr = {}
 
     logger = type("L", (), {"debug": lambda *a: None, "error": lambda *a: None})()
-    resp = instances.check_all_health(config=cfg, logger=logger)
+    resp = check_all_health(config=cfg, logger=logger)
 
     import json
 
