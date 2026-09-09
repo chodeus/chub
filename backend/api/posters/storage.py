@@ -21,6 +21,7 @@ from backend.util.database import ChubDB
 from backend.util.helper import get_static_dir
 from backend.util.poster_images import (
     optimize_poster_files,
+    SUPPORTED_FORMATS,
     resolve_format,
 )
 
@@ -78,10 +79,10 @@ async def optimize_posters(
 
     max_width = body.get("max_width", 1000)
     max_height = body.get("max_height", 1500)
-    # Both sit above the try below, so a bad type escaped as a 500 traceback
-    # rather than the 400 `mode` already returns.
+    # Validated here, not in resolve_format: that helper's JPEG fallback is
+    # relied on by transcode_poster and pinned by a test.
     raw_format = body.get("format", "jpeg")
-    if not isinstance(raw_format, str):
+    if not isinstance(raw_format, str) or raw_format.lower() not in SUPPORTED_FORMATS:
         return error("Invalid format", code="INVALID_FORMAT", status_code=400)
     target_format = raw_format.lower()
     raw_quality = body.get("quality", 85)

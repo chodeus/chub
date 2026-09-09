@@ -89,11 +89,7 @@ def ok(
 
 
 def require_bool_field(payload: dict, field: str) -> Optional[JSONResponse]:
-    """400 response when `field` is absent or not a bool, else None.
-
-    A missing key read as false and cleared stored state; a string like "false"
-    read as true. Both toggle endpoints share this.
-    """
+    """400 response when `field` is absent or not a bool, else None."""
     value = payload.get(field)
     if value is None:
         return error(

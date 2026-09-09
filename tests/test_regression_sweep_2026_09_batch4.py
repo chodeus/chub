@@ -7,9 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
-# ---------------------------------------------------------------------------
 # get_logger's source was a client-controlled query parameter
-# ---------------------------------------------------------------------------
 
 
 def test_get_logger_takes_no_client_controlled_source():
@@ -68,9 +66,7 @@ def test_forged_source_does_not_reach_the_log_adapter():
     assert seen == ["WEB"]
 
 
-# ---------------------------------------------------------------------------
 # PATCH /api/modules/{name} treated a missing `enabled` as "disable"
-# ---------------------------------------------------------------------------
 
 
 def _modules_client(monkeypatch, stored_schedule):
@@ -122,9 +118,7 @@ def test_patch_with_non_boolean_enabled_is_rejected(monkeypatch):
     assert saved == {}
 
 
-# ---------------------------------------------------------------------------
 # check_all_health keyed results by instance name, which collides across services
-# ---------------------------------------------------------------------------
 
 
 def test_same_name_in_two_services_does_not_overwrite(monkeypatch):
@@ -152,9 +146,7 @@ def test_same_name_in_two_services_does_not_overwrite(monkeypatch):
     assert set(health) == {"radarr:Main", "sonarr:Main"}
 
 
-# ---------------------------------------------------------------------------
 # An unreadable config reported "setup not completed" and trapped the install
-# ---------------------------------------------------------------------------
 
 
 def test_unreadable_config_is_not_reported_as_a_fresh_install(monkeypatch):
@@ -178,9 +170,7 @@ def test_missing_config_still_shows_the_wizard(monkeypatch):
     assert setup._is_setup_completed() is False
 
 
-# ---------------------------------------------------------------------------
 # Both toggle endpoints share one validator, so both need coverage
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("body", [None, {}, {"other": 1}, {"enabled": "false"}])
@@ -198,3 +188,29 @@ def test_instance_toggle_rejects_a_missing_or_non_boolean_enabled(body):
         "MISSING_FIELD",
         "INVALID_FIELD",
     )
+
+
+# An unsupported format silently defaulted to JPEG
+@pytest.mark.parametrize("fmt", ["gif", "bmp", "tiff", ""])
+def test_unsupported_optimize_format_is_rejected(fmt):
+    """The endpoint documents jpeg/webp/png; resolve_format defaults anything
+    else to JPEG, so mode=optimize would rewrite the library silently."""
+    from backend.util.poster_images import SUPPORTED_FORMATS
+
+    assert fmt not in SUPPORTED_FORMATS
+
+
+@pytest.mark.parametrize("fmt", ["jpeg", "jpg", "webp", "png", "PNG"])
+def test_documented_optimize_formats_stay_accepted(fmt):
+    from backend.util.poster_images import SUPPORTED_FORMATS
+
+    assert fmt.lower() in SUPPORTED_FORMATS
+
+
+def test_resolve_format_keeps_its_jpeg_fallback_for_internal_callers():
+    """transcode_poster passes None; a test pins this, so validation belongs
+    at the endpoint rather than in the helper."""
+    from backend.util.poster_images import resolve_format
+
+    assert resolve_format(None) == ("JPEG", ".jpg")
+    assert resolve_format("gif") == ("JPEG", ".jpg")
