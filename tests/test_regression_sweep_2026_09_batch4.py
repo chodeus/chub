@@ -173,8 +173,18 @@ def test_missing_config_still_shows_the_wizard(monkeypatch):
 # Both toggle endpoints share one validator, so both need coverage
 
 
-@pytest.mark.parametrize("body", [None, {}, {"other": 1}, {"enabled": "false"}])
-def test_instance_toggle_rejects_a_missing_or_non_boolean_enabled(body):
+@pytest.mark.parametrize(
+    "body,code",
+    [
+        (None, "MISSING_FIELD"),
+        ({}, "MISSING_FIELD"),
+        ({"other": 1}, "MISSING_FIELD"),
+        ({"enabled": None}, "INVALID_FIELD"),  # supplied, so not "missing"
+        ({"enabled": "false"}, "INVALID_FIELD"),
+        ({"enabled": 1}, "INVALID_FIELD"),
+    ],
+)
+def test_instance_toggle_rejects_a_missing_or_non_boolean_enabled(body, code):
     """Uncovered before the shared validator landed — a regression here was silent."""
     import json
 
@@ -184,10 +194,7 @@ def test_instance_toggle_rejects_a_missing_or_non_boolean_enabled(body):
     resp = toggle_instance(instance_id="radarr:Main", body=body, logger=logger)
 
     assert resp.status_code == 400
-    assert json.loads(bytes(resp.body))["error_code"] in (
-        "MISSING_FIELD",
-        "INVALID_FIELD",
-    )
+    assert json.loads(bytes(resp.body))["error_code"] == code
 
 
 # An unsupported format silently defaulted to JPEG

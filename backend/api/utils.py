@@ -90,14 +90,15 @@ def ok(
 
 def require_bool_field(payload: dict, field: str) -> Optional[JSONResponse]:
     """400 response when `field` is absent or not a bool, else None."""
-    value = payload.get(field)
-    if value is None:
+    # `in`, not .get(): an explicit null is present-but-invalid, and saying
+    # "missing" about a field the caller supplied is just wrong.
+    if field not in payload:
         return error(
             f"Missing '{field}' field in request body",
             code="MISSING_FIELD",
             status_code=400,
         )
-    if not isinstance(value, bool):
+    if not isinstance(payload[field], bool):
         return error(
             f"'{field}' must be a boolean",
             code="INVALID_FIELD",
