@@ -2,8 +2,6 @@ import json
 import os
 import re
 import subprocess
-import threading
-import time
 from pathlib import Path
 
 import requests
@@ -188,44 +186,3 @@ def check_for_update(logger) -> dict:
     }
 
 
-def start_version_check(config, logger, interval=3600):
-    """Starts a background thread to check for version updates."""
-
-    def poll():
-        local_version = get_version()
-        local_parts = local_version.strip().split(".")
-        if len(local_parts) < 4:
-            return
-        branch_and_build = local_parts[3]
-        m = re.match(r"([a-zA-Z]+)", branch_and_build)
-        branch = m.group(1) if m else "main"
-        logger.info(f"[VERSION CHECK] Local version: {local_version}, branch: {branch}")
-
-        while True:
-            remote_full, build_count, update_available = _check_remote_version(
-                local_version, branch, logger
-            )
-            if update_available:
-                logger.debug(
-                    f"[VERSION CHECK] Update available. Local: {local_version}, Remote: {remote_full}, Build Count: {build_count}"
-                )
-                output = {
-                    "local_version": local_version,
-                    "remote_version": remote_full,
-                    "color": "FF0000",
-                }
-                from backend.util.notification import NotificationManager
-
-                config.module_name = "version_check"
-                manager = NotificationManager(
-                    config, logger, module_name="version_check"
-                )
-                manager.send_notification(output)
-            else:
-                logger.debug(
-                    f"[VERSION CHECK] No update. Local: {local_version}, Remote: {remote_full}"
-                )
-            time.sleep(interval)
-
-    thread = threading.Thread(target=poll, daemon=True)
-    thread.start()

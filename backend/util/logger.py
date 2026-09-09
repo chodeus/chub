@@ -346,24 +346,3 @@ class ChubLoggerAdapter(logging.LoggerAdapter):
         self.info(f"[hb] {msg}", *args, **kwargs)
 
 
-def ensure_log_dir_and_rotate(log_file_path: str, max_logs: int = 9) -> None:
-    """
-    Ensures consistent <module_name>.#.log naming pattern.
-
-    Args:
-        log_file_path: Path to the main log file
-        max_logs: Maximum number of rotated logs to keep
-    """
-    log_dir = os.path.dirname(log_file_path)
-    os.makedirs(log_dir, exist_ok=True)
-
-    # Only rotate if main log file exists
-    if os.path.isfile(log_file_path) and rotated_log_path(log_file_path, 1):
-        # Shift existing numbered logs: module_name.9.log -> module_name.10.log, etc.
-        for i in range(max_logs - 1, 0, -1):
-            old_file = rotated_log_path(log_file_path, i)
-            new_file = rotated_log_path(log_file_path, i + 1)
-            if os.path.exists(old_file):
-                os.rename(old_file, new_file)
-
-        os.rename(log_file_path, rotated_log_path(log_file_path, 1))
