@@ -88,12 +88,11 @@ class _Orch:
 
 def _fresh_scheduler(monkeypatch, cfg):
     import backend.util.scheduler as sched_mod
-    from backend.util.scheduler import ChubScheduler
 
     monkeypatch.setattr(sched_mod, "datetime", _FixedNow._cls())
     sched_mod._last_fired.clear()
     orch = _Orch()
-    return ChubScheduler(cfg, logger=None, module_orchestrator=orch), orch
+    return sched_mod.ChubScheduler(cfg, logger=None, module_orchestrator=orch), orch
 
 
 def test_schedule_blocks_fire_once_per_matched_minute(monkeypatch):
