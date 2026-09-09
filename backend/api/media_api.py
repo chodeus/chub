@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from backend.api.utils import (
     BODY_TOO_LARGE,
+    body_flag,
     body_too_large_error,
     build_cache_refresh_payload,
     error,
@@ -27,7 +28,7 @@ from backend.api.utils import (
     read_json_object,
     read_request_json,
 )
-from backend.util.arr import create_arr_client
+from backend.util.arr import arr_api_version, create_arr_client
 from backend.util.config import ConfigError, load_config
 from backend.util.database import (
     INCOMPLETE_METADATA_FIELDS,
@@ -990,8 +991,8 @@ async def resolve_duplicates(
 
     keep_id = body.get("keepId")
     remove_ids = body.get("removeIds", [])
-    delete_files = body.get("deleteFiles", False)
-    add_exclusion = body.get("addImportExclusion", False)
+    delete_files = body_flag(body, "deleteFiles")
+    add_exclusion = body_flag(body, "addImportExclusion")
 
     if not keep_id:
         return error("keepId is required", code="MISSING_KEEP_ID", status_code=400)
@@ -1096,6 +1097,10 @@ def _resolve_duplicates_sync(
     failed = []
 
     for rid in remove_ids:
+        # The kept item must never be removed, and with delete_files that would
+        # take it off disk while the response still reports it as kept.
+        if rid == keep_id:
+            continue
         ok_, reason = _remove_media_item(db, logger, rid, delete_files, add_exclusion)
         if ok_:
             removed.append(rid)
@@ -1138,8 +1143,8 @@ async def bulk_delete_media(
         return error("Invalid request body", code="INVALID_BODY", status_code=400)
 
     ids = body.get("ids", [])
-    delete_files = body.get("deleteFiles", False)
-    add_exclusion = body.get("addImportExclusion", False)
+    delete_files = body_flag(body, "deleteFiles")
+    add_exclusion = body_flag(body, "addImportExclusion")
     if not ids:
         return error("ids is required", code="MISSING_IDS", status_code=400)
 
@@ -1877,7 +1882,7 @@ async def delete_media_item(
         body = await read_json_object(request)
         if body is BODY_TOO_LARGE:
             return body_too_large_error()
-        delete_files = body.get("deleteFiles", False)
+        delete_files = body_flag(body, "deleteFiles")
 
         # If deleteFiles requested, remove from ARR first. The connect probe +
         # delete request are blocking, so run them off the event loop.
@@ -2087,6 +2092,15 @@ def get_import_exclusion(
                 code="INSTANCE_NOT_FOUND",
                 status_code=404,
             )
+        # Guard before the factory: create_arr_client probes ARR with
+        # X-Api-Key, so validating only the later request left that unprotected.
+        safe, reason = is_safe_url(inst_cfg.url, allow_private=True)
+        if not safe:
+            return error(
+                f"Unsafe instance URL: {reason}",
+                code="UNSAFE_INSTANCE_URL",
+                status_code=400,
+            )
         client = create_arr_client(inst_cfg.url, inst_cfg.api, logger)
         if not (client and client.connect_status):
             return error(
@@ -2094,7 +2108,7 @@ def get_import_exclusion(
                 code="INSTANCE_UNREACHABLE",
                 status_code=502,
             )
-        api_ver = "v1" if service == "lidarr" else "v3"
+        api_ver = arr_api_version(service)
         exclusion_url = f"{inst_cfg.url.rstrip('/')}/api/{api_ver}/importlistexclusion"
         import requests as _rq
 
@@ -2102,6 +2116,7 @@ def get_import_exclusion(
             exclusion_url,
             headers={"X-Api-Key": inst_cfg.api},
             timeout=10,
+            allow_redirects=False,
         )
         if not resp.ok:
             return error(

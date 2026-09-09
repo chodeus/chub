@@ -26,6 +26,7 @@ from backend.api.utils import (
 )
 from backend.util.config import ConfigError, config_write_lock
 from backend.util.database import ChubDB
+from backend.util.arr import arr_api_version
 
 
 MODULE_DESCRIPTIONS = {
@@ -866,6 +867,14 @@ def get_module_schema(
             )
 
         field_info = ChubConfig.model_fields[name]
+        # Not every field is a model — `schedule` and `schedule_blocks` are
+        # plain dicts, and asking those for a JSON schema raised a 500.
+        if not hasattr(field_info.annotation, "model_json_schema"):
+            return error(
+                f"No config schema for module '{name}'",
+                code="SCHEMA_NOT_FOUND",
+                status_code=404,
+            )
         schema = field_info.annotation.model_json_schema()
         return ok(f"Schema for module '{name}'", {"schema": schema})
     except Exception as e:
@@ -1439,7 +1448,8 @@ def test_module(
                 test_url = f"{url}/library/sections"
             else:
                 headers = {"X-Api-Key": api} if api else {}
-                test_url = f"{url}/api/v3/system/status"
+                api_ver = arr_api_version(service)
+                test_url = f"{url}/api/{api_ver}/system/status"
 
             from backend.util.ssrf_guard import is_safe_url
 

@@ -429,66 +429,68 @@ class SyncGDrive(ChubModule):
                 progress_cb(100)
                 return False, counters
 
-            process = subprocess.Popen(
+            # Context manager: the cancel path below terminates and returns
+            # without wait() or closing stdout, leaving a zombie and a pipe fd.
+            with subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 env={**os.environ, **auth_env},
-            )
-            for line in process.stdout:
-                if self.is_cancelled():
-                    process.terminate()
-                    self.logger.info("Sync cancelled during rclone execution.")
-                    return False, counters
-                level_match = re.match(
-                    r"^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (INFO|ERROR|DEBUG) *:?",
-                    line,
-                )
-                rclone_level = level_match.group(1) if level_match else "INFO"
-                cleaned_line = re.sub(
-                    r"^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (INFO|ERROR|DEBUG) *:?",
-                    "",
-                    line,
-                ).strip()
-                if cleaned_line:
-                    # Routing contract lives in _rclone_line_level() so the
-                    # verbose / heartbeat behaviour is testable in isolation.
-                    level = _rclone_line_level(
-                        cleaned_line,
-                        rclone_level,
-                        verbose=getattr(self.config, "verbose", False),
+            ) as process:
+                for line in process.stdout:
+                    if self.is_cancelled():
+                        process.terminate()
+                        self.logger.info("Sync cancelled during rclone execution.")
+                        return False, counters
+                    level_match = re.match(
+                        r"^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (INFO|ERROR|DEBUG) *:?",
+                        line,
                     )
-                    getattr(self.logger, level)(cleaned_line)
-                    # Count actual per-file activity for the notification
-                    # summary. "Removed" is normalized to "deleted" since
-                    # rclone uses both labels depending on operation and
-                    # version. Skipped/no-op lines aren't counted — they
-                    # represent files already in sync.
-                    action_match = _RCLONE_ACTION_PATTERN.search(cleaned_line)
-                    if action_match:
-                        action = action_match.group(1).lower()
-                        if action == "removed":
-                            action = "deleted"
-                        counters[action] = counters.get(action, 0) + 1
-                    pct = self.parse_rclone_progress(cleaned_line)
-                    if pct is not None:
-                        guarded_progress_cb(pct)
-            process.wait()
-            if process.returncode == 0:
-                self.logger.info("✅ RClone sync completed successfully.")
-                # Per-folder action summary — visible even when verbose is off,
-                # so users can see "this run did X copies and Y deletes"
-                # without scrolling through the rclone per-file noise.
-                self.logger.info(f"   → {_format_counter_summary(counters)}")
-                guarded_progress_cb(95)
-                return True, counters
-            else:
-                self.logger.error(
-                    f"❌ RClone sync failed with return code {process.returncode}"
-                )
-                progress_cb(100)
-                return False, counters
+                    rclone_level = level_match.group(1) if level_match else "INFO"
+                    cleaned_line = re.sub(
+                        r"^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (INFO|ERROR|DEBUG) *:?",
+                        "",
+                        line,
+                    ).strip()
+                    if cleaned_line:
+                        # Routing contract lives in _rclone_line_level() so the
+                        # verbose / heartbeat behaviour is testable in isolation.
+                        level = _rclone_line_level(
+                            cleaned_line,
+                            rclone_level,
+                            verbose=getattr(self.config, "verbose", False),
+                        )
+                        getattr(self.logger, level)(cleaned_line)
+                        # Count actual per-file activity for the notification
+                        # summary. "Removed" is normalized to "deleted" since
+                        # rclone uses both labels depending on operation and
+                        # version. Skipped/no-op lines aren't counted — they
+                        # represent files already in sync.
+                        action_match = _RCLONE_ACTION_PATTERN.search(cleaned_line)
+                        if action_match:
+                            action = action_match.group(1).lower()
+                            if action == "removed":
+                                action = "deleted"
+                            counters[action] = counters.get(action, 0) + 1
+                        pct = self.parse_rclone_progress(cleaned_line)
+                        if pct is not None:
+                            guarded_progress_cb(pct)
+                process.wait()
+                if process.returncode == 0:
+                    self.logger.info("✅ RClone sync completed successfully.")
+                    # Per-folder action summary — visible even when verbose is off,
+                    # so users can see "this run did X copies and Y deletes"
+                    # without scrolling through the rclone per-file noise.
+                    self.logger.info(f"   → {_format_counter_summary(counters)}")
+                    guarded_progress_cb(95)
+                    return True, counters
+                else:
+                    self.logger.error(
+                        f"❌ RClone sync failed with return code {process.returncode}"
+                    )
+                    progress_cb(100)
+                    return False, counters
         except Exception as e:
             self.logger.error(f"Exception occurred while running rclone: {e}")
             progress_cb(100)

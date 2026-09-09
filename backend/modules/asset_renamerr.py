@@ -323,6 +323,9 @@ class AssetRenamerr(ChubModule):
                 self.logger.error(
                     f"Failed to connect to Plex instance '{instance_name}'"
                 )
+                # Don't cache the failure: a blip at the start of a run would
+                # otherwise keep the instance dead for the rest of it.
+                return None
         self._plex_clients[instance_name] = client
         return client
 

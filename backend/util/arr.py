@@ -53,6 +53,11 @@ QUEUE_STATES_STUCK = {
 }
 
 
+def arr_api_version(service: Optional[str]) -> str:
+    """API version path segment for an ARR service — Lidarr is still on v1."""
+    return "v1" if (service or "").lower() == "lidarr" else "v3"
+
+
 def classify_queue_row(record: Dict[str, Any]) -> str:
     """``done`` | ``stuck`` | ``pending`` for one *arr queue record."""
     state = str(record.get("trackedDownloadState") or "").strip().lower()

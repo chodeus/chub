@@ -297,7 +297,7 @@ def upload_media_posters(
         if result.get("success"):
             return ok(
                 f"Upload triggered for media cache item {media_id}",
-                result.get("data", {}),
+                result.get("payload", {}),
             )
         else:
             return worker_error(
@@ -367,7 +367,7 @@ def upload_collection_posters(
         if result.get("success"):
             return ok(
                 f"Upload triggered for collection cache item {collection_id}",
-                result.get("data", {}),
+                result.get("payload", {}),
             )
         else:
             return worker_error(

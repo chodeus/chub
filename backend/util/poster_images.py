@@ -6,6 +6,7 @@ Every function returns plain values so the API layer keeps sole ownership of
 HTTP shapes (backend/util never imports backend.api).
 """
 
+import contextlib
 import os
 from typing import Any, Dict, Optional, Tuple
 
@@ -15,6 +16,22 @@ from backend.util.path_safety import resolve_confined
 _PIL_FORMATS = {"jpeg": "JPEG", "jpg": "JPEG", "webp": "WEBP", "png": "PNG"}
 _FORMAT_EXTENSIONS = {"JPEG": ".jpg", "WEBP": ".webp", "PNG": ".png"}
 _FORMAT_MEDIA_TYPES = {"JPEG": "image/jpeg", "WEBP": "image/webp", "PNG": "image/png"}
+
+
+@contextlib.contextmanager
+def _unlink_on_exit(path: str):
+    """Drop a delete=False temp file unless something moved it away."""
+    # A failed save left tmpXXXX.jpg sitting in the user's poster folder,
+    # where the next scan picks it up as an asset.
+    try:
+        yield
+    finally:
+        try:
+            if os.path.exists(path):
+                os.unlink(path)
+        except OSError:
+            # Best effort: cleanup must never mask the original failure.
+            pass
 
 
 def resolve_format(name: Optional[str]) -> Tuple[str, str]:
@@ -111,7 +128,7 @@ def optimize_poster_files(
 
                 with tempfile.NamedTemporaryFile(
                     suffix=target_ext, delete=False, dir=os.path.dirname(full_path)
-                ) as tmp:
+                ) as tmp, _unlink_on_exit(tmp.name):
                     save_kwargs = {"format": pil_format}
                     if pil_format in ("JPEG", "WEBP"):
                         save_kwargs["quality"] = quality

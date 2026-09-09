@@ -7,6 +7,7 @@ retrieval for Plex, Radarr, Sonarr, and Lidarr integrations.
 
 import os
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Optional
 
@@ -28,6 +29,7 @@ from backend.util.config import (
 )
 from backend.util import plex_library_cache
 from backend.util.database import ChubDB
+from backend.util.arr import arr_api_version
 
 if os.environ.get("DOCKER_ENV"):
     LOG_BASE_DIR = "/config/logs"
@@ -465,7 +467,7 @@ def check_all_health(
                     test_url = f"{url}/library/sections"
                 else:
                     headers = {"X-Api-Key": api} if api else {}
-                    api_ver = "v1" if service == "lidarr" else "v3"
+                    api_ver = arr_api_version(service)
                     test_url = f"{url}/api/{api_ver}/system/status"
 
                 safe, reason = is_safe_url(test_url)
@@ -1000,7 +1002,7 @@ def test_instance(
             test_url = f"{url}/library/sections"
         else:
             headers = {"X-Api-Key": api} if api else {}
-            api_ver = "v1" if service == "lidarr" else "v3"
+            api_ver = arr_api_version(service)
             test_url = f"{url}/api/{api_ver}/system/status"
 
         logger.debug(f"Testing connection to: {test_url}")
@@ -1108,6 +1110,12 @@ def create_instance(
         Success confirmation with created instance details
     """
     try:
+        if not data.service:
+            return error(
+                "service is required",
+                code="INVALID_SERVICE_TYPE",
+                status_code=400,
+            )
         service = data.service.lower()
         name = data.name
         url = data.url.rstrip("/")
@@ -1223,6 +1231,12 @@ def update_instance(
         Success confirmation with updated instance details
     """
     try:
+        if not data.service:
+            return error(
+                "service is required",
+                code="INVALID_SERVICE_TYPE",
+                status_code=400,
+            )
         service = data.service.lower()
         new_name = data.name
         url = data.url.rstrip("/")
@@ -1575,7 +1589,7 @@ def test_existing_instance(
             test_url = f"{url}/library/sections"
         else:
             headers = {"X-Api-Key": api} if api else {}
-            api_ver = "v1" if service == "lidarr" else "v3"
+            api_ver = arr_api_version(service)
             test_url = f"{url}/api/{api_ver}/system/status"
 
         from backend.util.ssrf_guard import is_safe_url
@@ -1999,7 +2013,8 @@ def get_instance_logs(
             )
 
         # Collect all log lines from all module directories
-        all_lines = []
+        all_lines: deque = deque(maxlen=limit)
+        total_seen = 0
         for module_name in os.listdir(LOG_BASE_DIR):
             module_path = os.path.join(LOG_BASE_DIR, module_name)
             if not os.path.isdir(module_path) or module_name == "debug":
@@ -2024,16 +2039,18 @@ def get_instance_logs(
                                 level_upper = level.upper()
                                 if level_upper not in line.upper():
                                     continue
+                            total_seen += 1
                             all_lines.append(line)
                 except (PermissionError, OSError):
                     continue
 
-        # Return the last N lines (most recent)
-        filtered_lines = all_lines[-limit:]
+        # Bounded deque: the last `limit` matches encountered, not the newest —
+        # the walk order across module dirs is not chronological.
+        filtered_lines = list(all_lines)
 
         return ok(
-            f"Found {len(filtered_lines)} log entries for instance '{instance_id}'",
-            {"logs": filtered_lines, "instance": instance_id, "total": len(all_lines)},
+            f"Found {total_seen} log entries for instance '{instance_id}'",
+            {"logs": filtered_lines, "instance": instance_id, "total": total_seen},
         )
 
     except Exception as e:
@@ -2107,7 +2124,7 @@ def check_instance_health(
             test_url = f"{url}/library/sections"
         else:
             headers = {"X-Api-Key": api} if api else {}
-            api_ver = "v1" if service == "lidarr" else "v3"
+            api_ver = arr_api_version(service)
             test_url = f"{url}/api/{api_ver}/system/status"
 
         from backend.util.ssrf_guard import is_safe_url
