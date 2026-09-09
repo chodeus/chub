@@ -1239,16 +1239,8 @@ class SeasonsRequest(BaseModel):
 
 
 # ─── Background season-batch jobs ────────────────────────────────────────────
-# Generating a full show's worth of seasons (download + ImageMagick text-removal
-# + render + Drive upload, per season) easily outlasts a reverse-proxy timeout, so
-# the request returned a false failure even though every poster was written. The
-# batch now runs in a daemon thread and the frontend polls /seasons-status.
-#
-# The CL2K maker runs in a single-process uvicorn (see backend/api/server.py), so
-# this in-process registry is shared by the request handlers and the worker
-# thread — no cross-process store needed. Jobs are ephemeral (lost on restart);
-# the posters themselves persist to disk/Drive + cl2k_generated, so a lost status
-# only loses the progress readout, never the work.
+# In-process registry only — safe because uvicorn runs single-process (server.py).
+# Status is lost on restart; the posters themselves are already on disk/Drive.
 _season_jobs: Dict[int, Dict[str, Any]] = {}
 _season_jobs_lock = threading.Lock()
 _season_job_seq = 0
