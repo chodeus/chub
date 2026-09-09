@@ -124,11 +124,8 @@ class Logger:
         # Filter goes on the LOGGER, not each handler: it then runs once per
         # record and covers handlers attached later (root's ErrorNotifyHandler).
         attach_redaction_filter(self._logger)
-        # Stamp start_time on every instantiation — log_outro() uses
-        # `datetime.now() - start_time` to print "Run Time:", and the
-        # _initialized cache below short-circuits the handler/rotation
-        # setup so without this hoist the second-and-later runs in a
-        # long-lived process would print elapsed time since first init.
+        # Must be stamped per instantiation: the _initialized cache below skips
+        # setup, so a hoisted start_time makes later runs report since first init.
         self.start_time = datetime.now()
         self._logger.start_time = self.start_time
 
@@ -141,13 +138,8 @@ class Logger:
 
         self._logger.setLevel(getattr(logging, log_level, logging.INFO))
 
-        # Attach this module's own file handler if it doesn't have one yet.
-        # Check the logger's OWN handlers, NOT hasHandlers() — the latter is true
-        # when any ancestor (the root logger) has a handler, e.g. once the
-        # failure-notification ErrorNotifyHandler is installed on root. That made
-        # a module logger first created at run time (extensions like
-        # poster_self_heal) skip its file handler, so its run logs only
-        # propagated to root and never reached <module>.log.
+        # Check the logger's OWN handlers, never hasHandlers() — that is true
+        # whenever root has one, and the module then skips its own file handler.
         if not self._logger.handlers:
             self._setup_handlers(log_file_path, max_logs)
 

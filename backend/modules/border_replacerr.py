@@ -202,16 +202,8 @@ class BorderReplacerr(ChubModule):
         atomically move it into place only if the bytes differ from the
         current file. Returns True if written, False if unchanged.
 
-        Two fixes over the old `/tmp/{basename}` approach:
-          - The temp lives in the destination directory, so the move is an
-            atomic same-filesystem ``os.replace`` rather than a cross-device
-            copy (the dest is typically a FUSE/array mount, /tmp is not), and
-            concurrent workers compositing the same basename can't collide
-            (mkstemp gives each a unique name) — the prerequisite for #11.
-          - filecmp uses shallow=False (content compare). The old default
-            shallow=True compared stat signatures; a freshly written temp
-            always has a new mtime, so "unchanged" never fired and every
-            poster was rewritten each run. Content compare makes the skip real.
+        Temp goes in the destination dir so the move is an atomic os.replace,
+        and filecmp must stay shallow=False or the skip never fires.
         """
         dest_dir = os.path.dirname(renamed_file)
         os.makedirs(dest_dir, exist_ok=True)
