@@ -1,5 +1,6 @@
 # util/job_processor.py
 
+import inspect
 import json
 import threading
 import time
@@ -934,18 +935,20 @@ def _process_module_run_job(
             module_args = payload.get("module_args") or {}
 
             try:
-                # Execute the module
-                try:
-                    module_instance.run(**module_args)
-                except TypeError:
-                    if module_args:
+                # Bind-check rather than catching TypeError off the call: that
+                # cannot tell a bad signature from a TypeError raised inside
+                # run(), and re-ran a part-executed module with no args — for a
+                # scoped gdrive sync, a second unscoped full sync.
+                if module_args:
+                    try:
+                        inspect.signature(module_instance.run).bind(**module_args)
+                    except TypeError:
                         log.warning(
                             f"[JOB:{job_id}] {module_name}.run() does not accept "
-                            f"module_args {list(module_args)}; retrying without"
+                            f"module_args {list(module_args)}; running without"
                         )
-                        module_instance.run()
-                    else:
-                        raise
+                        module_args = {}
+                module_instance.run(**module_args)
 
                 # Check if cancelled during execution
                 if cancel_event and cancel_event.is_set():

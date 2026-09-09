@@ -81,6 +81,12 @@ class PlexMaintenance(ChubModule):
             transcoder_stats = {"count": 0, "total_size": 0}
             if self.config.photo_transcoder and self.plex_path:
                 transcoder_stats = self._clean_photo_transcoder()
+            elif self.config.photo_transcoder:
+                # plex_path defaults to "" and the UI does not couple the two, so
+                # this ran nothing, printed no row and still reported success.
+                self.logger.warning(
+                    "PhotoTranscoder is enabled but plex_path is not set — skipping."
+                )
 
             # The other three tasks all call Plex's REST API, so we need a
             # PlexServer connection.

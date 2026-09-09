@@ -704,6 +704,9 @@ class BorderReplacerr(ChubModule):
             now_iso = datetime.now(timezone.utc).isoformat()
             new_states: List[dict] = []
             total_work = len(work)
+            # `processed` also counts gate-skipped assets, which `work` excludes,
+            # so it drives the bar past 100% (and past the == total_work pin).
+            done = 0
 
             with progress(
                 work,
@@ -751,11 +754,12 @@ class BorderReplacerr(ChubModule):
                                     }
                                 )
                         processed += 1
+                        done += 1
                         # Drive the Jobs-page bar (no-op without job context; maps
                         # into the parent's reserved slice when chained from
                         # poster_renamerr). Report periodically + at the end.
-                        if total_work and (processed % 25 == 0 or processed == total_work):
-                            self._report_progress(int(processed / total_work * 100))
+                        if total_work and (done % 25 == 0 or done == total_work):
+                            self._report_progress(int(done / total_work * 100))
 
             if new_states:
                 db.border.bulk_record(new_states)

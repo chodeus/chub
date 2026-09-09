@@ -123,11 +123,21 @@ def _mask_to_image_dims(image_bytes: bytes, mask_bytes: bytes) -> bytes:
     """
     from PIL import Image
 
-    from backend.util.cl2k.limits import ImageTooLargeError, open_bounded
+    from backend.util.cl2k.limits import (
+        MAX_MEGAPIXELS,
+        ImageTooLargeError,
+        open_bounded,
+    )
 
     try:
         with Image.open(io.BytesIO(image_bytes)) as im:
             size = im.size  # header only — no pixel decode
+        # This size is read outside open_bounded but drives the resize below, so
+        # limits.py has to own it here too or the cap is bypassed.
+        if size[0] * size[1] > MAX_MEGAPIXELS * 1_000_000:
+            raise ImageTooLargeError(
+                f"{size[0]}x{size[1]} exceeds the {MAX_MEGAPIXELS} MP decode cap"
+            )
         mask = open_bounded(mask_bytes, "L")
         if mask.size == size:
             return mask_bytes

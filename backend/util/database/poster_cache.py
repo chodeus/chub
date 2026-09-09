@@ -632,8 +632,10 @@ class PosterCache(DatabaseBase):
             params.extend(qp)
 
         if owner:
-            conditions.append("(folder = ? OR folder LIKE ?)")
-            params.extend([owner, f"%/{owner}"])
+            # Escaped with the ESCAPE clause, as everywhere else in this file:
+            # an owner named `My_Movies` otherwise matches `/drive/MyXMovies`.
+            conditions.append("(folder = ? OR folder LIKE ? ESCAPE '\\')")
+            params.extend([owner, f"%/{escape_like(owner)}"])
 
         if asset_type in {"movie", "show", "collection"}:
             conditions.append("asset_type = ?")

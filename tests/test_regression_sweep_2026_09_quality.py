@@ -107,3 +107,138 @@ def test_detect_nesting_does_not_flag_a_sibling_prefix():
         _item("/mnt/data/movies2/Title", "b"),
     ]
     assert _scanner()._detect_nesting(media, "movie") == []
+
+
+# ---------------------------------------------------------------------------
+# PosterCache.browse matched sibling folders through LIKE wildcards
+# ---------------------------------------------------------------------------
+
+
+def test_owner_filter_does_not_match_sibling_folders(tmp_path):
+    """`My_Movies` matched `/drive/MyXMovies` — `_` is a LIKE wildcard."""
+    import sqlite3
+
+    from backend.util.database.db_base import escape_like
+
+    db = sqlite3.connect(":memory:")
+    db.execute("CREATE TABLE poster_cache (folder TEXT)")
+    db.executemany(
+        "INSERT INTO poster_cache VALUES (?)",
+        [(f,) for f in ("My_Movies", "/drive/My_Movies", "/drive/MyXMovies")],
+    )
+    owner = "My_Movies"
+
+    rows = db.execute(
+        "SELECT folder FROM poster_cache WHERE (folder = ? OR folder LIKE ? ESCAPE '\\')",
+        (owner, f"%/{escape_like(owner)}"),
+    ).fetchall()
+
+    assert sorted(r[0] for r in rows) == ["/drive/My_Movies", "My_Movies"]
+
+
+def test_browse_owner_clause_carries_both_halves():
+    """escape_like without the ESCAPE clause silently does nothing."""
+    import inspect
+
+    from backend.util.database.poster_cache import PosterCache
+
+    src = inspect.getsource(PosterCache.browse)
+    assert "folder LIKE ? ESCAPE" in src
+    assert "escape_like(owner)" in src
+
+
+# ---------------------------------------------------------------------------
+# transcode_poster leaked its temp file when the save failed
+# ---------------------------------------------------------------------------
+
+
+def test_failed_transcode_leaves_no_temp_file(tmp_path, monkeypatch):
+    import glob
+    import tempfile
+    from unittest import mock
+
+    from PIL import Image
+
+    from backend.util.poster_images import transcode_poster
+
+    src = tmp_path / "p.jpg"
+    Image.new("RGB", (20, 20)).save(src)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    before = set(glob.glob(str(tmp_path / "tmp*")))
+    with mock.patch.object(Image.Image, "save", side_effect=ValueError("encoder")):
+        with pytest.raises(ValueError):
+            transcode_poster(str(src), image_format="webp")
+
+    assert set(glob.glob(str(tmp_path / "tmp*"))) == before
+
+
+def test_successful_transcode_keeps_its_temp_file(tmp_path, monkeypatch):
+    """The success path returns the file, so cleanup must not unlink it."""
+    import os
+    import tempfile
+
+    from PIL import Image
+
+    from backend.util.poster_images import transcode_poster
+
+    src = tmp_path / "p.jpg"
+    Image.new("RGB", (20, 20)).save(src)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    path, media_type, ext = transcode_poster(str(src), image_format="webp")
+    try:
+        assert os.path.exists(path)
+        assert media_type == "image/webp"
+    finally:
+        os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# A TypeError inside run() re-ran the whole module unscoped
+# ---------------------------------------------------------------------------
+
+
+def test_type_error_inside_run_does_not_trigger_a_second_run():
+    """The old bare `except TypeError` could not tell a bad bind from a bug."""
+    import inspect
+
+    calls = []
+
+    class Module:
+        def run(self, only_folders=None, notify=None):
+            calls.append({"only_folders": only_folders, "notify": notify})
+            raise TypeError("boom inside run")
+
+    module_args = {"only_folders": ["A"], "notify": True}
+    m = Module()
+
+    # mirrors the production guard: bind first, then call exactly once
+    try:
+        inspect.signature(m.run).bind(**module_args)
+    except TypeError:
+        module_args = {}
+    with pytest.raises(TypeError):
+        m.run(**module_args)
+
+    assert calls == [{"only_folders": ["A"], "notify": True}]
+
+
+def test_unaccepted_module_args_still_fall_back_to_a_bare_run():
+    import inspect
+
+    calls = []
+
+    class Module:
+        def run(self):
+            calls.append("bare")
+
+    module_args = {"only_folders": ["A"]}
+    m = Module()
+    try:
+        inspect.signature(m.run).bind(**module_args)
+    except TypeError:
+        module_args = {}
+    m.run(**module_args)
+
+    assert calls == ["bare"]
