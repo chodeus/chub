@@ -48,7 +48,9 @@ router = APIRouter(
 # zip bomb.
 MAX_RESTORE_UPLOAD_BYTES = 500 * 1024 * 1024
 MAX_RESTORE_CONFIG_BYTES = 10 * 1024 * 1024
-MAX_RESTORE_SQL_BYTES = 2 * 1024 * 1024 * 1024
+# Matches the upload cap: zf.read() materialises the whole member, so a
+# tiny compressed zip declaring a huge one must not get past this.
+MAX_RESTORE_SQL_BYTES = MAX_RESTORE_UPLOAD_BYTES
 
 
 class TestEndpointRequest(BaseModel):
