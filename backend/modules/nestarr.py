@@ -634,14 +634,32 @@ class _NestScanner:
 
     @staticmethod
     def _is_nested_path(child_path: str, parent_path: str) -> bool:
-        child_norm = os.path.normpath(child_path)
-        parent_norm = os.path.normpath(parent_path)
+        return _NestScanner._is_nested_norm(
+            _NestScanner._norm(child_path), _NestScanner._norm(parent_path)
+        )
+
+    @staticmethod
+    def _norm(path: str) -> str:
+        """normpath, plus the leading "//" POSIX tells it to keep.
+
+        Both sides of the prefix test must agree, or "//mnt/x" stops matching
+        parent "/mnt".
+        """
+        norm = os.path.normpath(path)
+        if norm.startswith("//") and not norm.startswith("///"):
+            return norm[1:]
+        return norm
+
+    @staticmethod
+    def _is_nested_norm(child_norm: str, parent_norm: str) -> bool:
+        """Nesting test over paths already through `_norm`.
+
+        The loops below are O(n^2) in the media count, so normalisation must not
+        run per pair. rstrip keeps a "/" root working as a prefix.
+        """
         if child_norm == parent_norm:
             return False
-        try:
-            return os.path.commonpath([child_norm, parent_norm]) == parent_norm
-        except ValueError:
-            return False
+        return child_norm.startswith(parent_norm.rstrip(os.sep) + os.sep)
 
     def _detect_nesting(
         self, media_list: List[Dict[str, Any]], media_type: str
@@ -649,7 +667,15 @@ class _NestScanner:
         if len(media_list) < 2:
             return []
 
-        sorted_media = sorted(media_list, key=lambda m: m["path"])
+        # Sort on the normalised path, not the raw one: the loop below only
+        # considers earlier entries as parents, so "/mnt/./data" sorting before
+        # "/mnt/data" hid a real nesting.
+        paired = sorted(
+            ((_NestScanner._norm(m["path"]), m) for m in media_list),
+            key=lambda pair: pair[0],
+        )
+        norms = [norm for norm, _ in paired]
+        sorted_media = [m for _, m in paired]
         issues: List[Dict[str, Any]] = []
 
         self.logger.debug(
@@ -665,9 +691,11 @@ class _NestScanner:
 
         for child_index, child in enumerate(sorted_media):
             best_parent = None
-            for parent in sorted_media[:child_index]:
-                if not self._is_nested_path(child["path"], parent["path"]):
+            child_norm = norms[child_index]
+            for parent_index in range(child_index):
+                if not self._is_nested_norm(child_norm, norms[parent_index]):
                     continue
+                parent = sorted_media[parent_index]
                 if best_parent is None or len(parent["path"]) > len(
                     best_parent["path"]
                 ):
@@ -713,11 +741,13 @@ class _NestScanner:
             return []
 
         issues: List[Dict[str, Any]] = []
+        parent_norms = [_NestScanner._norm(p["path"]) for p in parents]
 
         for child in children:
             best_parent = None
-            for parent in parents:
-                if not self._is_nested_path(child["path"], parent["path"]):
+            child_norm = _NestScanner._norm(child["path"])
+            for parent, parent_norm in zip(parents, parent_norms):
+                if not self._is_nested_norm(child_norm, parent_norm):
                     continue
                 if best_parent is None or len(parent["path"]) > len(
                     best_parent["path"]
