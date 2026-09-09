@@ -89,8 +89,8 @@ class Jduparr(ChubModule):
         cls, groups: List[List[str]], inodes: Dict[str, Optional[Tuple[int, int]]]
     ) -> List[str]:
         """Grouped paths not sharing their group's master inode."""
-        # Any consistent anchor works — a fully linked group shares one inode —
-        # so group[0] serves for both snapshots: before = candidates, after = leftovers.
+        # Anchor is the group's first stat-able member — a fully linked group shares
+        # one inode — and serves both: before = candidates, after = leftovers.
         unlinked: List[str] = []
         for group in groups:
             master = next(
@@ -138,10 +138,8 @@ class Jduparr(ChubModule):
     def _build_scan_command(
         self, source_dirs: List[str], hash_db: Optional[str]
     ) -> List[str]:
-        # --json is mutually exclusive with the -L link action (jdupes allows
-        # only one print/action mode per run), so discovery and linking are
-        # necessarily two separate passes. --json gives machine-readable match
-        # sets, avoiding fragile text parsing of the -M output.
+        # --json cannot combine with the -L action, so discovery and linking are
+        # necessarily two separate jdupes passes.
         cmd = ["jdupes", "-r", "--json", "-X", VIDEO_EXT_FILTER]
         if hash_db:
             cmd.extend(["-y", hash_db])
@@ -316,9 +314,8 @@ class Jduparr(ChubModule):
 
             duplicate_groups = self.parse_duplicate_groups(scan_result.stdout)
             parsed_files = self._flatten_groups(duplicate_groups)
-            # Snapshot before linking: comparing inodes across the link pass is
-            # the only way to tell a real relink from a file jdupes had already
-            # linked, and the only proof that -L actually did the work.
+            # Snapshot before linking: the inode diff is what separates a real
+            # relink from a file jdupes had already linked.
             inodes_before = self._inode_map(duplicate_groups)
             candidate_count = len(self._unlinked_paths(duplicate_groups, inodes_before))
             linked_count = 0
@@ -364,20 +361,16 @@ class Jduparr(ChubModule):
                     )
                     self.logger.error(error_message)
 
-                # Measure whatever the run achieved, failed exit included: jdupes
-                # links what it can before reporting a per-file failure, so a
-                # partial success is real and must not be reported as zero.
-                if link_result is not None:
-                    inodes_after = self._inode_map(duplicate_groups)
-                    relinked = self._relinked_paths(inodes_before, inodes_after)
-                    relink_failures = self._unlinked_paths(
-                        duplicate_groups, inodes_after
-                    )
-                    linked_count = len(relinked)
-                    for relinked_path in relinked:
-                        self.logger.debug(f"[RELINKED] {relinked_path}")
-                    for failed_path in relink_failures:
-                        self.logger.warning(f"[NOT RELINKED] {failed_path}")
+                # Measure unconditionally: a non-zero exit or a timeout kill still
+                # leaves behind whatever jdupes linked before it stopped.
+                inodes_after = self._inode_map(duplicate_groups)
+                relinked = self._relinked_paths(inodes_before, inodes_after)
+                relink_failures = self._unlinked_paths(duplicate_groups, inodes_after)
+                linked_count = len(relinked)
+                for relinked_path in relinked:
+                    self.logger.debug(f"[RELINKED] {relinked_path}")
+                for failed_path in relink_failures:
+                    self.logger.warning(f"[NOT RELINKED] {failed_path}")
 
             if not duplicate_groups:
                 field_message = "✅ No duplicate files discovered..."

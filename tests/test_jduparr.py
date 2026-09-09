@@ -480,6 +480,8 @@ def test_jdupes_not_found_on_link_preserves_scan_and_notifies(tmp_path, monkeypa
     assert scan_item["status"] == "error"
     assert scan_item["sub_count"] == 1  # scan results preserved
     assert "jdupes not found" in scan_item["error"]
+    assert scan_item["linked_count"] == 0  # the binary never ran, so no inode moved
+    assert scan_item["failed"] == [str(b)]
 
 
 def test_scan_timeout_reports_error_and_notifies(tmp_path, monkeypatch):
@@ -498,6 +500,34 @@ def test_scan_timeout_reports_error_and_notifies(tmp_path, monkeypatch):
     scan_item = CapturingNotificationManager.sent[0][-1]
     assert scan_item["status"] == "error"
     assert "timed out" in scan_item["error"]
+    assert has_record(logger, "timed out")
+
+
+def test_link_timeout_still_counts_the_files_that_linked(tmp_path, monkeypatch):
+    # The timeout kills jdupes mid-run; whatever it linked first is already on disk.
+    source = tmp_path / "movies"
+    source.mkdir()
+    a, b, c = (source / "a.mkv"), (source / "b.mkv"), (source / "c.mkv")
+    make_dupes(a, b, c)
+
+    def fake_run(cmd, **kwargs):
+        if "--json" in cmd:
+            return completed(cmd, stdout=json_stdout([str(a), str(b), str(c)]))
+        hardlink_onto_first(a, b)  # c never reached before the kill
+        raise subprocess.TimeoutExpired(cmd, 1)
+
+    monkeypatch.setattr(jduparr_module.subprocess, "run", fake_run)
+    config = ChubConfig(jduparr=JduparrConfig(source_dirs=[str(source)]))
+    module, logger = make_module(monkeypatch, config)
+
+    module.run()
+
+    scan_item = CapturingNotificationManager.sent[0][-1]
+    assert scan_item["status"] == "error"
+    assert scan_item["sub_count"] == 2
+    assert scan_item["linked_count"] == 1
+    assert scan_item["failed"] == [str(c)]
+    assert "1 of 2" in scan_item["field_message"]
     assert has_record(logger, "timed out")
 
 
