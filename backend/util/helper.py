@@ -202,9 +202,6 @@ def create_table(data: List[List[Any]]) -> str:
         * Assumes a rectangular matrix; irregular rows will yield misaligned
           output.
 
-    Example:
-        >>> create_table([["Name", "Age"], ["Ada", 36], ["Linus", 54]])
-        "\n__________________________________\n|   Name   |   Age   |\n|----------|---------|\n|   Ada    |    36   |\n|   Linus  |    54   |\n‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾"
     """
     if not data:
         return "No data provided."
