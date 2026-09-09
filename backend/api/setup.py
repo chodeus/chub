@@ -25,7 +25,9 @@ def _is_setup_completed() -> bool:
     try:
         return bool(load_config().general.setup_completed)
     except ConfigError:
-        return False
+        # A missing file returns defaults, so ConfigError means an existing
+        # install with an unreadable config — not a first run.
+        return True
 
 
 @router.get(

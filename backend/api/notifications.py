@@ -21,11 +21,11 @@ test message for one method+config.
 import uuid
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from backend.api.utils import error, ok
+from backend.api.utils import error, get_logger, ok
 from backend.modules import MODULES
 from backend.util.config import (
     config_write,
@@ -79,11 +79,6 @@ class TestPayload(BaseModel):
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
-
-
-def get_logger(request: Request, source: str = "WEB") -> Any:
-    """Get logger adapter from app state."""
-    return request.app.state.logger.get_adapter(source)
 
 
 def get_config() -> ChubConfig:
