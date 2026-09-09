@@ -13,8 +13,7 @@ from .db_base import DatabaseBase
 #   missing    = monitored units that are released/aired but have no file
 #   upcoming   = monitored units not yet released/aired
 # A Sonarr SEASON row expands to its episode counts; a movie/album is 1 unit;
-# shows, seasons-as-rows... no — shows and artists are CONTAINERS (0 units; the
-# episodes/albums carry the counts), so they fall through to 0 automatically.
+# shows and artists are CONTAINERS (0 units — the episodes/albums carry them).
 # "released" gates simple (movie/album) units: Lidarr albums use their own
 # release_date (absent = released), movies/shows use the *arr `status` (mirrors
 # release_readiness.UNRELEASED_STATUSES). For seasons, "aired" IS the gate:
