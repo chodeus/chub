@@ -4,7 +4,7 @@ import threading
 import time
 from datetime import datetime
 from logging import Logger
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from croniter import croniter
 from dateutil import tz
@@ -24,6 +24,20 @@ _next_run_times: Dict[str, datetime] = {}
 # Last minute a non-cron schedule fired per script, so the tick (which can run
 # several times within the matched minute) triggers it at most once per window.
 _last_fired: Dict[str, datetime] = {}
+
+
+def _fired_this_minute(key: str, minute: datetime) -> bool:
+    """Whether `key` already fired in this matched minute.
+
+    check_schedule stays true for the whole matched minute while the tick runs
+    every few seconds; all three dispatch loops need this same guard.
+    """
+    return _last_fired.get(key) == minute
+
+
+def _mark_fired(keys: Iterable[str], minute: datetime) -> None:
+    for key in keys:
+        _last_fired[key] = minute
 
 _WEEKDAY_ALIASES = {
     "0": "sunday",
@@ -445,9 +459,9 @@ class ChubScheduler:
                     # minute; the tick can run several times within it, so fire
                     # each module at most once per matched minute.
                     minute_now = datetime.now().replace(second=0, microsecond=0)
-                    if _last_fired.get(name) == minute_now:
+                    if _fired_this_minute(name, minute_now):
                         continue
-                    _last_fired[name] = minute_now
+                    _mark_fired([name], minute_now)
 
                     if self.logger:
                         self.logger.get_adapter("SCHEDULER").info(
@@ -551,7 +565,7 @@ class ChubScheduler:
 
             label = _upgradinatorr_profile_label(profile, index)
             schedule_key = f"upgradinatorr:{index}:{label}"
-            if _last_fired.get(schedule_key) == minute_now:
+            if _fired_this_minute(schedule_key, minute_now):
                 continue
             if check_schedule(schedule_key, sched, log_adapter):
                 due_profiles.append(_profile_to_dict(profile))
@@ -582,8 +596,7 @@ class ChubScheduler:
         )
 
         if result["success"]:
-            for key in due_keys:
-                _last_fired[key] = minute_now
+            _mark_fired(due_keys, minute_now)
 
         if not result["success"]:
             if self.logger:
@@ -637,7 +650,7 @@ class ChubScheduler:
                     continue
                 label = _profile_value(block, "label", "") or f"block {index + 1}"
                 schedule_key = f"{module_name}:block:{index}:{label}"
-                if _last_fired.get(schedule_key) == minute_now:
+                if _fired_this_minute(schedule_key, minute_now):
                     continue
                 if check_schedule(schedule_key, sched, log_adapter):
                     overrides = _profile_value(block, "overrides", {}) or {}
@@ -676,8 +689,7 @@ class ChubScheduler:
                         f"{result['message']}"
                     )
                 continue
-            for key in due_keys:
-                _last_fired[key] = minute_now
+            _mark_fired(due_keys, minute_now)
             queued_modules.add(module_name)
 
     def _system_tick(self) -> None:
