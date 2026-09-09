@@ -78,8 +78,16 @@ async def optimize_posters(
 
     max_width = body.get("max_width", 1000)
     max_height = body.get("max_height", 1500)
-    target_format = body.get("format", "jpeg").lower()
-    quality = max(1, min(100, body.get("quality", 85)))
+    # Both sit above the try below, so a bad type escaped as a 500 traceback
+    # rather than the 400 `mode` already returns.
+    raw_format = body.get("format", "jpeg")
+    if not isinstance(raw_format, str):
+        return error("Invalid format", code="INVALID_FORMAT", status_code=400)
+    target_format = raw_format.lower()
+    raw_quality = body.get("quality", 85)
+    if isinstance(raw_quality, bool) or not isinstance(raw_quality, (int, float)):
+        return error("Invalid quality", code="INVALID_QUALITY", status_code=400)
+    quality = max(1, min(100, int(raw_quality)))
     raw_mode = body.get("mode", "report")
     mode = raw_mode.lower() if isinstance(raw_mode, str) else raw_mode
     # optimize_poster_files only dry-runs on "report" — every other value takes

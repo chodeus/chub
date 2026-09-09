@@ -379,10 +379,14 @@ def images(
     resolved = _resolve_tmdb_id(tmdb, tmdb_id, tvdb_id, imdb_id, mt)
     if not resolved:
         return ok("ok", {"logos": [], "backdrops": [], "posters": []})
-    imgs = tmdb_art.list_images(tmdb, resolved, media_type) or {
-        "logos": [],
-        "backdrops": [],
-    }
+    imgs = tmdb_art.list_images(tmdb, resolved, media_type)
+    if imgs is None:
+        # None is a transient lookup failure, {} is a title with no art. The
+        # frontend caches this response, so flattening the two caches a blip.
+        return ok(
+            "ok",
+            {"logos": [], "backdrops": [], "posters": [], "reason": "tmdb_unavailable"},
+        )
     # Textless (null-language) posters first — pure art that needs no AI text
     # pass at all. Stable sort keeps TMDB's vote order within each group.
     posters = sorted(

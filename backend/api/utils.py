@@ -19,8 +19,10 @@ _module_loggers: dict[str, Logger] = {}
 _module_loggers_lock = threading.Lock()
 
 
-def get_logger(request: Request, source: str = "WEB") -> Any:
-    return request.app.state.logger.get_adapter(source)
+def get_logger(request: Request) -> Any:
+    # No `source` parameter: Depends() would expose it as a query param on every
+    # route, letting a caller forge the source field of a log line.
+    return request.app.state.logger.get_adapter("WEB")
 
 
 def _apply_log_settings(module_logger: Logger, log_level: str, max_logs: int) -> None:

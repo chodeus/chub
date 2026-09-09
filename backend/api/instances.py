@@ -472,7 +472,9 @@ def check_all_health(
 
                 safe, reason = is_safe_url(test_url)
                 if not safe:
-                    results[name] = {
+                    # Names are unique per service only, so an unqualified key
+                    # lets radarr "Main" and sonarr "Main" overwrite each other.
+                    results[f"{service}:{name}"] = {
                         "service": service,
                         "status": "blocked",
                         "error": f"URL refused: {reason}",
@@ -486,41 +488,42 @@ def check_all_health(
         # serially (was up to ~2s per instance back-to-back).
         def _probe(probe):
             service, name, test_url, headers = probe
+            key = f"{service}:{name}"
             start = time.time()
             try:
                 resp = requests.get(
                     test_url, headers=headers, timeout=2, allow_redirects=False
                 )
                 elapsed = round((time.time() - start) * 1000)
-                return name, {
+                return key, {
                     "service": service,
                     "status": "healthy" if resp.ok else "unhealthy",
                     "status_code": resp.status_code,
                     "response_time_ms": elapsed,
                 }
             except requests.exceptions.Timeout:
-                return name, {
+                return key, {
                     "service": service,
                     "status": "timeout",
                     "response_time_ms": 2000,
                 }
             except requests.exceptions.ConnectionError:
-                return name, {
+                return key, {
                     "service": service,
                     "status": "unreachable",
                     "response_time_ms": 0,
                 }
             except Exception as exc:
                 logger.error(f"Health probe failed for '{name}': {exc}")
-                return name, {
+                return key, {
                     "service": service,
                     "status": "error",
                 }
 
         if probes:
             with ThreadPoolExecutor(max_workers=min(10, len(probes))) as pool:
-                for name, result in pool.map(_probe, probes):
-                    results[name] = result
+                for key, result in pool.map(_probe, probes):
+                    results[key] = result
 
         return ok(f"Health checked for {len(results)} instances", {"health": results})
     except Exception as e:
