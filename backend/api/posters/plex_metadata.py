@@ -524,5 +524,3 @@ def enqueue_kometa_assets_scan(
             status_code=500,
         )
 
-
-# --- Parameterized poster ID endpoints ---

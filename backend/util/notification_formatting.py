@@ -535,6 +535,9 @@ def format_for_discord(
             lines = [f"\tRelink candidates in '{dir_label}': {sub_count}"]
             if linked_count:
                 lines.append(f"\tItems re-linked in '{dir_label}': {linked_count}")
+            failed = item.get("failed") or []
+            if failed:
+                lines.append(f"\tStill unlinked in '{dir_label}': {len(failed)}")
             if item.get("error"):
                 lines.append(f"\tError: {item['error']}")
             results.extend(chunk_flat_content(header, "\n".join(lines), footer))
