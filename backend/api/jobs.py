@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from backend.api.utils import error, get_database, get_logger, ok, worker_error
 from backend.util.database import ChubDB
@@ -250,8 +250,8 @@ def get_job_detail(
 @router.get("/jobs/{job_id}/log-tail")
 def get_job_log_tail(
     job_id: int,
-    offset: int = 0,
-    max_bytes: int = 65536,
+    offset: int = Query(0, ge=0),
+    max_bytes: int = Query(65536, ge=0, le=65536),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> Dict[str, Any]:

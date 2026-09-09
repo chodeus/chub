@@ -14,6 +14,9 @@ from backend.util.config import ChubConfig
 from backend.util.path_safety import resolve_confined
 
 _PIL_FORMATS = {"jpeg": "JPEG", "jpg": "JPEG", "webp": "WEBP", "png": "PNG"}
+# The names an API caller may ask for; resolve_format still falls back to
+# JPEG for internal callers that pass None.
+SUPPORTED_FORMATS = frozenset(_PIL_FORMATS)
 _FORMAT_EXTENSIONS = {"JPEG": ".jpg", "WEBP": ".webp", "PNG": ".png"}
 _FORMAT_MEDIA_TYPES = {"JPEG": "image/jpeg", "WEBP": "image/webp", "PNG": "image/png"}
 

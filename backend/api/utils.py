@@ -19,8 +19,15 @@ _module_loggers: dict[str, Logger] = {}
 _module_loggers_lock = threading.Lock()
 
 
-def get_logger(request: Request, source: str = "WEB") -> Any:
-    return request.app.state.logger.get_adapter(source)
+def get_logger(request: Request) -> Any:
+    # No `source` parameter: Depends() would expose it as a query param on every
+    # route, letting a caller forge the source field of a log line.
+    return request.app.state.logger.get_adapter("WEB")
+
+
+def get_error_logger(request: Request) -> Any:
+    """Adapter for the global exception handlers. Not a Depends()."""
+    return request.app.state.logger.get_adapter("ERROR")
 
 
 def _apply_log_settings(module_logger: Logger, log_level: str, max_logs: int) -> None:
@@ -79,6 +86,25 @@ def ok(
     if data is not None:
         payload["data"] = data
     return JSONResponse(status_code=status_code, content=payload)
+
+
+def require_bool_field(payload: dict, field: str) -> Optional[JSONResponse]:
+    """400 response when `field` is absent or not a bool, else None."""
+    # `in`, not .get(): an explicit null is present-but-invalid, and saying
+    # "missing" about a field the caller supplied is just wrong.
+    if field not in payload:
+        return error(
+            f"Missing '{field}' field in request body",
+            code="MISSING_FIELD",
+            status_code=400,
+        )
+    if not isinstance(payload[field], bool):
+        return error(
+            f"'{field}' must be a boolean",
+            code="INVALID_FIELD",
+            status_code=400,
+        )
+    return None
 
 
 def error(
