@@ -34,6 +34,7 @@ class PlexMaintenance(ChubModule):
 
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
+        # Live per run: job_processor builds a new instance for every job.
         self.plex_path: str = getattr(self.config, "plex_path", "")
 
     # ------------------------------------------------------------------

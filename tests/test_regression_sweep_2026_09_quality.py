@@ -104,37 +104,37 @@ def test_detect_nesting_does_not_flag_a_sibling_prefix():
     assert _scanner()._detect_nesting(media, "movie") == []
 
 
-def test_owner_filter_does_not_match_sibling_folders(tmp_path):
-    """`_` is a LIKE wildcard: `My_Movies` must not match `/drive/MyXMovies`."""
-    import sqlite3
+class _StubLog:
+    def __getattr__(self, _):
+        return lambda *a, **k: None
 
-    from backend.util.database.db_base import escape_like
-
-    db = sqlite3.connect(":memory:")
-    db.execute("CREATE TABLE poster_cache (folder TEXT)")
-    db.executemany(
-        "INSERT INTO poster_cache VALUES (?)",
-        [(f,) for f in ("My_Movies", "/drive/My_Movies", "/drive/MyXMovies")],
-    )
-    owner = "My_Movies"
-
-    rows = db.execute(
-        "SELECT folder FROM poster_cache WHERE (folder = ? OR folder LIKE ? ESCAPE '\\')",
-        (owner, f"%/{escape_like(owner)}"),
-    ).fetchall()
-
-    assert sorted(r[0] for r in rows) == ["/drive/My_Movies", "My_Movies"]
+    def get_adapter(self, *_a, **_kw):
+        return self
 
 
-def test_browse_owner_clause_carries_both_halves():
-    """escape_like without the ESCAPE clause silently does nothing."""
-    import inspect
+def test_browse_owner_filter_does_not_match_sibling_folders(tmp_path):
+    """`_` is a LIKE wildcard: owner `My_Movies` must not match `/drive/MyXMovies`."""
+    from backend.util.database import ChubDB
 
-    from backend.util.database.poster_cache import PosterCache
+    folders = ("My_Movies", "/drive/My_Movies", "/drive/MyXMovies")
+    with ChubDB(_StubLog(), db_path=str(tmp_path / "chub.db")) as db:
+        for i, folder in enumerate(folders):
+            db.poster.upsert(
+                {
+                    "title": f"T{i}",
+                    "normalized_title": f"t{i}",
+                    "year": 2000,
+                    "tmdb_id": None,
+                    "tvdb_id": None,
+                    "imdb_id": None,
+                    "season_number": None,
+                    "folder": folder,
+                    "file": f"{folder}/poster{i}.jpg",
+                }
+            )
+        items = db.poster.browse(owner="My_Movies")["items"]
 
-    src = inspect.getsource(PosterCache.browse)
-    assert "folder LIKE ? ESCAPE" in src
-    assert "escape_like(owner)" in src
+    assert sorted(r["folder"] for r in items) == ["/drive/My_Movies", "My_Movies"]
 
 
 def test_failed_transcode_leaves_no_temp_file(tmp_path, monkeypatch):
