@@ -5,13 +5,8 @@ import os
 import pytest
 
 
-# ---------------------------------------------------------------------------
-# nestarr nesting predicate: O(n^2) over the media list, so normalise once
-# ---------------------------------------------------------------------------
-
-
 def _commonpath_reference(child, parent):
-    """The pre-change implementation, kept as the equivalence oracle."""
+    """commonpath-based oracle the nestarr prefix test must agree with."""
     c, p = os.path.normpath(child), os.path.normpath(parent)
     if c == p:
         return False
@@ -42,13 +37,13 @@ def test_nesting_matches_the_commonpath_reference(child, parent, expected):
     assert _commonpath_reference(child, parent) is expected
 
 
-def test_double_slash_prefix_is_now_detected():
-    """commonpath collapses a leading '//', so these nestings were missed."""
+def test_double_slash_prefix_is_detected():
+    """A leading '//' must nest like '/'."""
     from backend.modules.nestarr import _NestScanner
 
     assert _NestScanner._is_nested_path("//media/data", "//media") is True
     assert _NestScanner._is_nested_path("/mnt/Title (2019)", "//mnt") is True
-    # the old behaviour, recorded so the change is deliberate and visible
+    # the commonpath oracle misses every leading-'//' parent
     assert _commonpath_reference("//media/data", "//media") is False
 
 
@@ -109,13 +104,8 @@ def test_detect_nesting_does_not_flag_a_sibling_prefix():
     assert _scanner()._detect_nesting(media, "movie") == []
 
 
-# ---------------------------------------------------------------------------
-# PosterCache.browse matched sibling folders through LIKE wildcards
-# ---------------------------------------------------------------------------
-
-
 def test_owner_filter_does_not_match_sibling_folders(tmp_path):
-    """`My_Movies` matched `/drive/MyXMovies` — `_` is a LIKE wildcard."""
+    """`_` is a LIKE wildcard: `My_Movies` must not match `/drive/MyXMovies`."""
     import sqlite3
 
     from backend.util.database.db_base import escape_like
@@ -145,11 +135,6 @@ def test_browse_owner_clause_carries_both_halves():
     src = inspect.getsource(PosterCache.browse)
     assert "folder LIKE ? ESCAPE" in src
     assert "escape_like(owner)" in src
-
-
-# ---------------------------------------------------------------------------
-# transcode_poster leaked its temp file when the save failed
-# ---------------------------------------------------------------------------
 
 
 def test_failed_transcode_leaves_no_temp_file(tmp_path, monkeypatch):
@@ -194,14 +179,32 @@ def test_successful_transcode_keeps_its_temp_file(tmp_path, monkeypatch):
         os.unlink(path)
 
 
-# ---------------------------------------------------------------------------
-# A TypeError inside run() re-ran the whole module unscoped
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "size",
+    [(9000, 9000), (30000, 30000)],
+    ids=["over-our-cap", "over-pillows-bomb-ceiling"],
+)
+def test_mask_resize_refuses_an_oversized_image(size):
+    """Both bands must raise; Pillow's own bomb error must not fall to pass-through."""
+    from backend.util.cl2k.limits import ImageTooLargeError
+    from backend.util.cl2k.text_removal import _mask_to_image_dims
+    from tests.test_cl2k_limits import _png, _undecodable_png
+
+    with pytest.raises(ImageTooLargeError):
+        _mask_to_image_dims(_undecodable_png(*size), _png((40, 60)))
+
+
+class _WarnLog:
+    def __init__(self):
+        self.warnings = []
+
+    def warning(self, msg):
+        self.warnings.append(msg)
 
 
 def test_type_error_inside_run_does_not_trigger_a_second_run():
-    """The old bare `except TypeError` could not tell a bad bind from a bug."""
-    import inspect
+    """A TypeError raised inside run() must propagate, not re-run it without args."""
+    from backend.util.job_processor import _run_module_once
 
     calls = []
 
@@ -210,22 +213,16 @@ def test_type_error_inside_run_does_not_trigger_a_second_run():
             calls.append({"only_folders": only_folders, "notify": notify})
             raise TypeError("boom inside run")
 
-    module_args = {"only_folders": ["A"], "notify": True}
-    m = Module()
-
-    # mirrors the production guard: bind first, then call exactly once
-    try:
-        inspect.signature(m.run).bind(**module_args)
-    except TypeError:
-        module_args = {}
-    with pytest.raises(TypeError):
-        m.run(**module_args)
+    log = _WarnLog()
+    with pytest.raises(TypeError, match="boom inside run"):
+        _run_module_once(Module(), {"only_folders": ["A"], "notify": True}, log, "m")
 
     assert calls == [{"only_folders": ["A"], "notify": True}]
+    assert log.warnings == []
 
 
 def test_unaccepted_module_args_still_fall_back_to_a_bare_run():
-    import inspect
+    from backend.util.job_processor import _run_module_once
 
     calls = []
 
@@ -233,12 +230,8 @@ def test_unaccepted_module_args_still_fall_back_to_a_bare_run():
         def run(self):
             calls.append("bare")
 
-    module_args = {"only_folders": ["A"]}
-    m = Module()
-    try:
-        inspect.signature(m.run).bind(**module_args)
-    except TypeError:
-        module_args = {}
-    m.run(**module_args)
+    log = _WarnLog()
+    _run_module_once(Module(), {"only_folders": ["A"]}, log, "m")
 
     assert calls == ["bare"]
+    assert len(log.warnings) == 1

@@ -408,8 +408,7 @@ class NotificationManager:
             elif isinstance(color, str):
                 color = color.lstrip("#")
             pt_payload["discord"]["color"] = color
-            # Was discarded, so a failed part still reported success — unlike
-            # send_discord_notification, which aggregates.
+            # Any failed part fails the send, as in send_discord_notification.
             ok, msg = self.send_and_log_response("Notifiarr", hook, pt_payload)
             if not ok:
                 success = False

@@ -640,11 +640,7 @@ class _NestScanner:
 
     @staticmethod
     def _norm(path: str) -> str:
-        """normpath, plus the leading "//" POSIX tells it to keep.
-
-        Both sides of the prefix test must agree, or "//mnt/x" stops matching
-        parent "/mnt".
-        """
+        """normpath that also collapses the "//" it keeps, so both sides agree."""
         norm = os.path.normpath(path)
         if norm.startswith("//") and not norm.startswith("///"):
             return norm[1:]
@@ -652,13 +648,10 @@ class _NestScanner:
 
     @staticmethod
     def _is_nested_norm(child_norm: str, parent_norm: str) -> bool:
-        """Nesting test over paths already through `_norm`.
-
-        The loops below are O(n^2) in the media count, so normalisation must not
-        run per pair. rstrip keeps a "/" root working as a prefix.
-        """
+        """Nesting test over `_norm` output; never normalise here (O(n^2) callers)."""
         if child_norm == parent_norm:
             return False
+        # rstrip: a "/" parent must become "/", not "//"
         return child_norm.startswith(parent_norm.rstrip(os.sep) + os.sep)
 
     def _detect_nesting(
@@ -667,9 +660,7 @@ class _NestScanner:
         if len(media_list) < 2:
             return []
 
-        # Sort on the normalised path, not the raw one: the loop below only
-        # considers earlier entries as parents, so "/mnt/./data" sorting before
-        # "/mnt/data" hid a real nesting.
+        # Sort on the normalised path: the loop only takes earlier entries as parents.
         paired = sorted(
             ((_NestScanner._norm(m["path"]), m) for m in media_list),
             key=lambda pair: pair[0],

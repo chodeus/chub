@@ -367,8 +367,7 @@ class Labelarr(ChubModule):
                         plex_mapping_index.setdefault(pmid, []).append(item)
 
                 for mapping in self.config.mappings:
-                    # Cancel used to break only the innermost item loop, so every
-                    # remaining mapping still built a client and re-read each library.
+                    # Check cancel at every loop level, not only per item.
                     if self.is_cancelled():
                         break
                     if getattr(mapping, "enabled", True) is False:

@@ -256,6 +256,7 @@ def transcode_poster(
             img = img.convert("RGB")
 
         tmp = tempfile.NamedTemporaryFile(suffix=target_ext, delete=False)
+        tmp.close()  # save() writes by name; an open handle blocks unlink on Windows
         try:
             save_kwargs = {"format": pil_format}
             if quality and pil_format in ("JPEG", "WEBP"):
@@ -271,7 +272,5 @@ def transcode_poster(
                 # Best effort: cleanup must never mask the save failure below.
                 pass
             raise
-        finally:
-            tmp.close()
 
     return tmp.name, _FORMAT_MEDIA_TYPES.get(pil_format, "image/jpeg"), target_ext

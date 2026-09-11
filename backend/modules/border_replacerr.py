@@ -198,20 +198,16 @@ class BorderReplacerr(ChubModule):
         return h.hexdigest()
 
     def _save_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
-        """Write ``out_img`` next to ``renamed_file`` via a temp file, then
-        atomically move it into place only if the bytes differ from the
-        current file. Returns True if written, False if unchanged.
-
-        Temp goes in the destination dir so the move is an atomic os.replace,
-        and filecmp must stay shallow=False or the skip never fires.
-        """
+        """Write ``out_img`` to ``renamed_file`` if the bytes changed; True if so."""
         dest_dir = os.path.dirname(renamed_file)
         os.makedirs(dest_dir, exist_ok=True)
         suffix = os.path.splitext(renamed_file)[1] or ".jpg"
+        # Temp in dest_dir: os.replace is only atomic within one filesystem.
         fd, tmp_path = tempfile.mkstemp(prefix=".border-", suffix=suffix, dir=dest_dir)
         os.close(fd)
         try:
             out_img.save(tmp_path)
+            # shallow=False: never trust a size+mtime match over the bytes.
             if not os.path.exists(renamed_file) or not filecmp.cmp(
                 renamed_file, tmp_path, shallow=False
             ):
@@ -696,8 +692,7 @@ class BorderReplacerr(ChubModule):
             now_iso = datetime.now(timezone.utc).isoformat()
             new_states: List[dict] = []
             total_work = len(work)
-            # `processed` also counts gate-skipped assets, which `work` excludes,
-            # so it drives the bar past 100% (and past the == total_work pin).
+            # Bar counter; `processed` also counts gate-skipped assets `work` excludes.
             done = 0
 
             with progress(

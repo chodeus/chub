@@ -25,8 +25,8 @@ class ImageTooLargeError(ValueError):
     """An image whose header dimensions exceed ``MAX_MEGAPIXELS``."""
 
 
-def open_bounded(data: bytes, mode: str) -> Image.Image:
-    """Decode ``data`` to ``mode``, rejecting oversized headers before any decode."""
+def open_header(data: bytes) -> Image.Image:
+    """Open ``data`` lazily, rejecting oversized headers; no pixels are decoded."""
     try:
         img = Image.open(io.BytesIO(data))  # lazy — .size is the header, no pixels
     except Image.DecompressionBombError as exc:  # past Pillow's own 2x ceiling
@@ -37,7 +37,12 @@ def open_bounded(data: bytes, mode: str) -> Image.Image:
             f"image is {w}x{h} ({w * h / 1e6:.1f} MP), over the "
             f"{MAX_MEGAPIXELS} MP decode cap"
         )
-    return img.convert(mode)
+    return img
+
+
+def open_bounded(data: bytes, mode: str) -> Image.Image:
+    """Decode ``data`` to ``mode``, rejecting oversized headers before any decode."""
+    return open_header(data).convert(mode)
 
 
 def apply_magick_limits() -> None:

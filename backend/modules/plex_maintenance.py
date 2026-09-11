@@ -82,8 +82,7 @@ class PlexMaintenance(ChubModule):
             if self.config.photo_transcoder and self.plex_path:
                 transcoder_stats = self._clean_photo_transcoder()
             elif self.config.photo_transcoder:
-                # plex_path defaults to "" and the UI does not couple the two, so
-                # this ran nothing, printed no row and still reported success.
+                # The UI allows the toggle with plex_path unset; never skip silently.
                 self.logger.warning(
                     "PhotoTranscoder is enabled but plex_path is not set — skipping."
                 )
