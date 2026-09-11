@@ -178,8 +178,7 @@ class Nohl(ChubModule):
                 i for i in os.listdir(path) if os.path.isdir(os.path.join(path, i))
             ]
         except OSError as e:
-            # EACCES/ESTALE/EIO escaped and run() re-raises, aborting every
-            # remaining source dir. The child listdir below already skips.
+            # Skip, never raise: run() re-raises and would abort every other source dir.
             logger.error(f"Error reading directory '{path}': {e}")
             return None
         for item in progress(

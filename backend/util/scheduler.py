@@ -27,11 +27,7 @@ _last_fired: Dict[str, datetime] = {}
 
 
 def _fired_this_minute(key: str, minute: datetime) -> bool:
-    """Whether `key` already fired in this matched minute.
-
-    check_schedule stays true for the whole matched minute while the tick runs
-    every few seconds; all three dispatch loops need this same guard.
-    """
+    """Whether `key` already fired in this matched minute."""
     return _last_fired.get(key) == minute
 
 
@@ -455,13 +451,10 @@ class ChubScheduler:
                     self.logger.get_adapter("scheduler") if self.logger else None
                 )
                 if check_schedule(name, sched, log_adapter):
-                    # check_schedule is a pure match and stays True for the whole
-                    # minute; the tick can run several times within it, so fire
-                    # each module at most once per matched minute.
+                    # check_schedule stays True all minute; the 5s tick must fire once.
                     minute_now = datetime.now().replace(second=0, microsecond=0)
                     if _fired_this_minute(name, minute_now):
                         continue
-                    _mark_fired([name], minute_now)
 
                     if self.logger:
                         self.logger.get_adapter("SCHEDULER").info(
@@ -486,6 +479,7 @@ class ChubScheduler:
                             )
                     else:
                         queued_modules.add(name)
+                        _mark_fired([name], minute_now)
 
             self._tick_upgradinatorr_profiles(queued_modules, disabled)
             self._tick_schedule_blocks(queued_modules, disabled)
@@ -551,8 +545,7 @@ class ChubScheduler:
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
         due_profiles: List[Dict[str, Any]] = []
         due_labels: List[str] = []
-        # Same per-minute guard as the plain module loop in _tick: check_schedule
-        # stays True for the whole matched minute and the tick runs every 5s.
+        # Same per-minute guard as the module loop in _tick.
         minute_now = datetime.now().replace(second=0, microsecond=0)
         due_keys: List[str] = []
 
@@ -597,16 +590,14 @@ class ChubScheduler:
 
         if result["success"]:
             _mark_fired(due_keys, minute_now)
-
-        if not result["success"]:
-            if self.logger:
-                self.logger.get_adapter("SCHEDULER").error(
-                    f"Failed to queue Upgradinatorr profiles: {result['message']}"
-                )
-            else:
-                print(
-                    f"[SCHEDULER] Failed to queue Upgradinatorr profiles: {result['message']}"
-                )
+        elif self.logger:
+            self.logger.get_adapter("SCHEDULER").error(
+                f"Failed to queue Upgradinatorr profiles: {result['message']}"
+            )
+        else:
+            print(
+                f"[SCHEDULER] Failed to queue Upgradinatorr profiles: {result['message']}"
+            )
 
     def _tick_schedule_blocks(
         self, queued_modules: set, disabled: Optional[set] = None

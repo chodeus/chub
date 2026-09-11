@@ -5,11 +5,6 @@ import os
 import pytest
 
 
-# ---------------------------------------------------------------------------
-# An unreadable source dir aborted the whole nohl run
-# ---------------------------------------------------------------------------
-
-
 class _Logger:
     def __init__(self):
         self.records = []
@@ -27,7 +22,7 @@ class _Logger:
     ],
 )
 def test_unreadable_source_dir_is_skipped_not_fatal(monkeypatch, exc):
-    """Only FileNotFoundError was caught, so a sibling OSError aborted the run."""
+    """Any OSError on the top-level listdir skips that source dir."""
     from backend.modules.nohl import Nohl
 
     def boom(_path):
@@ -44,19 +39,15 @@ def test_unreadable_source_dir_is_skipped_not_fatal(monkeypatch, exc):
 
 
 def test_missing_source_dir_still_skipped(monkeypatch):
-    """The original FileNotFoundError behaviour must survive the widening."""
+    """A missing source dir is skipped."""
     from backend.modules.nohl import Nohl
 
     def boom(_path):
         raise FileNotFoundError(2, "No such file or directory")
 
     monkeypatch.setattr(os, "listdir", boom)
-    assert Nohl.find_nohl_files("/mnt/gone", _Logger()) is None
-
-
-# ---------------------------------------------------------------------------
-# Schedule blocks and upgradinatorr profiles re-fired every tick within a minute
-# ---------------------------------------------------------------------------
+    result = Nohl.find_nohl_files("/mnt/gone", _Logger())
+    assert result is None
 
 
 class _FixedNow:
@@ -86,17 +77,47 @@ class _Orch:
         return {"success": True, "data": {}}
 
 
-def _fresh_scheduler(monkeypatch, cfg):
+class _FailOnceOrch(_Orch):
+    def run_module_async(self, *args, **kwargs):
+        self.calls.append(args[0])
+        if len(self.calls) == 1:
+            return {"success": False, "message": "database is locked"}
+        return {"success": True, "data": {}}
+
+
+def _fresh_scheduler(monkeypatch, cfg, orch=None):
     import backend.util.scheduler as sched_mod
 
     monkeypatch.setattr(sched_mod, "datetime", _FixedNow._cls())
     sched_mod._last_fired.clear()
-    orch = _Orch()
+    orch = orch or _Orch()
     return sched_mod.ChubScheduler(cfg, logger=None, module_orchestrator=orch), orch
 
 
+def test_failed_module_queue_retries_within_the_matched_minute(monkeypatch):
+    """A failed enqueue leaves the minute unfired, so the next tick retries once."""
+    from types import SimpleNamespace
+
+    import backend.util.config as config_mod
+
+    cfg = SimpleNamespace(
+        general=SimpleNamespace(disabled_modules=[]),
+        instances=SimpleNamespace(sync_schedule=""),
+        schedule={},
+        schedule_blocks={},
+        upgradinatorr=SimpleNamespace(instances_list=[]),
+    )
+    monkeypatch.setattr(config_mod, "load_config", lambda: cfg)
+    s, orch = _fresh_scheduler(monkeypatch, cfg, _FailOnceOrch())
+
+    for _ in range(4):
+        s._tick({"nohl": "daily(09:00)"})
+
+    assert orch.calls == ["nohl", "nohl"]
+
+
 def test_schedule_blocks_fire_once_per_matched_minute(monkeypatch):
-    """The 5s tick re-entered the same matched minute and re-enqueued the block."""
+    """Repeated ticks within one matched minute enqueue a block once."""
     from types import SimpleNamespace
 
     cfg = SimpleNamespace(
