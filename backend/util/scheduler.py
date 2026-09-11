@@ -115,11 +115,16 @@ class _SilentLogger:
 _SILENT_LOGGER = _SilentLogger()
 
 
-def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) -> bool:
-    """Check if the current time matches the given schedule for a script."""
+def check_schedule(
+    script_name: str,
+    schedule: str,
+    logger: Optional[Logger],
+    now: Optional[datetime] = None,
+) -> bool:
+    """Check if `now` (default: the current time) matches the script's schedule."""
     logger = logger or _SILENT_LOGGER
     try:
-        now: datetime = datetime.now()
+        now = now or datetime.now()
         try:
             frequency, data = schedule.split("(")
         except ValueError:
@@ -167,7 +172,7 @@ def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) ->
 
         if frequency == "cron":
             local_tz = tz.tzlocal()
-            local_date = datetime.now(local_tz)
+            local_date = now.astimezone(local_tz)
             current_time = local_date.replace(second=0, microsecond=0)
             next_run = _next_run_times.get(script_name)
             if next_run is None:
@@ -377,6 +382,7 @@ class ChubScheduler:
 
         try:
             while self.running:
+                # Live per tick: main._on_config_changed swaps self.config on reload.
                 self._tick(self.config.schedule)
                 self._system_tick()
                 time.sleep(SCHEDULER_POLL_INTERVAL_SECONDS)
@@ -450,9 +456,10 @@ class ChubScheduler:
                 log_adapter = (
                     self.logger.get_adapter("scheduler") if self.logger else None
                 )
-                if check_schedule(name, sched, log_adapter):
+                now = datetime.now()  # one read for the match and the fired guard
+                minute_now = now.replace(second=0, microsecond=0)
+                if check_schedule(name, sched, log_adapter, now):
                     # check_schedule stays True all minute; the 5s tick must fire once.
-                    minute_now = datetime.now().replace(second=0, microsecond=0)
                     if _fired_this_minute(name, minute_now):
                         continue
 
@@ -546,7 +553,8 @@ class ChubScheduler:
         due_profiles: List[Dict[str, Any]] = []
         due_labels: List[str] = []
         # Same per-minute guard as the module loop in _tick.
-        minute_now = datetime.now().replace(second=0, microsecond=0)
+        now = datetime.now()
+        minute_now = now.replace(second=0, microsecond=0)
         due_keys: List[str] = []
 
         for index, profile in enumerate(profiles):
@@ -560,7 +568,7 @@ class ChubScheduler:
             schedule_key = f"upgradinatorr:{index}:{label}"
             if _fired_this_minute(schedule_key, minute_now):
                 continue
-            if check_schedule(schedule_key, sched, log_adapter):
+            if check_schedule(schedule_key, sched, log_adapter, now):
                 due_profiles.append(_profile_to_dict(profile))
                 due_labels.append(label)
                 due_keys.append(schedule_key)
@@ -612,7 +620,8 @@ class ChubScheduler:
 
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
         # See the same guard in _tick — the 5s tick re-enters a matched minute.
-        minute_now = datetime.now().replace(second=0, microsecond=0)
+        now = datetime.now()
+        minute_now = now.replace(second=0, microsecond=0)
 
         for module_name, blocks in blocks_by_module.items():
             if module_name in queued_modules or not blocks:
@@ -638,7 +647,7 @@ class ChubScheduler:
                 schedule_key = f"{module_name}:block:{index}:{label}"
                 if _fired_this_minute(schedule_key, minute_now):
                     continue
-                if check_schedule(schedule_key, sched, log_adapter):
+                if check_schedule(schedule_key, sched, log_adapter, now):
                     overrides = _profile_value(block, "overrides", {}) or {}
                     if isinstance(overrides, dict):
                         merged_overrides.update(overrides)

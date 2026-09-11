@@ -94,8 +94,7 @@ def _fresh_scheduler(monkeypatch, cfg, orch=None):
     return sched_mod.ChubScheduler(cfg, logger=None, module_orchestrator=orch), orch
 
 
-def test_failed_module_queue_retries_within_the_matched_minute(monkeypatch):
-    """A failed enqueue leaves the minute unfired, so the next tick retries once."""
+def _tick_scheduler(monkeypatch, orch=None):
     from types import SimpleNamespace
 
     import backend.util.config as config_mod
@@ -108,10 +107,40 @@ def test_failed_module_queue_retries_within_the_matched_minute(monkeypatch):
         upgradinatorr=SimpleNamespace(instances_list=[]),
     )
     monkeypatch.setattr(config_mod, "load_config", lambda: cfg)
-    s, orch = _fresh_scheduler(monkeypatch, cfg, _FailOnceOrch())
+    return _fresh_scheduler(monkeypatch, cfg, orch)
+
+
+def test_failed_module_queue_retries_within_the_matched_minute(monkeypatch):
+    """A failed enqueue leaves the minute unfired, so the next tick retries once."""
+    s, orch = _tick_scheduler(monkeypatch, _FailOnceOrch())
 
     for _ in range(4):
         s._tick({"nohl": "daily(09:00)"})
+
+    assert orch.calls == ["nohl", "nohl"]
+
+
+def test_minute_boundary_match_and_guard_share_one_clock_read(monkeypatch):
+    """A tick straddling 09:00/09:01 must not record 09:01 and swallow its run."""
+    from datetime import datetime as _dt
+
+    import backend.util.scheduler as sched_mod
+
+    reads = iter(
+        [_dt(2024, 5, 6, 9, 0, 59, 999999), _dt(2024, 5, 6, 9, 1, 0, 1)]
+        + [_dt(2024, 5, 6, 9, 1, 5)] * 10
+    )
+
+    class _Clock(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return next(reads)
+
+    s, orch = _tick_scheduler(monkeypatch)
+    monkeypatch.setattr(sched_mod, "datetime", _Clock)
+
+    for _ in range(2):
+        s._tick({"nohl": "daily(09:00|09:01)"})
 
     assert orch.calls == ["nohl", "nohl"]
 
