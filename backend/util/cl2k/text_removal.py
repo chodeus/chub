@@ -116,10 +116,7 @@ def remove_text(
 
 
 def _mask_to_image_dims(image_bytes: bytes, mask_bytes: bytes) -> bytes:
-    """Resize the brushed mask to the image's pixel dimensions (PNG bytes).
-
-    Pass-through when the sizes match or a decode fails; an oversized header raises.
-    """
+    """Resize the mask to the image size (PNG); a decode failure passes it through."""
     from backend.util.cl2k.limits import ImageTooLargeError, open_bounded, open_header
 
     try:

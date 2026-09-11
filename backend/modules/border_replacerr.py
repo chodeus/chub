@@ -742,9 +742,8 @@ class BorderReplacerr(ChubModule):
                                 )
                         processed += 1
                         done += 1
-                        # Drive the Jobs-page bar (no-op without job context; maps
-                        # into the parent's reserved slice when chained from
-                        # poster_renamerr). Report periodically + at the end.
+                        # Jobs-page bar; no-op without job context, and maps into
+                        # poster_renamerr's reserved slice when chained from it.
                         if total_work and (done % 25 == 0 or done == total_work):
                             self._report_progress(int(done / total_work * 100))
 

@@ -6,7 +6,7 @@ import pytest
 
 
 def _commonpath_reference(child, parent):
-    """commonpath-based oracle the nestarr prefix test must agree with."""
+    """commonpath baseline; differs from nestarr only for a leading-'//' parent."""
     c, p = os.path.normpath(child), os.path.normpath(parent)
     if c == p:
         return False
