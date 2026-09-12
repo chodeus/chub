@@ -367,6 +367,9 @@ class Labelarr(ChubModule):
                         plex_mapping_index.setdefault(pmid, []).append(item)
 
                 for mapping in self.config.mappings:
+                    # Check cancel at every loop level, not only per item.
+                    if self.is_cancelled():
+                        break
                     if getattr(mapping, "enabled", True) is False:
                         self.logger.debug(
                             f"Skipping disabled labelarr mapping for "
@@ -411,6 +414,8 @@ class Labelarr(ChubModule):
 
                     # For each Plex instance/library in this mapping, pull items and sync one-by-one
                     for plex_instance in mapping.plex_instances:
+                        if self.is_cancelled():
+                            break
                         instance_name = plex_instance.instance
                         library_names = plex_instance.library_names
 

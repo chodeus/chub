@@ -371,6 +371,8 @@ class NotificationManager:
                 )
         else:
             parts = data
+        success = True
+        messages: list = []
         for part in parts:
             pt_payload = {
                 "notification": {"update": False, "name": module_title, "event": ""},
@@ -406,8 +408,14 @@ class NotificationManager:
             elif isinstance(color, str):
                 color = color.lstrip("#")
             pt_payload["discord"]["color"] = color
-            self.send_and_log_response("Notifiarr", hook, pt_payload)
-        return True, "Notification sent to Notifiarr."
+            # Any failed part fails the send, as in send_discord_notification.
+            ok, msg = self.send_and_log_response("Notifiarr", hook, pt_payload)
+            if not ok:
+                success = False
+            messages.append(msg)
+        if not messages:
+            return True, "Notification sent to Notifiarr."
+        return success, "; ".join(messages)
 
     def send_discord_notification(
         self,

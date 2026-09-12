@@ -256,11 +256,21 @@ def transcode_poster(
             img = img.convert("RGB")
 
         tmp = tempfile.NamedTemporaryFile(suffix=target_ext, delete=False)
-        save_kwargs = {"format": pil_format}
-        if quality and pil_format in ("JPEG", "WEBP"):
-            save_kwargs["quality"] = quality
-            save_kwargs["optimize"] = True
-        img.save(tmp.name, **save_kwargs)
-        tmp.close()
+        tmp.close()  # save() writes by name; an open handle blocks unlink on Windows
+        try:
+            save_kwargs = {"format": pil_format}
+            if quality and pil_format in ("JPEG", "WEBP"):
+                save_kwargs["quality"] = quality
+                save_kwargs["optimize"] = True
+            img.save(tmp.name, **save_kwargs)
+        except BaseException:
+            # Not _unlink_on_exit: on success this file is the return value and
+            # the caller unlinks it. Only a failed save leaks.
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                # Best effort: cleanup must never mask the save failure below.
+                pass
+            raise
 
     return tmp.name, _FORMAT_MEDIA_TYPES.get(pil_format, "image/jpeg"), target_ext
