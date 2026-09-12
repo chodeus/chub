@@ -1,16 +1,8 @@
 # -------------------------
 # Stage 1: Builder
 # -------------------------
-# Node comes from the official image rather than NodeSource's apt repo. That
-# repo was a single external dependency in the critical path of every build:
-# on 2026-07-27 deb.nodesource.com began returning 403 for the whole domain,
-# `curl | gpg --dearmor` was handed an HTML error page, and every build in the
-# repo died on "no valid OpenPGP data found" — including PRs that touched
-# nothing. The official image needs no third-party apt repo and no GPG key.
-#
-# The tag tracks the SAME Debian release as the Python base (trixie, glibc
-# 2.41) so the copied binaries link against an identical libc; node:24-slim is
-# still bookworm/glibc 2.36 and would be a silent mismatch.
+# Official Node image, not NodeSource's apt repo: no third-party repo or GPG key in the build.
+# Must match the Python base's Debian release (trixie, glibc 2.41): the copied binaries use its libc.
 FROM node:24.20.0-trixie-slim@sha256:50c3b2f6988dfc307b86e5301d69611af31f4789bdf232863b07d3b02fe55ae0 AS node
 
 # -------------------------
@@ -106,7 +98,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends curl git tzdata jdupes && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy rclone binary (installed to /usr/bin by rclone install script)
+# rclone was downloaded and checksum-verified in the builder stage.
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
 
 # Includes frontend/dist. --chown=0:0 states the ownership invariant the
@@ -178,11 +170,8 @@ ENTRYPOINT ["bash", "scripts/start.sh"]
 # -------------------------
 FROM runtime-base AS full
 
-# imagemagick (Wand's libMagickWand), librsvg2-2 (so IM can read SVG clear
-# logos), fonts-dejavu-core (guaranteed fallback font), and cabextract to
-# unpack the vendored Arial below. No `contrib` component or
-# ttf-mscorefonts-installer: that package downloads MS fonts from SourceForge
-# at build time, and a flaky mirror failed the whole image build.
+# imagemagick (Wand), librsvg2-2 (SVG logos), fonts-dejavu-core (fallback font), cabextract
+# (install_fonts.sh). Not ttf-mscorefonts-installer: it fetches from flaky SourceForge mirrors.
 RUN set -eux; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -190,21 +179,9 @@ RUN set -eux; \
         fontconfig cabextract; \
     rm -rf /var/lib/apt/lists/*
 
-# Real Microsoft Arial (regular + bold) for CL2K text rendering, extracted at
-# build from the vendored, unmodified arial32.exe (deploy/docker/fonts/) — so
-# the build never touches the network for fonts. Renamed to the msttcorefonts
-# paths geometry.resolve_font() probes (Arial.ttf / Arial_Bold.ttf).
-# Redistributing the original .exe is permitted by its EULA (shipped alongside
-# as LICENSE-mscorefonts.txt); the extracted .ttf stays inside the image and is
-# never committed to the repo.
-COPY deploy/docker/fonts/arial32.exe /tmp/arial32.exe
-RUN set -eux; \
-    mkdir -p /usr/share/fonts/truetype/msttcorefonts /tmp/arialout; \
-    cabextract -L -d /tmp/arialout /tmp/arial32.exe; \
-    cp /tmp/arialout/arial.ttf   /usr/share/fonts/truetype/msttcorefonts/Arial.ttf; \
-    cp /tmp/arialout/arialbd.ttf /usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf; \
-    fc-cache -f; \
-    rm -rf /tmp/arial32.exe /tmp/arialout
+# The EULA permits redistributing the unmodified installer, not extracted .ttf files, so the
+# image ships the .exe + EULA and scripts/install_fonts.sh unpacks Arial into /config per host.
+COPY deploy/docker/fonts/arial32.exe deploy/docker/fonts/LICENSE-mscorefonts.txt /usr/share/chub/fonts/
 
 # Python deps from the full builder — the only place cl2k wheels exist.
 COPY --from=builder-full /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages

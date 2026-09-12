@@ -169,9 +169,8 @@ reviews:
           correctness, security, data-loss and the classes named above.
 
   tools:
-    # ruff + eslint left to CI (codeql-lint.yml runs Ruff, ESLint, stylelint,
-    # prettier, CodeQL). Every CodeRabbit tool defaults ON, so they must be
-    # switched off explicitly or they run here too and double-post CI findings.
+    # Tools default ON: disable any codeql-lint.yml already runs (Ruff, ESLint) or
+    # CI findings double-post.
     ruff:
       enabled: false
     eslint:

@@ -32,7 +32,7 @@ services:
       - /srv/apps/chub/config:/config
       - /srv/apps/chub/posters:/posters
       - /srv/media:/media
-      - /srv/kometa/assets:/kometa:ro
+      - /srv/kometa/assets:/kometa
       - /etc/localtime:/etc/localtime:ro
 
     healthcheck:
@@ -75,7 +75,7 @@ docker run -d \
   -v /srv/apps/chub/config:/config \
   -v /srv/apps/chub/posters:/posters \
   -v /srv/media:/media \
-  -v /srv/kometa/assets:/kometa:ro \
+  -v /srv/kometa/assets:/kometa \
   ghcr.io/chodeus/chub:latest
 ```
 
@@ -97,7 +97,7 @@ docker run -d \
   shows/
 
 /srv/kometa/
-  assets/               # Kometa poster assets (mount read-only)
+  assets/               # Kometa poster assets (CHUB syncs and renames into it)
 ```
 
 ---
@@ -127,7 +127,7 @@ docker run -d \
 | `/config` | `config.yml`, `chub.db`, `logs/`, `backups/` | read-write |
 | `/posters` | Poster tree CHUB optimizes + renames | read-write |
 | `/media` | Your media library (movies/shows) | read-write |
-| `/kometa` | Kometa asset source | read-only typically |
+| `/kometa` | Kometa assets: Drive syncs and poster renames write here | read-write |
 
 ---
 

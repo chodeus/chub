@@ -1,24 +1,7 @@
-"""Extract the CL2K label type-layer donor -> backend/assets/cl2k/label_tysh.bin.
-
-A live (editable) text layer needs a full Photoshop ``TySh`` block, most of
-which is the text engine's serialized state (``EngineData``): stock kinsoku /
-mojikumi tables, style and paragraph sheets, the font set. Hand-building that
-structure risks a file Photoshop refuses to open, so the export transplants a
-donor block instead and rewrites the string/tracking/anchor per poster
-(see backend/util/cl2k/psd_live.py:label_type_block).
-
-This script produces that donor from a finished creator PSD's label layer,
-neutralised: the text becomes the placeholder ``LABEL`` and the anchor is
-zeroed. What remains is the text-engine boilerplate plus the CL2K label
-typography facts already recorded in geometry.py (ArialMT, 32px, white,
-centre-justified, tracking 800) — the same derive-locally-commit-derivative
-pattern as gen_cl2k_gradient.py and gen_cl2k_inner_glow.py.
-
-Needs a creator PSD under refs/, which is gitignored (copyrighted, local
-only). The generated .bin is committed; re-run only if the template changes.
+"""Extract a neutral CL2K label TySh donor -> backend/assets/cl2k/label_tysh.bin.
 
 Run from the repo root:
-    PYTHONPATH=. .venv/bin/python scripts/gen_cl2k_label_tysh.py [path/to.psd]
+    PYTHONPATH=. python scripts/gen_cl2k_label_tysh.py [path/to.psd]
 """
 
 import copy

@@ -63,6 +63,13 @@ lint: ## Lint all code
 	@cd $(UI) && $(NPM) run lint
 	@echo "Linting complete"
 
+test: ## Run all tests
+	@echo "Testing backend..."
+	@$(VENV)/bin/python -m pytest $(ROOT)/tests
+	@echo "Testing frontend..."
+	@cd $(UI) && $(NPM) run test:run
+	@echo "Tests complete"
+
 # ---- Cleanup ----
 clean: ## Clean build artifacts
 	@echo "Cleaning..."

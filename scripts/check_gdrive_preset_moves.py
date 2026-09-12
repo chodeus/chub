@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 """Fail if a drive id left gdrive_presets.json without a gdrive_preset_moves.json record.
 
-Editing the catalogue alone only ever reaches NEW picks — an existing config
-keeps the dropped id forever. The move record is what heals it at config load.
-
     python3 scripts/check_gdrive_preset_moves.py [--base origin/main]
 
-A replacement id is optional: use "to": null when the owner hasn't supplied one
-yet, and fill it in later. Any id put in "to" must be measured live first (an
-unshared or emptied folder syncs nothing and reports no error).
+Measure any "to" id live first: an unshared or emptied folder syncs nothing, silently.
 """
 
 import argparse
@@ -61,8 +56,8 @@ def main() -> int:
             failures.append(
                 f"{PRESETS}: drive '{before[dropped]}' ({dropped}) was removed or "
                 f"had its id changed, but {MOVES} has no record for it. Existing "
-                f'configs keep the dead id. Add {{"from": "{dropped}", "to": '
-                f'"<new id, or null>", "note": "..."}}.'
+                f'configs keep the dead id. Add {{"from": "{dropped}", "to": null, '
+                f'"note": "..."}}, replacing null with the new id once measured.'
             )
 
     # A replacement must exist in the catalogue, or the heal moves users onto a

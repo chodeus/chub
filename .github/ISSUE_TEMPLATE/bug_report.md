@@ -38,8 +38,7 @@ A one-sentence description of the issue.
 
 ```
 <!-- Paste module logs from the Logs page or $LOG_DIR/*.log.
-     CHUB already scrubs secrets via SmartRedactionFilter,
-     but double-check before pasting. -->
+     Secrets are redacted automatically, but check before pasting. -->
 ```
 
 </details>

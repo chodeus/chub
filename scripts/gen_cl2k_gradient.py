@@ -1,23 +1,7 @@
 """Bake the CL2K gradient overlay -> backend/assets/cl2k/gradient.png.
 
-Read straight out of the template's own flattened composite. The template's
-POSTER group is empty, so below the glow band and away from the border the
-composite alpha IS the gradient alpha — Photoshop's own rasterisation of the
-BLACK GRADIENT fill layer, including its non-linear midpoint skew (the
-descriptor's transparency stops are 100% @ 20.0% midpoint 50 and 0% @ 95.4%
-midpoint 70, which no symmetric easing curve reproduces).
-
-The layer is dithered (Dthr=true), so the profile is averaged across a wide band
-of columns and forced monotonic rather than sampled from a single column.
-
-An earlier version of this script generated a smoothstep from y=780 instead, on
-the claim that the PSD's own gradient "blacks out at y~839" and contradicted its
-"Gradient Darkest Line" guide. It does not: measured, it is clear through y=1037
-and fully opaque from y=1374, matching the guide. The substitute ramp darkened
-the poster 240px higher than the template.
-
-Needs refs/CL2K_template.psd, which is gitignored (copyrighted, local only). The
-generated PNG is committed; re-run this only if the template itself changes.
+Reads the gradient alpha from the template's own flattened composite. Needs
+refs/CL2K_template.psd (gitignored, local only); re-run only if the template changes.
 
 Run from the repo root:
     PYTHONPATH=. python scripts/gen_cl2k_gradient.py [path/to/template.psd]
@@ -44,15 +28,8 @@ def main() -> None:
     w, h = geo.CANVAS_W, geo.CANVAS_H
     if alpha.shape != (h, w):
         raise SystemExit(f"{src} is {alpha.shape[1]}x{alpha.shape[0]}, expected {w}x{h}")
-    # A composite flattened to RGB makes convert("RGBA") synthesise alpha 255
-    # everywhere. Both guards above still pass, and this would then overwrite a
-    # known-good committed asset with a fully opaque PNG that the renderer
-    # composites as a solid black field over the whole poster. The template's
-    # gradient is transparent through the artwork, so demand that.
-    # Slice end is exclusive: GRADIENT_START_Y is the FIRST row with alpha, so
-    # this covers every row that must be transparent, up to and including
-    # GRADIENT_START_Y - 1. Stopping at GRADIENT_START_Y - 1 left that last row
-    # unchecked.
+    # An RGB-flattened composite gets synthetic alpha 255 and would bake a solid black
+    # field; every row above GRADIENT_START_Y (slice end is exclusive) must be clear.
     probe = alpha[geo.GLOW_REACH : geo.GRADIENT_START_Y, w // 2]
     if probe.max() > 0:
         raise SystemExit(
@@ -67,6 +44,11 @@ def main() -> None:
 
     ramp = np.zeros(h, np.float64)
     band = slice(pad, geo.GRADIENT_FULL_BLACK_Y)
+    if not profile[band].any():
+        raise SystemExit(
+            f"{src}: no gradient alpha above y={geo.GRADIENT_FULL_BLACK_Y}; "
+            f"refusing to overwrite {geo.GRADIENT_PNG.name}"
+        )
     ramp[band] = profile[band]
     ramp[geo.GRADIENT_FULL_BLACK_Y :] = 255.0
     # Dither leaves the raw profile very slightly non-monotonic; the ramp itself
