@@ -1,9 +1,11 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import { useErrorContext } from './ErrorContext.jsx';
-import { useToast } from '../../contexts/ToastContext.jsx';
 import { ErrorContainer, ErrorActions } from './primitives';
 import { copyText } from '../../utils/clipboard.js';
+import { Button } from '../ui/button/Button';
+
+const RECOVERY_WINDOW_MS = 5000;
 
 /**
  * FeatureErrorBoundary - Feature-level error boundary
@@ -47,6 +49,8 @@ class FeatureErrorBoundaryBase extends Component {
     componentDidCatch(error, errorInfo) {
         const { featureName, reportError } = this.props;
 
+        // Must clear here: a child that throws from an effect lands after componentDidUpdate armed it.
+        this.clearRecoveryTimer();
         this.setState({ errorInfo });
 
         console.group(`⚠️ FEATURE ERROR: ${featureName}`);
@@ -63,6 +67,25 @@ class FeatureErrorBoundaryBase extends Component {
             });
         }
     }
+
+    componentDidUpdate() {
+        const { hasError, skipped, retryCount } = this.state;
+        if (hasError || skipped || retryCount === 0 || this.recoveryTimer) return;
+        this.recoveryTimer = setTimeout(() => {
+            this.recoveryTimer = null;
+            this.setState({ retryCount: 0 });
+        }, RECOVERY_WINDOW_MS);
+    }
+
+    componentWillUnmount() {
+        clearTimeout(this.copyStatusTimer);
+        this.clearRecoveryTimer();
+    }
+
+    clearRecoveryTimer = () => {
+        clearTimeout(this.recoveryTimer);
+        this.recoveryTimer = null;
+    };
 
     handleRetry = () => {
         this.setState(prevState => ({
@@ -124,13 +147,21 @@ class FeatureErrorBoundaryBase extends Component {
 
         try {
             await copyText(JSON.stringify(errorDetails, null, 2));
-            this.setState({ copying: false, copySuccess: true });
-            setTimeout(() => this.setState({ copySuccess: false }), 2000);
+            this.setState({ copying: false, copySuccess: true, copyError: false });
+            this.resetCopyStatusAfter(2000);
         } catch (clipboardError) {
             console.error('Failed to copy error details:', clipboardError);
-            this.setState({ copying: false, copyError: true });
-            setTimeout(() => this.setState({ copyError: false }), 3000);
+            this.setState({ copying: false, copySuccess: false, copyError: true });
+            this.resetCopyStatusAfter(3000);
         }
+    };
+
+    resetCopyStatusAfter = ms => {
+        clearTimeout(this.copyStatusTimer);
+        this.copyStatusTimer = setTimeout(
+            () => this.setState({ copySuccess: false, copyError: false }),
+            ms
+        );
     };
 
     handleReload = () => {
@@ -168,23 +199,24 @@ class FeatureErrorBoundaryBase extends Component {
             return (
                 <div className="bg-surface-alt border border-warning rounded-md my-2 font-sans">
                     <div className="p-3 text-sm text-fg-muted flex items-center gap-2">
-                        <span className="material-symbols-outlined text-base shrink-0">
+                        <span
+                            className="material-symbols-outlined text-base shrink-0"
+                            aria-hidden="true"
+                        >
                             skip_next
                         </span>
                         <span className="flex-1 font-medium">
                             {featureName} skipped due to error
                         </span>
-                        <button
+                        <Button
+                            variant="ghost"
+                            size="small"
+                            icon="refresh"
                             onClick={this.handleRetry}
-                            className="touch-target bg-transparent text-fg px-2 py-1 border border-transparent rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center text-sm"
-                            type="button"
                             title="Try to load this feature again"
                         >
-                            <span className="material-symbols-outlined mr-1 align-middle">
-                                refresh
-                            </span>
                             Retry
-                        </button>
+                        </Button>
                     </div>
                 </div>
             );
@@ -226,14 +258,11 @@ class FeatureErrorBoundaryBase extends Component {
             ];
 
             return (
-                <ErrorContainer mode="modal">
-                    <h2 className="text-error text-2xl font-bold m-0 mb-4 text-center leading-tight">
-                        Critical Feature Error
-                    </h2>
-                    <p className="text-fg text-base m-0 mb-5 text-center leading-relaxed">
-                        The {featureName} feature is required for the application to function
-                        properly.
-                    </p>
+                <ErrorContainer
+                    mode="modal"
+                    title="Critical Feature Error"
+                    description={`The ${featureName} feature is required for the application to function properly.`}
+                >
                     <ErrorActions
                         actions={modalActions}
                         onAction={this.handleAction}
@@ -246,16 +275,27 @@ class FeatureErrorBoundaryBase extends Component {
         if (retryCount >= 3) {
             return (
                 <div
-                    className="bg-surface-alt border border-border-subtle rounded-md my-2 opacity-70 font-sans"
+                    className="bg-surface-alt border border-border-subtle rounded-md my-2 font-sans"
                     title={`${featureName} is temporarily disabled due to repeated errors`}
                 >
                     <div className="p-3 text-sm text-fg-subtle flex items-center gap-2">
-                        <span className="material-symbols-outlined text-base shrink-0">
+                        <span
+                            className="material-symbols-outlined text-base shrink-0"
+                            aria-hidden="true"
+                        >
                             warning
                         </span>
                         <span className="flex-1 font-medium">
                             {featureName} temporarily disabled
                         </span>
+                        <Button
+                            variant="ghost"
+                            size="small"
+                            icon="refresh"
+                            onClick={this.handleReload}
+                        >
+                            Reload page
+                        </Button>
                     </div>
                 </div>
             );
@@ -294,7 +334,10 @@ class FeatureErrorBoundaryBase extends Component {
             <>
                 <div className="bg-surface-alt border border-warning rounded-md my-2 mb-1 p-2 text-center text-xs text-warning font-medium font-sans">
                     <div className="m-0 p-0">
-                        <span className="material-symbols-outlined text-warning mr-1 align-middle">
+                        <span
+                            className="material-symbols-outlined text-warning mr-1 align-middle"
+                            aria-hidden="true"
+                        >
                             warning
                         </span>
                         {featureName} temporarily unavailable
@@ -303,7 +346,10 @@ class FeatureErrorBoundaryBase extends Component {
 
                 <ErrorContainer mode="inline">
                     <div className="mb-4 flex items-center gap-3">
-                        <span className="material-symbols-outlined text-xl shrink-0 mt-1 text-warning">
+                        <span
+                            className="material-symbols-outlined text-xl shrink-0 mt-1 text-warning"
+                            aria-hidden="true"
+                        >
                             warning
                         </span>
                         <div className="flex-1 min-w-0">
@@ -367,7 +413,6 @@ FeatureErrorBoundaryBase.propTypes = {
     critical: PropTypes.bool,
     fallback: PropTypes.func,
     reportError: PropTypes.func,
-    showToast: PropTypes.func,
 };
 
 /**
@@ -375,15 +420,8 @@ FeatureErrorBoundaryBase.propTypes = {
  */
 function FeatureErrorBoundary(props) {
     const globalErrorContext = useErrorContext();
-    const toastContext = useToast();
 
-    return (
-        <FeatureErrorBoundaryBase
-            {...props}
-            reportError={globalErrorContext?.reportError}
-            showToast={toastContext?.success}
-        />
-    );
+    return <FeatureErrorBoundaryBase {...props} reportError={globalErrorContext.reportError} />;
 }
 
 FeatureErrorBoundary.propTypes = FeatureErrorBoundaryBase.propTypes;
