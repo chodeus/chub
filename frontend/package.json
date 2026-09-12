@@ -18,7 +18,7 @@
   "dependencies": {
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@tanstack/react-virtual": "^3.14.10",
+    "@tanstack/react-virtual": "^3.14.12",
     "cron-validator": "^1.4.0",
     "cronstrue": "^3.26.0",
     "prop-types": "15.8.1",
