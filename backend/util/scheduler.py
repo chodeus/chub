@@ -1,10 +1,12 @@
 # util/scheduler.py
 
+import re
 import threading
 import time
+from collections import defaultdict
 from datetime import datetime, timedelta
 from logging import Logger
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from croniter import croniter
 from dateutil import tz
@@ -70,6 +72,21 @@ def _safe_md_date(year: int, month: int, day: int) -> datetime:
         if month == 2 and day == 29:
             return datetime(year, 2, 28)
         raise
+
+
+def md_range_contains(span: str, now: datetime) -> bool:
+    """Whether `now` falls in an "MM/DD-MM/DD" span; an end before the start crosses New Year."""
+    start, end = span.split("-")
+    sm, sd = map(int, start.split("/"))
+    em, ed = map(int, end.split("/"))
+    start_date = _safe_md_date(now.year, sm, sd)
+    end_date = _safe_md_date(now.year, em, ed)
+    if end_date < start_date:
+        if now.month < sm:
+            start_date = _safe_md_date(now.year - 1, sm, sd)
+        else:
+            end_date = _safe_md_date(now.year + 1, em, ed)
+    return start_date <= now <= end_date
 
 
 def _normalize_weekday(day: str) -> str:
@@ -157,15 +174,8 @@ def check_schedule(
                     return True
 
         if frequency == "range":
-            ranges = data.split("|")
-            for start_end in ranges:
-                start, end = start_end.split("-")
-                start_month, start_day = map(int, start.split("/"))
-                end_month, end_day = map(int, end.split("/"))
-                start_date = _safe_md_date(now.year, start_month, start_day)
-                end_date = _safe_md_date(now.year, end_month, end_day)
-                if start_date <= now <= end_date:
-                    return True
+            if any(md_range_contains(span, now) for span in data.split("|")):
+                return True
 
         if frequency == "cron":
             # Minute-granular on purpose; `nxt <= now` skips fires after the last
@@ -291,8 +301,9 @@ def _config_schedules(config: Any) -> Iterable[Tuple[str, Any, str]]:
     yield "instances.sync_schedule", config.instances.sync_schedule, ""
 
 
-def _invalid_schedules(config: Any) -> Set[Tuple[str, str]]:
-    bad = set()
+def _invalid_schedules(config: Any) -> Dict[Tuple[str, str], List[Tuple[str, str]]]:
+    """(field, repr(value)) -> [(path, value)] for each schedule in config that never fires."""
+    bad: Dict[Tuple[str, str], List[Tuple[str, str]]] = defaultdict(list)
     for path, value, prefix in _config_schedules(config):
         if not value:
             continue
@@ -302,14 +313,20 @@ def _invalid_schedules(config: Any) -> Set[Tuple[str, str]]:
         except (ValueError, AttributeError):
             valid = False
         if not valid:
-            bad.add((path, str(value)))
+            bad[(re.sub(r"\[\d+\]", "[]", path), repr(value))].append((path, str(value)))
     return bad
 
 
 def new_invalid_schedule(old: Any, new: Any) -> Optional[Tuple[str, str]]:
     """First (path, value) schedule in `new` that would never fire and isn't already in `old`."""
-    # Diffed against `old` so a hand-edited bad schedule can't block unrelated saves.
-    added = _invalid_schedules(new) - _invalid_schedules(old)
+    # Counted per field and typed value, not per index: reordering or keeping a
+    # hand-edited bad schedule never blocks an unrelated save; adding one does.
+    before = _invalid_schedules(old)
+    added = [
+        min(locs)
+        for key, locs in _invalid_schedules(new).items()
+        if len(locs) > len(before.get(key, ()))
+    ]
     return min(added) if added else None
 
 

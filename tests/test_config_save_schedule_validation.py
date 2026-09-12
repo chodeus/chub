@@ -131,6 +131,20 @@ def test_existing_bad_schedule_does_not_block_unrelated_saves(make_client):
     assert len(saves) == 1
 
 
+def test_legacy_bad_schedule_matched_by_value_not_index():
+    bad = {"instance": "a", "schedule": "hourly(99)"}
+    good = {"instance": "b", "schedule": "hourly(5)"}
+    old = _config(upgradinatorr={"instances_list": [good, bad]})
+    # Removing the row above moves the legacy entry from [1] to [0]; still not new.
+    assert new_invalid_schedule(old, _config(upgradinatorr={"instances_list": [bad]})) is None
+    assert new_invalid_schedule(
+        old, _config(upgradinatorr={"instances_list": [bad, bad]})
+    ) == ("upgradinatorr.instances_list[0].schedule", "hourly(99)")
+    assert new_invalid_schedule(
+        _config(schedule={"nohl": 5}), _config(schedule={"nohl": "5"})
+    ) == ("schedule.nohl", "5")
+
+
 def test_new_invalid_schedule_covers_every_schedule_field():
     old = _config()
     assert new_invalid_schedule(old, _config(schedule={"nohl": None})) is None
