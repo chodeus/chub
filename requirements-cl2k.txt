@@ -11,7 +11,7 @@ Wand==0.7.2
 # import or model load fails, tighten falls back to the colour-key. Needs cp313
 # wheels for the python:3.13-slim image (>=1.20); the InferenceSession/run API is
 # version-stable (verified locally against 1.19.2 on py3.9).
-onnxruntime==1.29.0
+onnxruntime==1.30.0
 # SVG clear-logo rasterization (renderer._read_logo_image). Wand's own SVG
 # delegate is absent from the runtime image (ImageMagick reports "no decode
 # delegate for image format 'SVG'"), which 500s any title whose best logo is an
