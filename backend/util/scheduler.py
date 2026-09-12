@@ -184,11 +184,7 @@ def check_schedule(
 def cron_next_run(
     schedule: Optional[str], now: Optional[datetime] = None
 ) -> Optional[datetime]:
-    """Compute the next fire time for a ``cron(...)`` schedule.
-
-    API handlers use it to display the upcoming run. Returns ``None`` for non-cron,
-    empty, or invalid schedules (the frontend computes the other frequencies).
-    """
+    """Next fire time of a ``cron(...)`` schedule, or None if not a valid cron."""
     if not schedule or not schedule.startswith("cron(") or not schedule.endswith(")"):
         return None
     expr = schedule[len("cron(") : -1].strip()
@@ -485,13 +481,7 @@ class ChubScheduler:
     def _tick_media_sync(
         self, sync_schedule: str, now: Optional[datetime] = None
     ) -> None:
-        """Queue the background media-cache reconciliation when its
-        Instances-page schedule (config.instances.sync_schedule) is due.
-
-        It runs as a plain ``media_sync`` job — stepping through each instance
-        sequentially and logging to General — NOT as a user module, so it never
-        appears on the Modules/Logs pages. The per-minute fired guard stops re-firing.
-        """
+        """Queue the media_sync job when config.instances.sync_schedule is due."""
         if not sync_schedule:
             return
         now = now or datetime.now()
@@ -540,11 +530,15 @@ class ChubScheduler:
             return
 
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
-        due_profiles: List[Dict[str, Any]] = []
-        due_labels: List[str] = []
         now = now or datetime.now()
         minute_now = now.replace(second=0, microsecond=0)
-        due_keys: List[str] = []
+        # One key for the phase: all due profiles go out in one run, and index or
+        # label keys would change under a mid-minute reorder or rename.
+        fired_key = "upgradinatorr:profiles"
+        if _fired_this_minute(fired_key, minute_now):
+            return
+        due_profiles: List[Dict[str, Any]] = []
+        due_labels: List[str] = []
 
         for index, profile in enumerate(profiles):
             if not _profile_value(profile, "enabled", True):
@@ -554,13 +548,9 @@ class ChubScheduler:
                 continue
 
             label = _upgradinatorr_profile_label(profile, index)
-            schedule_key = f"upgradinatorr:{index}:{label}"
-            if _fired_this_minute(schedule_key, minute_now):
-                continue
-            if check_schedule(schedule_key, sched, log_adapter, now):
+            if check_schedule(f"upgradinatorr:{label}", sched, log_adapter, now):
                 due_profiles.append(_profile_to_dict(profile))
                 due_labels.append(label)
-                due_keys.append(schedule_key)
 
         if not due_profiles:
             return
@@ -586,7 +576,7 @@ class ChubScheduler:
         )
 
         if result["success"]:
-            _mark_fired(due_keys, minute_now)
+            _mark_fired([fired_key], minute_now)
         elif self.logger:
             self.logger.get_adapter("SCHEDULER").error(
                 f"Failed to queue Upgradinatorr profiles: {result['message']}"
@@ -624,10 +614,13 @@ class ChubScheduler:
             status = self.module_orchestrator.get_module_status(module_name)
             if status["running"]:
                 continue
+            # One key per module: due blocks merge into one run (see profiles).
+            fired_key = f"{module_name}:blocks"
+            if _fired_this_minute(fired_key, minute_now):
+                continue
 
             merged_overrides: Dict[str, Any] = {}
             due_labels: List[str] = []
-            due_keys: List[str] = []
             for index, block in enumerate(blocks):
                 if not _profile_value(block, "enabled", True):
                     continue
@@ -635,15 +628,11 @@ class ChubScheduler:
                 if not sched:
                     continue
                 label = _profile_value(block, "label", "") or f"block {index + 1}"
-                schedule_key = f"{module_name}:block:{index}:{label}"
-                if _fired_this_minute(schedule_key, minute_now):
-                    continue
-                if check_schedule(schedule_key, sched, log_adapter, now):
+                if check_schedule(f"{module_name}:{label}", sched, log_adapter, now):
                     overrides = _profile_value(block, "overrides", {}) or {}
                     if isinstance(overrides, dict):
                         merged_overrides.update(overrides)
                     due_labels.append(label)
-                    due_keys.append(schedule_key)
 
             if not due_labels:
                 continue
@@ -675,7 +664,7 @@ class ChubScheduler:
                         f"{result['message']}"
                     )
                 continue
-            _mark_fired(due_keys, minute_now)
+            _mark_fired([fired_key], minute_now)
             queued_modules.add(module_name)
 
     def _system_tick(self) -> None:

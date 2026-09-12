@@ -34,10 +34,10 @@ def test_unreadable_source_dir_is_skipped_not_fatal(monkeypatch, exc):
     logger = _Logger()
 
     result = Nohl.find_nohl_files("/mnt/unreadable", logger)
+    logged = any("/mnt/unreadable" in r for r in logger.records)
 
     assert result is None
-    assert any("unreadable" in r or "denied" in r.lower() or "error" in r.lower()
-               for r in logger.records)
+    assert logged
 
 
 def _clock(*times):
@@ -196,9 +196,10 @@ def test_media_sync_enqueues_once_per_minute_and_retries_a_failure(monkeypatch):
 )
 def test_cron_matches_any_fire_time_inside_the_minute(schedule, when, expected):
     """A seconds field must not make a 5s tick miss its minute."""
-    from backend.util.scheduler import check_schedule
+    import backend.util.scheduler as sched_mod
 
-    assert check_schedule("x", schedule, None, datetime(2024, 5, 6, *when)) is expected
+    result = sched_mod.check_schedule("x", schedule, None, datetime(2024, 5, 6, *when))
+    assert result is expected
 
 
 def test_schedule_blocks_fire_once_per_matched_minute(monkeypatch):
@@ -240,3 +241,35 @@ def test_upgradinatorr_profiles_fire_once_per_matched_minute(monkeypatch):
         s._tick_upgradinatorr_profiles(set())
 
     assert orch.calls == ["upgradinatorr"]
+
+
+def test_reordered_or_renamed_config_does_not_refire_in_the_same_minute(monkeypatch):
+    """A mid-minute reload that reorders or renames entries must not re-queue them."""
+    from types import SimpleNamespace
+
+    daily = "daily(09:00)"
+    cfg = SimpleNamespace(
+        schedule={},
+        upgradinatorr=SimpleNamespace(
+            instances_list=[
+                {"schedule": daily, "label": "a", "instance": "radarr"},
+                {"schedule": daily, "label": "b", "instance": "sonarr"},
+            ]
+        ),
+        schedule_blocks={
+            "border_replacerr": [
+                {"schedule": daily, "label": "morning"},
+                {"schedule": daily, "label": "extra"},
+            ]
+        },
+    )
+    s, orch = _fresh_scheduler(monkeypatch, cfg)
+    s._tick_upgradinatorr_profiles(set())
+    s._tick_schedule_blocks(set(), set())
+
+    cfg.upgradinatorr.instances_list.reverse()
+    cfg.schedule_blocks["border_replacerr"][0]["label"] = "renamed"
+    s._tick_upgradinatorr_profiles(set())
+    s._tick_schedule_blocks(set(), set())
+
+    assert orch.calls == ["upgradinatorr", "border_replacerr"]
