@@ -1,4 +1,4 @@
-// Export ToolBar as default with subcomponents attached
+// Named re-export of ToolBar.jsx's default (subcomponents attached as statics)
 export { default as ToolBar } from './ToolBar';
 
 // Export context and hook for advanced usage

@@ -139,13 +139,6 @@ const devRoutes = import.meta.env.DEV
               Component: React.lazy(() => import('./pages/dev/CardPrimitivesTestPage.jsx')),
           },
           {
-              path: 'dev/form-compounds',
-              pageName: 'Form Compounds Test',
-              pageDescription:
-                  'Form System compound composition validation (Header, Section, Actions)',
-              Component: React.lazy(() => import('./pages/dev/FormCompoundsTest.jsx')),
-          },
-          {
               path: 'dev/modals',
               pageName: 'Modal Test',
               pageDescription: 'Modal System comprehensive testing and real-world examples',
@@ -190,32 +183,11 @@ const LoginRoute = () => {
 };
 
 /**
- * CHUB Application Root - Phase 5 Complete
- *
- * Clean provider hierarchy with primitive composition error system:
- * 1. ToastProvider (outermost)
- * 2. ThemeProvider
- * 3. ErrorProvider (new primitive composition system)
- * 4. UIStateProvider
- * 5. Router
- * 6. SearchCoordinatorProvider
- * 7. RouteErrorProvider (innermost)
- *
- * Error boundaries now use atomic primitive composition pattern.
- * All context providers maintained in exact order.
- */
-
-/**
  * Route Error Boundary - Catches route-specific errors with sophisticated recovery
  */
 const RouteErrorBoundary = ({ children }) => {
     return (
-        <PageErrorBoundary
-            pageName="Application"
-            pageDescription="Main application routing"
-            showNavigation={true}
-            showRetry={true}
-        >
+        <PageErrorBoundary pageName="Application" pageDescription="Main application routing">
             {children}
         </PageErrorBoundary>
     );
@@ -235,7 +207,7 @@ const App = () => {
         // 5. UIStateProvider
         // 6. Router
         // 7. SearchCoordinatorProvider
-        // 8. RouteErrorProvider (innermost)
+        // 8. RouteErrorBoundary (innermost)
         <ToastProvider>
             <ThemeProvider>
                 <AuthProvider>
@@ -527,7 +499,7 @@ const App = () => {
                                                     <Route
                                                         path="settings/notifications"
                                                         element={
-                                                            <PageErrorBoundary routeName="Notification Settings">
+                                                            <PageErrorBoundary pageName="Notification Settings">
                                                                 <NotificationsPage />
                                                             </PageErrorBoundary>
                                                         }

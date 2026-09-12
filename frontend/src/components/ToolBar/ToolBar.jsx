@@ -6,39 +6,12 @@ import ToolBarButton from './Button';
 import ToolBarSeparator from './Separator';
 import ToolBarOverflow from './Overflow';
 
-/**
- * ToolBar - Compound component parent with responsive overflow handling
- *
- * Features:
- * - Automatic responsive breakpoint detection
- * - Overflow button management via context
- * - Mobile menu generation
- * - Context-based state management
- * - Keyboard navigation (Arrow keys, Home/End, Escape)
- *
- * This component wraps children in ToolBarProvider to enable compound pattern.
- * Subcomponents (Section, Button, Separator) access responsive state via context.
- *
- * @param {Object} props
- * @param {React.ReactNode} props.children - Subcomponents (Section, Button, Separator)
- * @param {boolean} [props.enableOverflow=true] - Enable automatic overflow handling
- * @param {number} [props.mobileBreakpoint=768] - Mobile breakpoint in pixels
- * @param {string} [props.className] - Additional CSS classes
- *
- * @example
- * <ToolBar>
- *   <ToolBar.Section align="left">
- *     <ToolBar.Button label="Refresh" icon="refresh" onClick={refresh} />
- *   </ToolBar.Section>
- *   <ToolBar.Separator />
- *   <ToolBar.Section align="right">
- *     <ToolBar.Button label="Help" icon="help" onClick={help} />
- *   </ToolBar.Section>
- * </ToolBar>
- */
+const EDITABLE_SELECTOR =
+    'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+
+/** Compound toolbar: provides ToolBar context and Arrow/Home/End focus movement between buttons. */
 const ToolBar = ({
     children,
-    enableOverflow = true,
     mobileBreakpoint = 768,
     className = 'flex justify-between flex-none px-2 md:px-4 bg-surface text-fg border-b border-border',
 }) => {
@@ -47,7 +20,7 @@ const ToolBar = ({
     // Keyboard navigation
     useEffect(() => {
         const handleKeyDown = event => {
-            if (!toolbarRef.current) return;
+            if (!toolbarRef.current || event.target.closest(EDITABLE_SELECTOR)) return;
 
             const buttons = Array.from(
                 toolbarRef.current.querySelectorAll('button:not([disabled])')
@@ -85,10 +58,6 @@ const ToolBar = ({
                     buttons[buttons.length - 1].focus();
                     break;
 
-                case 'Escape':
-                    // Escape handled by Overflow component for menu
-                    break;
-
                 default:
                     break;
             }
@@ -102,7 +71,7 @@ const ToolBar = ({
     }, []);
 
     return (
-        <ToolBarProvider enableOverflow={enableOverflow} mobileBreakpoint={mobileBreakpoint}>
+        <ToolBarProvider mobileBreakpoint={mobileBreakpoint}>
             <div ref={toolbarRef} className={className} role="toolbar" aria-label="Toolbar">
                 {children}
             </div>
@@ -114,7 +83,6 @@ ToolBar.displayName = 'ToolBar';
 
 ToolBar.propTypes = {
     children: PropTypes.node.isRequired,
-    enableOverflow: PropTypes.bool,
     mobileBreakpoint: PropTypes.number,
     className: PropTypes.string,
 };
