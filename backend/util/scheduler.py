@@ -4,7 +4,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from logging import Logger
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from croniter import croniter
 from dateutil import tz
@@ -274,6 +274,43 @@ def validate_schedule(schedule: str) -> None:
             _safe_md_date(2000, em, ed)
         return
     raise ValueError(f"unknown schedule frequency: {frequency!r}")
+
+
+def _config_schedules(config: Any) -> Iterable[Tuple[str, Any, str]]:
+    """Yield (path, value, required prefix) for every schedule string in config."""
+    for name, value in (config.schedule or {}).items():
+        yield f"schedule.{name}", value, ""
+    for module, blocks in (config.schedule_blocks or {}).items():
+        for i, block in enumerate(blocks):
+            yield f"schedule_blocks.{module}[{i}].schedule", block.schedule, ""
+    for i, profile in enumerate(config.upgradinatorr.instances_list):
+        yield f"upgradinatorr.instances_list[{i}].schedule", profile.schedule, ""
+    # border_replacerr silently skips a holiday whose schedule isn't range(...).
+    for i, holiday in enumerate(config.border_replacerr.holidays):
+        yield f"border_replacerr.holidays[{i}].schedule", holiday.schedule, "range("
+    yield "instances.sync_schedule", config.instances.sync_schedule, ""
+
+
+def _invalid_schedules(config: Any) -> Set[Tuple[str, str]]:
+    bad = set()
+    for path, value, prefix in _config_schedules(config):
+        if not value:
+            continue
+        try:
+            validate_schedule(value)
+            valid = value.startswith(prefix)
+        except (ValueError, AttributeError):
+            valid = False
+        if not valid:
+            bad.add((path, str(value)))
+    return bad
+
+
+def new_invalid_schedule(old: Any, new: Any) -> Optional[Tuple[str, str]]:
+    """First (path, value) schedule in `new` that would never fire and isn't already in `old`."""
+    # Diffed against `old` so a hand-edited bad schedule can't block unrelated saves.
+    added = _invalid_schedules(new) - _invalid_schedules(old)
+    return min(added) if added else None
 
 
 def print_schedule_table(logger: Optional[Any], schedule: Dict[str, str]) -> None:
