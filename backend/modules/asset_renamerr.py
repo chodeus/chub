@@ -267,30 +267,6 @@ class AssetRenamerr(ChubModule):
                 out.append((instance_name, targets))
         return out
 
-    def _type_matched_targets(self, media: dict) -> List[Tuple[str, List[str]]]:
-        """Opted-in (instance, libraries) targets, dropping libraries whose Plex
-        type can't hold this item — e.g. a movie is never in a 'show' library, so
-        searching one is a guaranteed miss (and was the source of noisy "not
-        found" logs). A library is only excluded when its type is KNOWN and
-        mismatches; if the type can't be resolved (no client / offline), the
-        library is kept so behaviour degrades to the old "search everything".
-        """
-        expected = self._PLEX_SECTION_TYPE.get(media.get("asset_type"))
-        out: List[Tuple[str, List[str]]] = []
-        for instance_name, libraries in self._enabled_plex_instances():
-            client = self._plex_client_for(instance_name)
-            getter = getattr(client, "section_type", None) if client else None
-            libs: List[str] = []
-            for lib in libraries:
-                if not lib:
-                    continue
-                st = getter(lib) if (getter and expected) else None
-                if st is None or st == expected:
-                    libs.append(lib)
-            if libs:
-                out.append((instance_name, libs))
-        return out
-
     def _direct_target_lib_keys(
         self, db: ChubDB, media: dict, is_collection: bool
     ) -> Set[str]:

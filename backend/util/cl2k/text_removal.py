@@ -116,18 +116,12 @@ def remove_text(
 
 
 def _mask_to_image_dims(image_bytes: bytes, mask_bytes: bytes) -> bytes:
-    """Resize the brushed mask to the image's pixel dimensions (PNG bytes).
-
-    Pass-through when the sizes already match or either decode fails (the
-    provider call then behaves exactly as before this normalization existed).
-    """
-    from PIL import Image
-
-    from backend.util.cl2k.limits import ImageTooLargeError, open_bounded
+    """Resize the mask to the image (PNG); oversize raises, other failures return it."""
+    from backend.util.cl2k.limits import ImageTooLargeError, open_bounded, open_header
 
     try:
-        with Image.open(io.BytesIO(image_bytes)) as im:
-            size = im.size  # header only — no pixel decode
+        with open_header(image_bytes) as im:
+            size = im.size
         mask = open_bounded(mask_bytes, "L")
         if mask.size == size:
             return mask_bytes

@@ -174,7 +174,9 @@ def export_psd(
                 tw = round(lg.width * th / lg.height)
         # Scale the guide-fit box as a whole, canvas-clamped — mirrors
         # renderer._place_logo so the LOGO layer matches the rendered poster.
-        scale = max(0.25, min(float(logo_scale or 1.0), 3.0))
+        scale = max(
+            geo.LOGO_SCALE_MIN, min(float(logo_scale or 1.0), geo.LOGO_SCALE_MAX)
+        )
         tw = max(1, round(tw * scale))
         th = max(1, round(th * scale))
         if tw > w:

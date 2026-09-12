@@ -34,6 +34,7 @@ class PlexMaintenance(ChubModule):
 
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
+        # Live per run: job_processor builds a new instance for every job.
         self.plex_path: str = getattr(self.config, "plex_path", "")
 
     # ------------------------------------------------------------------
@@ -81,6 +82,11 @@ class PlexMaintenance(ChubModule):
             transcoder_stats = {"count": 0, "total_size": 0}
             if self.config.photo_transcoder and self.plex_path:
                 transcoder_stats = self._clean_photo_transcoder()
+            elif self.config.photo_transcoder:
+                # The UI allows the toggle with plex_path unset; never skip silently.
+                self.logger.warning(
+                    "PhotoTranscoder is enabled but plex_path is not set — skipping."
+                )
 
             # The other three tasks all call Plex's REST API, so we need a
             # PlexServer connection.

@@ -198,28 +198,16 @@ class BorderReplacerr(ChubModule):
         return h.hexdigest()
 
     def _save_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
-        """Write ``out_img`` next to ``renamed_file`` via a temp file, then
-        atomically move it into place only if the bytes differ from the
-        current file. Returns True if written, False if unchanged.
-
-        Two fixes over the old `/tmp/{basename}` approach:
-          - The temp lives in the destination directory, so the move is an
-            atomic same-filesystem ``os.replace`` rather than a cross-device
-            copy (the dest is typically a FUSE/array mount, /tmp is not), and
-            concurrent workers compositing the same basename can't collide
-            (mkstemp gives each a unique name) — the prerequisite for #11.
-          - filecmp uses shallow=False (content compare). The old default
-            shallow=True compared stat signatures; a freshly written temp
-            always has a new mtime, so "unchanged" never fired and every
-            poster was rewritten each run. Content compare makes the skip real.
-        """
+        """Write ``out_img`` to ``renamed_file`` if the bytes changed; True if so."""
         dest_dir = os.path.dirname(renamed_file)
         os.makedirs(dest_dir, exist_ok=True)
         suffix = os.path.splitext(renamed_file)[1] or ".jpg"
+        # Temp in dest_dir: os.replace is only atomic within one filesystem.
         fd, tmp_path = tempfile.mkstemp(prefix=".border-", suffix=suffix, dir=dest_dir)
         os.close(fd)
         try:
             out_img.save(tmp_path)
+            # shallow=False: never trust a size+mtime match over the bytes.
             if not os.path.exists(renamed_file) or not filecmp.cmp(
                 renamed_file, tmp_path, shallow=False
             ):
@@ -704,6 +692,8 @@ class BorderReplacerr(ChubModule):
             now_iso = datetime.now(timezone.utc).isoformat()
             new_states: List[dict] = []
             total_work = len(work)
+            # Bar counter; `processed` also counts gate-skipped assets `work` excludes.
+            done = 0
 
             with progress(
                 work,
@@ -751,11 +741,11 @@ class BorderReplacerr(ChubModule):
                                     }
                                 )
                         processed += 1
-                        # Drive the Jobs-page bar (no-op without job context; maps
-                        # into the parent's reserved slice when chained from
-                        # poster_renamerr). Report periodically + at the end.
-                        if total_work and (processed % 25 == 0 or processed == total_work):
-                            self._report_progress(int(processed / total_work * 100))
+                        done += 1
+                        # Jobs-page bar; no-op without job context, and maps into
+                        # poster_renamerr's reserved slice when chained from it.
+                        if total_work and (done % 25 == 0 or done == total_work):
+                            self._report_progress(int(done / total_work * 100))
 
             if new_states:
                 db.border.bulk_record(new_states)

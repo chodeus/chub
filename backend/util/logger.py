@@ -124,11 +124,8 @@ class Logger:
         # Filter goes on the LOGGER, not each handler: it then runs once per
         # record and covers handlers attached later (root's ErrorNotifyHandler).
         attach_redaction_filter(self._logger)
-        # Stamp start_time on every instantiation — log_outro() uses
-        # `datetime.now() - start_time` to print "Run Time:", and the
-        # _initialized cache below short-circuits the handler/rotation
-        # setup so without this hoist the second-and-later runs in a
-        # long-lived process would print elapsed time since first init.
+        # Must be stamped per instantiation: the _initialized cache below skips
+        # setup, so a hoisted start_time makes later runs report since first init.
         self.start_time = datetime.now()
         self._logger.start_time = self.start_time
 
@@ -141,13 +138,8 @@ class Logger:
 
         self._logger.setLevel(getattr(logging, log_level, logging.INFO))
 
-        # Attach this module's own file handler if it doesn't have one yet.
-        # Check the logger's OWN handlers, NOT hasHandlers() — the latter is true
-        # when any ancestor (the root logger) has a handler, e.g. once the
-        # failure-notification ErrorNotifyHandler is installed on root. That made
-        # a module logger first created at run time (extensions like
-        # poster_self_heal) skip its file handler, so its run logs only
-        # propagated to root and never reached <module>.log.
+        # Check the logger's OWN handlers, never hasHandlers() — that is true
+        # whenever root has one, and the module then skips its own file handler.
         if not self._logger.handlers:
             self._setup_handlers(log_file_path, max_logs)
 
@@ -346,24 +338,3 @@ class ChubLoggerAdapter(logging.LoggerAdapter):
         self.info(f"[hb] {msg}", *args, **kwargs)
 
 
-def ensure_log_dir_and_rotate(log_file_path: str, max_logs: int = 9) -> None:
-    """
-    Ensures consistent <module_name>.#.log naming pattern.
-
-    Args:
-        log_file_path: Path to the main log file
-        max_logs: Maximum number of rotated logs to keep
-    """
-    log_dir = os.path.dirname(log_file_path)
-    os.makedirs(log_dir, exist_ok=True)
-
-    # Only rotate if main log file exists
-    if os.path.isfile(log_file_path) and rotated_log_path(log_file_path, 1):
-        # Shift existing numbered logs: module_name.9.log -> module_name.10.log, etc.
-        for i in range(max_logs - 1, 0, -1):
-            old_file = rotated_log_path(log_file_path, i)
-            new_file = rotated_log_path(log_file_path, i + 1)
-            if os.path.exists(old_file):
-                os.rename(old_file, new_file)
-
-        os.rename(log_file_path, rotated_log_path(log_file_path, 1))

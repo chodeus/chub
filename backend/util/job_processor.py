@@ -1,5 +1,6 @@
 # util/job_processor.py
 
+import inspect
 import json
 import threading
 import time
@@ -799,6 +800,20 @@ def _process_media_sync_job(
         lock.release()
 
 
+def _run_module_once(module_instance, module_args: dict, log, label: str) -> None:
+    """Call run() once; module_args it cannot bind are dropped, never retried."""
+    if module_args:
+        try:
+            inspect.signature(module_instance.run).bind(**module_args)
+        except TypeError:
+            log.warning(
+                f"{label}.run() does not accept module_args "
+                f"{list(module_args)}; running without"
+            )
+            module_args = {}
+    module_instance.run(**module_args)
+
+
 def _process_module_run_job(
     payload: Dict[str, Any], logger, job_id: int, db: ChubDB = None
 ) -> Dict[str, Any]:
@@ -924,28 +939,13 @@ def _process_module_run_job(
 
             start_time = time.time()
 
-            # module_args: optional kwargs forwarded to module.run(). Lets
-            # the generic module_run path express module-specific filters
-            # (e.g. sync_gdrive's only_folders + notify) so we don't need
-            # a dedicated job_type per parametrized invocation. Modules
-            # whose run() doesn't accept these kwargs raise TypeError on
-            # call, which we catch and retry with no args — defensive so
-            # existing modules unaware of the convention keep working.
+            # Optional run() kwargs, e.g. sync_gdrive's only_folders + notify.
             module_args = payload.get("module_args") or {}
 
             try:
-                # Execute the module
-                try:
-                    module_instance.run(**module_args)
-                except TypeError:
-                    if module_args:
-                        log.warning(
-                            f"[JOB:{job_id}] {module_name}.run() does not accept "
-                            f"module_args {list(module_args)}; retrying without"
-                        )
-                        module_instance.run()
-                    else:
-                        raise
+                _run_module_once(
+                    module_instance, module_args, log, f"[JOB:{job_id}] {module_name}"
+                )
 
                 # Check if cancelled during execution
                 if cancel_event and cancel_event.is_set():
