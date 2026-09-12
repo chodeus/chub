@@ -1,7 +1,6 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import { useErrorContext } from './ErrorContext.jsx';
-import { useToast } from '../../contexts/ToastContext.jsx';
 import { ErrorContainer, ErrorIcon, ErrorActions } from './primitives';
 import { copyText } from '../../utils/clipboard.js';
 import { formatDateTime } from '../../utils/datetime.js';
@@ -112,14 +111,26 @@ class PageErrorBoundaryBase extends Component {
 
         try {
             await copyText(JSON.stringify(errorDetails, null, 2));
-            this.setState({ copying: false, copySuccess: true });
-            setTimeout(() => this.setState({ copySuccess: false }), 2000);
+            this.setState({ copying: false, copySuccess: true, copyError: false });
+            this.resetCopyStatusAfter(2000);
         } catch (clipboardError) {
             console.error('Failed to copy error details:', clipboardError);
-            this.setState({ copying: false, copyError: true });
-            setTimeout(() => this.setState({ copyError: false }), 3000);
+            this.setState({ copying: false, copySuccess: false, copyError: true });
+            this.resetCopyStatusAfter(3000);
         }
     };
+
+    resetCopyStatusAfter = ms => {
+        clearTimeout(this.copyStatusTimer);
+        this.copyStatusTimer = setTimeout(
+            () => this.setState({ copySuccess: false, copyError: false }),
+            ms
+        );
+    };
+
+    componentWillUnmount() {
+        clearTimeout(this.copyStatusTimer);
+    }
 
     handleAction = actionId => {
         switch (actionId) {
@@ -192,15 +203,6 @@ class PageErrorBoundaryBase extends Component {
                     </p>
                 </div>
 
-                {pageDescription && (
-                    <div className="bg-surface-alt rounded-md p-4 mb-6">
-                        <p className="text-base leading-relaxed">
-                            The {pageDescription} encountered an error and could not be displayed
-                            properly.
-                        </p>
-                    </div>
-                )}
-
                 <div className="bg-surface-alt border border-border rounded-md p-4 mb-6">
                     <h3 className="text-fg text-xl font-semibold m-0 mb-3">Error Details</h3>
                     <div className="mb-2 text-sm font-mono break-words">
@@ -258,7 +260,6 @@ PageErrorBoundaryBase.propTypes = {
     pageName: PropTypes.string.isRequired,
     pageDescription: PropTypes.string,
     reportError: PropTypes.func,
-    showToast: PropTypes.func,
 };
 
 /**
@@ -266,15 +267,8 @@ PageErrorBoundaryBase.propTypes = {
  */
 function PageErrorBoundary(props) {
     const globalErrorContext = useErrorContext();
-    const toastContext = useToast();
 
-    return (
-        <PageErrorBoundaryBase
-            {...props}
-            reportError={globalErrorContext?.reportError}
-            showToast={toastContext?.success}
-        />
-    );
+    return <PageErrorBoundaryBase {...props} reportError={globalErrorContext.reportError} />;
 }
 
 PageErrorBoundary.propTypes = PageErrorBoundaryBase.propTypes;

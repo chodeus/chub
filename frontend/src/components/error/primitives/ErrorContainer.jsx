@@ -1,29 +1,57 @@
-import React from 'react';
+import React, { useId, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { useFocusTrap } from '../../../hooks/useFocusTrap';
 
-/**
- * ErrorContainer - Universal error layout wrapper
- *
- * Provides consistent error display containers for three modes:
- * - Modal: Fixed overlay with backdrop blur for critical errors
- * - Page: Centered page-level error container
- * - Inline: Inline feature-level error container
- *
- * @param {Object} props
- * @param {'modal'|'page'|'inline'} props.mode - Display mode
- * @param {ReactNode} props.children - Error content to display
- * @param {string} props.className - Additional classes (optional)
- */
-export const ErrorContainer = ({ mode = 'page', children, className = '' }) => {
+const ErrorDialog = ({ title, description, children, className }) => {
+    const dialogRef = useRef(null);
+    const titleId = useId();
+    const descriptionId = useId();
+    useFocusTrap(dialogRef, true);
+
+    return (
+        <div className="fixed inset-0 z-modal-backdrop bg-overlay backdrop-blur-sm font-sans flex items-center justify-center p-4">
+            <div
+                ref={dialogRef}
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                aria-describedby={description ? descriptionId : undefined}
+                className={`relative bg-surface border-2 border-error rounded-lg p-6 max-w-lg w-full max-h-screen overflow-y-auto shadow-xl z-modal ${className}`}
+            >
+                <h2
+                    id={titleId}
+                    className="text-error text-2xl font-bold m-0 mb-4 text-center leading-tight"
+                >
+                    {title}
+                </h2>
+                {description && (
+                    <p
+                        id={descriptionId}
+                        className="text-fg text-base m-0 mb-5 text-center leading-relaxed"
+                    >
+                        {description}
+                    </p>
+                )}
+                {children}
+            </div>
+        </div>
+    );
+};
+
+ErrorDialog.propTypes = {
+    title: PropTypes.node.isRequired,
+    description: PropTypes.node,
+    children: PropTypes.node.isRequired,
+    className: PropTypes.string.isRequired,
+};
+
+/** Error layout wrapper: modal alert dialog (needs `title`), centred page card, or inline banner. */
+export const ErrorContainer = ({ mode = 'page', title, description, children, className = '' }) => {
     if (mode === 'modal') {
         return (
-            <div className="fixed inset-0 z-modal-backdrop bg-overlay backdrop-blur-sm font-sans flex items-center justify-center p-4">
-                <div
-                    className={`relative bg-surface border-2 border-error rounded-lg p-6 max-w-lg w-full max-h-screen overflow-y-auto shadow-xl z-modal ${className}`}
-                >
-                    {children}
-                </div>
-            </div>
+            <ErrorDialog title={title} description={description} className={className}>
+                {children}
+            </ErrorDialog>
         );
     }
 
@@ -48,6 +76,8 @@ export const ErrorContainer = ({ mode = 'page', children, className = '' }) => {
 
 ErrorContainer.propTypes = {
     mode: PropTypes.oneOf(['modal', 'page', 'inline']),
+    title: PropTypes.node,
+    description: PropTypes.node,
     children: PropTypes.node.isRequired,
     className: PropTypes.string,
 };
