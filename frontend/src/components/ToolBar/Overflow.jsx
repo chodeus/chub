@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useToolBar } from './ToolBarContext.jsx';
 import Button from './Button.jsx';
@@ -6,21 +6,7 @@ import Dropdown from '../ui/Dropdown.jsx';
 import Menu from '../ui/Menu.jsx';
 import MenuItem from '../ui/MenuItem.jsx';
 
-/**
- * ToolBar.Overflow - Dedicated overflow menu component
- *
- * Renders overflow menu toggle button and dropdown menu.
- * Automatically integrates with ToolBarContext for overflow state.
- *
- * Mobile: Full-width bottom sheet
- * Desktop: Dropdown positioned menu
- *
- * @param {Object} props - Component props
- * @param {string} [props.position='right'] - Menu position ('left' | 'right')
- * @param {string} [props.menuIcon='more_vert'] - Icon for overflow button
- * @param {Array} [props.overflowButtons=[]] - Override overflow buttons from context
- * @param {Function} [props.onItemClick] - Custom item click handler
- */
+/** Toggle + dropdown menu for the `overflowButtons` prop; renders nothing while it is `null` or empty. */
 const Overflow = ({
     position = 'right',
     menuIcon = 'more_vert',
@@ -30,9 +16,8 @@ const Overflow = ({
     const overflowButtonRef = useRef(null);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-    const { mobileMenuOpen, toggleMobileMenu, isMobile } = useToolBar();
+    const { mobileMenuOpen, toggleMobileMenu, closeMobileMenu, isMobile } = useToolBar();
 
-    // Use provided overflow buttons or default to empty array
     const buttons = overflowButtons || [];
 
     const handleMenuToggle = () => {
@@ -45,46 +30,20 @@ const Overflow = ({
 
     const handleMenuClose = React.useCallback(() => {
         if (isMobile) {
-            toggleMobileMenu();
+            closeMobileMenu();
         } else {
             setIsMenuOpen(false);
         }
-    }, [isMobile, toggleMobileMenu]);
+    }, [isMobile, closeMobileMenu]);
 
+    // MenuItem calls onClose after onPress; Dropdown owns outside-click and Escape.
     const handleItemClick = (button, event) => {
         if (onItemClick) {
             onItemClick(button, event);
         } else if (button.onPress) {
             button.onPress(event);
         }
-        handleMenuClose();
     };
-
-    // Close menu on Escape key
-    useEffect(() => {
-        const handleEscape = e => {
-            if (e.key === 'Escape' && (isMenuOpen || mobileMenuOpen)) {
-                handleMenuClose();
-            }
-        };
-
-        document.addEventListener('keydown', handleEscape);
-        return () => document.removeEventListener('keydown', handleEscape);
-    }, [isMenuOpen, mobileMenuOpen, handleMenuClose]);
-
-    // Close menu on outside click
-    useEffect(() => {
-        if (!isMenuOpen && !mobileMenuOpen) return;
-
-        const handleClickOutside = event => {
-            if (overflowButtonRef.current && !overflowButtonRef.current.contains(event.target)) {
-                handleMenuClose();
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isMenuOpen, mobileMenuOpen, handleMenuClose]);
 
     // Don't render if no overflow buttons
     if (buttons.length === 0) {

@@ -62,7 +62,15 @@ const registrySrc = read(REGISTRY_PATH);
 
 const schemaTypes = new Set();
 for (const schemaPath of SCHEMA_PATHS) {
-    for (const type of extractSchemaTypes(read(schemaPath))) {
+    const types = extractSchemaTypes(read(schemaPath));
+    if (types.size === 0) {
+        console.error(
+            `\n✖ ${path.relative(process.cwd(), schemaPath)} yields no field types; ` +
+                'the extractor no longer matches it, so the check would pass vacuously.\n'
+        );
+        process.exit(1);
+    }
+    for (const type of types) {
         schemaTypes.add(type);
     }
 }

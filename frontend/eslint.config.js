@@ -22,8 +22,8 @@ export default defineConfig([
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       ...prettier.rules,
-      'react/prop-types': 'off',           // Not needed unless you use PropTypes
-      'react/react-in-jsx-scope': 'off',   // Required for React 17+
+      'react/prop-types': 'off',           // PropTypes are optional docs; React 19 ignores them at runtime
+      'react/react-in-jsx-scope': 'off',   // Not needed with the automatic JSX runtime
     },
     settings: {
       react: { version: 'detect' },
