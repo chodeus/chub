@@ -1,21 +1,4 @@
-/**
- * DirectoryArray Composed Component
- *
- * Composed component for managing multiple directory values using atomic primitives.
- * Follows the same pattern as ColorArray for consistency.
- *
- * Composition Architecture:
- * - AddButton: Generic add functionality
- * - RemoveButton: Generic remove functionality
- * - ItemCounter: Generic count display
- * - EmptyState: Generic empty collection display
- * - InputBase: Basic input primitive (read-only, clickable for directory browsing)
- *
- * This demonstrates proper "write once, use everywhere" philosophy where:
- * - Atomic primitives handle single responsibilities
- * - Composed components orchestrate business logic
- * - Each primitive is reusable across different contexts
- */
+/** Directory list editor; rows become dnd-kit sortables when enableReordering is set. */
 
 import React, { useCallback, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
@@ -61,7 +44,7 @@ const SortableDirectoryItem = React.memo(
         priorityHighest,
     }) => {
         const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-            useSortable({ id });
+            useSortable({ id, disabled });
 
         const style = {
             transform: CSS.Transform.toString(transform),

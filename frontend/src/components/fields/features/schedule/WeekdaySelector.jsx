@@ -47,6 +47,7 @@ export const WeekdaySelector = React.memo(
                                 type="button"
                                 onClick={() => handleDayToggle(day.key)}
                                 disabled={disabled}
+                                aria-pressed={isSelected}
                                 className={`
                                 w-full min-h-11 px-4 py-3 text-sm font-medium rounded transition-colors
                                 flex items-center justify-between
@@ -76,6 +77,7 @@ export const WeekdaySelector = React.memo(
                                 type="button"
                                 onClick={() => handleDayToggle(day.key)}
                                 disabled={disabled}
+                                aria-pressed={isSelected}
                                 title={day.fullName}
                                 className={`
                                 px-2 py-2 text-sm font-medium rounded transition-colors min-h-11

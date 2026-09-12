@@ -37,10 +37,7 @@ export const Badge = React.memo(
         ariaProps = {},
         ...restProps
     }) => {
-        // Development-time validation to prevent domain-specific prop drift.
-        // Only inspect caller pass-through props (restProps) — the destructured
-        // props above are Badge's own API, and including them flagged legitimate
-        // names (e.g. `removeLabel` contains "label"), firing on every render.
+        // Dev-only: flags domain-specific names among caller pass-through props only.
         if (import.meta.env.DEV) {
             const propNames = Object.keys(restProps);
             const forbidden = ['tag', 'label', 'status', 'category', 'type'];
@@ -74,7 +71,7 @@ export const Badge = React.memo(
 
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                onClick?.(e);
+                (onClick || onRemove)?.(e);
             }
             if ((e.key === 'Delete' || e.key === 'Backspace') && onRemove) {
                 e.preventDefault();
@@ -141,7 +138,6 @@ export const Badge = React.memo(
             role: isInteractive ? 'button' : undefined,
             tabIndex: isInteractive && !disabled ? 0 : undefined,
             'aria-disabled': disabled,
-            'aria-pressed': focused,
             ...ariaProps,
         };
 

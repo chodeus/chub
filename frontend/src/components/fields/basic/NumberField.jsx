@@ -2,12 +2,11 @@
  * NumberField Component
  *
  * Clean number input (no ± stepper buttons — those aren't in the mocks).
- * Accepts typed digits/decimal/minus with min/max bounds.
+ * Accepts typed digits/decimal/minus; min/max bounds are applied on blur.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { FieldRow, InputBase } from '../primitives';
-import { useOptionalFormField } from '../../forms/FormContext';
 
 export const NumberField = React.memo(
     ({
@@ -19,40 +18,41 @@ export const NumberField = React.memo(
         errorMessage = null,
         onBlur,
     }) => {
-        // Optional FormContext integration
-        const formField = useOptionalFormField(field.key);
-
-        // Use FormContext if available, otherwise use props
-        const finalValue = formField?.value ?? value;
-        const finalOnChange = formField?.onChange ?? onChange;
-        const finalHighlightInvalid = formField?.highlightInvalid ?? highlightInvalid;
-        const finalErrorMessage = formField?.errorMessage ?? errorMessage;
-        const finalOnBlur = formField?.onBlur ?? onBlur;
-        const numValue = finalValue !== null && finalValue !== undefined ? Number(finalValue) : 0;
+        // Text shown while typing; partial input ("1.", "-") stays here and is never emitted.
+        const [draft, setDraft] = useState(null);
+        const numValue = value !== null && value !== undefined ? Number(value) : 0;
         const min = field.min !== undefined ? Number(field.min) : undefined;
         const max = field.max !== undefined ? Number(field.max) : undefined;
 
+        // Out-of-range text stays in the draft (the "5" of "50" with min 10), so a save
+        // without blur (Ctrl/Cmd+S) sends the last in-range value.
         const handleInputChange = useCallback(
             e => {
                 const inputValue = e.target.value;
-
-                // Allow empty string, digits, decimal point, and minus sign
-                if (inputValue === '' || /^-?\d*\.?\d*$/.test(inputValue)) {
-                    // If it's a valid number, convert and validate bounds
-                    if (inputValue !== '' && !isNaN(inputValue)) {
-                        const newValue = Number(inputValue);
-                        if (min !== undefined && newValue < min) return;
-                        if (max !== undefined && newValue > max) return;
-                        finalOnChange(newValue);
-                    } else if (inputValue === '') {
-                        finalOnChange(null);
-                    } else {
-                        // Allow partial input (like "-" or "1." while typing)
-                        finalOnChange(inputValue);
-                    }
+                if (!/^-?\d*\.?\d*$/.test(inputValue)) return;
+                setDraft(inputValue);
+                if (inputValue === '') {
+                    onChange(null);
+                    return;
                 }
+                const next = Number(inputValue);
+                const inRange = next >= (min ?? -Infinity) && next <= (max ?? Infinity);
+                if (/^-?\d*\.?\d+$/.test(inputValue) && inRange) onChange(next);
             },
-            [min, max, finalOnChange]
+            [min, max, onChange]
+        );
+
+        const handleBlur = useCallback(
+            e => {
+                const typed = draft ? Number(draft) : NaN;
+                if (Number.isFinite(typed)) {
+                    const clamped = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, typed));
+                    if (clamped !== value) onChange(clamped);
+                }
+                setDraft(null);
+                onBlur?.(e);
+            },
+            [draft, value, min, max, onChange, onBlur]
         );
 
         const inputId = field.id || `field-${field.key}`;
@@ -63,8 +63,8 @@ export const NumberField = React.memo(
                 label={field.label}
                 required={field.required}
                 description={field.description}
-                error={finalErrorMessage}
-                invalid={finalHighlightInvalid}
+                error={errorMessage}
+                invalid={highlightInvalid}
             >
                 <InputBase
                     id={inputId}
@@ -72,21 +72,22 @@ export const NumberField = React.memo(
                     inputMode="numeric"
                     name={field.key}
                     value={
-                        typeof finalValue === 'string'
-                            ? finalValue
+                        draft ??
+                        (typeof value === 'string'
+                            ? value
                             : Number.isFinite(numValue)
                               ? numValue
-                              : ''
+                              : '')
                     }
                     onChange={handleInputChange}
-                    onBlur={finalOnBlur}
+                    onBlur={handleBlur}
                     disabled={disabled}
                     required={field.required}
                     placeholder={field.placeholder}
-                    invalid={finalHighlightInvalid}
+                    invalid={highlightInvalid}
                     className="w-full sm:max-w-[200px] sm:ml-auto"
                     aria-describedby={`${field.descId || `${inputId}-desc`} ${field.errorId || `${inputId}-error`}`.trim()}
-                    aria-invalid={finalHighlightInvalid}
+                    aria-invalid={highlightInvalid}
                 />
             </FieldRow>
         );

@@ -36,11 +36,6 @@ export const ScheduleSummary = React.memo(
                     case 'weekly': {
                         const days = scheduleValue.days || [];
                         const time = scheduleValue.time || '09:00';
-
-                        if (days.length === 0) {
-                            return `Weekly at ${time} (no days specified)`;
-                        }
-
                         const dayNames = {
                             sunday: 'Sunday',
                             monday: 'Monday',
@@ -52,6 +47,10 @@ export const ScheduleSummary = React.memo(
                         };
 
                         const readableDays = days.map(day => dayNames[day]).filter(Boolean);
+
+                        if (readableDays.length === 0) {
+                            return `Weekly at ${time} (no days specified)`;
+                        }
 
                         if (readableDays.length === 1) {
                             return `Every ${readableDays[0]} at ${time}`;

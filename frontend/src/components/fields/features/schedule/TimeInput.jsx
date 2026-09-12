@@ -2,6 +2,8 @@ import React, { useCallback } from 'react';
 
 /**
  * Enhanced time input component with 24-hour validation
+ * @param {string} id - Input id, for label binding
+ * @param {string} ariaLabel - Accessible name when no <label> is bound to the input
  * @param {string} value - Time value in HH:mm format (24-hour)
  * @param {Function} onChange - Value change callback
  * @param {boolean} disabled - Whether the input is disabled
@@ -11,6 +13,8 @@ import React, { useCallback } from 'react';
  */
 export const TimeInput = React.memo(
     ({
+        id,
+        ariaLabel,
         value = '12:00',
         onChange,
         disabled = false,
@@ -29,37 +33,13 @@ export const TimeInput = React.memo(
             [onChange]
         );
 
-        const handleBlur = useCallback(
-            e => {
-                const currentValue = e.target.value;
-                // Auto-format incomplete time entries
-                if (currentValue && currentValue.length === 4 && !currentValue.includes(':')) {
-                    // Handle formats like "1230" -> "12:30"
-                    const formatted = `${currentValue.slice(0, 2)}:${currentValue.slice(2)}`;
-                    if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(formatted)) {
-                        onChange(formatted);
-                    }
-                } else if (
-                    currentValue &&
-                    currentValue.length === 3 &&
-                    !currentValue.includes(':')
-                ) {
-                    // Handle formats like "930" -> "09:30"
-                    const formatted = `0${currentValue.slice(0, 1)}:${currentValue.slice(1)}`;
-                    if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(formatted)) {
-                        onChange(formatted);
-                    }
-                }
-            },
-            [onChange]
-        );
-
         return (
             <input
+                id={id}
+                aria-label={ariaLabel}
                 type="time"
                 value={value || ''}
                 onChange={handleChange}
-                onBlur={handleBlur}
                 disabled={disabled}
                 required={required}
                 placeholder={placeholder}

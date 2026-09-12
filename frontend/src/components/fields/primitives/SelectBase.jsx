@@ -70,7 +70,7 @@ export const SelectBase = React.memo(
                 <select
                     id={id}
                     name={name}
-                    value={value || ''}
+                    value={value ?? ''}
                     onChange={handleChange}
                     disabled={disabled}
                     required={required}
@@ -88,7 +88,7 @@ export const SelectBase = React.memo(
                     {options
                         ? options.map((option, index) => (
                               <option
-                                  key={option.value || index}
+                                  key={option.value ?? index}
                                   value={option.value}
                                   disabled={option.disabled}
                               >

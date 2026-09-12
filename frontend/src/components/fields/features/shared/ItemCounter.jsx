@@ -31,7 +31,7 @@ import React from 'react';
  * @param {number} props.total - Total/maximum count (optional)
  * @param {string} props.itemType - Type of item being counted (singular)
  * @param {string} props.itemTypePlural - Type of item being counted (plural)
- * @param {string} props.format - Display format ('count', 'fraction', 'percentage', 'custom')
+ * @param {string} props.format - Display format ('count', 'fraction', 'percentage')
  * @param {Function} props.customFormatter - Custom formatting function (current, total, itemType) => string
  * @param {boolean} props.showWarning - Show warning state when approaching limit
  * @param {number} props.warningThreshold - Threshold for warning state (0.0-1.0)
@@ -96,10 +96,8 @@ export const ItemCounter = React.memo(
 
         // CSS classes
         const counterClasses = [
-            'item-counter',
-            hasLimit && `item-counter--with-limit`,
-            isWarning && 'item-counter--warning',
-            isFull && 'item-counter--full',
+            'text-sm',
+            isFull ? 'text-error' : isWarning ? 'text-warning' : 'text-fg-muted',
             className,
         ]
             .filter(Boolean)

@@ -8,16 +8,21 @@ import InfoTooltip from '../../ui/InfoTooltip.jsx';
  *
  * @param {Object} props - Component props
  * @param {string} props.htmlFor - ID of the associated form control
+ * @param {string} [props.id] - ID of the label element, for aria-labelledby
  * @param {string} props.label - Label text to display
  * @param {boolean} [props.required=false] - Show required indicator
  * @param {string} [props.helpText] - Longer guidance revealed via an inline ⓘ tooltip
  * @param {string} [props.className=""] - Additional CSS classes
  */
-export const FieldLabel = ({ htmlFor, label, required = false, helpText, className = '' }) => {
+export const FieldLabel = ({ htmlFor, id, label, required = false, helpText, className = '' }) => {
     if (!label) return null;
 
     const labelEl = (
-        <label htmlFor={htmlFor} className={`text-sm font-medium text-fg ${className}`.trim()}>
+        <label
+            id={id}
+            htmlFor={htmlFor}
+            className={`text-sm font-medium text-fg ${className}`.trim()}
+        >
             {label}
             {required && <span className="ml-1 font-semibold text-error">*</span>}
         </label>
@@ -28,6 +33,7 @@ export const FieldLabel = ({ htmlFor, label, required = false, helpText, classNa
     if (!helpText) {
         return (
             <label
+                id={id}
                 htmlFor={htmlFor}
                 className={`text-sm font-medium text-fg mb-1 ${className}`.trim()}
             >
