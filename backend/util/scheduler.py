@@ -18,8 +18,8 @@ SCHEDULER_UPTIME_LOG_INTERVAL_SECONDS = 600
 SCHEDULER_HEALTH_CHECK_INTERVAL_SECONDS = 6 * 3600  # every 6h
 SCHEDULER_HEALTH_RETENTION_DAYS = 30
 
-# Last minute each schedule key fired; check_schedule is a pure per-minute match,
-# so this is what stops the 5s tick firing a key twice in one minute.
+# Last minute each module (and media_sync) was queued; check_schedule is a pure
+# per-minute match, so this stops the 5s tick queueing one twice in a minute.
 _last_fired: Dict[str, datetime] = {}
 
 
@@ -168,7 +168,8 @@ def check_schedule(
                     return True
 
         if frequency == "cron":
-            # Any fire time inside this minute, so a seconds field still matches.
+            # Minute-granular on purpose; `nxt <= now` skips fires after the last
+            # tick of a minute (e.g. second :58), so seconds-crons run at its start.
             start = now.astimezone(tz.tzlocal()).replace(second=0, microsecond=0)
             nxt = croniter(data, start - timedelta(seconds=1)).get_next(datetime)
             return nxt < start + timedelta(minutes=1)
@@ -532,9 +533,9 @@ class ChubScheduler:
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
         now = now or datetime.now()
         minute_now = now.replace(second=0, microsecond=0)
-        # One key for the phase: all due profiles go out in one run, and index or
-        # label keys would change under a mid-minute reorder or rename.
-        fired_key = "upgradinatorr:profiles"
+        # Keyed by module, shared with the plain schedule: index/label keys would
+        # change under a mid-minute reorder or rename.
+        fired_key = "upgradinatorr"
         if _fired_this_minute(fired_key, minute_now):
             return
         due_profiles: List[Dict[str, Any]] = []
@@ -614,8 +615,8 @@ class ChubScheduler:
             status = self.module_orchestrator.get_module_status(module_name)
             if status["running"]:
                 continue
-            # One key per module: due blocks merge into one run (see profiles).
-            fired_key = f"{module_name}:blocks"
+            # Shared with the plain schedule, so either path queues it once a minute.
+            fired_key = module_name
             if _fired_this_minute(fired_key, minute_now):
                 continue
 

@@ -192,6 +192,7 @@ def test_media_sync_enqueues_once_per_minute_and_retries_a_failure(monkeypatch):
         ("cron(0 9 * * *)", (9, 1, 0), False),
         ("cron(0 9 * * * 30)", (9, 0, 10), True),
         ("cron(0 9 * * * 30)", (9, 1, 5), False),
+        ("cron(0 9 * * * 58)", (9, 0, 55), True),  # last tick before :58
     ],
 )
 def test_cron_matches_any_fire_time_inside_the_minute(schedule, when, expected):
@@ -273,3 +274,16 @@ def test_reordered_or_renamed_config_does_not_refire_in_the_same_minute(monkeypa
     s._tick_schedule_blocks(set(), set())
 
     assert orch.calls == ["upgradinatorr", "border_replacerr"]
+
+
+def test_plain_schedule_suppresses_blocks_and_profiles_all_minute(monkeypatch):
+    """A module queued by its plain schedule is not re-queued by blocks or profiles."""
+    s, orch = _tick_scheduler(monkeypatch)
+    s.config.upgradinatorr.instances_list = [{"schedule": "daily(09:00)", "label": "a"}]
+    s.config.schedule_blocks = {"nohl": [{"schedule": "daily(09:00)", "label": "m"}]}
+    schedule = {"nohl": "daily(09:00)", "upgradinatorr": "daily(09:00)"}
+
+    for _ in range(3):  # later ticks run after the first jobs have finished
+        s._tick(schedule)
+
+    assert orch.calls == ["nohl", "upgradinatorr"]
