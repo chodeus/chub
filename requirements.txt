@@ -20,7 +20,7 @@ python-dotenv==1.2.3
 # No import anywhere: FastAPI requires it to parse the UploadFile/File routes
 # in backend/api/posters.py and backend/api/system.py, or they raise on startup.
 python-multipart==0.0.32
-PyJWT==2.13.0
+PyJWT==2.14.0
 PyYAML==6.0.3
 ratelimit==2.2.1
 requests==2.34.2
