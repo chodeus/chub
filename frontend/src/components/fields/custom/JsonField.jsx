@@ -1,4 +1,4 @@
-import { useId, useCallback, useState } from 'react';
+import { useId, useCallback, useMemo, useState } from 'react';
 import { FieldWrapper } from '../primitives/FieldWrapper';
 import { FieldLabel } from '../primitives/FieldLabel';
 import { FieldDescription } from '../primitives/FieldDescription';
@@ -16,7 +16,6 @@ export const JsonField = ({
     errorMessage,
 }) => {
     const inputId = useId();
-    const [jsonError, setJsonError] = useState(null);
 
     // Convert value to string representation
     const getStringValue = useCallback(() => {
@@ -43,60 +42,41 @@ export const JsonField = ({
         setTextValue(getStringValue());
     }
 
-    // Validate JSON and update parent
+    const jsonError = useMemo(() => {
+        if (!textValue.trim()) return null;
+        try {
+            JSON.parse(textValue);
+            return null;
+        } catch (error) {
+            return `Invalid JSON: ${error.message}`;
+        }
+    }, [textValue]);
+
+    // Invalid text still reaches the form so the user can keep typing.
     const handleChange = useCallback(
         e => {
             const newTextValue = e.target.value;
             setTextValue(newTextValue);
-
-            // Clear previous JSON error
-            setJsonError(null);
-
-            // If empty, just pass through
-            if (!newTextValue.trim()) {
-                onChange('');
-                return;
-            }
-
-            // Try to parse as JSON
-            try {
-                JSON.parse(newTextValue);
-                onChange(newTextValue); // Store as string for form handling
-                setJsonError(null);
-            } catch (error) {
-                // Still update the form value so user can keep typing
-                onChange(newTextValue);
-                setJsonError(`Invalid JSON: ${error.message}`);
-            }
+            onChange(newTextValue.trim() ? newTextValue : '');
         },
         [onChange]
     );
 
     // Format JSON
     const formatJson = useCallback(() => {
-        try {
-            const parsed = JSON.parse(textValue);
-            const formatted = JSON.stringify(parsed, null, 2);
-            setTextValue(formatted);
-            onChange(formatted);
-            setJsonError(null);
-        } catch (error) {
-            setJsonError(`Cannot format invalid JSON: ${error.message}`);
-        }
-    }, [textValue, onChange]);
+        if (jsonError) return;
+        const formatted = JSON.stringify(JSON.parse(textValue), null, 2);
+        setTextValue(formatted);
+        onChange(formatted);
+    }, [jsonError, textValue, onChange]);
 
     // Minify JSON
     const minifyJson = useCallback(() => {
-        try {
-            const parsed = JSON.parse(textValue);
-            const minified = JSON.stringify(parsed);
-            setTextValue(minified);
-            onChange(minified);
-            setJsonError(null);
-        } catch (error) {
-            setJsonError(`Cannot minify invalid JSON: ${error.message}`);
-        }
-    }, [textValue, onChange]);
+        if (jsonError) return;
+        const minified = JSON.stringify(JSON.parse(textValue));
+        setTextValue(minified);
+        onChange(minified);
+    }, [jsonError, textValue, onChange]);
 
     const hasError = Boolean(errorMessage || jsonError);
     const errorToShow = errorMessage || jsonError;

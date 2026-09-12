@@ -7,4 +7,3 @@
 
 export { ColorField } from './ColorField.jsx';
 export { ColorListField } from './ColorListField.jsx';
-export { ColorListPosterField } from './ColorListPosterField.jsx';

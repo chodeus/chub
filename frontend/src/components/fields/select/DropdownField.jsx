@@ -36,7 +36,7 @@ export const DropdownField = React.memo(
         );
 
         const inputId = field.id || `field-${field.key}`;
-        const inputValue = value || '';
+        const inputValue = value ?? '';
 
         // Transform options to SelectBase format
         const options = useMemo(() => {

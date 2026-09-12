@@ -79,9 +79,10 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                 setRoots(list);
                 // If the form already has a value, browse under whichever
                 // root contains it; otherwise start at the first root.
-                const startRoot = matchRoot(value, list) || list[0];
+                const matchedRoot = matchRoot(value, list);
+                const startRoot = matchedRoot || list[0];
                 setActiveRoot(startRoot);
-                loadDirectory(value || startRoot);
+                loadDirectory(matchedRoot ? value : startRoot);
             })
             .catch(err => {
                 if (!cancelled) setError(err.message || 'Failed to load allowed directories');

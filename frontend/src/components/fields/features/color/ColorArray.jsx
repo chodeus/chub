@@ -86,7 +86,7 @@ export const ColorArray = React.memo(
         );
 
         const canAddColor = colors.length < maxColors && !disabled;
-        const canRemoveColor = () => colors.length > minColors && !disabled;
+        const canRemoveColor = colors.length > minColors && !disabled;
 
         return (
             <div
@@ -128,11 +128,10 @@ export const ColorArray = React.memo(
 
                                 <RemoveButton
                                     onClick={() => handleRemoveColor(index)}
-                                    disabled={!canRemoveColor(index)}
+                                    disabled={!canRemoveColor}
                                     itemName={`${label} ${index + 1}`}
                                     itemType="color"
                                     text={removeButtonText}
-                                    variant="default"
                                     size="medium"
                                 />
                             </div>

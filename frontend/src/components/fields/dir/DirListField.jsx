@@ -59,7 +59,7 @@ export const DirListField = React.memo(
         const inputId = `field-${field.key}`;
 
         // Extract field configuration options
-        const minDirectories = field.min_directories || field.minDirectories || 1; // Default to 1 for dir lists
+        const minDirectories = field.min_directories ?? field.minDirectories ?? 1; // Default to 1 for dir lists
         const label = field.label || 'Directories';
 
         return (

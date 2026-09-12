@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useId } from 'react';
 import { TimeInput } from './TimeInput.jsx';
 import { WeekdaySelector } from './WeekdaySelector.jsx';
 import { MonthdaySelector } from './MonthdaySelector.jsx';
@@ -13,6 +13,7 @@ import { CronInput } from './CronInput.jsx';
  */
 export const ScheduleTypePanel = React.memo(
     ({ scheduleType, scheduleData, onDataChange, disabled = false }) => {
+        const baseId = useId();
         const updateScheduleData = useCallback(
             updates => {
                 // Always use functional update to ensure stable reference
@@ -27,17 +28,22 @@ export const ScheduleTypePanel = React.memo(
         const renderHourlyPanel = () => (
             <div className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-fg-muted mb-2">
+                    <label
+                        htmlFor={`${baseId}-minute`}
+                        className="block text-sm font-medium text-fg-muted mb-2"
+                    >
                         Minute (0-59)
                     </label>
                     <input
+                        id={`${baseId}-minute`}
                         type="number"
                         min="0"
                         max="59"
                         value={scheduleData.minute || 0}
-                        onChange={e =>
-                            updateScheduleData({ minute: parseInt(e.target.value) || 0 })
-                        }
+                        onChange={e => {
+                            const minute = parseInt(e.target.value, 10) || 0;
+                            updateScheduleData({ minute: Math.min(59, Math.max(0, minute)) });
+                        }}
                         disabled={disabled}
                         className="w-20 px-3 py-2 border border-border rounded-lg min-h-11 bg-input"
                     />
@@ -71,7 +77,12 @@ export const ScheduleTypePanel = React.memo(
                 <div className="space-y-4">
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm font-medium text-fg-muted">Daily Times</label>
+                            <span
+                                id={`${baseId}-daily`}
+                                className="text-sm font-medium text-fg-muted"
+                            >
+                                Daily Times
+                            </span>
                             <button
                                 type="button"
                                 onClick={addTime}
@@ -81,10 +92,11 @@ export const ScheduleTypePanel = React.memo(
                                 Add Time
                             </button>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2" role="group" aria-labelledby={`${baseId}-daily`}>
                             {times.map((time, index) => (
                                 <div key={index} className="flex items-center gap-2">
                                     <TimeInput
+                                        ariaLabel={`Time ${index + 1}`}
                                         value={time}
                                         onChange={newTime => updateTime(index, newTime)}
                                         disabled={disabled}
@@ -115,8 +127,14 @@ export const ScheduleTypePanel = React.memo(
                     disabled={disabled}
                 />
                 <div>
-                    <label className="block text-sm font-medium text-fg-muted mb-2">Time</label>
+                    <label
+                        htmlFor={`${baseId}-time`}
+                        className="block text-sm font-medium text-fg-muted mb-2"
+                    >
+                        Time
+                    </label>
                     <TimeInput
+                        id={`${baseId}-time`}
                         value={scheduleData.time || '09:00'}
                         onChange={time => updateScheduleData({ time })}
                         disabled={disabled}
@@ -133,8 +151,14 @@ export const ScheduleTypePanel = React.memo(
                     disabled={disabled}
                 />
                 <div>
-                    <label className="block text-sm font-medium text-fg-muted mb-2">Time</label>
+                    <label
+                        htmlFor={`${baseId}-time`}
+                        className="block text-sm font-medium text-fg-muted mb-2"
+                    >
+                        Time
+                    </label>
                     <TimeInput
+                        id={`${baseId}-time`}
                         value={scheduleData.time || '09:00'}
                         onChange={time => updateScheduleData({ time })}
                         disabled={disabled}
@@ -148,7 +172,6 @@ export const ScheduleTypePanel = React.memo(
                 <CronInput
                     value={scheduleData.expression || ''}
                     onChange={expression => updateScheduleData({ expression })}
-                    onValidityChange={isValid => updateScheduleData({ isValid })}
                     disabled={disabled}
                 />
             </div>

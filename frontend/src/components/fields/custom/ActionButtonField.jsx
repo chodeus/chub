@@ -33,7 +33,9 @@ export const ActionButtonField = ({ field, rowData = null, disabled = false }) =
     // while that payload is unchanged. That drops a stale "success" after the
     // folder id is edited, or (with array rows keyed by index) after a row above
     // is removed and this instance is reused to render a different row.
-    const payloadKey = (field.payloadFields || []).map(k => (rowData || {})[k] ?? '').join(' ');
+    const payloadKey = JSON.stringify(
+        (field.payloadFields || []).map(k => (rowData || {})[k] ?? '')
+    );
     const shown = result && result.forKey === payloadKey ? result : null;
 
     const run = useCallback(async () => {

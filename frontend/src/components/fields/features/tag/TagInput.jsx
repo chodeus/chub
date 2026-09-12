@@ -7,14 +7,14 @@
  *
  * Features:
  * - Agnostic string array management without content validation
- * - Configurable suggestion sources (array, function, async)
+ * - Array-based suggestion list with filtering
  * - Duplicate prevention with case-sensitive/insensitive options
  * - Comprehensive keyboard navigation (arrows, enter, escape, delete)
  * - Full ARIA combobox pattern for screen readers
  * - Touch-optimized suggestion selection
  */
 
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useId, useEffect } from 'react';
 import { Badge } from './Badge';
 
 /**
@@ -23,7 +23,7 @@ import { Badge } from './Badge';
  * @param {Object} props - Component props
  * @param {string[]} props.items - Current array of string items
  * @param {Function} props.onItemsChange - Callback when items array changes
- * @param {string[]|Function} props.suggestions - Autocomplete suggestions (array or function)
+ * @param {string[]} props.suggestions - Autocomplete suggestions
  * @param {boolean} props.allowCustom - Allow typing arbitrary strings
  * @param {string} props.placeholder - Input placeholder text
  * @param {boolean} props.disabled - Disabled state
@@ -52,46 +52,32 @@ export const TagInput = React.memo(
         removeLabel = 'Remove item',
         badgeProps = {},
         className = '',
+        id,
+        name,
+        'aria-describedby': ariaDescribedby,
+        'aria-invalid': ariaInvalid,
+        'aria-labelledby': ariaLabelledby,
         ...restProps
     }) => {
         // State management for interaction patterns
         const [inputValue, setInputValue] = useState('');
         const [showSuggestions, setShowSuggestions] = useState(false);
         const [focusedSuggestionIndex, setFocusedSuggestionIndex] = useState(-1);
-        const [isLoading, setIsLoading] = useState(false);
+        const uid = useId();
+        const listboxId = `${uid}-suggestions`;
+        const descriptionId = `${uid}-description`;
 
         // Refs for DOM interaction and focus management
         const inputRef = useRef(null);
-        const suggestionsRef = useRef(null);
         const containerRef = useRef(null);
+        const blurTimerRef = useRef(null);
+
+        useEffect(() => () => clearTimeout(blurTimerRef.current), []);
 
         // Generate suggestions based on input value
         const filteredSuggestions = useMemo(() => {
             if (!inputValue.trim() && !showSuggestions) return [];
 
-            // Handle function-based suggestions
-            if (typeof suggestions === 'function') {
-                try {
-                    const result = suggestions(inputValue);
-                    // Handle async function results
-                    if (result instanceof Promise) {
-                        setIsLoading(true);
-                        result
-                            .then(() => {
-                                setIsLoading(false);
-                                // This would need more sophisticated state management for async
-                            })
-                            .catch(() => setIsLoading(false));
-                        return [];
-                    }
-                    return Array.isArray(result) ? result : [];
-                } catch (error) {
-                    console.warn('TagInput: Error calling suggestions function:', error);
-                    return [];
-                }
-            }
-
-            // Handle array-based suggestions
             const suggestionArray = Array.isArray(suggestions) ? suggestions : [];
 
             if (!inputValue.trim()) return suggestionArray;
@@ -262,7 +248,8 @@ export const TagInput = React.memo(
 
         const handleInputBlur = () => {
             // Delay hiding suggestions to allow suggestion clicks
-            setTimeout(() => {
+            clearTimeout(blurTimerRef.current);
+            blurTimerRef.current = setTimeout(() => {
                 if (!containerRef.current?.contains(document.activeElement)) {
                     setShowSuggestions(false);
                     setFocusedSuggestionIndex(-1);
@@ -347,6 +334,8 @@ export const TagInput = React.memo(
                         {/* Invisible input that takes remaining space */}
                         <input
                             ref={inputRef}
+                            id={id}
+                            name={name}
                             value={inputValue}
                             onChange={handleInputChange}
                             onKeyDown={handleKeyDown}
@@ -365,15 +354,19 @@ export const TagInput = React.memo(
                             aria-expanded={showSuggestions}
                             aria-haspopup="listbox"
                             aria-autocomplete="both"
-                            aria-controls="suggestions-list"
-                            aria-describedby="input-description"
+                            aria-controls={showSuggestions ? listboxId : undefined}
+                            aria-describedby={[descriptionId, ariaDescribedby]
+                                .filter(Boolean)
+                                .join(' ')}
+                            aria-invalid={ariaInvalid}
+                            aria-labelledby={ariaLabelledby}
                             aria-label={`${addLabel}. ${items.length} items selected.`}
                             autoComplete="off"
                         />
                     </div>
 
                     {/* Hidden description for screen readers */}
-                    <div id="input-description" className="sr-only">
+                    <div id={descriptionId} className="sr-only">
                         {allowCustom
                             ? 'Type to add new items or select from suggestions. Use commas or Enter to add items.'
                             : 'Select from available suggestions.'}
@@ -384,19 +377,12 @@ export const TagInput = React.memo(
                     {/* Suggestions dropdown with ARIA listbox pattern */}
                     {showSuggestions && (
                         <div
-                            ref={suggestionsRef}
                             className={suggestionsClasses}
                             role="listbox"
-                            id="suggestions-list"
+                            id={listboxId}
                             aria-label="Available suggestions"
                         >
-                            {isLoading && (
-                                <div className="px-3 py-2 text-sm text-fg-subtle" role="status">
-                                    Loading suggestions...
-                                </div>
-                            )}
-
-                            {!isLoading && filteredSuggestions.length === 0 && inputValue && (
+                            {filteredSuggestions.length === 0 && inputValue && (
                                 <div className="px-3 py-2 text-sm text-fg-muted" role="status">
                                     {allowCustom
                                         ? `Press Enter to add "${inputValue}"`
@@ -404,25 +390,24 @@ export const TagInput = React.memo(
                                 </div>
                             )}
 
-                            {!isLoading &&
-                                filteredSuggestions.map((suggestion, index) => (
-                                    <div
-                                        key={suggestion}
-                                        role="option"
-                                        aria-selected={index === focusedSuggestionIndex}
-                                        className={[
-                                            'touch-target flex items-center px-3 py-2 cursor-pointer text-sm',
-                                            index === focusedSuggestionIndex
-                                                ? 'bg-primary text-on-color'
-                                                : 'hover:bg-surface-hover text-fg',
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' ')}
-                                        onClick={() => handleSuggestionClick(suggestion)}
-                                    >
-                                        {suggestion}
-                                    </div>
-                                ))}
+                            {filteredSuggestions.map((suggestion, index) => (
+                                <div
+                                    key={suggestion}
+                                    role="option"
+                                    aria-selected={index === focusedSuggestionIndex}
+                                    className={[
+                                        'touch-target flex items-center px-3 py-2 cursor-pointer text-sm',
+                                        index === focusedSuggestionIndex
+                                            ? 'bg-primary text-on-color'
+                                            : 'hover:bg-surface-hover text-fg',
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                    onClick={() => handleSuggestionClick(suggestion)}
+                                >
+                                    {suggestion}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useId } from 'react';
 import { isValidCron } from 'cron-validator';
 import cronstrue from 'cronstrue';
 
@@ -6,16 +6,16 @@ import cronstrue from 'cronstrue';
  * Cron expression input with real-time validation and human-readable explanation
  * @param {string} value - Cron expression string
  * @param {Function} onChange - Value change callback
- * @param {Function} onValidityChange - Validation status callback
  * @param {boolean} disabled - Whether the input is disabled
  * @param {string} className - Additional CSS classes
  */
 export const CronInput = React.memo(
-    ({ value = '', onChange, onValidityChange, disabled = false, className = '' }) => {
+    ({ value = '', onChange, disabled = false, className = '' }) => {
         const [isValid, setIsValid] = useState(true);
         const [explanation, setExplanation] = useState('');
         const [validationError, setValidationError] = useState('');
-        const previousValidityRef = useRef(true);
+        const inputId = useId();
+        const errorId = `${inputId}-error`;
 
         // Validate and explain cron expression
         const validateCron = useCallback(cronExpression => {
@@ -23,7 +23,7 @@ export const CronInput = React.memo(
                 setIsValid(true);
                 setExplanation('');
                 setValidationError('');
-                return true;
+                return;
             }
 
             try {
@@ -39,34 +39,21 @@ export const CronInput = React.memo(
                     setIsValid(true);
                     setExplanation(humanReadable);
                     setValidationError('');
-                    return true;
                 } else {
                     setIsValid(false);
                     setExplanation('');
                     setValidationError('Invalid cron expression format');
-                    return false;
                 }
             } catch (error) {
                 setIsValid(false);
                 setExplanation('');
                 setValidationError(error.message || 'Invalid cron expression');
-                return false;
             }
         }, []);
 
-        // Validate when value changes (only call onValidityChange when validity actually changes)
         useEffect(() => {
-            const valid = validateCron(value);
-
-            // Only call onValidityChange if validity actually changed
-            // This prevents infinite loops from validation-only updates
-            if (valid !== previousValidityRef.current) {
-                previousValidityRef.current = valid;
-                if (onValidityChange) {
-                    onValidityChange(valid);
-                }
-            }
-        }, [value, validateCron, onValidityChange]);
+            validateCron(value);
+        }, [value, validateCron]);
 
         const handleChange = useCallback(
             e => {
@@ -78,13 +65,18 @@ export const CronInput = React.memo(
 
         return (
             <div className={`mb-4 ${className}`}>
-                <div className="text-sm font-medium text-fg-muted mb-2">Cron Expression</div>
+                <label htmlFor={inputId} className="block text-sm font-medium text-fg-muted mb-2">
+                    Cron Expression
+                </label>
 
                 <input
+                    id={inputId}
                     type="text"
                     value={value}
                     onChange={handleChange}
                     disabled={disabled}
+                    aria-invalid={!isValid}
+                    aria-describedby={validationError ? errorId : undefined}
                     placeholder="0 9 * * 1-5  (9 AM on weekdays)"
                     className={`
                     w-full px-3 py-2 border rounded-lg min-h-11
@@ -127,7 +119,7 @@ export const CronInput = React.memo(
                             </div>
                         ) : validationError ? (
                             <div className="p-3 bg-surface-alt border border-border-light rounded-lg">
-                                <div className="text-sm text-error">
+                                <div id={errorId} className="text-sm text-error">
                                     <strong>Error:</strong> {validationError}
                                 </div>
                             </div>

@@ -116,10 +116,13 @@ export const ArrayObjectField = ({
         index => {
             const newArray = value.filter((_, i) => i !== index);
             onChange(newArray);
-            if (expandedIndex === index) {
-                setExpandedIndex(null);
-                setEditingData({});
+            if (expandedIndex === null || index > expandedIndex) return;
+            if (index < expandedIndex) {
+                setExpandedIndex(expandedIndex - 1);
+                return;
             }
+            setExpandedIndex(null);
+            setEditingData({});
         },
         [value, onChange, expandedIndex]
     );
@@ -179,23 +182,19 @@ export const ArrayObjectField = ({
 
         return (
             <div key={index} className="border-b border-border last:border-b-0">
-                <div
-                    className="flex items-center justify-between p-3 min-h-11 cursor-pointer transition-colors hover:bg-surface-hover focus:bg-surface-hover focus:outline-2 focus:outline-primary"
-                    style={{ outlineOffset: '-2px' }}
-                    onClick={() => handleEdit(index)}
-                    tabIndex={0}
-                    onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleEdit(index);
-                        }
-                    }}
-                >
-                    <div className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-4 min-w-0">
-                        <div className="font-medium text-fg text-sm truncate">{primary}</div>
+                <div className="flex items-center justify-between min-h-11 transition-colors hover:bg-surface-hover focus-within:bg-surface-hover">
+                    {/* RemoveButton stays a sibling: a control nested in this button is invalid. */}
+                    <button
+                        type="button"
+                        className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-4 min-w-0 p-3 text-left cursor-pointer focus:outline-2 focus:outline-primary"
+                        style={{ outlineOffset: '-2px' }}
+                        onClick={() => handleEdit(index)}
+                        aria-expanded={isExpanded}
+                    >
+                        <span className="font-medium text-fg text-sm truncate">{primary}</span>
                         {secondary &&
                             (Array.isArray(secondary) ? (
-                                <div className="flex flex-wrap gap-1.5">
+                                <span className="flex flex-wrap gap-1.5">
                                     {secondary
                                         .filter(s => s != null && s !== '')
                                         .map((seg, i) => (
@@ -206,27 +205,24 @@ export const ArrayObjectField = ({
                                                 {seg}
                                             </span>
                                         ))}
-                                </div>
+                                </span>
                             ) : (
-                                <div className="text-xs text-fg-muted truncate">{secondary}</div>
+                                <span className="text-xs text-fg-muted truncate">{secondary}</span>
                             ))}
                         {badge && (
-                            <div className="inline-flex items-center px-2 py-0.5 bg-primary/15 text-brand-primary rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
+                            <span className="inline-flex items-center px-2 py-0.5 bg-primary/15 text-brand-primary rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
                                 {/* Show color swatches for items with colors array */}
                                 {item.colors && Array.isArray(item.colors) ? (
                                     <ColorSwatches colors={item.colors} size="sm" maxDisplay={3} />
                                 ) : (
                                     badge
                                 )}
-                            </div>
+                            </span>
                         )}
-                    </div>
-                    <div className="flex items-center gap-2 ml-3">
+                    </button>
+                    <div className="flex items-center gap-2 pr-3">
                         <RemoveButton
-                            onClick={e => {
-                                e.stopPropagation();
-                                handleRemove(index);
-                            }}
+                            onClick={() => handleRemove(index)}
                             itemName={`${displayTemplate.itemName} ${index + 1}`}
                             disabled={disabled}
                         />
@@ -259,7 +255,7 @@ export const ArrayObjectField = ({
                 </div>
 
                 <div className="p-4 flex flex-col gap-4">
-                    {field.fields
+                    {(field.fields || [])
                         .filter(subField => shouldShowField(subField, editingData, apiData))
                         .map(subField => {
                             const FieldComponent = getFieldComponent(subField.type);
@@ -363,7 +359,7 @@ export const ArrayObjectField = ({
 
     const renderItemFields = (item, index, excludeKeys = []) => {
         const apiData = { instances: instancesData };
-        return field.fields
+        return (field.fields || [])
             .filter(
                 subField =>
                     !excludeKeys.includes(subField.key) && shouldShowField(subField, item, apiData)

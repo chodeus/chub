@@ -53,7 +53,7 @@ export const DateRangeField = React.memo(
                 toDay = '01';
 
             if (typeof val === 'string' && val.startsWith('range(')) {
-                const match = val.match(/^range\((\d{2})\/(\d{2})-(\d{2})\/(\d{2})\)/);
+                const match = val.match(/^range\((\d{2})\/(\d{2})-(\d{2})\/(\d{2})\)$/);
                 if (match) {
                     [, fromMonth, fromDay, toMonth, toDay] = match;
                 }
@@ -72,7 +72,7 @@ export const DateRangeField = React.memo(
         // requires it) rejected the save. Emit the default range once on mount when
         // the value is unset, so a brand-new holiday always carries a valid schedule.
         useEffect(() => {
-            if (typeof value !== 'string' || !value.startsWith('range(')) {
+            if (value === undefined || value === null || value === '') {
                 onChange(`range(${fromMonth}/${fromDay}-${toMonth}/${toDay})`);
             }
             // eslint-disable-next-line react-hooks/exhaustive-deps
