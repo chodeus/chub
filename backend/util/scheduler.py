@@ -2,7 +2,7 @@
 
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from logging import Logger
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -18,11 +18,8 @@ SCHEDULER_UPTIME_LOG_INTERVAL_SECONDS = 600
 SCHEDULER_HEALTH_CHECK_INTERVAL_SECONDS = 6 * 3600  # every 6h
 SCHEDULER_HEALTH_RETENTION_DAYS = 30
 
-# Persistent cache for cron next-run times (must survive across check_schedule calls)
-_next_run_times: Dict[str, datetime] = {}
-
-# Last minute a non-cron schedule fired per script, so the tick (which can run
-# several times within the matched minute) triggers it at most once per window.
+# Last minute each schedule key fired; check_schedule is a pure per-minute match,
+# so this is what stops the 5s tick firing a key twice in one minute.
 _last_fired: Dict[str, datetime] = {}
 
 
@@ -171,23 +168,10 @@ def check_schedule(
                     return True
 
         if frequency == "cron":
-            local_tz = tz.tzlocal()
-            local_date = now.astimezone(local_tz)
-            current_time = local_date.replace(second=0, microsecond=0)
-            next_run = _next_run_times.get(script_name)
-            if next_run is None:
-                next_run = croniter(data, local_date).get_next(datetime)
-                _next_run_times[script_name] = next_run
-                logger.debug(f"Next run for {script_name}: {next_run}")
-            if next_run <= current_time:
-                _next_run_times[script_name] = croniter(data, local_date).get_next(
-                    datetime
-                )
-                logger.debug(
-                    f"Cron triggered for {script_name}, next run: {_next_run_times[script_name]}"
-                )
-                return True
-            return False
+            # Any fire time inside this minute, so a seconds field still matches.
+            start = now.astimezone(tz.tzlocal()).replace(second=0, microsecond=0)
+            nxt = croniter(data, start - timedelta(seconds=1)).get_next(datetime)
+            return nxt < start + timedelta(minutes=1)
 
         return False
 
@@ -202,9 +186,7 @@ def cron_next_run(
 ) -> Optional[datetime]:
     """Compute the next fire time for a ``cron(...)`` schedule.
 
-    Stateless on purpose — unlike :func:`check_schedule` it never touches the
-    ``_next_run_times`` trigger cache, so it is safe to call from API handlers
-    that only want to display the upcoming run. Returns ``None`` for non-cron,
+    API handlers use it to display the upcoming run. Returns ``None`` for non-cron,
     empty, or invalid schedules (the frontend computes the other frequencies).
     """
     if not schedule or not schedule.startswith("cron(") or not schedule.endswith(")"):
@@ -459,7 +441,6 @@ class ChubScheduler:
                     self.logger.get_adapter("scheduler") if self.logger else None
                 )
                 if check_schedule(name, sched, log_adapter, now):
-                    # check_schedule stays True all minute; the 5s tick must fire once.
                     if _fired_this_minute(name, minute_now):
                         continue
 
@@ -509,14 +490,17 @@ class ChubScheduler:
 
         It runs as a plain ``media_sync`` job — stepping through each instance
         sequentially and logging to General — NOT as a user module, so it never
-        appears on the Modules/Logs pages. A cron schedule string is used so
-        check_schedule's per-name next-run guard prevents double-firing.
+        appears on the Modules/Logs pages. The per-minute fired guard stops re-firing.
         """
         if not sync_schedule:
             return
+        now = now or datetime.now()
+        minute_now = now.replace(second=0, microsecond=0)
         log_adapter = self.logger.get_adapter("SCHEDULER") if self.logger else None
         try:
             if not check_schedule("media_sync", sync_schedule, log_adapter, now):
+                return
+            if _fired_this_minute("media_sync", minute_now):
                 return
             db = getattr(self.module_orchestrator, "db", None)
             if db is None:
@@ -524,13 +508,14 @@ class ChubScheduler:
             result = db.worker.enqueue_job(
                 "jobs", {"origin": "scheduled"}, job_type="media_sync"
             )
-            if log_adapter:
-                if result.get("success"):
+            if result.get("success"):
+                _mark_fired(["media_sync"], minute_now)
+                if log_adapter:
                     log_adapter.info("Queued media-cache reconciliation (media_sync)")
-                else:
-                    log_adapter.error(
-                        f"Failed to queue media_sync: {result.get('message')}"
-                    )
+            elif log_adapter:
+                log_adapter.error(
+                    f"Failed to queue media_sync: {result.get('message')}"
+                )
         except Exception as e:
             if log_adapter:
                 log_adapter.error(f"media_sync tick failed: {e}", exc_info=True)
@@ -557,7 +542,6 @@ class ChubScheduler:
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
         due_profiles: List[Dict[str, Any]] = []
         due_labels: List[str] = []
-        # Same per-minute guard as the module loop in _tick.
         now = now or datetime.now()
         minute_now = now.replace(second=0, microsecond=0)
         due_keys: List[str] = []
@@ -627,7 +611,6 @@ class ChubScheduler:
             return
 
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
-        # See the same guard in _tick — the 5s tick re-enters a matched minute.
         now = now or datetime.now()
         minute_now = now.replace(second=0, microsecond=0)
 
@@ -799,8 +782,6 @@ class ChubScheduler:
             db.system_health.record_snapshots(rows)
 
     def _prune_old_health_snapshots(self) -> None:
-        from datetime import timedelta
-
         from backend.util.database import ChubDB
 
         cutoff = (

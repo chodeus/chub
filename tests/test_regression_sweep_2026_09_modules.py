@@ -1,6 +1,7 @@
 """Regression tests for the 2026-09 sweep, modules batch — one per confirmed bug."""
 
 import os
+from datetime import datetime
 
 import pytest
 
@@ -19,6 +20,7 @@ class _Logger:
         PermissionError(13, "Permission denied"),      # PUID/PGID lacks read
         OSError(116, "Stale file handle"),             # dropped NFS mount
         OSError(5, "Input/output error"),              # degraded pool
+        FileNotFoundError(2, "No such file or directory"),  # source dir removed
     ],
 )
 def test_unreadable_source_dir_is_skipped_not_fatal(monkeypatch, exc):
@@ -38,31 +40,19 @@ def test_unreadable_source_dir_is_skipped_not_fatal(monkeypatch, exc):
                for r in logger.records)
 
 
-def test_missing_source_dir_still_skipped(monkeypatch):
-    """A missing source dir is skipped."""
-    from backend.modules.nohl import Nohl
+def _clock(*times):
+    """datetime stand-in: now() returns `times` in order, then repeats the last."""
+    pending = list(times)
 
-    def boom(_path):
-        raise FileNotFoundError(2, "No such file or directory")
+    class _Clock(datetime):
+        reads = 0
 
-    monkeypatch.setattr(os, "listdir", boom)
-    result = Nohl.find_nohl_files("/mnt/gone", _Logger())
-    assert result is None
+        @classmethod
+        def now(cls, tz=None):
+            cls.reads += 1
+            return pending.pop(0) if len(pending) > 1 else pending[0]
 
-
-class _FixedNow:
-    """datetime stand-in pinned to one matched minute."""
-
-    @staticmethod
-    def _cls():
-        from datetime import datetime as _dt
-
-        class F(_dt):
-            @classmethod
-            def now(cls, tz=None):
-                return cls(2024, 5, 6, 9, 0, tzinfo=tz)
-
-        return F
+    return _Clock
 
 
 class _Orch:
@@ -85,16 +75,17 @@ class _FailOnceOrch(_Orch):
         return {"success": True, "data": {}}
 
 
-def _fresh_scheduler(monkeypatch, cfg, orch=None):
+def _fresh_scheduler(monkeypatch, cfg, orch=None, clock=None):
     import backend.util.scheduler as sched_mod
 
-    monkeypatch.setattr(sched_mod, "datetime", _FixedNow._cls())
+    clock = clock or _clock(datetime(2024, 5, 6, 9, 0))
+    monkeypatch.setattr(sched_mod, "datetime", clock)
     sched_mod._last_fired.clear()
     orch = orch or _Orch()
     return sched_mod.ChubScheduler(cfg, logger=None, module_orchestrator=orch), orch
 
 
-def _tick_scheduler(monkeypatch, orch=None):
+def _tick_scheduler(monkeypatch, orch=None, clock=None):
     from types import SimpleNamespace
 
     import backend.util.config as config_mod
@@ -107,7 +98,7 @@ def _tick_scheduler(monkeypatch, orch=None):
         upgradinatorr=SimpleNamespace(instances_list=[]),
     )
     monkeypatch.setattr(config_mod, "load_config", lambda: cfg)
-    return _fresh_scheduler(monkeypatch, cfg, orch)
+    return _fresh_scheduler(monkeypatch, cfg, orch, clock)
 
 
 def test_failed_module_queue_retries_within_the_matched_minute(monkeypatch):
@@ -122,22 +113,12 @@ def test_failed_module_queue_retries_within_the_matched_minute(monkeypatch):
 
 def test_minute_boundary_match_and_guard_share_one_clock_read(monkeypatch):
     """A tick straddling 09:00/09:01 must not record 09:01 and swallow its run."""
-    from datetime import datetime as _dt
-
-    import backend.util.scheduler as sched_mod
-
-    reads = iter(
-        [_dt(2024, 5, 6, 9, 0, 59, 999999), _dt(2024, 5, 6, 9, 1, 0, 1)]
-        + [_dt(2024, 5, 6, 9, 1, 5)] * 10
+    clock = _clock(
+        datetime(2024, 5, 6, 9, 0, 59, 999999),
+        datetime(2024, 5, 6, 9, 1, 0, 1),
+        datetime(2024, 5, 6, 9, 1, 5),
     )
-
-    class _Clock(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            return next(reads)
-
-    s, orch = _tick_scheduler(monkeypatch)
-    monkeypatch.setattr(sched_mod, "datetime", _Clock)
+    s, orch = _tick_scheduler(monkeypatch, clock=clock)
 
     for _ in range(2):
         s._tick({"nohl": "daily(09:00|09:01)"})
@@ -147,19 +128,8 @@ def test_minute_boundary_match_and_guard_share_one_clock_read(monkeypatch):
 
 def test_tick_reads_the_clock_once_for_every_phase(monkeypatch):
     """Modules, profiles and blocks in one tick all evaluate the same instant."""
-    from datetime import datetime as _dt
-
-    import backend.util.scheduler as sched_mod
-
-    reads = []
-
-    class _Clock(_dt):
-        @classmethod
-        def now(cls, tz=None):
-            reads.append(1)
-            return _dt(2024, 5, 6, 9, 0)
-
-    s, orch = _tick_scheduler(monkeypatch)
+    clock = _clock(datetime(2024, 5, 6, 9, 0))
+    s, orch = _tick_scheduler(monkeypatch, clock=clock)
     s.config.upgradinatorr.instances_list = [
         {"enabled": True, "schedule": "daily(09:00)", "name": "radarr-main"}
     ]
@@ -168,12 +138,67 @@ def test_tick_reads_the_clock_once_for_every_phase(monkeypatch):
             {"enabled": True, "schedule": "daily(09:00)", "label": "morning"}
         ]
     }
-    monkeypatch.setattr(sched_mod, "datetime", _Clock)
 
     s._tick({"nohl": "daily(09:00)"})
 
     assert orch.calls == ["nohl", "upgradinatorr", "border_replacerr"]
-    assert len(reads) == 1
+    assert clock.reads == 1
+
+
+def test_cron_failed_dispatch_retries_next_tick(monkeypatch):
+    """A failed enqueue at a cron time retries on the next tick, not the next day."""
+    clock = _clock(
+        datetime(2024, 5, 6, 8, 59),
+        datetime(2024, 5, 6, 9, 0),
+        datetime(2024, 5, 6, 9, 0, 5),
+        datetime(2024, 5, 6, 9, 0, 10),
+    )
+    s, orch = _tick_scheduler(monkeypatch, _FailOnceOrch(), clock)
+
+    for _ in range(4):
+        s._tick({"nohl": "cron(0 9 * * *)"})
+
+    assert orch.calls == ["nohl", "nohl"]
+
+
+def test_media_sync_enqueues_once_per_minute_and_retries_a_failure(monkeypatch):
+    """media_sync enqueues once per matched minute and retries a failed enqueue."""
+    from types import SimpleNamespace
+
+    results = iter(
+        [{"success": False, "message": "database is locked"}]
+        + [{"success": True}] * 5
+    )
+    enqueued = []
+
+    def enqueue_job(*args, **kwargs):
+        enqueued.append(kwargs.get("job_type"))
+        return next(results)
+
+    orch = _Orch()
+    orch.db = SimpleNamespace(worker=SimpleNamespace(enqueue_job=enqueue_job))
+    s, _ = _fresh_scheduler(monkeypatch, SimpleNamespace(), orch)
+
+    for _ in range(4):
+        s._tick_media_sync("cron(0 9 * * *)")
+
+    assert enqueued == ["media_sync", "media_sync"]
+
+
+@pytest.mark.parametrize(
+    "schedule,when,expected",
+    [
+        ("cron(0 9 * * *)", (9, 0, 45), True),
+        ("cron(0 9 * * *)", (9, 1, 0), False),
+        ("cron(0 9 * * * 30)", (9, 0, 10), True),
+        ("cron(0 9 * * * 30)", (9, 1, 5), False),
+    ],
+)
+def test_cron_matches_any_fire_time_inside_the_minute(schedule, when, expected):
+    """A seconds field must not make a 5s tick miss its minute."""
+    from backend.util.scheduler import check_schedule
+
+    assert check_schedule("x", schedule, None, datetime(2024, 5, 6, *when)) is expected
 
 
 def test_schedule_blocks_fire_once_per_matched_minute(monkeypatch):
