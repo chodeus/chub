@@ -1,8 +1,6 @@
-"""Extract a neutral CL2K label TySh donor -> backend/assets/cl2k/label_tysh.bin.
+"""Extract a neutral CL2K label TySh donor -> backend/assets/cl2k/label_tysh.bin."""
 
-Run from the repo root:
-    PYTHONPATH=. python scripts/gen_cl2k_label_tysh.py [path/to.psd]
-"""
+# Run from repo root: PYTHONPATH=. python scripts/gen_cl2k_label_tysh.py [path/to.psd]
 
 import copy
 import io

@@ -1,11 +1,7 @@
-"""Bake the CL2K gradient overlay -> backend/assets/cl2k/gradient.png.
+"""Bake the CL2K gradient overlay -> backend/assets/cl2k/gradient.png."""
 
-Reads the gradient alpha from the template's own flattened composite. Needs
-refs/CL2K_template.psd (gitignored, local only); re-run only if the template changes.
-
-Run from the repo root:
-    PYTHONPATH=. python scripts/gen_cl2k_gradient.py [path/to/template.psd]
-"""
+# Reads the template's own composite alpha; needs refs/CL2K_template.psd (gitignored).
+# Run from repo root: PYTHONPATH=. python scripts/gen_cl2k_gradient.py [template.psd]
 
 import sys
 

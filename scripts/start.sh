@@ -74,7 +74,7 @@ if [ "$(id -u)" = "0" ]; then
     echo "WARNING: could not restrict permissions on one or more files in ${CONFIG_DIR}."
     echo "Secrets there may be readable by other users on the host."
   fi
-  # runuser, not su: skips PAM, so the README's CHOWN/SETUID/SETGID/FOWNER caps suffice.
+  # runuser, not su: no password prompt, and its own PAM config (/etc/pam.d/runuser).
   exec runuser -s /bin/bash -c "python3 main.py" dockeruser
 else
   bash scripts/install_fonts.sh

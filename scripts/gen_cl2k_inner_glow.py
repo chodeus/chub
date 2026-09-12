@@ -1,9 +1,7 @@
-"""Bake the CL2K inner-glow field -> backend/assets/cl2k/inner_glow.png.
+"""Bake the CL2K inner-glow field -> backend/assets/cl2k/inner_glow.png."""
 
-Needs refs/CL2K_template.psd (gitignored); its composite alpha is the glow alpha
-only while the POSTER group is empty. Run from the repo root:
-    PYTHONPATH=. python scripts/gen_cl2k_inner_glow.py [path/to/template.psd]
-"""
+# Needs refs/CL2K_template.psd (gitignored): composite alpha = glow while POSTER is empty.
+# Run from repo root: PYTHONPATH=. python scripts/gen_cl2k_inner_glow.py [template.psd]
 
 import sys
 
