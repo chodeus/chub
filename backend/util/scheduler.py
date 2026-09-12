@@ -2,9 +2,9 @@
 
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from logging import Logger
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from croniter import croniter
 from dateutil import tz
@@ -18,12 +18,19 @@ SCHEDULER_UPTIME_LOG_INTERVAL_SECONDS = 600
 SCHEDULER_HEALTH_CHECK_INTERVAL_SECONDS = 6 * 3600  # every 6h
 SCHEDULER_HEALTH_RETENTION_DAYS = 30
 
-# Persistent cache for cron next-run times (must survive across check_schedule calls)
-_next_run_times: Dict[str, datetime] = {}
-
-# Last minute a non-cron schedule fired per script, so the tick (which can run
-# several times within the matched minute) triggers it at most once per window.
+# Last minute each module (and media_sync) was queued; check_schedule is a pure
+# per-minute match, so this stops the 5s tick queueing one twice in a minute.
 _last_fired: Dict[str, datetime] = {}
+
+
+def _fired_this_minute(key: str, minute: datetime) -> bool:
+    """Whether `key` already fired in this matched minute."""
+    return _last_fired.get(key) == minute
+
+
+def _mark_fired(keys: Iterable[str], minute: datetime) -> None:
+    for key in keys:
+        _last_fired[key] = minute
 
 _WEEKDAY_ALIASES = {
     "0": "sunday",
@@ -105,11 +112,16 @@ class _SilentLogger:
 _SILENT_LOGGER = _SilentLogger()
 
 
-def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) -> bool:
-    """Check if the current time matches the given schedule for a script."""
+def check_schedule(
+    script_name: str,
+    schedule: str,
+    logger: Optional[Logger],
+    now: Optional[datetime] = None,
+) -> bool:
+    """Check if `now` (default: the current time) matches the script's schedule."""
     logger = logger or _SILENT_LOGGER
     try:
-        now: datetime = datetime.now()
+        now = now or datetime.now()
         try:
             frequency, data = schedule.split("(")
         except ValueError:
@@ -156,23 +168,11 @@ def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) ->
                     return True
 
         if frequency == "cron":
-            local_tz = tz.tzlocal()
-            local_date = datetime.now(local_tz)
-            current_time = local_date.replace(second=0, microsecond=0)
-            next_run = _next_run_times.get(script_name)
-            if next_run is None:
-                next_run = croniter(data, local_date).get_next(datetime)
-                _next_run_times[script_name] = next_run
-                logger.debug(f"Next run for {script_name}: {next_run}")
-            if next_run <= current_time:
-                _next_run_times[script_name] = croniter(data, local_date).get_next(
-                    datetime
-                )
-                logger.debug(
-                    f"Cron triggered for {script_name}, next run: {_next_run_times[script_name]}"
-                )
-                return True
-            return False
+            # Minute-granular on purpose; `nxt <= now` skips fires after the last
+            # tick of a minute (e.g. second :58), so seconds-crons run at its start.
+            start = now.astimezone(tz.tzlocal()).replace(second=0, microsecond=0)
+            nxt = croniter(data, start - timedelta(seconds=1)).get_next(datetime)
+            return nxt < start + timedelta(minutes=1)
 
         return False
 
@@ -185,13 +185,7 @@ def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) ->
 def cron_next_run(
     schedule: Optional[str], now: Optional[datetime] = None
 ) -> Optional[datetime]:
-    """Compute the next fire time for a ``cron(...)`` schedule.
-
-    Stateless on purpose — unlike :func:`check_schedule` it never touches the
-    ``_next_run_times`` trigger cache, so it is safe to call from API handlers
-    that only want to display the upcoming run. Returns ``None`` for non-cron,
-    empty, or invalid schedules (the frontend computes the other frequencies).
-    """
+    """Next fire time of a ``cron(...)`` schedule, or None if not a valid cron."""
     if not schedule or not schedule.startswith("cron(") or not schedule.endswith(")"):
         return None
     expr = schedule[len("cron(") : -1].strip()
@@ -367,6 +361,7 @@ class ChubScheduler:
 
         try:
             while self.running:
+                # Live per tick: main._on_config_changed swaps self.config on reload.
                 self._tick(self.config.schedule)
                 self._system_tick()
                 time.sleep(SCHEDULER_POLL_INTERVAL_SECONDS)
@@ -404,6 +399,8 @@ class ChubScheduler:
 
     def _tick(self, schedule: Dict[str, str]) -> None:
         """Check for due modules and queue them for execution"""
+        now = datetime.now()  # one read per tick; every phase sees the same minute
+        minute_now = now.replace(second=0, microsecond=0)
         try:
             # Hard-disabled modules (Modules page) never auto-run.
             from backend.util.config import load_config
@@ -440,14 +437,9 @@ class ChubScheduler:
                 log_adapter = (
                     self.logger.get_adapter("scheduler") if self.logger else None
                 )
-                if check_schedule(name, sched, log_adapter):
-                    # check_schedule is a pure match and stays True for the whole
-                    # minute; the tick can run several times within it, so fire
-                    # each module at most once per matched minute.
-                    minute_now = datetime.now().replace(second=0, microsecond=0)
-                    if _last_fired.get(name) == minute_now:
+                if check_schedule(name, sched, log_adapter, now):
+                    if _fired_this_minute(name, minute_now):
                         continue
-                    _last_fired[name] = minute_now
 
                     if self.logger:
                         self.logger.get_adapter("SCHEDULER").info(
@@ -472,10 +464,11 @@ class ChubScheduler:
                             )
                     else:
                         queued_modules.add(name)
+                        _mark_fired([name], minute_now)
 
-            self._tick_upgradinatorr_profiles(queued_modules, disabled)
-            self._tick_schedule_blocks(queued_modules, disabled)
-            self._tick_media_sync(inst_sync_schedule)
+            self._tick_upgradinatorr_profiles(queued_modules, disabled, now)
+            self._tick_schedule_blocks(queued_modules, disabled, now)
+            self._tick_media_sync(inst_sync_schedule, now)
 
         except Exception as e:
             if self.logger:
@@ -486,20 +479,19 @@ class ChubScheduler:
                 print(f"[SCHEDULER] Exception in tick(): {e}")
             raise
 
-    def _tick_media_sync(self, sync_schedule: str) -> None:
-        """Queue the background media-cache reconciliation when its
-        Instances-page schedule (config.instances.sync_schedule) is due.
-
-        It runs as a plain ``media_sync`` job — stepping through each instance
-        sequentially and logging to General — NOT as a user module, so it never
-        appears on the Modules/Logs pages. A cron schedule string is used so
-        check_schedule's per-name next-run guard prevents double-firing.
-        """
+    def _tick_media_sync(
+        self, sync_schedule: str, now: Optional[datetime] = None
+    ) -> None:
+        """Queue the media_sync job when config.instances.sync_schedule is due."""
         if not sync_schedule:
             return
+        now = now or datetime.now()
+        minute_now = now.replace(second=0, microsecond=0)
         log_adapter = self.logger.get_adapter("SCHEDULER") if self.logger else None
         try:
-            if not check_schedule("media_sync", sync_schedule, log_adapter):
+            if not check_schedule("media_sync", sync_schedule, log_adapter, now):
+                return
+            if _fired_this_minute("media_sync", minute_now):
                 return
             db = getattr(self.module_orchestrator, "db", None)
             if db is None:
@@ -507,19 +499,23 @@ class ChubScheduler:
             result = db.worker.enqueue_job(
                 "jobs", {"origin": "scheduled"}, job_type="media_sync"
             )
-            if log_adapter:
-                if result.get("success"):
+            if result.get("success"):
+                _mark_fired(["media_sync"], minute_now)
+                if log_adapter:
                     log_adapter.info("Queued media-cache reconciliation (media_sync)")
-                else:
-                    log_adapter.error(
-                        f"Failed to queue media_sync: {result.get('message')}"
-                    )
+            elif log_adapter:
+                log_adapter.error(
+                    f"Failed to queue media_sync: {result.get('message')}"
+                )
         except Exception as e:
             if log_adapter:
                 log_adapter.error(f"media_sync tick failed: {e}", exc_info=True)
 
     def _tick_upgradinatorr_profiles(
-        self, queued_modules: set, disabled: Optional[set] = None
+        self,
+        queued_modules: set,
+        disabled: Optional[set] = None,
+        now: Optional[datetime] = None,
     ) -> None:
         """Queue Upgradinatorr profile-specific schedules."""
         if "upgradinatorr" in queued_modules:
@@ -535,6 +531,13 @@ class ChubScheduler:
             return
 
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
+        now = now or datetime.now()
+        minute_now = now.replace(second=0, microsecond=0)
+        # Keyed by module, shared with the plain schedule: index/label keys would
+        # change under a mid-minute reorder or rename.
+        fired_key = "upgradinatorr"
+        if _fired_this_minute(fired_key, minute_now):
+            return
         due_profiles: List[Dict[str, Any]] = []
         due_labels: List[str] = []
 
@@ -546,8 +549,7 @@ class ChubScheduler:
                 continue
 
             label = _upgradinatorr_profile_label(profile, index)
-            schedule_key = f"upgradinatorr:{index}:{label}"
-            if check_schedule(schedule_key, sched, log_adapter):
+            if check_schedule(f"upgradinatorr:{label}", sched, log_adapter, now):
                 due_profiles.append(_profile_to_dict(profile))
                 due_labels.append(label)
 
@@ -574,33 +576,34 @@ class ChubScheduler:
             overrides={"instances_list": due_profiles},
         )
 
-        if not result["success"]:
-            if self.logger:
-                self.logger.get_adapter("SCHEDULER").error(
-                    f"Failed to queue Upgradinatorr profiles: {result['message']}"
-                )
-            else:
-                print(
-                    f"[SCHEDULER] Failed to queue Upgradinatorr profiles: {result['message']}"
-                )
+        if result["success"]:
+            _mark_fired([fired_key], minute_now)
+        elif self.logger:
+            self.logger.get_adapter("SCHEDULER").error(
+                f"Failed to queue Upgradinatorr profiles: {result['message']}"
+            )
+        else:
+            print(
+                f"[SCHEDULER] Failed to queue Upgradinatorr profiles: {result['message']}"
+            )
 
     def _tick_schedule_blocks(
-        self, queued_modules: set, disabled: Optional[set] = None
+        self,
+        queued_modules: set,
+        disabled: Optional[set] = None,
+        now: Optional[datetime] = None,
     ) -> None:
         """Queue module runs from multi-block schedules (config.schedule_blocks).
 
-        Each block fires on its own schedule string and injects its `overrides`
-        into the run (e.g. one block reports daily, another removes weekly).
-        Blocks for a module already queued this tick — or already running — are
-        skipped; if several blocks for one module are due at the same minute,
-        their overrides are merged (later blocks win). The per-block schedule
-        key keeps each block's cron next-run cache independent.
+        Blocks due in the same minute merge their overrides, later wins.
         """
         blocks_by_module = getattr(self.config, "schedule_blocks", None) or {}
         if not blocks_by_module:
             return
 
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
+        now = now or datetime.now()
+        minute_now = now.replace(second=0, microsecond=0)
 
         for module_name, blocks in blocks_by_module.items():
             if module_name in queued_modules or not blocks:
@@ -612,6 +615,10 @@ class ChubScheduler:
             status = self.module_orchestrator.get_module_status(module_name)
             if status["running"]:
                 continue
+            # Shared with the plain schedule, so either path queues it once a minute.
+            fired_key = module_name
+            if _fired_this_minute(fired_key, minute_now):
+                continue
 
             merged_overrides: Dict[str, Any] = {}
             due_labels: List[str] = []
@@ -622,8 +629,7 @@ class ChubScheduler:
                 if not sched:
                     continue
                 label = _profile_value(block, "label", "") or f"block {index + 1}"
-                schedule_key = f"{module_name}:block:{index}:{label}"
-                if check_schedule(schedule_key, sched, log_adapter):
+                if check_schedule(f"{module_name}:{label}", sched, log_adapter, now):
                     overrides = _profile_value(block, "overrides", {}) or {}
                     if isinstance(overrides, dict):
                         merged_overrides.update(overrides)
@@ -659,6 +665,7 @@ class ChubScheduler:
                         f"{result['message']}"
                     )
                 continue
+            _mark_fired([fired_key], minute_now)
             queued_modules.add(module_name)
 
     def _system_tick(self) -> None:
@@ -765,8 +772,6 @@ class ChubScheduler:
             db.system_health.record_snapshots(rows)
 
     def _prune_old_health_snapshots(self) -> None:
-        from datetime import timedelta
-
         from backend.util.database import ChubDB
 
         cutoff = (

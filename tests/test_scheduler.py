@@ -20,10 +20,8 @@ print_schedule_table = scheduler.print_schedule_table
 
 @pytest.fixture(autouse=True)
 def _reset_schedule_state():
-    # check_schedule is stateful (fire-once-per-minute / cron next-run); reset
-    # between tests so a fixed script/time doesn't carry over.
+    # The per-minute fired guard is module state; reset it between tests.
     scheduler._last_fired.clear()
-    scheduler._next_run_times.clear()
     yield
 
 

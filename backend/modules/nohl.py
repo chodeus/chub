@@ -177,8 +177,9 @@ class Nohl(ChubModule):
             entries = [
                 i for i in os.listdir(path) if os.path.isdir(os.path.join(path, i))
             ]
-        except FileNotFoundError as e:
-            logger.error(f"Error: {e}")
+        except OSError as e:
+            # Skip, never raise: run() re-raises and would abort every other source dir.
+            logger.error(f"Error reading directory '{path}': {e}")
             return None
         for item in progress(
             entries,
