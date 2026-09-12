@@ -14,7 +14,7 @@
  * - Touch-optimized suggestion selection
  */
 
-import React, { useState, useRef, useCallback, useMemo, useId } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useId, useEffect } from 'react';
 import { Badge } from './Badge';
 
 /**
@@ -70,6 +70,9 @@ export const TagInput = React.memo(
         // Refs for DOM interaction and focus management
         const inputRef = useRef(null);
         const containerRef = useRef(null);
+        const blurTimerRef = useRef(null);
+
+        useEffect(() => () => clearTimeout(blurTimerRef.current), []);
 
         // Generate suggestions based on input value
         const filteredSuggestions = useMemo(() => {
@@ -245,7 +248,8 @@ export const TagInput = React.memo(
 
         const handleInputBlur = () => {
             // Delay hiding suggestions to allow suggestion clicks
-            setTimeout(() => {
+            clearTimeout(blurTimerRef.current);
+            blurTimerRef.current = setTimeout(() => {
                 if (!containerRef.current?.contains(document.activeElement)) {
                     setShowSuggestions(false);
                     setFocusedSuggestionIndex(-1);

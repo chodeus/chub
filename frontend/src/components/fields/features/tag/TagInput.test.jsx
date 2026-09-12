@@ -52,6 +52,20 @@ describe('TagInput', () => {
         fireEvent.keyDown(input, { key: 'Escape' });
         expect(input).not.toHaveAttribute('aria-controls');
     });
+
+    it('clears its pending blur timer on unmount', () => {
+        vi.useFakeTimers();
+        try {
+            const { unmount } = render(<TagInput items={[]} suggestions={['logo']} />);
+            const before = vi.getTimerCount();
+            fireEvent.blur(screen.getByRole('combobox'));
+            expect(vi.getTimerCount()).toBe(before + 1);
+            unmount();
+            expect(vi.getTimerCount()).toBe(before);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });
 
 describe('TagInputField', () => {
