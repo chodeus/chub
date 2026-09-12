@@ -145,6 +145,37 @@ def test_minute_boundary_match_and_guard_share_one_clock_read(monkeypatch):
     assert orch.calls == ["nohl", "nohl"]
 
 
+def test_tick_reads_the_clock_once_for_every_phase(monkeypatch):
+    """Modules, profiles and blocks in one tick all evaluate the same instant."""
+    from datetime import datetime as _dt
+
+    import backend.util.scheduler as sched_mod
+
+    reads = []
+
+    class _Clock(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            reads.append(1)
+            return _dt(2024, 5, 6, 9, 0)
+
+    s, orch = _tick_scheduler(monkeypatch)
+    s.config.upgradinatorr.instances_list = [
+        {"enabled": True, "schedule": "daily(09:00)", "name": "radarr-main"}
+    ]
+    s.config.schedule_blocks = {
+        "border_replacerr": [
+            {"enabled": True, "schedule": "daily(09:00)", "label": "morning"}
+        ]
+    }
+    monkeypatch.setattr(sched_mod, "datetime", _Clock)
+
+    s._tick({"nohl": "daily(09:00)"})
+
+    assert orch.calls == ["nohl", "upgradinatorr", "border_replacerr"]
+    assert len(reads) == 1
+
+
 def test_schedule_blocks_fire_once_per_matched_minute(monkeypatch):
     """Repeated ticks within one matched minute enqueue a block once."""
     from types import SimpleNamespace

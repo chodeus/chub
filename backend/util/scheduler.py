@@ -420,6 +420,8 @@ class ChubScheduler:
 
     def _tick(self, schedule: Dict[str, str]) -> None:
         """Check for due modules and queue them for execution"""
+        now = datetime.now()  # one read per tick; every phase sees the same minute
+        minute_now = now.replace(second=0, microsecond=0)
         try:
             # Hard-disabled modules (Modules page) never auto-run.
             from backend.util.config import load_config
@@ -456,8 +458,6 @@ class ChubScheduler:
                 log_adapter = (
                     self.logger.get_adapter("scheduler") if self.logger else None
                 )
-                now = datetime.now()  # one read for the match and the fired guard
-                minute_now = now.replace(second=0, microsecond=0)
                 if check_schedule(name, sched, log_adapter, now):
                     # check_schedule stays True all minute; the 5s tick must fire once.
                     if _fired_this_minute(name, minute_now):
@@ -488,9 +488,9 @@ class ChubScheduler:
                         queued_modules.add(name)
                         _mark_fired([name], minute_now)
 
-            self._tick_upgradinatorr_profiles(queued_modules, disabled)
-            self._tick_schedule_blocks(queued_modules, disabled)
-            self._tick_media_sync(inst_sync_schedule)
+            self._tick_upgradinatorr_profiles(queued_modules, disabled, now)
+            self._tick_schedule_blocks(queued_modules, disabled, now)
+            self._tick_media_sync(inst_sync_schedule, now)
 
         except Exception as e:
             if self.logger:
@@ -501,7 +501,9 @@ class ChubScheduler:
                 print(f"[SCHEDULER] Exception in tick(): {e}")
             raise
 
-    def _tick_media_sync(self, sync_schedule: str) -> None:
+    def _tick_media_sync(
+        self, sync_schedule: str, now: Optional[datetime] = None
+    ) -> None:
         """Queue the background media-cache reconciliation when its
         Instances-page schedule (config.instances.sync_schedule) is due.
 
@@ -514,7 +516,7 @@ class ChubScheduler:
             return
         log_adapter = self.logger.get_adapter("SCHEDULER") if self.logger else None
         try:
-            if not check_schedule("media_sync", sync_schedule, log_adapter):
+            if not check_schedule("media_sync", sync_schedule, log_adapter, now):
                 return
             db = getattr(self.module_orchestrator, "db", None)
             if db is None:
@@ -534,7 +536,10 @@ class ChubScheduler:
                 log_adapter.error(f"media_sync tick failed: {e}", exc_info=True)
 
     def _tick_upgradinatorr_profiles(
-        self, queued_modules: set, disabled: Optional[set] = None
+        self,
+        queued_modules: set,
+        disabled: Optional[set] = None,
+        now: Optional[datetime] = None,
     ) -> None:
         """Queue Upgradinatorr profile-specific schedules."""
         if "upgradinatorr" in queued_modules:
@@ -553,7 +558,7 @@ class ChubScheduler:
         due_profiles: List[Dict[str, Any]] = []
         due_labels: List[str] = []
         # Same per-minute guard as the module loop in _tick.
-        now = datetime.now()
+        now = now or datetime.now()
         minute_now = now.replace(second=0, microsecond=0)
         due_keys: List[str] = []
 
@@ -608,7 +613,10 @@ class ChubScheduler:
             )
 
     def _tick_schedule_blocks(
-        self, queued_modules: set, disabled: Optional[set] = None
+        self,
+        queued_modules: set,
+        disabled: Optional[set] = None,
+        now: Optional[datetime] = None,
     ) -> None:
         """Queue module runs from multi-block schedules (config.schedule_blocks).
 
@@ -620,7 +628,7 @@ class ChubScheduler:
 
         log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
         # See the same guard in _tick — the 5s tick re-enters a matched minute.
-        now = datetime.now()
+        now = now or datetime.now()
         minute_now = now.replace(second=0, microsecond=0)
 
         for module_name, blocks in blocks_by_module.items():
