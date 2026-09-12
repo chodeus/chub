@@ -8,9 +8,8 @@ PGID=${PGID:-100}
 UMASK=${UMASK:-002}
 BRANCH=${BRANCH:-master}
 
-# When started rootless (e.g. `docker run --user 99:100`), PUID/PGID env
-# vars are ignored — we can't usermod without root. Show the real uid/gid
-# in the banner so the operator sees what's actually running.
+# Rootless (`docker run --user uid:gid`): PUID/PGID can't be applied without root,
+# so show the real ids in the banner.
 if [ "$(id -u)" != "0" ]; then
   PUID=$(id -u)
   PGID=$(id -g)
@@ -63,15 +62,9 @@ if [ "$(id -u)" = "0" ]; then
     exit 1
   fi
   runuser -u dockeruser -- rm -f "${probe}"
-  # /app is deliberately NOT chowned: it only needs to be readable, and the image
-  # bakes the bytecode so nothing writes there. See PYTHONDONTWRITEBYTECODE.
-  # CONFIG_DIR is private to this container (owned by PUID:PGID above), so it
-  # does not need world-writable 777. Cross-container sharing (e.g. Kometa
-  # reading the assets mount) happens on OTHER mounts and works via umask 002
-  # group perms. Lock down the secrets so the service-account key, DB and rclone
-  # token aren't world-readable on the host; everything else relies on ownership
-  # + umask. (Set CHUB_LEGACY_CHMOD=1 to restore the old recursive 777 if a
-  # mismatched-UID container of yours depends on it.)
+  runuser -u dockeruser -- bash scripts/install_fonts.sh
+  # /app stays root-owned (bytecode is baked). CONFIG_DIR relies on ownership + umask,
+  # not 777; CHUB_LEGACY_CHMOD=1 restores the recursive 777 for mismatched-UID setups.
   if [ "${CHUB_LEGACY_CHMOD:-0}" = "1" ]; then
     chmod -R 777 "${CONFIG_DIR}"
   fi
@@ -81,10 +74,9 @@ if [ "$(id -u)" = "0" ]; then
     echo "WARNING: could not restrict permissions on one or more files in ${CONFIG_DIR}."
     echo "Secrets there may be readable by other users on the host."
   fi
-  # runuser instead of su: skips PAM, so the cap set documented in the
-  # README (CHOWN/SETUID/SETGID/FOWNER) is sufficient — no need to grant
-  # AUDIT_WRITE or DAC_OVERRIDE just for the user switch.
+  # runuser, not su: no password prompt, and its own PAM config (/etc/pam.d/runuser).
   exec runuser -s /bin/bash -c "python3 main.py" dockeruser
 else
+  bash scripts/install_fonts.sh
   exec python3 main.py
 fi

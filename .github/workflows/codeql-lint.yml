@@ -25,13 +25,8 @@ on:
       - '.dockerignore'
       - 'scripts/start.sh'
       - '.release-please-manifest.json'
-      # Deliberately NOT self-referential on push: docker-push runs on push
-      # events only, so a comment-level edit to this file used to rebuild and
-      # republish :latest and :full with a fresh digest (BUILD_NUMBER is baked
-      # in, so identical code still churns the tag). The pull_request trigger
-      # below KEEPS the self-reference, so a workflow edit is still exercised
-      # end to end before it lands — and actionlint (validate-workflows.yml)
-      # runs on it independently. Use workflow_dispatch to force a run.
+      # Not self-referential on push: a comment-only edit here would republish :latest
+      # and :full. pull_request keeps the self-reference; workflow_dispatch forces a run.
   pull_request:
     branches:
       - '**'
@@ -374,12 +369,14 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/chub
+          # Feature branches get only their branch tag: on-branch-delete removes a
+          # version only when that is its sole tag.
           tags: |
             type=raw,value=${{ steps.get_branch.outputs.BRANCH_TAG }},enable=${{ steps.get_branch.outputs.IS_BRANCH }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha,prefix=sha-,format=short
+            type=sha,prefix=sha-,format=short,enable=${{ steps.get_branch.outputs.IS_BRANCH == 'false' || github.ref_name == github.event.repository.default_branch }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       # Full tags are release-shaped only: semver with a -full suffix, plus the
@@ -437,4 +434,5 @@ jobs:
       status: failure
       title: "❌ Pipeline failed: ${{ github.ref_name }}"
       commit_sha: ${{ github.sha }}
-    secrets: inherit
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

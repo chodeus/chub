@@ -23,7 +23,7 @@ services:
       - /path/to/config:/config
       - /path/to/posters:/posters
       - /path/to/media:/media
-      - /path/to/kometa/assets:/kometa:ro
+      - /path/to/kometa/assets:/kometa
       - /etc/localtime:/etc/localtime:ro
 
     healthcheck:

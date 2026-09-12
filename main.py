@@ -44,10 +44,8 @@ class ConfigFileHandler(FileSystemEventHandler):
         self._maybe_trigger(event.src_path)
 
     def on_moved(self, event):
-        # Atomic save_config uses os.replace, which inotify reports as a move
-        # (IN_MOVED_FROM + IN_MOVED_TO). Watchdog dispatches this as
-        # FileMovedEvent only — never FileModifiedEvent — so on_modified alone
-        # misses every API-driven config change on Linux.
+        # save_config's atomic os.replace arrives as a move, never a modify;
+        # without this, API-driven config saves go unnoticed on Linux.
         self._maybe_trigger(getattr(event, "dest_path", "") or event.src_path)
 
     def on_created(self, event):
@@ -453,7 +451,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def reset_auth() -> int:
-    """Clear auth credentials and regenerate JWT secret, then exit."""
+    """Clear credentials and the JWT secret (setup mints a new one), then exit."""
     from backend.util.config import save_config
 
     try:

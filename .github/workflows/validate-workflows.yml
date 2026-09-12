@@ -27,8 +27,18 @@ jobs:
       - name: Install actionlint
         id: install
         shell: bash
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+        # Release tarball checked against its published checksums; no remote script runs.
         run: |
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash)
+          set -euo pipefail
+          base="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          sums="actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+          curl -sSfLO "${base}/${tarball}"
+          curl -sSfLO "${base}/${sums}"
+          grep " ${tarball}\$" "${sums}" | sha256sum -c -
+          tar -xzf "${tarball}" actionlint
           echo "exe=$PWD/actionlint" >> "$GITHUB_OUTPUT"
 
       - name: Run actionlint

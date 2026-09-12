@@ -26,7 +26,7 @@ install: ## Install backend dependencies
 		{ echo "ERROR: $(VENV) is $$($(VENV)/bin/python -V); this repo needs Python >= 3.11 (shutil.rmtree(dir_fd=) is 3.11+); CI and Docker build on 3.14. Recreate the venv with a newer PY=."; exit 1; }
 	@$(VENV)/bin/python -m pip install --upgrade pip
 	@$(VENV)/bin/pip install -r requirements.txt
-	@$(VENV)/bin/pip install -r requirements-dev.txt
+	@for f in requirements-*.txt; do $(VENV)/bin/pip install -r "$$f" || exit 1; done
 	@$(VENV)/bin/pip install black isort ruff
 	@echo "Backend ready"
 
@@ -62,6 +62,13 @@ lint: ## Lint all code
 	@echo "Linting frontend..."
 	@cd $(UI) && $(NPM) run lint
 	@echo "Linting complete"
+
+test: ## Run all tests
+	@echo "Testing backend..."
+	@$(VENV)/bin/python -m pytest $(ROOT)/tests
+	@echo "Testing frontend..."
+	@cd $(UI) && $(NPM) run test:run
+	@echo "Tests complete"
 
 # ---- Cleanup ----
 clean: ## Clean build artifacts

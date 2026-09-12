@@ -16,12 +16,7 @@
 
 ## Testing
 
-<!-- How did you verify this works?
-     - Module run output
-     - API calls / curl examples
-     - Browser steps
-     - Unit/integration tests added
--->
+<!-- How did you verify this works? (module run output, API calls, browser steps, tests added) -->
 
 ## Screenshots
 

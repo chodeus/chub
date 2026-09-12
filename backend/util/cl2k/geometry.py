@@ -13,6 +13,7 @@ the PSD. See memory ``cl2k-poster-maker-spec`` for the extraction method.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
@@ -212,9 +213,8 @@ TITLE_FONT_PX_SMALL = 48  # secondary title line
 TITLE_CENTER_Y = 1319  # centre of the MM2K "MIDDLE BOTTOM" band (1284-1354)
 TEXT_COLOR = "white"
 
-# Real-Arial candidates, first existing wins (mscorefonts in-container, macOS dev).
-# Liberation Sans is Arial-metric-compatible — a guaranteed last resort so a host
-# without mscorefonts doesn't silently render ImageMagick's default typeface.
+# Fallbacks after the per-host unpack (scripts/install_fonts.sh): mscorefonts on a Linux
+# dev host, macOS, then Arial-metric Liberation Sans so IM's default face never renders.
 _ARIAL_REGULAR_CANDIDATES = (
     "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
     "/System/Library/Fonts/Supplemental/Arial.ttf",
@@ -229,12 +229,19 @@ _ARIAL_BOLD_CANDIDATES = (
 )
 
 
+def _unpacked_arial(bold: bool) -> str:
+    """Where scripts/install_fonts.sh unpacks Arial in the :full image."""
+    name = "arialbd.ttf" if bold else "arial.ttf"
+    return os.path.join(os.environ.get("CONFIG_DIR", "/config"), "fonts", name)
+
+
 def resolve_font(bold: bool = False) -> Optional[str]:
     """Return the first available real-Arial path (bold or regular), else None.
 
     None lets ImageMagick fall back to its default font.
     """
-    for path in _ARIAL_BOLD_CANDIDATES if bold else _ARIAL_REGULAR_CANDIDATES:
+    fallbacks = _ARIAL_BOLD_CANDIDATES if bold else _ARIAL_REGULAR_CANDIDATES
+    for path in (_unpacked_arial(bold), *fallbacks):
         if Path(path).exists():
             return path
     return None

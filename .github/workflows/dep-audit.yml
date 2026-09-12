@@ -1,13 +1,10 @@
 name: "Dependency Audit"
 
-# Live OSV scan of the dependencies the release actually ships. Renovate keeps
-# versions fresh but never checks advisories; this is the vulnerability gate.
-# Weekly + on every change to an audited manifest, however it lands. Findings
-# land in the Security tab (SARIF) and fail the run.
+# OSV scan of the shipped dependency manifests, weekly and on any manifest change.
+# Findings go to the Security tab (SARIF) and fail the run.
 
-# No Dockerfile in the paths below: this job scans lockfiles, not container base
-# images, so triggering on it would imply base-image coverage it lacks.
-# Actions has no YAML anchors, so the path list is repeated verbatim.
+# No Dockerfile in paths: this scans lockfiles, not base images.
+# Actions has no YAML anchors, so keep both path lists identical.
 on:
   workflow_dispatch:
   schedule:
