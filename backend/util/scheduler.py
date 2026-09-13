@@ -75,7 +75,7 @@ def _safe_md_date(year: int, month: int, day: int) -> datetime:
 
 
 def md_range_contains(span: str, now: datetime) -> bool:
-    """Whether `now` falls in an "MM/DD-MM/DD" span; an end before the start crosses New Year."""
+    """Whether `now` is in an "MM/DD-MM/DD" span, end day included; end < start crosses New Year."""
     start, end = span.split("-")
     sm, sd = map(int, start.split("/"))
     em, ed = map(int, end.split("/"))
@@ -86,7 +86,7 @@ def md_range_contains(span: str, now: datetime) -> bool:
             start_date = _safe_md_date(now.year - 1, sm, sd)
         else:
             end_date = _safe_md_date(now.year + 1, em, ed)
-    return start_date <= now <= end_date
+    return start_date <= now < end_date + timedelta(days=1)
 
 
 def _normalize_weekday(day: str) -> str:
@@ -305,11 +305,12 @@ def _invalid_schedules(config: Any) -> Dict[Tuple[str, str], List[Tuple[str, str
     """(field, repr(value)) -> [(path, value)] for each schedule in config that never fires."""
     bad: Dict[Tuple[str, str], List[Tuple[str, str]]] = defaultdict(list)
     for path, value, prefix in _config_schedules(config):
-        if not value:
+        if value is None or value == "":
             continue
         try:
             validate_schedule(value)
-            valid = value.startswith(prefix)
+            # check_schedule doesn't strip, so a padded schedule would never fire.
+            valid = value == value.strip() and value.startswith(prefix)
         except (ValueError, AttributeError):
             valid = False
         if not valid:

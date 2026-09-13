@@ -138,13 +138,16 @@ def test_check_schedule_range_outside(monkeypatch):
     [
         ((2024, 12, 31, 9, 0), True),
         ((2025, 1, 1, 9, 0), True),
+        ((2025, 1, 2, 23, 59), True),
+        ((2025, 1, 3, 0, 0), False),
         ((2024, 7, 1, 9, 0), False),
     ],
 )
 def test_check_schedule_range_crosses_new_year(monkeypatch, target, expected):
     monkeypatch.setattr(scheduler, "datetime", FixedNow)
     monkeypatch.setattr(FixedNow, "target", target)
-    assert check_schedule("x", "range(12/30-01/02)", None) is expected
+    result = check_schedule("x", "range(12/30-01/02)", None)
+    assert result is expected
 
 
 def test_check_schedule_bad_format_returns_false(stub_logger):

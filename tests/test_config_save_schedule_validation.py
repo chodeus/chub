@@ -149,6 +149,11 @@ def test_new_invalid_schedule_covers_every_schedule_field():
     old = _config()
     assert new_invalid_schedule(old, _config(schedule={"nohl": None})) is None
     assert new_invalid_schedule(old, _config(schedule={"nohl": 5})) == ("schedule.nohl", "5")
+    assert new_invalid_schedule(old, _config(schedule={"nohl": 0})) == ("schedule.nohl", "0")
+    assert new_invalid_schedule(old, _config(schedule={"nohl": " daily(03:00)"})) == (
+        "schedule.nohl",
+        " daily(03:00)",
+    )
     assert new_invalid_schedule(
         old, _config(instances={"sync_schedule": "cron(not a cron)"})
     ) == ("instances.sync_schedule", "cron(not a cron)")
