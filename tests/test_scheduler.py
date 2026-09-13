@@ -133,6 +133,31 @@ def test_check_schedule_range_outside(monkeypatch):
     assert check_schedule("x", "range(1/1-1/31)", None) is False
 
 
+@pytest.mark.parametrize("schedule", ["daily(|09:00)", "range(|5/1-5/31)"])
+def test_check_schedule_skips_empty_segments(monkeypatch, schedule):
+    # validate_schedule accepts these, so a stored one must still fire.
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    result = check_schedule("x", schedule, None)
+    assert result is True
+
+
+@pytest.mark.parametrize(
+    "target, expected",
+    [
+        ((2024, 12, 31, 9, 0), True),
+        ((2025, 1, 1, 9, 0), True),
+        ((2025, 1, 2, 23, 59), True),
+        ((2025, 1, 3, 0, 0), False),
+        ((2024, 7, 1, 9, 0), False),
+    ],
+)
+def test_check_schedule_range_crosses_new_year(monkeypatch, target, expected):
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    monkeypatch.setattr(FixedNow, "target", target)
+    result = check_schedule("x", "range(12/30-01/02)", None)
+    assert result is expected
+
+
 def test_check_schedule_bad_format_returns_false(stub_logger):
     """No parens at all -> falls into ValueError handler."""
     assert check_schedule("x", "garbage", stub_logger) is False

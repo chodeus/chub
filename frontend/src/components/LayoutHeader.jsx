@@ -38,30 +38,7 @@ const ROUTE_TITLES = {
     '/logs': 'Logs',
 };
 
-/**
- * LayoutHeader component for CHUB application - Phase 4D Context-Aware
- *
- * Context-aware header that adapts interface based on current page type:
- *
- * Search Pages (/media/search, /posters/search/*):
- * - Logo + Hamburger menu
- * - Search Input Field with debounced input (300ms)
- * - Smart Responsive Toolbar placeholder
- * - Search State Indicator
- *
- * Non-Search Pages:
- * - Logo + Hamburger menu only
- * - Clean, minimal header
- * - Theme toggle (temporary for testing)
- *
- * Features:
- * - CHUB logo from favicon-32x32.png
- * - Animated hamburger menu with SVG
- * - Route-based interface switching
- * - Mobile-first responsive design (375px+)
- * - Touch-optimized buttons (44px minimum)
- * - Uses design tokens for styling
- */
+/** Mobile-only header; swaps the page title for search on /media/search and /poster/search/assets. */
 const LayoutHeader = React.memo(() => {
     const { toggleTheme, isDarkTheme, isLightTheme, isSystemTheme, actualTheme } = useTheme();
     const { mobileMenuOpen, toggleMobileMenu, isMobile } = useUIState();
@@ -158,15 +135,6 @@ const LayoutHeader = React.memo(() => {
                         className="touch-target flex items-center no-underline cursor-pointer transition-opacity hover:opacity-80 focus:outline-focus"
                         aria-label="CHUB — Media Manager"
                     >
-                        {/* Desktop branding now lives in the sidebar; keep the
-                            banner element for mobile only (mobile shows the small
-                            logo below, desktop shows nothing here). */}
-                        <img
-                            src="/img/chub-banner.png"
-                            alt="CHUB — Media Manager"
-                            className="hidden h-16 w-auto mt-3"
-                            height="64"
-                        />
                         <img
                             src="/img/chub-logo.png"
                             alt="CHUB"

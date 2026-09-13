@@ -20,6 +20,7 @@ from backend.util.database import ChubDB
 from backend.util.helper import create_table, get_config_dir, print_settings, progress
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+from backend.util.scheduler import md_range_contains
 
 # Path to bundled borders: backend/assets/borders/<holiday>/<name>.png
 _BUNDLED_BORDERS_DIR = Path(__file__).resolve().parents[1] / "assets" / "borders"
@@ -52,17 +53,6 @@ class BorderReplacerr(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
 
-    @staticmethod
-    def _safe_holiday_date(year: int, month: int, day: int) -> datetime:
-        """Build a date for a holiday range boundary, clamping Feb 29 to Feb 28
-        on non-leap years so a leap-day range doesn't raise every other year."""
-        try:
-            return datetime(year, month, day)
-        except ValueError:
-            if month == 2 and day == 29:
-                return datetime(year, 2, 28)
-            raise
-
     def get_holiday_status(self, db: ChubDB):
         now = datetime.now()
         holidays = self.config.holidays
@@ -84,25 +74,14 @@ class BorderReplacerr(ChubModule):
             # A single malformed holiday entry must not abort the whole run /
             # crash the preview API — skip it with a warning instead.
             try:
-                inside = schedule[len("range(") : -1]
-                start_str, end_str = inside.split("-", 1)
-                sm, sd = map(int, start_str.split("/"))
-                em, ed = map(int, end_str.split("/"))
-                year = now.year
-                start_date = self._safe_holiday_date(year, sm, sd)
-                end_date = self._safe_holiday_date(year, em, ed)
+                active = md_range_contains(schedule[len("range(") : -1], now)
             except (ValueError, AttributeError) as e:
                 self.logger.warning(
                     f"Skipping holiday '{holiday}': invalid schedule "
                     f"{schedule!r} ({e})"
                 )
                 continue
-            if end_date < start_date:  # handle year crossover
-                if now.month < sm:
-                    start_date = start_date.replace(year=year - 1)
-                else:
-                    end_date = end_date.replace(year=year + 1)
-            if start_date <= now <= end_date:
+            if active:
                 if isinstance(color_list, str):
                     color_list = [color_list]
                 border_colors = [self.convert_to_rgb(c) for c in color_list]

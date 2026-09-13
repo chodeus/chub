@@ -34,6 +34,9 @@ const SearchInterface = React.memo(
         const [showSuggestions, setShowSuggestions] = useState(false);
         const inputRef = useRef(null);
         const suggestionsRef = useRef(null);
+        const blurTimerRef = useRef(null);
+
+        useEffect(() => () => clearTimeout(blurTimerRef.current), []);
 
         // Sync the coordinator term to the URL `?q=` whenever they differ.
         // Runs on searchPageType change AND on URL search-string change so
@@ -66,6 +69,7 @@ const SearchInterface = React.memo(
         );
 
         const handleFocus = useCallback(() => {
+            clearTimeout(blurTimerRef.current);
             setIsActive(true);
             if (suggestions.length > 0 && !term) {
                 setShowSuggestions(true);
@@ -73,10 +77,26 @@ const SearchInterface = React.memo(
         }, [suggestions.length, term]);
 
         const handleBlur = useCallback(e => {
-            if (suggestionsRef.current?.contains(e.relatedTarget)) return;
+            const next = e.relatedTarget;
+            if (next === inputRef.current || suggestionsRef.current?.contains(next)) return;
             setIsActive(false);
-            setTimeout(() => setShowSuggestions(false), 150);
+            clearTimeout(blurTimerRef.current);
+            blurTimerRef.current = setTimeout(() => setShowSuggestions(false), 150);
         }, []);
+
+        const handleSuggestionSelect = useCallback(
+            value => {
+                // Refocus before hiding: handleFocus re-shows the list, so the hide must come last.
+                inputRef.current?.focus();
+                setShowSuggestions(false);
+                if (onSuggestionSelect) {
+                    onSuggestionSelect(value);
+                } else {
+                    search(searchPageType, value, { immediate: true });
+                }
+            },
+            [onSuggestionSelect, search, searchPageType]
+        );
 
         const handleClear = useCallback(() => {
             clearSearch(searchPageType);
@@ -149,39 +169,35 @@ const SearchInterface = React.memo(
                 {showSuggestions && suggestions.length > 0 && (
                     <div
                         ref={suggestionsRef}
+                        onBlur={handleBlur}
                         className="absolute z-20 w-full mt-1 bg-surface border border-border-light rounded-lg max-h-48 overflow-y-auto"
-                        role="listbox"
-                        aria-label="Search suggestions"
                     >
                         <div className="px-3 py-1.5 text-xs text-fg-muted border-b border-border">
                             Recent searches
                         </div>
-                        {suggestions.map((suggestion, idx) => (
-                            <button
-                                key={suggestion.id || idx}
-                                type="button"
-                                role="option"
-                                className="touch-target w-full text-left px-3 py-2 text-sm text-fg hover:bg-surface-hover cursor-pointer border-none bg-transparent flex items-center gap-2"
-                                onMouseDown={e => {
-                                    e.preventDefault();
-                                    const value = suggestion.term || suggestion;
-                                    setShowSuggestions(false);
-                                    if (onSuggestionSelect) {
-                                        onSuggestionSelect(value);
-                                    } else {
-                                        search(searchPageType, value, { immediate: true });
-                                    }
-                                }}
-                            >
-                                <span
-                                    className="material-symbols-outlined text-fg-muted text-base"
-                                    aria-hidden="true"
-                                >
-                                    history
-                                </span>
-                                {suggestion.term || suggestion}
-                            </button>
-                        ))}
+                        <ul className="list-none" role="list" aria-label="Recent searches">
+                            {suggestions.map((suggestion, idx) => (
+                                <li key={suggestion.id || idx}>
+                                    <button
+                                        type="button"
+                                        className="touch-target w-full text-left px-3 py-2 text-sm text-fg hover:bg-surface-hover cursor-pointer border-none bg-transparent flex items-center gap-2"
+                                        // Keeps input focus so its blur can't hide the list before the click lands.
+                                        onMouseDown={e => e.preventDefault()}
+                                        onClick={() =>
+                                            handleSuggestionSelect(suggestion.term || suggestion)
+                                        }
+                                    >
+                                        <span
+                                            className="material-symbols-outlined text-fg-muted text-base"
+                                            aria-hidden="true"
+                                        >
+                                            history
+                                        </span>
+                                        {suggestion.term || suggestion}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 )}
             </div>
