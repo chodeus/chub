@@ -32,6 +32,7 @@ from backend.util.config import (
     strip_redacted_placeholders,
 )
 from backend.util.helper import dict_diff
+from backend.util.scheduler import new_invalid_schedule
 
 
 def _reject_weak_webhook_secret(old_config: dict, new_config: dict) -> Optional[str]:
@@ -226,6 +227,16 @@ async def update_config(
                     status_code=400,
                 )
 
+            updated_config = ChubConfig.model_validate(config_dict)
+            bad = new_invalid_schedule(current_config, updated_config)
+            if bad:
+                logger.error(f"Invalid schedule at {bad[0]}: {bad[1]!r}")
+                return error(
+                    f"Invalid schedule at {bad[0]}: '{bad[1]}'",
+                    code="INVALID_SCHEDULE",
+                    status_code=400,
+                )
+
             diffs = dict_diff(old_config, new_config)
             config_logger = logger.get_adapter("CONFIG_UPDATE")
             for path, old, new in diffs:
@@ -236,7 +247,6 @@ async def update_config(
                 else:
                     config_logger.debug(f"Updated: {path} | old={old!r} | new={new!r}")
 
-            updated_config = ChubConfig.model_validate(config_dict)
             save_config(updated_config)
 
         logger.info("Configuration updated successfully")

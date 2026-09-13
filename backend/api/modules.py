@@ -26,6 +26,7 @@ from backend.api.utils import (
     require_bool_field,
 )
 from backend.util.config import ConfigError, config_write_lock
+from backend.util.scheduler import new_invalid_schedule
 from backend.util.database import ChubDB
 from backend.util.arr import arr_api_version
 
@@ -975,6 +976,14 @@ async def update_module_config(
                 config_dict[name] = payload
 
             updated = ChubConfig.model_validate(config_dict)
+            bad = new_invalid_schedule(config, updated)
+            if bad:
+                logger.error(f"Invalid schedule at {bad[0]}: {bad[1]!r}")
+                return error(
+                    f"Invalid schedule at {bad[0]}: '{bad[1]}'",
+                    code="INVALID_SCHEDULE",
+                    status_code=400,
+                )
             save_config(updated)
 
         return ok(f"Configuration for '{name}' updated", {"module": name})
