@@ -2,6 +2,46 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.49.0](https://github.com/chodeus/chub/compare/v2.48.1...v2.49.0) (2026-09-13)
+
+
+### Features
+
+* **upgradinatorr:** report upgrades that completed, not grabs ([#609](https://github.com/chodeus/chub/issues/609)) ([5f03c0b](https://github.com/chodeus/chub/commit/5f03c0bdc4fb835734bb26075f553fac6d5a29ff))
+
+
+### Bug Fixes
+
+* act on the CodeRabbit root-slice review ([#628](https://github.com/chodeus/chub/issues/628)) ([#636](https://github.com/chodeus/chub/issues/636)) ([c9d5f83](https://github.com/chodeus/chub/commit/c9d5f83a947b2322519a1e6588c2854fa7ded498))
+* **api:** close unauthenticated log forging and four input-handling faults ([#632](https://github.com/chodeus/chub/issues/632)) ([f8af2d6](https://github.com/chodeus/chub/commit/f8af2d6d8cdc068bdd25d8586ae462badc54ffcc))
+* **api:** stop non-awaiting handlers from blocking the event loop ([#603](https://github.com/chodeus/chub/issues/603)) ([ee8e658](https://github.com/chodeus/chub/commit/ee8e6580cba0805d916768c80db4e74fc4ff3fed))
+* **config:** give config read-modify-write a single owner ([#611](https://github.com/chodeus/chub/issues/611)) ([f3c25b9](https://github.com/chodeus/chub/commit/f3c25b92a91a6a07c571729942ba6c9dc7df334b))
+* **config:** refuse settings saves that store a schedule that never runs ([#639](https://github.com/chodeus/chub/issues/639)) ([2cb09fe](https://github.com/chodeus/chub/commit/2cb09fe55345d7704934838fd3fc6f2ad0183c45))
+* correctness and cost findings across modules, cache and notifications ([#634](https://github.com/chodeus/chub/issues/634)) ([b081e9c](https://github.com/chodeus/chub/commit/b081e9cab1defd8eca8999c4e1253a18569a1d72))
+* **deps:** update all non-major dependencies ([c4cd849](https://github.com/chodeus/chub/commit/c4cd849898de488ef49f1fc7693efdfda5a64c21))
+* **deps:** update all non-major dependencies ([4dfb301](https://github.com/chodeus/chub/commit/4dfb30142dfee68ec1f37b3e63256319e5f72576))
+* **deps:** update all non-major dependencies ([#637](https://github.com/chodeus/chub/issues/637)) ([c4cd849](https://github.com/chodeus/chub/commit/c4cd849898de488ef49f1fc7693efdfda5a64c21))
+* **deps:** update all non-major dependencies ([#638](https://github.com/chodeus/chub/issues/638)) ([4dfb301](https://github.com/chodeus/chub/commit/4dfb30142dfee68ec1f37b3e63256319e5f72576))
+* **jduparr:** measure relinks from inodes instead of assuming them ([#621](https://github.com/chodeus/chub/issues/621)) ([2ed07c4](https://github.com/chodeus/chub/commit/2ed07c425c128817602b0a00ecef68b3abe19505))
+* Lidarr endpoints, year-0 metadata, empty config sections and stale caches ([#630](https://github.com/chodeus/chub/issues/630)) ([e25678c](https://github.com/chodeus/chub/commit/e25678cb2bcbc4e6db8c6af92530a30509b56f9b))
+* **posters:** make match state transitions atomic ([#606](https://github.com/chodeus/chub/issues/606)) ([f5aab1d](https://github.com/chodeus/chub/commit/f5aab1d5916fce620763933943b085474ff8374e))
+* preview-refresh collisions and the reversed container uid/gid ([#612](https://github.com/chodeus/chub/issues/612)) ([6e19078](https://github.com/chodeus/chub/commit/6e19078d74631288aa614289c2b9a6e07a89469b))
+* **scheduler,nohl:** stop blocks re-firing and an unreadable share aborting a run ([#633](https://github.com/chodeus/chub/issues/633)) ([22c8d4e](https://github.com/chodeus/chub/commit/22c8d4e87de1d44d20a3ae95b062cf6bb1922d8e))
+* **security:** close fail-open scheduler gate, SSRF rebind and body-flag coercion ([#629](https://github.com/chodeus/chub/issues/629)) ([cb85e22](https://github.com/chodeus/chub/commit/cb85e220504fbc6e273b3c4042ba10d23f8ec79a))
+* **settings:** stop password managers filling logins into secret fields ([#620](https://github.com/chodeus/chub/issues/620)) ([26508f8](https://github.com/chodeus/chub/commit/26508f836800c8d0a1703de4ff4e93ac6cd00580))
+* **upgradinatorr:** report first acquisitions, not just upgrades ([#615](https://github.com/chodeus/chub/issues/615)) ([b8f17bb](https://github.com/chodeus/chub/commit/b8f17bb92db4f6340acd239e387994f0f1af857b))
+
+
+### Performance
+
+* batch per-row database writes and bound hot-path allocations ([#631](https://github.com/chodeus/chub/issues/631)) ([7fd754e](https://github.com/chodeus/chub/commit/7fd754e2d9811e54f8d83cca3f39ded7eeb70eaf))
+
+
+### Documentation
+
+* correct comments and docstrings that disagree with the code ([a94dc9a](https://github.com/chodeus/chub/commit/a94dc9ad2d4cca41cba30852889bf4e6674ae49a))
+* trim over-length comments to the 1-2 line cap ([807cfce](https://github.com/chodeus/chub/commit/807cfcec7e7cacf893cfca7af37b609d2aa4a347))
+
 ## [2.48.1](https://github.com/chodeus/chub/compare/v2.48.0...v2.48.1) (2026-08-30)
 
 
