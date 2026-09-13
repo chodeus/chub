@@ -152,7 +152,8 @@ def check_schedule(
             return int(data) == now.minute
 
         if frequency == "daily":
-            times = data.split("|")
+            # Empty segments are skipped, as validate_schedule does.
+            times = [t for t in data.split("|") if t]
             for time_ in times:
                 hour, minute = map(int, time_.split(":"))
                 if now.hour == hour and now.minute == minute:
@@ -174,7 +175,7 @@ def check_schedule(
                     return True
 
         if frequency == "range":
-            if any(md_range_contains(span, now) for span in data.split("|")):
+            if any(md_range_contains(span, now) for span in data.split("|") if span):
                 return True
 
         if frequency == "cron":

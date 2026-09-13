@@ -133,6 +133,14 @@ def test_check_schedule_range_outside(monkeypatch):
     assert check_schedule("x", "range(1/1-1/31)", None) is False
 
 
+@pytest.mark.parametrize("schedule", ["daily(|09:00)", "range(|5/1-5/31)"])
+def test_check_schedule_skips_empty_segments(monkeypatch, schedule):
+    # validate_schedule accepts these, so a stored one must still fire.
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    result = check_schedule("x", schedule, None)
+    assert result is True
+
+
 @pytest.mark.parametrize(
     "target, expected",
     [
