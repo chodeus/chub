@@ -1,4 +1,4 @@
-import React, { useId, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
 
@@ -8,6 +8,12 @@ const ErrorDialog = ({ title, description, children, className }) => {
     const descriptionId = useId();
     useFocusTrap(dialogRef, true);
 
+    // Runs after useFocusTrap's effect, which focuses nothing when there is no focusable child.
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        if (dialog && !dialog.contains(document.activeElement)) dialog.focus();
+    }, []);
+
     return (
         <div className="fixed inset-0 z-modal-backdrop bg-overlay backdrop-blur-sm font-sans flex items-center justify-center p-4">
             <div
@@ -16,7 +22,8 @@ const ErrorDialog = ({ title, description, children, className }) => {
                 aria-modal="true"
                 aria-labelledby={titleId}
                 aria-describedby={description ? descriptionId : undefined}
-                className={`relative bg-surface border-2 border-error rounded-lg p-6 max-w-lg w-full max-h-screen overflow-y-auto shadow-xl z-modal ${className}`}
+                tabIndex={-1}
+                className={`relative bg-surface border-2 border-error rounded-lg p-6 max-w-lg w-full max-h-screen overflow-y-auto shadow-xl z-modal focus:outline-none ${className}`}
             >
                 <h2
                     id={titleId}
