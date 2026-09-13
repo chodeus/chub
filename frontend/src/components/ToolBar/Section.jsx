@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useLayoutEffect, useId } from 'react';
+import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import PropTypes from 'prop-types';
 import Button from './Button.jsx';
 import Dropdown from '../ui/Dropdown.jsx';
@@ -17,7 +17,6 @@ import { useToolBar } from './ToolBarContext.jsx';
  * @param {boolean} [props.collapseButtons=true] - Enable button collapse/overflow
  */
 const Section = ({ children, alignContent = 'left', collapseButtons = true }) => {
-    const sectionId = useId();
     const sectionRef = useRef(null);
     const moreButtonRef = useRef(null);
     const [sectionWidth, setSectionWidth] = useState(0);
@@ -36,16 +35,15 @@ const Section = ({ children, alignContent = 'left', collapseButtons = true }) =>
 
     // Measure section width
     useLayoutEffect(() => {
-        const updateWidth = () => {
-            if (sectionRef.current) {
-                const newWidth = sectionRef.current.offsetWidth;
-                setSectionWidth(newWidth);
-            }
-        };
+        const section = sectionRef.current;
+        if (!section) return undefined;
 
-        updateWidth();
-        window.addEventListener('resize', updateWidth);
-        return () => window.removeEventListener('resize', updateWidth);
+        setSectionWidth(section.offsetWidth);
+        if (typeof ResizeObserver === 'undefined') return undefined;
+
+        const observer = new ResizeObserver(() => setSectionWidth(section.offsetWidth));
+        observer.observe(section);
+        return () => observer.disconnect();
     }, []);
 
     // Force recalculation when children change
@@ -56,8 +54,8 @@ const Section = ({ children, alignContent = 'left', collapseButtons = true }) =>
     }, [children]);
 
     const { visibleButtons, overflowItems, buttonCount } = useMemo(() => {
-        return calculateSectionOverflow(sectionId, children, sectionWidth, collapseButtons);
-    }, [calculateSectionOverflow, sectionId, children, sectionWidth, collapseButtons]);
+        return calculateSectionOverflow(children, sectionWidth, collapseButtons);
+    }, [calculateSectionOverflow, children, sectionWidth, collapseButtons]);
 
     const getJustifyClass = () => {
         switch (alignContent) {

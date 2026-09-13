@@ -46,9 +46,7 @@ const LayoutSidebar = React.memo(() => {
         return m ? `v${m[1]} · ${m[2]} #${m[3]}` : `v${raw}`;
     }, [versionData]);
 
-    const handleParentNavLinkClick = useCallback(() => {}, []);
-
-    const handleChildNavLinkClick = useCallback(() => {
+    const handleNavLinkClick = useCallback(() => {
         if (isMobile && mobileMenuOpen) {
             closeMobileMenu();
         }
@@ -102,13 +100,14 @@ const LayoutSidebar = React.memo(() => {
             role="navigation"
             aria-label="Main navigation"
             aria-hidden={isMobile && !mobileMenuOpen}
+            inert={isMobile && !mobileMenuOpen}
         >
             <div className="flex flex-col h-full py-4">
                 {/* Brand lockup — gold mark + wordmark. Always present at the
                     top of the sidebar; links home. */}
                 <NavLink
                     to="/"
-                    onClick={handleParentNavLinkClick}
+                    onClick={handleNavLinkClick}
                     className="flex items-center gap-3 px-4 pt-1 pb-4 no-underline hover:opacity-90 transition-opacity"
                     aria-label="CHUB — Media Manager, go to dashboard"
                 >
@@ -136,7 +135,12 @@ const LayoutSidebar = React.memo(() => {
                                     <li key={item.id} className="mb-0">
                                         <NavLink
                                             to={item.path}
-                                            onClick={handleParentNavLinkClick}
+                                            // Parent links keep the drawer open so a child can be picked.
+                                            onClick={
+                                                item.type === 'parent'
+                                                    ? undefined
+                                                    : handleNavLinkClick
+                                            }
                                             className={`sidebar-nav-link flex items-center gap-3 py-3 px-3 mx-0 my-0.5 rounded-lg no-underline text-sm font-medium transition-all duration-150 touch-target relative ${
                                                 item.type === 'parent' && isParentActive(item)
                                                     ? 'sidebar-nav-link--active'
@@ -173,7 +177,7 @@ const LayoutSidebar = React.memo(() => {
                                                         <li key={child.id} className="mb-0">
                                                             <NavLink
                                                                 to={child.path}
-                                                                onClick={handleChildNavLinkClick}
+                                                                onClick={handleNavLinkClick}
                                                                 className={`sidebar-nav-link sidebar-nav-link--child flex items-center py-2 pl-12 pr-3 rounded-lg my-0.5 no-underline text-sm font-normal transition-all duration-150 touch-target ${
                                                                     isChildActive(child.path)
                                                                         ? 'sidebar-nav-link--child-active'
