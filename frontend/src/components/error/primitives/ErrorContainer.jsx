@@ -45,11 +45,16 @@ ErrorDialog.propTypes = {
     className: PropTypes.string.isRequired,
 };
 
-/** Error layout wrapper: modal alert dialog (needs `title`), centred page card, or inline banner. */
+/** Error layout wrapper: modal alert dialog, centred page card, or inline banner. */
 export const ErrorContainer = ({ mode = 'page', title, description, children, className = '' }) => {
     if (mode === 'modal') {
         return (
-            <ErrorDialog title={title} description={description} className={className}>
+            <ErrorDialog
+                // `||` on purpose: an empty-string title would also leave the dialog unnamed.
+                title={title || 'Something went wrong'}
+                description={description}
+                className={className}
+            >
                 {children}
             </ErrorDialog>
         );

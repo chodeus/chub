@@ -1,10 +1,20 @@
 /** Guards FeatureErrorBoundary's retry limit, its reset after recovery, timer cleanup and a11y. */
-import { useEffect } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { act, fireEvent, isInaccessible, render, screen } from '@testing-library/react';
 import FeatureErrorBoundary from './FeatureErrorBoundary.jsx';
 import { ErrorProvider } from './ErrorContext.jsx';
+import { copyText } from '../../utils/clipboard.js';
 
 vi.mock('../../utils/clipboard.js', () => ({ copyText: vi.fn() }));
+
+function deferred() {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
 
 const PAST_RECOVERY_WINDOW = 60_000;
 const flaky = { throws: true };
@@ -23,11 +33,13 @@ function ThrowsFromEffect() {
 
 function renderBoundary(child, props = {}) {
     const tree = c => (
-        <ErrorProvider>
-            <FeatureErrorBoundary featureName="Widget" {...props}>
-                {c}
-            </FeatureErrorBoundary>
-        </ErrorProvider>
+        <StrictMode>
+            <ErrorProvider>
+                <FeatureErrorBoundary featureName="Widget" {...props}>
+                    {c}
+                </FeatureErrorBoundary>
+            </ErrorProvider>
+        </StrictMode>
     );
     const view = render(tree(child));
     return { ...view, rerender: c => view.rerender(tree(c)) };
@@ -114,6 +126,25 @@ describe('FeatureErrorBoundary', () => {
         view.unmount();
 
         expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each([
+        ['resolves', copy => copy.resolve()],
+        ['rejects', copy => copy.reject(new Error('denied'))],
+    ])('ignores a copy that %s after unmount', async (_, settle) => {
+        const copy = deferred();
+        copyText.mockReturnValue(copy.promise);
+        const view = renderBoundary(<Flaky />);
+        fireEvent.click(screen.getByRole('button', { name: /Copy Error/ }));
+        view.unmount();
+        vi.mocked(console.error).mockClear();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        await act(async () => settle(copy));
+
+        expect(vi.getTimerCount()).toBe(0);
+        expect(console.error).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
     });
 
     it('renders a critical error as a labelled alert dialog holding focus', () => {

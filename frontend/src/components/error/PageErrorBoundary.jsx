@@ -111,9 +111,11 @@ class PageErrorBoundaryBase extends Component {
 
         try {
             await copyText(JSON.stringify(errorDetails, null, 2));
+            if (!this.mounted) return;
             this.setState({ copying: false, copySuccess: true, copyError: false });
             this.resetCopyStatusAfter(2000);
         } catch (clipboardError) {
+            if (!this.mounted) return;
             console.error('Failed to copy error details:', clipboardError);
             this.setState({ copying: false, copySuccess: false, copyError: true });
             this.resetCopyStatusAfter(3000);
@@ -128,7 +130,13 @@ class PageErrorBoundaryBase extends Component {
         );
     };
 
+    // Set here, not in the constructor: StrictMode unmounts and remounts the same instance.
+    componentDidMount() {
+        this.mounted = true;
+    }
+
     componentWillUnmount() {
+        this.mounted = false;
         clearTimeout(this.copyStatusTimer);
     }
 

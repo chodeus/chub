@@ -1,11 +1,4 @@
-/**
- * Error Primitives - Atomic building blocks for error displays
- *
- * Three primitives that compose to create consistent error UIs:
- * - ErrorContainer: Layout wrapper (modal/page/inline modes)
- * - ErrorIcon: Visual error indicator
- * - ErrorActions: Action button composition
- */
+/** Error-screen building blocks: layout container, icon, and action row. */
 
 export { ErrorContainer } from './ErrorContainer';
 export { ErrorIcon } from './ErrorIcon';

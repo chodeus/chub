@@ -1,18 +1,4 @@
-/**
- * Error System - Composition-first error handling architecture
- *
- * Primitives (3 components):
- * - ErrorContainer, ErrorIcon, ErrorActions
- *
- * Boundaries:
- * - PageErrorBoundary (page-level errors)
- * - FeatureErrorBoundary (feature-level errors with critical/inline modes)
- *
- * Context & Hooks:
- * - ErrorProvider (global error state)
- * - useErrorContext (error reporting)
- * - useErrorRecovery (recovery actions with retry limits)
- */
+/** Error screens: primitives, page and feature boundaries, and the ErrorProvider context. */
 
 export * from './primitives';
 export { default as PageErrorBoundary } from './PageErrorBoundary';
