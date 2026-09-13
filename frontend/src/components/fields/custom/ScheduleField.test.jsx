@@ -9,6 +9,7 @@ describe('ScheduleField', () => {
     it.each([
         ['99', 'hourly(59)'],
         ['-5', 'hourly(0)'],
+        ['1e1', 'hourly(10)'],
     ])('clamps a typed hourly minute of %s', (typed, expected) => {
         const onChange = vi.fn();
         render(<ScheduleField field={field} value="hourly(5)" onChange={onChange} />);

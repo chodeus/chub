@@ -1,13 +1,13 @@
-/** Guards the local draft: partial input stays on screen and only complete numbers are emitted. */
+/** Guards the local draft: partial or out-of-range input stays on screen and is never emitted. */
 import { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FloatField } from './FloatField.jsx';
 
-function Harness({ onChange }) {
+function Harness({ onChange, field }) {
     const [value, setValue] = useState(0.5);
     return (
         <FloatField
-            field={{ key: 'threshold', label: 'Threshold' }}
+            field={{ key: 'threshold', label: 'Threshold', ...field }}
             value={value}
             onChange={next => {
                 setValue(next);
@@ -39,5 +39,21 @@ describe('FloatField', () => {
 
         expect(onChange.mock.calls.flat().every(v => v === null || Number.isFinite(v))).toBe(true);
         expect(onChange).toHaveBeenLastCalledWith(0.51);
+    });
+
+    it('lets the "5" of "50" through with min 10 and clamps out-of-range text on blur', () => {
+        const onChange = vi.fn();
+        render(<Harness onChange={onChange} field={{ min: 10 }} />);
+        const input = screen.getByLabelText('Threshold');
+
+        fireEvent.change(input, { target: { value: '5' } });
+        expect(input).toHaveValue('5');
+        fireEvent.change(input, { target: { value: '50' } });
+        expect(onChange).toHaveBeenLastCalledWith(0.5);
+
+        fireEvent.change(input, { target: { value: '500' } });
+        expect(onChange).toHaveBeenLastCalledWith(0.5);
+        fireEvent.blur(input);
+        expect(onChange).toHaveBeenLastCalledWith(1);
     });
 });

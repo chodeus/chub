@@ -1,16 +1,6 @@
 import React, { useCallback } from 'react';
 
-/**
- * Enhanced time input component with 24-hour validation
- * @param {string} id - Input id, for label binding
- * @param {string} ariaLabel - Accessible name when no <label> is bound to the input
- * @param {string} value - Time value in HH:mm format (24-hour)
- * @param {Function} onChange - Value change callback
- * @param {boolean} disabled - Whether the input is disabled
- * @param {boolean} required - Whether the input is required
- * @param {string} placeholder - Placeholder text
- * @param {string} className - Additional CSS classes
- */
+/** 24-hour time input; pass `id` for a bound <label>, or `ariaLabel` when there is none. */
 export const TimeInput = React.memo(
     ({
         id,

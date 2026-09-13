@@ -17,6 +17,15 @@ import { Modal, Button, LoadingButton } from '../../ui';
 import { postersAPI } from '../../../utils/api/posters';
 import { useToast } from '../../../contexts/ToastContext.jsx';
 
+let rowIdSeq = 0;
+const newRowIds = count => Array.from({ length: count }, () => `row-${++rowIdSeq}`);
+const alignRowIds = (ids, length) =>
+    ids.length === length
+        ? ids
+        : ids.length > length
+          ? ids.slice(0, length)
+          : [...ids, ...newRowIds(length - ids.length)];
+
 /**
  * Unified ArrayObjectField - Handles dynamic array of objects with configurable schemas
  * Uses accordion-style expansion for mobile-first design without modal dependency
@@ -46,6 +55,10 @@ export const ArrayObjectField = ({
     const [gdriveDeleteLocal, setGdriveDeleteLocal] = useState(false);
     const [gdriveDeleting, setGdriveDeleting] = useState(false);
     const toast = useToast();
+    // Client-only row keys, never saved: index keys let removing a row hand its
+    // field components' local state (e.g. un-submitted TagInput text) to the next row.
+    const [rowIds, setRowIds] = useState(() => newRowIds(value.length));
+    const rowKey = index => rowIds[index] ?? `tail-${index}`;
 
     // Load instances data for conditional field evaluation and dynamic dropdowns
     const { instancesData } = useInstancesData();
@@ -102,10 +115,11 @@ export const ArrayObjectField = ({
             newArray[expandedIndex] = editingData;
         }
 
+        setRowIds(alignRowIds(rowIds, newArray.length));
         onChange(newArray);
         setExpandedIndex(null);
         setEditingData({});
-    }, [expandedIndex, editingData, value, onChange]);
+    }, [expandedIndex, editingData, value, rowIds, onChange]);
 
     const handleCancel = useCallback(() => {
         setExpandedIndex(null);
@@ -115,6 +129,7 @@ export const ArrayObjectField = ({
     const handleRemove = useCallback(
         index => {
             const newArray = value.filter((_, i) => i !== index);
+            setRowIds(alignRowIds(rowIds, value.length).filter((_, i) => i !== index));
             onChange(newArray);
             if (expandedIndex === null || index > expandedIndex) return;
             if (index < expandedIndex) {
@@ -124,7 +139,15 @@ export const ArrayObjectField = ({
             setExpandedIndex(null);
             setEditingData({});
         },
-        [value, onChange, expandedIndex]
+        [value, rowIds, onChange, expandedIndex]
+    );
+
+    const handleBulkChange = useCallback(
+        next => {
+            setRowIds(alignRowIds(rowIds, next.length));
+            onChange(next);
+        },
+        [rowIds, onChange]
     );
 
     // Gdrive drive removal is confirmed via a modal so it's not accidental, and
@@ -181,7 +204,7 @@ export const ArrayObjectField = ({
         const isExpanded = expandedIndex === index;
 
         return (
-            <div key={index} className="border-b border-border last:border-b-0">
+            <div key={rowKey(index)} className="border-b border-border last:border-b-0">
                 <div className="flex items-center justify-between min-h-11 transition-colors hover:bg-surface-hover focus-within:bg-surface-hover">
                     {/* RemoveButton stays a sibling: a control nested in this button is invalid. */}
                     <button
@@ -354,8 +377,10 @@ export const ArrayObjectField = ({
     );
 
     const handleAddExpanded = useCallback(() => {
-        onChange([...value, buildDefaultItem()]);
-    }, [value, onChange, buildDefaultItem]);
+        const next = [...value, buildDefaultItem()];
+        setRowIds(alignRowIds(rowIds, next.length));
+        onChange(next);
+    }, [value, rowIds, onChange, buildDefaultItem]);
 
     const renderItemFields = (item, index, excludeKeys = []) => {
         const apiData = { instances: instancesData };
@@ -412,7 +437,10 @@ export const ArrayObjectField = ({
     const renderExpandedCard = (item, index) => {
         const { primary, badge } = displayTemplate.display(item);
         return (
-            <div key={index} className="bg-surface border border-border rounded-xl overflow-hidden">
+            <div
+                key={rowKey(index)}
+                className="bg-surface border border-border rounded-xl overflow-hidden"
+            >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border bg-surface-inset">
                     <div className="min-w-0 flex-1">
                         <div className="font-semibold text-sm text-fg truncate">{primary}</div>
@@ -461,7 +489,7 @@ export const ArrayObjectField = ({
             'h-11 px-2.5 rounded-md bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary w-full';
         return (
             <div
-                key={index}
+                key={rowKey(index)}
                 className={`bg-surface border border-border rounded-xl overflow-hidden ${enabled ? '' : 'opacity-60'}`}
             >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border bg-surface-inset">
@@ -644,7 +672,7 @@ export const ArrayObjectField = ({
                         <div className="flex flex-col gap-2">
                             {value.map((item, index) => (
                                 <div
-                                    key={index}
+                                    key={rowKey(index)}
                                     className="grid gap-3 items-center px-3 py-2 rounded-[9px] bg-surface-inset border border-border transition-colors focus-within:border-primary"
                                     style={{ gridTemplateColumns: cols }}
                                 >
@@ -839,7 +867,7 @@ export const ArrayObjectField = ({
         const enabled = item.enabled !== false;
         return (
             <div
-                key={index}
+                key={rowKey(index)}
                 className={`bg-surface border border-border rounded-xl overflow-hidden ${enabled ? '' : 'opacity-60'}`}
             >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border bg-surface-inset">
@@ -899,7 +927,7 @@ export const ArrayObjectField = ({
                         <BulkPresetPicker
                             field={field}
                             value={value}
-                            onChange={onChange}
+                            onChange={handleBulkChange}
                             disabled={disabled}
                         />
                     )}
@@ -939,7 +967,7 @@ export const ArrayObjectField = ({
                     <BulkPresetPicker
                         field={field}
                         value={value}
-                        onChange={onChange}
+                        onChange={handleBulkChange}
                         disabled={disabled}
                     />
                 )}

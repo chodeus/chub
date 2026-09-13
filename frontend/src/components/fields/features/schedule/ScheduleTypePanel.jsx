@@ -41,7 +41,8 @@ export const ScheduleTypePanel = React.memo(
                         max="59"
                         value={scheduleData.minute || 0}
                         onChange={e => {
-                            const minute = parseInt(e.target.value, 10) || 0;
+                            const typed = Number(e.target.value);
+                            const minute = Number.isInteger(typed) ? typed : 0;
                             updateScheduleData({ minute: Math.min(59, Math.max(0, minute)) });
                         }}
                         disabled={disabled}

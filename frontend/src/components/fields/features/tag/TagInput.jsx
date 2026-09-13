@@ -1,18 +1,4 @@
-/**
- * TagInput - Complete string collection management with autocomplete
- *
- * Manages any string array (tags, categories, keywords, labels) with
- * configurable autocomplete, full ARIA accessibility, and keyboard navigation.
- * Touch-optimized with mobile-first responsive behavior.
- *
- * Features:
- * - Agnostic string array management without content validation
- * - Array-based suggestion list with filtering
- * - Duplicate prevention with case-sensitive/insensitive options
- * - Comprehensive keyboard navigation (arrows, enter, escape, delete)
- * - Full ARIA combobox pattern for screen readers
- * - Touch-optimized suggestion selection
- */
+/** TagInput - string-array editor with array suggestions and the ARIA combobox pattern. */
 
 import React, { useState, useRef, useCallback, useMemo, useId, useEffect } from 'react';
 import { Badge } from './Badge';
@@ -355,6 +341,12 @@ export const TagInput = React.memo(
                             aria-haspopup="listbox"
                             aria-autocomplete="both"
                             aria-controls={showSuggestions ? listboxId : undefined}
+                            aria-activedescendant={
+                                showSuggestions &&
+                                filteredSuggestions[focusedSuggestionIndex] !== undefined
+                                    ? `${listboxId}-option-${focusedSuggestionIndex}`
+                                    : undefined
+                            }
                             aria-describedby={[descriptionId, ariaDescribedby]
                                 .filter(Boolean)
                                 .join(' ')}
@@ -393,6 +385,7 @@ export const TagInput = React.memo(
                             {filteredSuggestions.map((suggestion, index) => (
                                 <div
                                     key={suggestion}
+                                    id={`${listboxId}-option-${index}`}
                                     role="option"
                                     aria-selected={index === focusedSuggestionIndex}
                                     className={[

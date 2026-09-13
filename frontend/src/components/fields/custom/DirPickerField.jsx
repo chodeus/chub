@@ -17,7 +17,8 @@ const matchRoot = (path, roots) => {
     if (!path || !Array.isArray(roots) || roots.length === 0) return null;
     let best = null;
     for (const r of roots) {
-        if (path === r || path.startsWith(r + '/')) {
+        const base = r.replace(/\/+$/, '');
+        if (path === r || path === base || path.startsWith(base + '/')) {
             if (!best || r.length > best.length) best = r;
         }
     }

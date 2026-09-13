@@ -20,7 +20,7 @@ export const FloatField = React.memo(
         highlightInvalid = false,
         errorMessage = null,
     }) => {
-        // Text shown while typing; partial input ("1.", "-") stays here and is never emitted.
+        // Typed text; partial ("1.", "-") or out-of-range input stays here and is never emitted.
         const [draft, setDraft] = useState(null);
         // Convert decimal (0-1) to percentage (0-100) for display with precision fix
         const percentageValue =
@@ -35,18 +35,26 @@ export const FloatField = React.memo(
             e => {
                 const inputValue = e.target.value;
                 if (!/^-?\d*\.?\d*$/.test(inputValue)) return;
-                if (!/^-?\d*\.?\d+$/.test(inputValue)) {
-                    setDraft(inputValue);
-                    if (inputValue === '') onChange(null);
+                setDraft(inputValue);
+                if (inputValue === '') {
+                    onChange(null);
                     return;
                 }
-                const newPercentValue = Number(inputValue);
-                if (newPercentValue < percentMin || newPercentValue > percentMax) return;
-                setDraft(inputValue);
-                onChange(toStored(newPercentValue));
+                const next = Number(inputValue);
+                const inRange = next >= percentMin && next <= percentMax;
+                if (/^-?\d*\.?\d+$/.test(inputValue) && inRange) onChange(toStored(next));
             },
             [percentMin, percentMax, onChange]
         );
+
+        const handleBlur = useCallback(() => {
+            const typed = draft ? Number(draft) : NaN;
+            if (Number.isFinite(typed)) {
+                const clamped = toStored(Math.min(percentMax, Math.max(percentMin, typed)));
+                if (clamped !== value) onChange(clamped);
+            }
+            setDraft(null);
+        }, [draft, value, percentMin, percentMax, onChange]);
 
         const handleDecrement = useCallback(() => {
             const newPercentValue = percentageValue - step;
@@ -93,7 +101,7 @@ export const FloatField = React.memo(
                             draft ?? (value === null || value === undefined ? '' : percentageValue)
                         }
                         onChange={handleInputChange}
-                        onBlur={() => setDraft(null)}
+                        onBlur={handleBlur}
                         disabled={disabled}
                         required={field.required}
                         placeholder={field.placeholder}

@@ -1,19 +1,6 @@
 import InfoTooltip from '../../ui/InfoTooltip.jsx';
 
-/**
- * FieldLabel Primitive Component
- *
- * Universal label component with required indicator support.
- * This primitive is composed by ALL field types for consistent labeling.
- *
- * @param {Object} props - Component props
- * @param {string} props.htmlFor - ID of the associated form control
- * @param {string} [props.id] - ID of the label element, for aria-labelledby
- * @param {string} props.label - Label text to display
- * @param {boolean} [props.required=false] - Show required indicator
- * @param {string} [props.helpText] - Longer guidance revealed via an inline ⓘ tooltip
- * @param {string} [props.className=""] - Additional CSS classes
- */
+/** Label with a required marker; `id` serves aria-labelledby, `helpText` adds an ⓘ tooltip. */
 export const FieldLabel = ({ htmlFor, id, label, required = false, helpText, className = '' }) => {
     if (!label) return null;
 

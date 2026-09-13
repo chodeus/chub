@@ -43,7 +43,7 @@ export const TextareaField = React.memo(
                 <TextareaBase
                     id={inputId}
                     name={field.key}
-                    value={value || ''}
+                    value={value ?? ''}
                     placeholder={field.placeholder}
                     disabled={disabled}
                     required={field.required}

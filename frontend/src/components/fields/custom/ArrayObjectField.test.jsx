@@ -1,6 +1,6 @@
 /** Guards the open editor against a removal above it, and the row's button semantics. */
 import { useState } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 vi.mock('../../../hooks/useInstancesData', () => ({
     useInstancesData: () => ({ instancesData: {} }),
@@ -98,5 +98,37 @@ describe('ArrayObjectField', () => {
             />
         );
         expect(screen.getByText('Alpha')).toBeInTheDocument();
+    });
+
+    it("keeps a card's un-submitted tag text with its row when a row above is removed", () => {
+        const labelarr = {
+            key: 'mappings',
+            label: 'Mappings',
+            type: 'object_array',
+            displayType: 'labelarr',
+            alwaysExpanded: true,
+            fields: [
+                { key: 'app_instance', type: 'dropdown', label: 'ARR' },
+                { key: 'labels', type: 'array', label: 'Labels' },
+                { key: 'enabled', type: 'check_box', label: 'Enabled' },
+            ],
+        };
+        function LabelarrHarness() {
+            const [value, setValue] = useState(
+                ['a', 'b', 'c'].map(name => ({ app_instance: name, labels: [`${name}-label`] }))
+            );
+            return <ArrayObjectField field={labelarr} value={value} onChange={setValue} />;
+        }
+        render(<LabelarrHarness />);
+        const tagInputOf = label =>
+            within(screen.getByText(label).closest('.rounded-xl')).getByRole('combobox', {
+                name: 'Labels',
+            });
+
+        fireEvent.change(tagInputOf('b-label'), { target: { value: 'kids' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Remove mapping 1' }));
+
+        expect(tagInputOf('b-label')).toHaveValue('kids');
+        expect(tagInputOf('c-label')).toHaveValue('');
     });
 });

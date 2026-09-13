@@ -13,6 +13,16 @@ describe('Badge', () => {
         expect(onRemove).toHaveBeenCalledTimes(1);
     });
 
+    it('ignores keys pressed on the nested remove button', () => {
+        const onRemove = vi.fn();
+        render(<Badge onRemove={onRemove}>logo</Badge>);
+
+        fireEvent.keyDown(screen.getByRole('button', { name: 'Remove item: logo' }), {
+            key: 'Enter',
+        });
+        expect(onRemove).not.toHaveBeenCalled();
+    });
+
     it('is not exposed as a toggle button', () => {
         render(
             <Badge onRemove={() => {}} focused>

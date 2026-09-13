@@ -53,6 +53,18 @@ describe('TagInput', () => {
         expect(input).not.toHaveAttribute('aria-controls');
     });
 
+    it('points aria-activedescendant at the option ArrowDown focuses', () => {
+        render(<TagInput items={[]} suggestions={['logo', 'background']} />);
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        expect(input).not.toHaveAttribute('aria-activedescendant');
+
+        fireEvent.keyDown(input, { key: 'ArrowDown' });
+        const [first] = screen.getAllByRole('option');
+        expect(first.id).not.toBe('');
+        expect(input).toHaveAttribute('aria-activedescendant', first.id);
+    });
+
     it('clears its pending blur timer on unmount', () => {
         vi.useFakeTimers();
         try {

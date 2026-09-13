@@ -67,6 +67,8 @@ export const Badge = React.memo(
         };
 
         const handleKeyDown = e => {
+            // Keys pressed on the nested remove button bubble here; only the badge's own count.
+            if (e.target !== e.currentTarget) return;
             if (disabled) return;
 
             if (e.key === 'Enter' || e.key === ' ') {

@@ -50,6 +50,54 @@ const DAY_TOKEN_TO_KEY = {
     saturday: 'saturday',
 };
 
+// Compose schedule string from type and data
+const composeScheduleString = (type, data) => {
+    if (!type || !data) {
+        return '';
+    }
+
+    try {
+        switch (type) {
+            case 'hourly': {
+                const minute = data.minute || 0;
+                return `hourly(${minute})`;
+            }
+
+            case 'daily': {
+                const times = data.times || [];
+                if (times.length === 0) return '';
+                return `daily(${times.join('|')})`;
+            }
+
+            case 'weekly': {
+                const days = data.days || [];
+                const time = data.time || '09:00';
+                if (days.length === 0) return '';
+                return `weekly(${days.map(day => `${day}@${time}`).join('|')})`;
+            }
+
+            case 'monthly': {
+                const days = data.days || [];
+                const time = data.time || '09:00';
+                if (days.length === 0) return '';
+                return `monthly(${days.map(day => `${day}@${time}`).join('|')})`;
+            }
+
+            case 'cron': {
+                const expression = data.expression || '';
+                if (!expression.trim()) return 'cron()';
+                return `cron(${expression})`;
+            }
+
+            default:
+                return '';
+        }
+    } catch (error) {
+        console.warn('Failed to compose schedule string:', type, data, error);
+        return '';
+    }
+};
+
 /**
  * Main schedule input component using atomic primitives
  * @param {Object} field - Field configuration
@@ -167,54 +215,6 @@ export const ScheduleField = React.memo(
                 return { type: 'daily', data: {} };
             }
         }, []);
-
-        // Compose schedule string from type and data (pure function, no useCallback needed)
-        const composeScheduleString = (type, data) => {
-            if (!type || !data) {
-                return '';
-            }
-
-            try {
-                switch (type) {
-                    case 'hourly': {
-                        const minute = data.minute || 0;
-                        return `hourly(${minute})`;
-                    }
-
-                    case 'daily': {
-                        const times = data.times || [];
-                        if (times.length === 0) return '';
-                        return `daily(${times.join('|')})`;
-                    }
-
-                    case 'weekly': {
-                        const days = data.days || [];
-                        const time = data.time || '09:00';
-                        if (days.length === 0) return '';
-                        return `weekly(${days.map(day => `${day}@${time}`).join('|')})`;
-                    }
-
-                    case 'monthly': {
-                        const days = data.days || [];
-                        const time = data.time || '09:00';
-                        if (days.length === 0) return '';
-                        return `monthly(${days.map(day => `${day}@${time}`).join('|')})`;
-                    }
-
-                    case 'cron': {
-                        const expression = data.expression || '';
-                        if (!expression.trim()) return 'cron()';
-                        return `cron(${expression})`;
-                    }
-
-                    default:
-                        return '';
-                }
-            } catch (error) {
-                console.warn('Failed to compose schedule string:', type, data, error);
-                return '';
-            }
-        };
 
         // Sync from value on every change (not just type change), or a saved
         // schedule matching the 'daily' default never loads its data. Equality
