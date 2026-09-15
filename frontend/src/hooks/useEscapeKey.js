@@ -7,7 +7,6 @@ import { useEffect } from 'react';
  * - Calls callback when ESC key pressed
  * - Only active when isActive=true
  * - Proper cleanup on unmount or deactivation
- * - Multiple modals support (last modal wins - last mounted handler executes first)
  * - Event listener added at document level for global scope
  *
  * @example
@@ -33,7 +32,6 @@ export const useEscapeKey = (onEscape, isActive) => {
         };
 
         // Add event listener at document level
-        // Last mounted modal will handle ESC first (event propagation)
         document.addEventListener('keydown', handleEscape);
 
         // Cleanup: remove event listener

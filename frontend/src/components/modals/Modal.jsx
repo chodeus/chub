@@ -1,7 +1,7 @@
 import { useState, useContext, createContext, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useUIState } from '../../contexts/UIStateContext';
-import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { isTopFocusTrap, useFocusTrap } from '../../hooks/useFocusTrap';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 
@@ -82,10 +82,16 @@ export const Modal = ({
         onClose?.();
     }, [closable, isControlled, onClose]);
 
+    // Escape closes only the top dialog, never a Modal under the critical error dialog.
+    const handleEscape = useCallback(() => {
+        if (isTopFocusTrap(containerRef.current)) handleClose();
+    }, [handleClose]);
+
     // Accessibility hooks
-    useFocusTrap(containerRef, isOpen && closable);
+    // Not gated on closable: SchedulePage flips it while saving, which would throw focus out mid-save.
+    useFocusTrap(containerRef, isOpen);
     useBodyScrollLock(isOpen);
-    useEscapeKey(handleClose, isOpen && closable);
+    useEscapeKey(handleEscape, isOpen && closable);
 
     // Don't render if not open
     if (!isOpen) return null;
