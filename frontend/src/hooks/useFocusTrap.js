@@ -13,6 +13,9 @@ const FOCUSABLE_SELECTOR = [
     '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
+// Newest last: only the top trap acts, so stacked dialogs don't fight over focus.
+const activeTraps = [];
+
 /**
  * useFocusTrap - Trap keyboard focus within a container element
  *
@@ -51,6 +54,8 @@ export const useFocusTrap = (containerRef, isActive) => {
 
         // Store currently focused element for restoration
         previousFocusRef.current = document.activeElement;
+        activeTraps.push(container);
+        const isTopTrap = () => activeTraps[activeTraps.length - 1] === container;
 
         /**
          * Get all currently focusable elements within container
@@ -69,16 +74,17 @@ export const useFocusTrap = (containerRef, isActive) => {
          * @param {KeyboardEvent} event - Keyboard event
          */
         const handleKeyDown = event => {
-            if (event.key !== 'Tab') return;
+            if (event.key !== 'Tab' || !isTopTrap()) return;
 
             const focusableElements = getFocusableElements();
             const lastIndex = focusableElements.length - 1;
             const index = focusableElements.indexOf(document.activeElement);
+            const outside = !container.contains(document.activeElement);
 
-            // index -1 = focus on the container itself; an empty list must also swallow Tab.
-            if (event.shiftKey ? index <= 0 : index === lastIndex) {
+            // index -1 = focus on the container itself or outside it; an empty list swallows Tab.
+            if (event.shiftKey ? index <= 0 : index === lastIndex || outside) {
                 event.preventDefault();
-                focusableElements[event.shiftKey ? lastIndex : 0]?.focus();
+                (focusableElements[event.shiftKey ? lastIndex : 0] ?? container).focus();
             }
         };
 
@@ -91,7 +97,7 @@ export const useFocusTrap = (containerRef, isActive) => {
             const activeElement = document.activeElement;
 
             // If focused element was removed, focus first available element
-            if (!container.contains(activeElement) && focusableElements.length > 0) {
+            if (isTopTrap() && !container.contains(activeElement) && focusableElements.length > 0) {
                 focusableElements[0].focus();
             }
         };
@@ -105,12 +111,13 @@ export const useFocusTrap = (containerRef, isActive) => {
             attributeFilter: ['disabled', 'tabindex'],
         });
 
-        // Add keyboard event listener
-        container.addEventListener('keydown', handleKeyDown);
+        // On document: a click on dialog text drops focus to <body>, where the container never sees Tab.
+        document.addEventListener('keydown', handleKeyDown);
 
         // Cleanup function
         return () => {
-            container.removeEventListener('keydown', handleKeyDown);
+            document.removeEventListener('keydown', handleKeyDown);
+            activeTraps.splice(activeTraps.indexOf(container), 1);
 
             if (observerRef.current) {
                 observerRef.current.disconnect();

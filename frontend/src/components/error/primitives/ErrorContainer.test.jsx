@@ -73,4 +73,45 @@ describe('ErrorContainer', () => {
 
         expect(screen.getByRole('button', { name: 'Reload' })).toHaveFocus();
     });
+
+    it('pulls Tab back into the dialog after a click drops focus to the page', async () => {
+        const user = userEvent.setup();
+        render(
+            <>
+                <button type="button">Before</button>
+                <ErrorContainer mode="modal" title="Critical">
+                    <button type="button">Retry</button>
+                    <button type="button">Reload</button>
+                </ErrorContainer>
+            </>
+        );
+
+        document.activeElement.blur();
+        await user.tab();
+        expect(screen.getByRole('button', { name: 'Retry' })).toHaveFocus();
+
+        document.activeElement.blur();
+        await user.tab({ shift: true });
+        expect(screen.getByRole('button', { name: 'Reload' })).toHaveFocus();
+    });
+
+    it('lets only the newest of two open dialogs handle Tab', async () => {
+        const user = userEvent.setup();
+        render(
+            <>
+                <ErrorContainer mode="modal" title="Older">
+                    <button type="button">Older action</button>
+                </ErrorContainer>
+                <ErrorContainer mode="modal" title="Newer">
+                    <button type="button">One</button>
+                    <button type="button">Two</button>
+                </ErrorContainer>
+            </>
+        );
+
+        expect(screen.getByRole('button', { name: 'One' })).toHaveFocus();
+        await user.tab();
+
+        expect(screen.getByRole('button', { name: 'Two' })).toHaveFocus();
+    });
 });
