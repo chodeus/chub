@@ -1,5 +1,5 @@
 /** Guards the modal ErrorContainer's accessible name, initial focus and focus trap. */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ErrorContainer } from './ErrorContainer.jsx';
 
@@ -113,5 +113,48 @@ describe('ErrorContainer', () => {
         await user.tab();
 
         expect(screen.getByRole('button', { name: 'Two' })).toHaveFocus();
+    });
+
+    it('keeps focus in the newer dialog when an older one closes underneath', () => {
+        const opener = (
+            <button key="opener" type="button">
+                Opener
+            </button>
+        );
+        const older = (
+            <ErrorContainer key="older" mode="modal" title="Older">
+                <button type="button">Older action</button>
+            </ErrorContainer>
+        );
+        const newer = (
+            <ErrorContainer key="newer" mode="modal" title="Newer">
+                <button type="button">One</button>
+            </ErrorContainer>
+        );
+        const { rerender } = render(<>{[opener]}</>);
+        screen.getByRole('button', { name: 'Opener' }).focus();
+        rerender(<>{[opener, older, newer]}</>);
+        expect(screen.getByRole('button', { name: 'One' })).toHaveFocus();
+
+        rerender(<>{[opener, newer]}</>);
+
+        expect(screen.getByRole('button', { name: 'One' })).toHaveFocus();
+    });
+
+    it('refocuses the dialog when its last focusable child is removed', async () => {
+        const { rerender } = render(
+            <ErrorContainer mode="modal" title="Critical">
+                <button type="button">Retry</button>
+            </ErrorContainer>
+        );
+        expect(screen.getByRole('button', { name: 'Retry' })).toHaveFocus();
+
+        rerender(
+            <ErrorContainer mode="modal" title="Critical">
+                <p>Nothing left to press</p>
+            </ErrorContainer>
+        );
+
+        await waitFor(() => expect(screen.getByRole('alertdialog')).toHaveFocus());
     });
 });

@@ -96,9 +96,9 @@ export const useFocusTrap = (containerRef, isActive) => {
             const focusableElements = getFocusableElements();
             const activeElement = document.activeElement;
 
-            // If focused element was removed, focus first available element
-            if (isTopTrap() && !container.contains(activeElement) && focusableElements.length > 0) {
-                focusableElements[0].focus();
+            // If focused element was removed, focus first available element or the container
+            if (isTopTrap() && !container.contains(activeElement)) {
+                (focusableElements[0] ?? container).focus();
             }
         };
 
@@ -117,6 +117,7 @@ export const useFocusTrap = (containerRef, isActive) => {
         // Cleanup function
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
+            const wasTopTrap = isTopTrap();
             activeTraps.splice(activeTraps.indexOf(container), 1);
 
             if (observerRef.current) {
@@ -124,8 +125,12 @@ export const useFocusTrap = (containerRef, isActive) => {
                 observerRef.current = null;
             }
 
-            // Restore focus to original element
-            if (previousFocusRef.current && document.body.contains(previousFocusRef.current)) {
+            // Only the top trap hands focus back; an older one closing underneath would pull it out.
+            if (
+                wasTopTrap &&
+                previousFocusRef.current &&
+                document.body.contains(previousFocusRef.current)
+            ) {
                 previousFocusRef.current.focus();
             }
 
