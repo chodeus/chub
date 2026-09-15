@@ -1,15 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * ErrorIcon - Visual error type indicator
- *
- * Displays Material Symbols icons with size and color variants.
- *
- * @param {Object} props
- * @param {'error'|'warning'|'info'} props.type - Icon type (maps to Material Symbol)
- * @param {'sm'|'md'|'lg'} props.size - Icon size variant
- */
+/** Material Symbol for an error type: error → build, warning, info. */
 export const ErrorIcon = ({ type = 'error', size = 'lg' }) => {
     const iconMap = {
         error: 'build',
@@ -34,6 +26,7 @@ export const ErrorIcon = ({ type = 'error', size = 'lg' }) => {
             <div className="text-center mb-8">
                 <div
                     className={`material-symbols-outlined ${sizeClassMap[size]} mb-3 block ${colorClassMap[type]}`}
+                    aria-hidden="true"
                 >
                     {iconMap[type]}
                 </div>
@@ -44,6 +37,7 @@ export const ErrorIcon = ({ type = 'error', size = 'lg' }) => {
     return (
         <span
             className={`material-symbols-outlined ${sizeClassMap[size]} shrink-0 mt-1 ${colorClassMap[type]}`}
+            aria-hidden="true"
         >
             {iconMap[type]}
         </span>

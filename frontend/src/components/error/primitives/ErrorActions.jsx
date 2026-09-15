@@ -2,16 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Button } from '../../ui/button/Button';
 
-/**
- * ErrorActions - Action button composition
- *
- * Renders a collection of action buttons with icons using the Button component.
- *
- * @param {Object} props
- * @param {Array} props.actions - Action button configurations
- * @param {Function} props.onAction - Action handler
- * @param {'page'|'modal'|'inline'} props.mode - Button layout mode
- */
+/** Row of recovery buttons; `onAction` receives the clicked action's id. */
 export const ErrorActions = ({ actions = [], onAction, mode = 'page' }) => {
     if (actions.length === 0) return null;
 
@@ -26,13 +17,9 @@ export const ErrorActions = ({ actions = [], onAction, mode = 'page' }) => {
                     variant={action.variant || 'secondary'}
                     onClick={() => onAction(action.id)}
                     disabled={action.disabled}
+                    icon={action.icon}
                     className="gap-1"
                 >
-                    {action.icon && (
-                        <span className="material-symbols-outlined text-base align-middle">
-                            {action.icon}
-                        </span>
-                    )}
                     {action.label}
                 </Button>
             ))}
