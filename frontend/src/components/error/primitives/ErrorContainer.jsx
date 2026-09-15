@@ -41,7 +41,7 @@ const ErrorDialog = ({ title, description, children, className }) => {
 
 ErrorDialog.propTypes = {
     title: PropTypes.node.isRequired,
-    description: PropTypes.node,
+    description: PropTypes.string,
     children: PropTypes.node.isRequired,
     className: PropTypes.string.isRequired,
 };
@@ -83,7 +83,7 @@ export const ErrorContainer = ({ mode = 'page', title, description, children, cl
 ErrorContainer.propTypes = {
     mode: PropTypes.oneOf(['modal', 'page', 'inline']),
     title: PropTypes.node,
-    description: PropTypes.node,
+    description: PropTypes.string,
     children: PropTypes.node.isRequired,
     className: PropTypes.string,
 };

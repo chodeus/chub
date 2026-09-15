@@ -88,7 +88,8 @@ export const Modal = ({
     }, [handleClose]);
 
     // Accessibility hooks
-    useFocusTrap(containerRef, isOpen && closable);
+    // Not gated on closable: SchedulePage flips it while saving, which would throw focus out mid-save.
+    useFocusTrap(containerRef, isOpen);
     useBodyScrollLock(isOpen);
     useEscapeKey(handleEscape, isOpen && closable);
 
