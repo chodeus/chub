@@ -53,7 +53,8 @@ export const Badge = React.memo(
             }
         }
 
-        const isInteractive = Boolean(onClick || onRemove);
+        // Only a click handler earns button semantics; otherwise the badge would wrap its own remove button.
+        const isInteractive = Boolean(onClick);
         const isRemovable = Boolean(onRemove);
         const handleClick = e => {
             if (disabled) return;
@@ -73,7 +74,7 @@ export const Badge = React.memo(
 
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                (onClick || onRemove)?.(e);
+                onClick?.(e);
             }
             if ((e.key === 'Delete' || e.key === 'Backspace') && onRemove) {
                 e.preventDefault();
@@ -163,7 +164,6 @@ export const Badge = React.memo(
                         disabled={disabled}
                         aria-label={`${removeLabel}: ${children}`}
                         title={`${removeLabel}: ${children}`}
-                        tabIndex={-1} // Badge itself handles focus
                     >
                         <span
                             className="material-symbols-outlined text-current"
