@@ -39,7 +39,9 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     // past this; changing the dropdown jumps to a different root.
     const [activeRoot, setActiveRoot] = useState(null);
 
-    const loadDirectory = useCallback(async (path, { skipCache = false } = {}) => {
+    const loadDirectory = useCallback(async (rawPath, { skipCache = false } = {}) => {
+        // Roots arrive trimmed; a saved "/media/" must equal the root "/media" or Go up escapes it.
+        const path = rawPath.replace(/(.)\/+$/, '$1');
         setLoading(true);
         setError(null);
         try {

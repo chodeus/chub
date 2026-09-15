@@ -18,7 +18,7 @@ export const ScheduleSummary = React.memo(
             try {
                 switch (scheduleType) {
                     case 'hourly': {
-                        const minute = scheduleValue.minute || 0;
+                        const minute = scheduleValue.minute ?? 0;
                         return `Every hour at ${minute.toString().padStart(2, '0')} minutes past the hour`;
                     }
 

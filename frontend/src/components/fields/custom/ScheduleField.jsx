@@ -59,7 +59,7 @@ const composeScheduleString = (type, data) => {
     try {
         switch (type) {
             case 'hourly': {
-                const minute = data.minute || 0;
+                const minute = data.minute ?? 0;
                 return `hourly(${minute})`;
             }
 

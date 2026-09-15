@@ -48,6 +48,7 @@ describe('FloatField', () => {
 
         fireEvent.change(input, { target: { value: '5' } });
         expect(input).toHaveValue('5');
+        expect(onChange).not.toHaveBeenCalled();
         fireEvent.change(input, { target: { value: '50' } });
         expect(onChange).toHaveBeenLastCalledWith(0.5);
 
