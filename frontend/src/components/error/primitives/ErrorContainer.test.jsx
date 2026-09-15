@@ -1,5 +1,6 @@
-/** Guards the modal ErrorContainer's accessible name and initial focus. */
+/** Guards the modal ErrorContainer's accessible name, initial focus and focus trap. */
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ErrorContainer } from './ErrorContainer.jsx';
 
 describe('ErrorContainer', () => {
@@ -34,5 +35,42 @@ describe('ErrorContainer', () => {
         );
 
         expect(screen.getByRole('button', { name: 'Retry' })).toHaveFocus();
+    });
+
+    it('keeps Tab and Shift+Tab inside a dialog with no focusable child', async () => {
+        const user = userEvent.setup();
+        render(
+            <>
+                <button type="button">Before</button>
+                <ErrorContainer mode="modal" title="Critical">
+                    <p>Nothing to press</p>
+                </ErrorContainer>
+                <button type="button">After</button>
+            </>
+        );
+        const dialog = screen.getByRole('alertdialog');
+
+        await user.tab();
+        expect(dialog).toHaveFocus();
+        await user.tab({ shift: true });
+        expect(dialog).toHaveFocus();
+    });
+
+    it('wraps Shift+Tab from the dialog itself to its last button', async () => {
+        const user = userEvent.setup();
+        render(
+            <>
+                <button type="button">Before</button>
+                <ErrorContainer mode="modal" title="Critical">
+                    <button type="button">Retry</button>
+                    <button type="button">Reload</button>
+                </ErrorContainer>
+            </>
+        );
+
+        screen.getByRole('alertdialog').focus();
+        await user.tab({ shift: true });
+
+        expect(screen.getByRole('button', { name: 'Reload' })).toHaveFocus();
     });
 });

@@ -60,11 +60,8 @@ export const useFocusTrap = (containerRef, isActive) => {
             return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR));
         };
 
-        // Focus first focusable element on activation
-        const focusableElements = getFocusableElements();
-        if (focusableElements.length > 0) {
-            focusableElements[0].focus();
-        }
+        // Falls back to the container, which needs tabIndex={-1} to take focus.
+        (getFocusableElements()[0] ?? container).focus();
 
         /**
          * Handle TAB and Shift+TAB key navigation
@@ -75,25 +72,13 @@ export const useFocusTrap = (containerRef, isActive) => {
             if (event.key !== 'Tab') return;
 
             const focusableElements = getFocusableElements();
-            if (focusableElements.length === 0) return;
+            const lastIndex = focusableElements.length - 1;
+            const index = focusableElements.indexOf(document.activeElement);
 
-            const firstElement = focusableElements[0];
-            const lastElement = focusableElements[focusableElements.length - 1];
-            const activeElement = document.activeElement;
-
-            // Shift+TAB: cycle backward
-            if (event.shiftKey) {
-                if (activeElement === firstElement) {
-                    event.preventDefault();
-                    lastElement.focus();
-                }
-            }
-            // TAB: cycle forward
-            else {
-                if (activeElement === lastElement) {
-                    event.preventDefault();
-                    firstElement.focus();
-                }
+            // index -1 = focus on the container itself; an empty list must also swallow Tab.
+            if (event.shiftKey ? index <= 0 : index === lastIndex) {
+                event.preventDefault();
+                focusableElements[event.shiftKey ? lastIndex : 0]?.focus();
             }
         };
 
