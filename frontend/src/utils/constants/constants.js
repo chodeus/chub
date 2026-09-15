@@ -1,0 +1,18 @@
+export const moduleOrder = [
+    'general',
+    'main',
+    'sync_gdrive',
+    'poster_renamerr',
+    'asset_renamerr',
+    'poster_cleanarr',
+    'plex_maintenance',
+    'border_replacerr',
+    'unmatched_assets',
+    'renameinatorr',
+    'upgradinatorr',
+    'nohl',
+    'nestarr',
+    'labelarr',
+    'health_checkarr',
+    'jduparr',
+];
