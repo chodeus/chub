@@ -16,6 +16,9 @@ const FOCUSABLE_SELECTOR = [
 // Newest last: only the top trap acts, so stacked dialogs don't fight over focus.
 const activeTraps = [];
 
+/** True when `container` is the most recently activated trap. */
+export const isTopFocusTrap = container => activeTraps[activeTraps.length - 1] === container;
+
 /**
  * useFocusTrap - Trap keyboard focus within a container element
  *
@@ -55,7 +58,7 @@ export const useFocusTrap = (containerRef, isActive) => {
         // Store currently focused element for restoration
         previousFocusRef.current = document.activeElement;
         activeTraps.push(container);
-        const isTopTrap = () => activeTraps[activeTraps.length - 1] === container;
+        const isTopTrap = () => isTopFocusTrap(container);
 
         /**
          * Get all currently focusable elements within container
