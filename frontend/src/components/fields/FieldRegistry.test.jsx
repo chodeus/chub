@@ -13,4 +13,11 @@ describe('FieldRegistry', () => {
     it('counts dir_picker as implemented', () => {
         expect(FieldRegistry.isWorkingFieldType('dir_picker')).toBe(true);
     });
+
+    it('counts a registered extension type as implemented, not a placeholder', () => {
+        FieldRegistry.register('test_only_extension_field', () => null);
+
+        expect(FieldRegistry.isWorkingFieldType('test_only_extension_field')).toBe(true);
+        expect(FieldRegistry.getPlaceholderFieldTypes()).not.toContain('test_only_extension_field');
+    });
 });

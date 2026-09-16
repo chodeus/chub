@@ -38,7 +38,7 @@ export const PrimarySourceField = React.memo(
 
         // value is an ordered list; the primary is the first known option in it.
         const current = Array.isArray(value) ? value : [];
-        const primary = current.find(v => allValues.includes(v)) || '';
+        const primary = current.find(v => allValues.includes(v)) ?? '';
 
         const handleChange = useCallback(
             e => {

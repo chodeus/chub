@@ -48,4 +48,13 @@ describe('DirPickerField', () => {
         expect(api.listed).toEqual(['/media']);
         expect(screen.queryByText('..')).toBeNull();
     });
+
+    it('treats a trailing-slash root as the root itself, so Go up stays hidden', async () => {
+        api.roots = ['/media/'];
+        render(<DirPickerField field={field} value="/media" onChange={() => {}} />);
+
+        expect(await screen.findByTitle('/media')).toBeInTheDocument();
+        expect(api.listed).toEqual(['/media']);
+        expect(screen.queryByText('..')).toBeNull();
+    });
 });

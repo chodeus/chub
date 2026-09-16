@@ -72,7 +72,8 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
             .listAllowedRoots()
             .then(result => {
                 if (cancelled) return;
-                const list = result?.data?.roots || [];
+                // Trim here too: a trailing-slash root would never compare equal to currentPath.
+                const list = (result?.data?.roots || []).map(r => r.replace(/(.)\/+$/, '$1'));
                 if (list.length === 0) {
                     setError(
                         'No allowed directories configured. Set a source/destination path in another module first.'

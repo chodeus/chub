@@ -69,4 +69,16 @@ describe('NumberField', () => {
         expect(input).toHaveValue('500');
         expect(onChange).toHaveBeenLastCalledWith(50);
     });
+
+    it('stays empty after the field is cleared and blurred', () => {
+        const onChange = vi.fn();
+        render(<Harness onChange={onChange} />);
+        const input = screen.getByLabelText('Count');
+
+        fireEvent.change(input, { target: { value: '' } });
+        expect(onChange).toHaveBeenLastCalledWith(null);
+        fireEvent.blur(input);
+
+        expect(input).toHaveValue('');
+    });
 });

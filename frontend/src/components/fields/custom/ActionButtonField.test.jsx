@@ -1,4 +1,4 @@
-/** Guards the stale-result key: rows whose values join to the same text must not share a result. */
+/** Guards the stale-result key: different payloads — joined-text collisions, and "" vs null — never share a result. */
 import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('../../../utils/api/core', async importOriginal => ({
@@ -22,6 +22,18 @@ describe('ActionButtonField', () => {
         expect(await screen.findByText('Folder reachable')).toBeInTheDocument();
 
         rerender(<ActionButtonField field={field} rowData={{ a: 'x', b: 'y z' }} />);
+        expect(screen.queryByText('Folder reachable')).not.toBeInTheDocument();
+    });
+
+    it('keeps an empty string and a null apart, since they are different requests', async () => {
+        const { rerender } = render(
+            <ActionButtonField field={field} rowData={{ a: '', b: 'z' }} />
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+        expect(await screen.findByText('Folder reachable')).toBeInTheDocument();
+
+        rerender(<ActionButtonField field={field} rowData={{ a: null, b: 'z' }} />);
+
         expect(screen.queryByText('Folder reachable')).not.toBeInTheDocument();
     });
 });

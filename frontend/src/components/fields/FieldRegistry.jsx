@@ -163,6 +163,8 @@ export class FieldRegistry {
             console.warn(`[FieldRegistry] Overriding existing field type: ${fieldType}`);
         }
         FIELD_COMPONENTS[fieldType] = component;
+        // A registered component IS the implementation; without this the dev page calls it a placeholder.
+        IMPLEMENTED_FIELD_TYPES.add(fieldType);
     }
 
     /**

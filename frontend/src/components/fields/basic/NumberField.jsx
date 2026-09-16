@@ -20,7 +20,8 @@ export const NumberField = React.memo(
     }) => {
         // Text shown while typing; partial input ("1.", "-") stays here and is never emitted.
         const [draft, setDraft] = useState(null);
-        const numValue = value !== null && value !== undefined ? Number(value) : 0;
+        // NaN, not 0: a cleared field (value null) must stay empty instead of snapping back to 0 on blur.
+        const numValue = value !== null && value !== undefined ? Number(value) : NaN;
         const min = field.min !== undefined ? Number(field.min) : undefined;
         const max = field.max !== undefined ? Number(field.max) : undefined;
 
