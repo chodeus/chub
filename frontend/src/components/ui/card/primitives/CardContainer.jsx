@@ -6,10 +6,10 @@ import PropTypes from 'prop-types';
  *
  * Responsibilities:
  * - Outer card container with base styling
- * - Hover state styling (shadow elevation)
+ * - Hover state styling (border shift, no shadow)
  * - Click interaction (cursor, active state)
  * - Selected state styling
- * - Keyboard navigation (Enter on clickable cards)
+ * - Keyboard navigation (Enter or Space on clickable cards)
  * - ARIA attributes for interactive cards
  * - Theme-aware colors
  *
@@ -98,7 +98,7 @@ export const CardContainer = React.memo(
                 tabIndex={clickable ? 0 : undefined}
                 role={clickable ? 'button' : undefined}
                 aria-label={clickable ? ariaLabel : undefined}
-                aria-pressed={selected ? 'true' : undefined}
+                aria-pressed={clickable && selected ? 'true' : undefined}
                 {...htmlProps}
             >
                 {children}

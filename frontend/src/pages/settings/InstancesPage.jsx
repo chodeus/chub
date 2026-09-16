@@ -613,8 +613,6 @@ export const InstancesPage = () => {
                 <PageHeader
                     title="Instances"
                     description="Radarr, Sonarr, Lidarr, and Plex connections."
-                    badge={2}
-                    icon="dns"
                 />
                 <div className="text-center py-12">
                     <p className="text-fg-muted">Loading instances...</p>
@@ -630,8 +628,6 @@ export const InstancesPage = () => {
                 <PageHeader
                     title="Instances"
                     description="Radarr, Sonarr, Lidarr, and Plex connections."
-                    badge={2}
-                    icon="dns"
                 />
                 <div className="text-center py-12">
                     <p className="text-error">Error loading instances: {error.message}</p>

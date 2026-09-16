@@ -108,17 +108,29 @@ const Dropdown = ({
         }
     }, [isOpen, placement, anchorRef, onClose]);
 
-    // Focus management - focus first interactive element when opened
+    // Focus the first interactive element on open, and hand focus back on close —
+    // Escape, outside click and the auto-close below all unmount us, orphaning focus.
     useEffect(() => {
-        if (isOpen && dropdownRef.current) {
-            const firstFocusable = dropdownRef.current.querySelector(
-                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-            );
-            if (firstFocusable) {
-                firstFocusable.focus();
-            }
+        if (!isOpen || !dropdownRef.current) return undefined;
+
+        const anchor = anchorRef.current;
+        const firstFocusable = dropdownRef.current.querySelector(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (firstFocusable) {
+            firstFocusable.focus();
         }
-    }, [isOpen]);
+
+        return () => {
+            // Only reclaim orphaned focus: if the user moved it somewhere themselves,
+            // taking it back would be worse than leaving it. preventScroll because the
+            // auto-close path fires exactly when the anchor has scrolled out of view.
+            const active = document.activeElement;
+            if (!active || active === document.body) {
+                anchor?.focus({ preventScroll: true });
+            }
+        };
+    }, [isOpen, anchorRef]);
 
     if (!isOpen) return null;
 

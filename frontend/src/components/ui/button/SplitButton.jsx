@@ -9,7 +9,7 @@ import { IconButton } from './IconButton';
  * Composes: Button + IconButton + Dropdown menu
  *
  * @param {Object} props - Component props
- * @param {string} props.children - Primary button label
+ * @param {React.ReactNode} props.children - Primary button label content
  * @param {Function} props.onClick - Primary action handler
  * @param {Array} props.options - Dropdown options [{label, icon, onClick}]
  * @param {string} props.variant - Button variant

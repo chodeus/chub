@@ -1277,6 +1277,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                         <button
                             key={key}
                             type="button"
+                            aria-pressed={isActive}
                             onClick={() => {
                                 setTypeFilter(isActive ? null : key);
                                 setPage(0);
@@ -2256,6 +2257,7 @@ const UnmatchedAssetsPage = () => {
                                     <button
                                         key={key}
                                         type="button"
+                                        aria-pressed={isActive}
                                         onClick={() =>
                                             setPosterTypeFilter(isActive ? 'all' : filterFor)
                                         }

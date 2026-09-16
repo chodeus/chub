@@ -19,6 +19,7 @@ const SegmentedControl = ({
     size = 'md',
     className = '',
     fullWidth = false,
+    ariaLabel,
 }) => {
     const wrapH = size === 'sm' ? 'h-9' : 'h-11';
     // min-w-11 pins touch-expand's 44px box to the segment's own width, so a
@@ -29,7 +30,9 @@ const SegmentedControl = ({
     return (
         <div
             className={`${wrapLayout} items-center ${wrapH} p-1 gap-0.5 rounded-[10px] bg-surface-inset border border-border ${className}`}
-            role="tablist"
+            // radiogroup, not tablist: these pick a value, and no segment controls a tabpanel.
+            role="radiogroup"
+            aria-label={ariaLabel}
         >
             {options.map(opt => {
                 const active = opt.value === value;
@@ -47,8 +50,8 @@ const SegmentedControl = ({
                     <button
                         key={opt.value}
                         type="button"
-                        role="tab"
-                        aria-selected={active}
+                        role="radio"
+                        aria-checked={active}
                         onClick={() => onChange(opt.value)}
                         className={`touch-expand inline-flex items-center justify-center ${segFlex} ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${stateCls}`}
                     >
@@ -73,6 +76,7 @@ SegmentedControl.propTypes = {
     size: PropTypes.oneOf(['sm', 'md']),
     className: PropTypes.string,
     fullWidth: PropTypes.bool,
+    ariaLabel: PropTypes.string,
 };
 
 export default SegmentedControl;

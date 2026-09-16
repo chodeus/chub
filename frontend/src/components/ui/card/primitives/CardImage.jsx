@@ -24,6 +24,15 @@ export const CardImage = React.memo(
     ({ src, alt, aspectRatio = '16/9', objectFit = 'cover', className = '' }) => {
         const [isLoading, setIsLoading] = useState(true);
         const [hasError, setHasError] = useState(false);
+        const [prevSrc, setPrevSrc] = useState(src);
+
+        // Adjust state during render rather than in an effect (see EditMediaModal):
+        // without this, one failed image leaves the fallback showing for every later src.
+        if (src !== prevSrc) {
+            setPrevSrc(src);
+            setIsLoading(true);
+            setHasError(false);
+        }
 
         const handleLoad = useCallback(() => {
             setIsLoading(false);

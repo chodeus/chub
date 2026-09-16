@@ -253,15 +253,16 @@ const BreakdownTabs = ({ stats }) => {
     return (
         <section>
             <h3 className="text-lg font-semibold text-fg mb-3">Breakdowns</h3>
-            <div className="flex flex-wrap gap-2 mb-4" role="tablist">
+            {/* radiogroup, not tablist: no segment owns a tabpanel, and this mirrors SegmentedControl. */}
+            <div className="flex flex-wrap gap-2 mb-4" role="radiogroup" aria-label="Breakdown">
                 {availableTabs.map(tab => {
                     const isActive = tab.key === resolvedActive;
                     const count = (stats[tab.key] || []).length;
                     return (
                         <button
                             key={tab.key}
-                            role="tab"
-                            aria-selected={isActive}
+                            role="radio"
+                            aria-checked={isActive}
                             onClick={() => setActiveKey(tab.key)}
                             className="inline-flex items-center min-h-11 px-3 rounded-full text-sm transition-colors"
                             style={{

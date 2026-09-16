@@ -14,7 +14,7 @@ const Toggle = ({ checked = false, onChange, disabled = false, label, className 
         disabled={disabled}
         onClick={() => !disabled && onChange?.(!checked)}
         className={`relative shrink-0 rounded-full transition-colors touch-expand disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
-        style={{ width: 38, height: 22, background: checked ? 'var(--primary)' : '#2a3052' }}
+        style={{ width: 38, height: 22, background: checked ? 'var(--primary)' : 'var(--border)' }}
     >
         <span
             className="absolute rounded-full bg-white transition-all"
@@ -28,7 +28,8 @@ Toggle.propTypes = {
     checked: PropTypes.bool,
     onChange: PropTypes.func,
     disabled: PropTypes.bool,
-    label: PropTypes.string,
+    // Required: it is the switch's only accessible name — the knob is aria-hidden.
+    label: PropTypes.string.isRequired,
     className: PropTypes.string,
 };
 
