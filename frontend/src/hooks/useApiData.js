@@ -222,13 +222,22 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
 
         /** Clear current data and error */
         clear: useCallback(() => {
+            // Bump past the in-flight request, or its response repopulates what we just cleared.
+            requestSeqRef.current += 1;
             setData(null);
             setError(null);
             setRetryCount(0);
+            setIsLoading(false);
         }, []),
 
         /** Cancel ongoing request */
-        cancel: cleanup,
+        cancel: useCallback(() => {
+            cleanup();
+            // Bumping alone strands the spinner: the in-flight .finally is seq-guarded
+            // and will no longer run, so clear isLoading here instead.
+            requestSeqRef.current += 1;
+            setIsLoading(false);
+        }, [cleanup]),
     };
 };
 

@@ -1,34 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
-/**
- * useBodyScrollLock - Prevent body scroll when locked
- *
- * Manages body scroll behavior for modal dialogs and overlay components:
- * - Prevents body scroll when locked (overflow: hidden)
- * - Stores and restores original overflow style
- * - Stores and restores scroll position
- * - Handles iOS Safari scroll behavior quirks
- * - Multiple locks can coexist (reference counting)
- *
- * @example
- * useBodyScrollLock(isModalOpen);
- *
- * @param {boolean} isLocked - Whether scroll should be locked
- * @returns {void}
- */
+// Shared across every lock: per-instance state would let the first modal to close
+// restore scrolling while another is still open, or leave the body locked with none.
+let lockCount = 0;
+let savedOverflow = '';
+let savedScrollY = 0;
+
+/** Locks body scroll while `isLocked`; concurrent locks are reference-counted. */
 export const useBodyScrollLock = isLocked => {
-    const scrollPositionRef = useRef(0);
-    const originalOverflowRef = useRef('');
-
     useEffect(() => {
         if (!isLocked) return;
 
-        // Store current state
-        scrollPositionRef.current = window.scrollY;
-        originalOverflowRef.current = document.body.style.overflow;
-
-        // Lock scroll
-        document.body.style.overflow = 'hidden';
+        // Only the outermost lock touches the body; the rest just raise the count.
+        if (lockCount === 0) {
+            savedScrollY = window.scrollY;
+            savedOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+        }
+        lockCount += 1;
 
         // iOS Safari fix: prevent bounce scrolling
         const preventTouchMove = event => {
@@ -47,13 +36,12 @@ export const useBodyScrollLock = isLocked => {
 
         // Cleanup function
         return () => {
-            // Restore overflow
-            document.body.style.overflow = originalOverflowRef.current;
+            lockCount = Math.max(0, lockCount - 1);
+            if (lockCount === 0) {
+                document.body.style.overflow = savedOverflow;
+                window.scrollTo(0, savedScrollY);
+            }
 
-            // Restore scroll position
-            window.scrollTo(0, scrollPositionRef.current);
-
-            // Remove iOS event listener
             if (isIOS) {
                 document.removeEventListener('touchmove', preventTouchMove);
             }

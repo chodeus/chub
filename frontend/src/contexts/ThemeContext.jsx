@@ -90,13 +90,15 @@ const getSystemTheme = () => {
  * @returns {string} Theme preference
  */
 const getStoredTheme = () => {
-    if (typeof window === 'undefined') return THEMES.SYSTEM;
+    if (typeof window === 'undefined') return null;
 
     try {
-        return localStorage.getItem(THEME_STORAGE_KEY) || THEMES.SYSTEM;
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
+        // null, not SYSTEM, so callers can fall back to their own default.
+        return stored && Object.values(THEMES).includes(stored) ? stored : null;
     } catch (error) {
         console.warn('Failed to read theme preference from localStorage:', error);
-        return THEMES.SYSTEM;
+        return null;
     }
 };
 
@@ -146,10 +148,10 @@ const applyTheme = theme => {
 export const ThemeProvider = ({ children, defaultTheme = THEMES.SYSTEM }) => {
     // Lazy initialization reads localStorage / prefers-color-scheme once at mount.
     // Avoids a setState-in-effect on first render.
-    const [themePreference, setThemePreference] = useState(() => getStoredTheme() || defaultTheme);
+    const [themePreference, setThemePreference] = useState(() => getStoredTheme() ?? defaultTheme);
     const [systemTheme, setSystemTheme] = useState(() => getSystemTheme());
     const [actualTheme, setActualTheme] = useState(() => {
-        const stored = getStoredTheme() || defaultTheme;
+        const stored = getStoredTheme() ?? defaultTheme;
         return stored === THEMES.SYSTEM ? getSystemTheme() : stored;
     });
     const [accent, setAccentState] = useState(() => getStoredAccent());
