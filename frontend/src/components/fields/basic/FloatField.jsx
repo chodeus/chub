@@ -56,19 +56,24 @@ export const FloatField = React.memo(
             setDraft(null);
         }, [draft, value, percentMin, percentMax, onChange]);
 
+        // Clamp to both bounds: an unset value starts at 0, which can sit outside [min, max].
         const handleDecrement = useCallback(() => {
-            const newPercentValue = percentageValue - step;
-            if (newPercentValue < percentMin) return;
+            const newPercentValue = Math.min(
+                percentMax,
+                Math.max(percentMin, percentageValue - step)
+            );
             setDraft(null);
             onChange(toStored(newPercentValue));
-        }, [percentageValue, step, percentMin, onChange]);
+        }, [percentageValue, step, percentMin, percentMax, onChange]);
 
         const handleIncrement = useCallback(() => {
-            const newPercentValue = percentageValue + step;
-            if (newPercentValue > percentMax) return;
+            const newPercentValue = Math.min(
+                percentMax,
+                Math.max(percentMin, percentageValue + step)
+            );
             setDraft(null);
             onChange(toStored(newPercentValue));
-        }, [percentageValue, step, percentMax, onChange]);
+        }, [percentageValue, step, percentMin, percentMax, onChange]);
 
         const inputId = field.id || `field-${field.key}`;
         const decrementDisabled = disabled || percentageValue <= percentMin;

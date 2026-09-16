@@ -57,4 +57,19 @@ describe('FloatField', () => {
         fireEvent.blur(input);
         expect(onChange).toHaveBeenLastCalledWith(1);
     });
+
+    it('clamps a stepper click to the configured minimum', () => {
+        const onChange = vi.fn();
+        render(
+            <FloatField
+                field={{ key: 'threshold', label: 'Threshold', min: 10 }}
+                value={null}
+                onChange={onChange}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Increase Threshold' }));
+
+        expect(onChange).toHaveBeenCalledWith(0.1);
+    });
 });

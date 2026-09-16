@@ -28,13 +28,6 @@ export const DropdownField = React.memo(
         highlightInvalid = false,
         errorMessage = null,
     }) => {
-        const handleChange = useCallback(
-            e => {
-                onChange(e.target.value);
-            },
-            [onChange]
-        );
-
         const inputId = field.id || `field-${field.key}`;
         const inputValue = value ?? '';
 
@@ -52,6 +45,15 @@ export const DropdownField = React.memo(
                 };
             });
         }, [field.options]);
+
+        const handleChange = useCallback(
+            e => {
+                // The DOM returns a string; re-resolve so a numeric or boolean option keeps its type.
+                const match = options.find(option => String(option.value) === e.target.value);
+                onChange(match ? match.value : e.target.value);
+            },
+            [onChange, options]
+        );
 
         return (
             <FieldRow

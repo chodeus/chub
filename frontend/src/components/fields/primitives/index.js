@@ -1,7 +1,4 @@
-/**
- * Field primitives: FieldLabel, FieldError, FieldDescription, FieldWrapper, FieldRow,
- * InputBase, TextareaBase, SelectBase, CheckboxBase.
- */
+/** Field primitives: label, error, description, wrapper, row, and the input/textarea/select/checkbox bases. */
 
 export { FieldLabel } from './FieldLabel';
 export { FieldError } from './FieldError';

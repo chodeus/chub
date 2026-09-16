@@ -1,5 +1,5 @@
-/** Guards 0-valued dropdown options, no hidden primary source, and stored date ranges. */
-import { render, screen } from '@testing-library/react';
+/** Guards dropdown option values (0, and the configured type), no hidden primary source, and stored date ranges. */
+import { render, screen, fireEvent } from '@testing-library/react';
 import { DropdownField } from './DropdownField.jsx';
 import { PrimarySourceField } from './PrimarySourceField.jsx';
 import { DateRangeField } from './DateRangeField.jsx';
@@ -21,6 +21,28 @@ describe('DropdownField', () => {
             />
         );
         expect(screen.getByLabelText('Level')).toHaveValue('0');
+    });
+
+    it('emits the configured option type, not the DOM string', () => {
+        const onChange = vi.fn();
+        render(
+            <DropdownField
+                field={{
+                    key: 'level',
+                    label: 'Level',
+                    options: [
+                        { value: 0, label: 'Off' },
+                        { value: 1, label: 'On' },
+                    ],
+                }}
+                value={0}
+                onChange={onChange}
+            />
+        );
+
+        fireEvent.change(screen.getByLabelText('Level'), { target: { value: '1' } });
+
+        expect(onChange).toHaveBeenCalledWith(1);
     });
 });
 
