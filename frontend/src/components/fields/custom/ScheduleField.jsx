@@ -50,6 +50,54 @@ const DAY_TOKEN_TO_KEY = {
     saturday: 'saturday',
 };
 
+// Compose schedule string from type and data
+const composeScheduleString = (type, data) => {
+    if (!type || !data) {
+        return '';
+    }
+
+    try {
+        switch (type) {
+            case 'hourly': {
+                const minute = data.minute ?? 0;
+                return `hourly(${minute})`;
+            }
+
+            case 'daily': {
+                const times = data.times || [];
+                if (times.length === 0) return '';
+                return `daily(${times.join('|')})`;
+            }
+
+            case 'weekly': {
+                const days = data.days || [];
+                const time = data.time || '09:00';
+                if (days.length === 0) return '';
+                return `weekly(${days.map(day => `${day}@${time}`).join('|')})`;
+            }
+
+            case 'monthly': {
+                const days = data.days || [];
+                const time = data.time || '09:00';
+                if (days.length === 0) return '';
+                return `monthly(${days.map(day => `${day}@${time}`).join('|')})`;
+            }
+
+            case 'cron': {
+                const expression = data.expression || '';
+                if (!expression.trim()) return 'cron()';
+                return `cron(${expression})`;
+            }
+
+            default:
+                return '';
+        }
+    } catch (error) {
+        console.warn('Failed to compose schedule string:', type, data, error);
+        return '';
+    }
+};
+
 /**
  * Main schedule input component using atomic primitives
  * @param {Object} field - Field configuration
@@ -70,7 +118,6 @@ export const ScheduleField = React.memo(
     }) => {
         const [scheduleType, setScheduleType] = useState('daily');
         const [scheduleData, setScheduleData] = useState({});
-        const [, setIsValid] = useState(true);
 
         // Parse incoming value into type and data
         const parseScheduleValue = useCallback(val => {
@@ -169,54 +216,6 @@ export const ScheduleField = React.memo(
             }
         }, []);
 
-        // Compose schedule string from type and data (pure function, no useCallback needed)
-        const composeScheduleString = (type, data) => {
-            if (!type || !data) {
-                return '';
-            }
-
-            try {
-                switch (type) {
-                    case 'hourly': {
-                        const minute = data.minute || 0;
-                        return `hourly(${minute})`;
-                    }
-
-                    case 'daily': {
-                        const times = data.times || [];
-                        if (times.length === 0) return '';
-                        return `daily(${times.join('|')})`;
-                    }
-
-                    case 'weekly': {
-                        const days = data.days || [];
-                        const time = data.time || '09:00';
-                        if (days.length === 0) return '';
-                        return `weekly(${days.map(day => `${day}@${time}`).join('|')})`;
-                    }
-
-                    case 'monthly': {
-                        const days = data.days || [];
-                        const time = data.time || '09:00';
-                        if (days.length === 0) return '';
-                        return `monthly(${days.map(day => `${day}@${time}`).join('|')})`;
-                    }
-
-                    case 'cron': {
-                        const expression = data.expression || '';
-                        if (!expression.trim()) return 'cron()';
-                        return `cron(${expression})`;
-                    }
-
-                    default:
-                        return '';
-                }
-            } catch (error) {
-                console.warn('Failed to compose schedule string:', type, data, error);
-                return '';
-            }
-        };
-
         // Sync from value on every change (not just type change), or a saved
         // schedule matching the 'daily' default never loads its data. Equality
         // guards prevent re-render loops.
@@ -252,7 +251,7 @@ export const ScheduleField = React.memo(
                         newData = { days: [1], time: '09:00' };
                         break;
                     case 'cron':
-                        newData = { expression: '', isValid: true };
+                        newData = { expression: '' };
                         break;
                 }
 
@@ -268,33 +267,18 @@ export const ScheduleField = React.memo(
         // Handle schedule data change
         const handleDataChange = useCallback(
             newDataOrUpdater => {
-                // Always use functional update to avoid stale closure issues
-                setScheduleData(prevData => {
-                    const updatedData =
-                        typeof newDataOrUpdater === 'function'
-                            ? newDataOrUpdater(prevData)
-                            : newDataOrUpdater;
+                const updatedData =
+                    typeof newDataOrUpdater === 'function'
+                        ? newDataOrUpdater(scheduleData)
+                        : newDataOrUpdater;
+                setScheduleData(updatedData);
 
-                    // Update validity for cron expressions
-                    if (scheduleType === 'cron') {
-                        setIsValid(updatedData.isValid !== false);
-                    }
-
-                    // Compose new value
-                    const prevValue = composeScheduleString(scheduleType, prevData);
-                    const newValue = composeScheduleString(scheduleType, updatedData);
-
-                    // Only emit onChange if the value actually changed
-                    // This prevents infinite loops from validation-only updates
-                    if (newValue !== prevValue) {
-                        // Use setTimeout to break out of the current render cycle
-                        setTimeout(() => onChange(newValue), 0);
-                    }
-
-                    return updatedData;
-                });
+                const newValue = composeScheduleString(scheduleType, updatedData);
+                if (newValue !== composeScheduleString(scheduleType, scheduleData)) {
+                    onChange(newValue);
+                }
             },
-            [scheduleType, onChange]
+            [scheduleType, scheduleData, onChange]
         );
 
         const inputId = `field-${field.key}`;

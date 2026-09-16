@@ -65,7 +65,7 @@ export const MultiSelectField = React.memo(
                 <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
 
                 {/* The × is a real 36px box, not a touch-expand: an expanded hit area
-                    on a 26px chip reached across the row gap into the next chip's ×. */}
+                    on a 44px chip reached across the row gap into the next chip's ×. */}
                 {selected.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                         {selected.map((v, i) => (

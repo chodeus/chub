@@ -9,7 +9,7 @@
  * - tag_display: Display-only mode (accent color)
  *
  * Configuration Mapping:
- * - field.suggestions → TagInput suggestions (array or function)
+ * - field.suggestions → TagInput suggestions (array)
  * - field.allowCustom → TagInput allowCustom (default: true)
  * - field.placeholder → TagInput placeholder
  * - field.maxItems → TagInput maxItems
@@ -105,7 +105,12 @@ export const TagInputField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel label={field.label} required={field.required} />
+                <FieldLabel
+                    htmlFor={inputId}
+                    id={`${inputId}-label`}
+                    label={field.label}
+                    required={field.required}
+                />
 
                 <TagInput
                     {...tagInputProps}

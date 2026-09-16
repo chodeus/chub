@@ -33,7 +33,6 @@ import React from 'react';
  * @param {string} props.text - Optional button text (for text variant)
  * @param {string} props.icon - Icon to display (defaults to "close" using Material Symbols)
  * @param {boolean} props.iconOnly - Show only icon without text
- * @param {string} props.variant - Visual style variant ('default', 'danger', 'subtle')
  * @param {string} props.size - Size variant ('small', 'medium', 'large')
  * @param {string} props.className - Additional CSS classes
  * @param {Object} props.ariaProps - Additional ARIA properties
@@ -107,7 +106,9 @@ export const RemoveButton = React.memo(
                 {...ariaProps}
                 {...domProps}
             >
-                <span className="material-symbols-outlined text-lg">{icon}</span>
+                <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                    {icon}
+                </span>
                 {!iconOnly && <span>{text}</span>}
                 {iconOnly && <span className="sr-only">{text}</span>}
             </button>

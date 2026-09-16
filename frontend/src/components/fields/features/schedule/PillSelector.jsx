@@ -26,6 +26,7 @@ export const PillSelector = React.memo(
                             }
                         }}
                         disabled={disabled}
+                        aria-pressed={selectedType === option.type}
                         className={`
                         px-3 py-2 text-sm font-medium rounded transition-colors min-h-11
                         flex items-center justify-center

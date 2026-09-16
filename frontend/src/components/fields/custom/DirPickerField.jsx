@@ -17,7 +17,8 @@ const matchRoot = (path, roots) => {
     if (!path || !Array.isArray(roots) || roots.length === 0) return null;
     let best = null;
     for (const r of roots) {
-        if (path === r || path.startsWith(r + '/')) {
+        const base = r.replace(/\/+$/, '');
+        if (path === r || path === base || path.startsWith(base + '/')) {
             if (!best || r.length > best.length) best = r;
         }
     }
@@ -38,7 +39,9 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     // past this; changing the dropdown jumps to a different root.
     const [activeRoot, setActiveRoot] = useState(null);
 
-    const loadDirectory = useCallback(async (path, { skipCache = false } = {}) => {
+    const loadDirectory = useCallback(async (rawPath, { skipCache = false } = {}) => {
+        // Roots arrive trimmed; a saved "/media/" must equal the root "/media" or Go up escapes it.
+        const path = rawPath.replace(/(.)\/+$/, '$1');
         setLoading(true);
         setError(null);
         try {
@@ -69,7 +72,8 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
             .listAllowedRoots()
             .then(result => {
                 if (cancelled) return;
-                const list = result?.data?.roots || [];
+                // Trim here too: a trailing-slash root would never compare equal to currentPath.
+                const list = (result?.data?.roots || []).map(r => r.replace(/(.)\/+$/, '$1'));
                 if (list.length === 0) {
                     setError(
                         'No allowed directories configured. Set a source/destination path in another module first.'
@@ -79,9 +83,10 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                 setRoots(list);
                 // If the form already has a value, browse under whichever
                 // root contains it; otherwise start at the first root.
-                const startRoot = matchRoot(value, list) || list[0];
+                const matchedRoot = matchRoot(value, list);
+                const startRoot = matchedRoot || list[0];
                 setActiveRoot(startRoot);
-                loadDirectory(value || startRoot);
+                loadDirectory(matchedRoot ? value : startRoot);
             })
             .catch(err => {
                 if (!cancelled) setError(err.message || 'Failed to load allowed directories');

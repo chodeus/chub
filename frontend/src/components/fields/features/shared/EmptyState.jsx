@@ -36,7 +36,6 @@ import React from 'react';
  * @param {string} props.size - Size variant ('small', 'medium', 'large')
  * @param {boolean} props.showIcon - Whether to show the icon
  * @param {string} props.iconPosition - Icon position ('top', 'left', 'none')
- * @param {string} props.textAlign - Text alignment ('left', 'center', 'right')
  * @param {string} props.className - Additional CSS classes
  * @param {Object} props.ariaProps - Additional ARIA properties
  */
@@ -50,13 +49,12 @@ export const EmptyState = React.memo(
         size = 'medium',
         showIcon = Boolean(icon),
         iconPosition = 'top',
-        textAlign = 'center',
         className = '',
         ariaProps = {},
         ...props
     }) => {
         // Use utility classes instead of phantom classes
-        const baseClasses = `flex flex-col items-center p-4 rounded-lg text-${textAlign}`;
+        const baseClasses = 'flex flex-col items-center p-4 rounded-lg text-center';
         const sizeClasses = size === 'small' ? 'gap-2' : 'gap-4';
         const variantClasses = variant === 'subtle' ? 'text-fg-muted' : 'text-fg';
         const emptyStateClasses =

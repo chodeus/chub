@@ -44,7 +44,7 @@ export const TextareaBase = ({
     return (
         <textarea
             id={id}
-            value={value || ''}
+            value={value ?? ''}
             onChange={onChange}
             rows={rows}
             disabled={disabled}

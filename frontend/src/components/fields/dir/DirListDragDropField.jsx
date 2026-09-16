@@ -112,18 +112,15 @@ export const DirListDragDropField = React.memo(
         const handleDragEnd = useCallback(
             event => {
                 const { active, over } = event;
+                if (!over || active.id === over.id) return;
 
-                if (active.id !== over.id) {
-                    const oldIndex = directoriesArray.findIndex(
-                        (_, idx) => idx.toString() === active.id
-                    );
-                    const newIndex = directoriesArray.findIndex(
-                        (_, idx) => idx.toString() === over.id
-                    );
+                const oldIndex = directoriesArray.findIndex(
+                    (_, idx) => idx.toString() === active.id
+                );
+                const newIndex = directoriesArray.findIndex((_, idx) => idx.toString() === over.id);
 
-                    const newDirectories = arrayMove(directoriesArray, oldIndex, newIndex);
-                    handleChange(newDirectories);
-                }
+                const newDirectories = arrayMove(directoriesArray, oldIndex, newIndex);
+                handleChange(newDirectories);
             },
             [directoriesArray, handleChange]
         );
@@ -131,7 +128,7 @@ export const DirListDragDropField = React.memo(
         const inputId = `field-${field.key}`;
 
         // Extract field configuration options
-        const minDirectories = field.min_directories || field.minDirectories || 1;
+        const minDirectories = field.min_directories ?? field.minDirectories ?? 1;
         const label = field.label || 'Directories';
         const addButtonText = field.add_button_text || 'Add Directory';
         const removeButtonText = field.remove_button_text || 'Remove';
