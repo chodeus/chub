@@ -1,28 +1,7 @@
 import React, { useCallback } from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * CardContainer - Base card wrapper primitive
- *
- * Responsibilities:
- * - Outer card container with base styling
- * - Hover state styling (border shift, no shadow)
- * - Click interaction (cursor, active state)
- * - Selected state styling
- * - Keyboard navigation (Enter or Space on clickable cards)
- * - ARIA attributes for interactive cards
- * - Theme-aware colors
- *
- * @param {Object} props - Component props
- * @param {ReactNode} props.children - Card content (Header, Body, Footer, Image)
- * @param {boolean} props.hoverable - Enable hover state elevation
- * @param {boolean} props.clickable - Enable click interaction
- * @param {Function} props.onClick - Click handler
- * @param {boolean} props.selected - Selected state styling
- * @param {string} props.className - Additional CSS classes
- * @param {string} props['aria-label'] - Accessibility label for clickable cards
- * @returns {JSX.Element}
- */
+/** Base card wrapper; `clickable` adds button semantics, Enter/Space and the pressed state. */
 export const CardContainer = React.memo(
     ({
         children,

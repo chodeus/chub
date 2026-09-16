@@ -491,6 +491,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
         <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
                 <SegmentedControl
+                    ariaLabel="Asset type"
                     options={presentTabs.map(t => ({ value: t.key, label: t.label }))}
                     value={typeKey}
                     onChange={key => {
@@ -1317,6 +1318,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
 
             <div className="flex items-center gap-3 flex-wrap">
                 <SegmentedControl
+                    ariaLabel="Media type"
                     options={mediaTabs.map(t => ({ value: t.key, label: t.label }))}
                     value={mediaTypeKey}
                     onChange={key => {

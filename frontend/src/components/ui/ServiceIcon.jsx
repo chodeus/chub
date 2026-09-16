@@ -1,20 +1,7 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * ServiceIcon - Displays service icon from homarr-labs dashboard-icons CDN
- *
- * Renders professional SVG icons from homarr-labs dashboard-icons CDN for
- * popular services (Discord, Notifiarr, Radarr, Sonarr, Lidarr, Plex). Does NOT handle
- * Material Symbols - use those directly in consuming components (e.g., email).
- * Provides consistent sizing and graceful fallback on error.
- *
- * @param {Object} props - Component props
- * @param {string} props.service - Service identifier (discord|notifiarr|radarr|sonarr|lidarr|plex)
- * @param {string} props.size - Icon size (small: 20px, medium: 24px, large: 32px, xlarge: 48px)
- * @param {string} props.className - Additional CSS classes
- * @returns {JSX.Element|null}
- */
+/** CDN service icon; renders null for an unknown service or a failed load. Not for Material Symbols. */
 export const ServiceIcon = React.memo(({ service, size = 'medium', className = '' }) => {
     // Track WHICH service failed, so switching to another one un-hides the icon —
     // hiding the node via style.display left it hidden forever after a reuse.

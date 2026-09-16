@@ -211,6 +211,7 @@ const MediaSearchPage = () => {
                     )}
                 </div>
                 <SegmentedControl
+                    ariaLabel="Media type"
                     options={TYPE_OPTIONS}
                     value={filters.type}
                     onChange={v => setFilters(prev => ({ ...prev, type: v, offset: 0 }))}

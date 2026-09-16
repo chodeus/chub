@@ -108,8 +108,8 @@ const Dropdown = ({
         }
     }, [isOpen, placement, anchorRef, onClose]);
 
-    // Focus the first interactive element on open, and hand focus back on close —
-    // Escape, outside click and the auto-close below all unmount us, orphaning focus.
+    // Focus the first interactive element on open, and hand focus back on close:
+    // Escape, an outside click and the visibility auto-close all unmount us.
     useEffect(() => {
         if (!isOpen || !dropdownRef.current) return undefined;
 
@@ -122,9 +122,8 @@ const Dropdown = ({
         }
 
         return () => {
-            // Only reclaim orphaned focus: if the user moved it somewhere themselves,
-            // taking it back would be worse than leaving it. preventScroll because the
-            // auto-close path fires exactly when the anchor has scrolled out of view.
+            // Only reclaim orphaned focus; preventScroll because auto-close fires
+            // exactly when the anchor has scrolled out of view.
             const active = document.activeElement;
             if (!active || active === document.body) {
                 anchor?.focus({ preventScroll: true });

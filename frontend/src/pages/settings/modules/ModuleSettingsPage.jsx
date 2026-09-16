@@ -281,20 +281,26 @@ const ModuleSettingsContent = ({ moduleKey }) => {
         const current = moduleData[modeF.key] || '';
         const moreShown = !!openMoreModes[meta.id] || more.some(o => o.value === current);
         const onPick = v => handleFieldChange(activeModule.key, modeF.key, v);
+        const actionLabel = meta.actionLabel || 'Action';
         return (
             <div>
                 <div className="flex items-center gap-1 mb-2">
-                    <span className="text-[14px] font-medium text-fg">
-                        {meta.actionLabel || 'Action'}
-                    </span>
+                    <span className="text-[14px] font-medium text-fg">{actionLabel}</span>
                     {modeF.helpText && <InfoTooltip text={modeF.helpText} />}
                 </div>
-                <SegmentedControl fullWidth options={primary} value={current} onChange={onPick} />
+                <SegmentedControl
+                    fullWidth
+                    ariaLabel={actionLabel}
+                    options={primary}
+                    value={current}
+                    onChange={onPick}
+                />
                 {more.length > 0 &&
                     (moreShown ? (
                         <div className="mt-2">
                             <SegmentedControl
                                 fullWidth
+                                ariaLabel={`${actionLabel} (more actions)`}
                                 options={more}
                                 value={current}
                                 onChange={onPick}
@@ -640,6 +646,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                                 <div className={dimCls}>
                                                     <SegmentedControl
                                                         size="sm"
+                                                        ariaLabel={headerF.label}
                                                         options={segOptions(headerF)}
                                                         value={moduleData[headerF.key] || ''}
                                                         onChange={v =>

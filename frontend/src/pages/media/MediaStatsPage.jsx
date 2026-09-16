@@ -236,9 +236,10 @@ const BREAKDOWN_TABS = [
     { key: 'by_runtime', label: 'Runtime', labelKey: 'bucket' },
 ];
 
-const BreakdownTabs = ({ stats }) => {
+export const BreakdownTabs = ({ stats }) => {
     const availableTabs = BREAKDOWN_TABS.filter(tab => (stats[tab.key] || []).length > 0);
     const [activeKey, setActiveKey] = React.useState(null);
+    const tabRefs = React.useRef([]);
 
     const resolvedActive =
         activeKey && availableTabs.some(t => t.key === activeKey)
@@ -249,20 +250,45 @@ const BreakdownTabs = ({ stats }) => {
 
     const activeTab = availableTabs.find(t => t.key === resolvedActive);
     const activeItems = stats[activeTab.key] || [];
+    const activeIndex = availableTabs.findIndex(t => t.key === resolvedActive);
+
+    // Roving tabindex plus arrow/Home/End: the keyboard contract role="radio" owes.
+    const handleKeyDown = (event, index) => {
+        const last = availableTabs.length - 1;
+        let next = null;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            next = index === last ? 0 : index + 1;
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            next = index === 0 ? last : index - 1;
+        } else if (event.key === 'Home') {
+            next = 0;
+        } else if (event.key === 'End') {
+            next = last;
+        }
+        if (next === null) return;
+        event.preventDefault();
+        setActiveKey(availableTabs[next].key);
+        tabRefs.current[next]?.focus();
+    };
 
     return (
         <section>
             <h3 className="text-lg font-semibold text-fg mb-3">Breakdowns</h3>
             {/* radiogroup, not tablist: no segment owns a tabpanel, and this mirrors SegmentedControl. */}
             <div className="flex flex-wrap gap-2 mb-4" role="radiogroup" aria-label="Breakdown">
-                {availableTabs.map(tab => {
+                {availableTabs.map((tab, i) => {
                     const isActive = tab.key === resolvedActive;
                     const count = (stats[tab.key] || []).length;
                     return (
                         <button
                             key={tab.key}
+                            ref={el => {
+                                tabRefs.current[i] = el;
+                            }}
                             role="radio"
                             aria-checked={isActive}
+                            tabIndex={i === activeIndex ? 0 : -1}
+                            onKeyDown={e => handleKeyDown(e, i)}
                             onClick={() => setActiveKey(tab.key)}
                             className="inline-flex items-center min-h-11 px-3 rounded-full text-sm transition-colors"
                             style={{

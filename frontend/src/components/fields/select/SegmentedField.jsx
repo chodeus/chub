@@ -40,6 +40,7 @@ export const SegmentedField = React.memo(
                 <div className="flex sm:justify-end">
                     <SegmentedControl
                         options={options}
+                        ariaLabel={field.label}
                         value={value || ''}
                         onChange={v => !disabled && onChange(v)}
                     />
