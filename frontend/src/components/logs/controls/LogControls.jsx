@@ -8,7 +8,7 @@ import { ActionButtons } from './ActionButtons';
 import { useLogControls } from '../context/LogControlsContext';
 import { useUIState } from '../../../contexts/UIStateContext';
 
-/** Control bar UI: stacked with a collapse toggle under 1200px, single row above it. */
+/** Control bar UI: stacked with a collapse toggle under 1200px, a wrapping row above it. */
 const LogControlsContent = ({ logText }) => {
     const { isCollapsed } = useLogControls();
     const { viewport } = useUIState();
@@ -44,7 +44,7 @@ const LogControlsContent = ({ logText }) => {
                         </>
                     ) : (
                         <>
-                            {/* Horizontal layout: Flexible single row with wrapping */}
+                            {/* Horizontal layout: a row that wraps when it runs out of width */}
                             <div className="flex-shrink-0 min-w-48">
                                 <ModuleSelect />
                             </div>

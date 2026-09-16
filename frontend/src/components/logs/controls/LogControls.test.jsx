@@ -29,7 +29,8 @@ describe('LogControls', () => {
     });
 
     it('keeps the controls on screen when the window grew past the stacked breakpoint', () => {
-        // Mounted phone-width, so the panel starts collapsed; then the window widened.
+        // innerWidth seeds the collapsed state at mount; the layout reads the mocked
+        // viewport, so this is the "mounted narrow, now wide" case.
         window.innerWidth = 500;
         mockUIState.viewport = { width: 1400 };
 
