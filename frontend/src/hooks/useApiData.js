@@ -42,7 +42,8 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
             abortControllerRef.current = null;
         }
 
-        if (retryTimeoutRef.current) {
+        // Explicit null: a 0 handle is falsy, and clear() relies on this to stop a retry.
+        if (retryTimeoutRef.current !== null) {
             clearTimeout(retryTimeoutRef.current);
             retryTimeoutRef.current = null;
         }
