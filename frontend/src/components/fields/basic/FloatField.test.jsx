@@ -1,4 +1,4 @@
-/** Guards the local draft: partial and out-of-range text stay on screen; blur clamps and emits. */
+/** Guards the local draft: text stays on screen; blur clamps finite drafts and drops "-". */
 import { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FloatField } from './FloatField.jsx';

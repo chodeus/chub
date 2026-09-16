@@ -65,6 +65,14 @@ describe('TagInput', () => {
         expect(input).toHaveAttribute('aria-activedescendant', first.id);
     });
 
+    it('renders a duplicated suggestion once', () => {
+        render(<TagInput items={[]} suggestions={['logo', 'logo', 'background']} />);
+        fireEvent.focus(screen.getByRole('combobox'));
+
+        expect(screen.getAllByRole('option')).toHaveLength(2);
+        expect(screen.getAllByRole('option', { name: 'logo' })).toHaveLength(1);
+    });
+
     it('clears its pending blur timer on unmount', () => {
         vi.useFakeTimers();
         try {

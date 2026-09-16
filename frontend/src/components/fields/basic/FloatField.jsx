@@ -20,7 +20,7 @@ export const FloatField = React.memo(
         highlightInvalid = false,
         errorMessage = null,
     }) => {
-        // Typed text; partial ("1.", "-") and out-of-range input stay here — blur clamps and emits.
+        // Typed text; blur clamps and emits a finite draft, and drops a non-numeric one like "-".
         const [draft, setDraft] = useState(null);
         // Convert decimal (0-1) to percentage (0-100) for display with precision fix
         const percentageValue =

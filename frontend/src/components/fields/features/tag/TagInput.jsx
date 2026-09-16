@@ -65,8 +65,10 @@ export const TagInput = React.memo(
             if (!inputValue.trim() && !showSuggestions) return [];
 
             const suggestionArray = Array.isArray(suggestions) ? suggestions : [];
+            // Dedupe here, not at render: the keyboard index addresses this same array.
+            const unique = [...new Set(suggestionArray)];
 
-            if (!inputValue.trim()) return suggestionArray;
+            if (!inputValue.trim()) return unique;
 
             // Suggestion filtering logic
             const filterFn =
@@ -77,7 +79,7 @@ export const TagInput = React.memo(
                     return suggestionText.includes(inputText);
                 });
 
-            return suggestionArray
+            return unique
                 .filter(suggestion => filterFn(suggestion, inputValue))
                 .filter(suggestion => {
                     // Exclude already selected items
