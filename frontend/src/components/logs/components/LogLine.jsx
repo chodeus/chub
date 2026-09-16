@@ -14,10 +14,12 @@ import {
 const PATTERNS = {
     quotedString: /(['"])(.*?)\1/g,
     combined:
-        /\b\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}\b|\b(CRITICAL|ERROR|WARNING|INFO|DEBUG)\b|https?:\/\/[^\s<>"{}|\\^`\]]+|\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]|\b[\w_]+(\.[\w_]+)+\b|\b\d+(\.\d+)?\b|__QUOTED_PLACEHOLDER_\d+__/g,
+        /\b\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}\b|\b(CRITICAL|ERROR|WARNING|INFO|DEBUG)\b|https?:\/\/[^\s<>"{}|\\^`\]]+|\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]|\b[\w_]+(\.[\w_]+)+\b|\b\d+(\.\d+)?\b|\d+/g,
     datetime: /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/,
     level: /^(CRITICAL|ERROR|WARNING|INFO|DEBUG)$/,
-    placeholder: /^__QUOTED_PLACEHOLDER_(\d+)__$/,
+    // Private-use sentinel, not a word-like token: a log line can contain
+    // "__QUOTED_PLACEHOLDER_0__" itself and must not collide with a real quote.
+    placeholder: /^(\d+)$/,
     url: /^https?:\/\//,
     fileref: /^\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]$/,
     // Needs a letter in the first segment, or "3.5" and "12.34" classify as paths.
@@ -37,7 +39,7 @@ export const LogLine = React.memo(
             const quotedMatches = [];
             working = working.replace(PATTERNS.quotedString, match => {
                 quotedMatches.push(match);
-                return `__QUOTED_PLACEHOLDER_${quotedMatches.length - 1}__`;
+                return `${quotedMatches.length - 1}`;
             });
 
             let currentIndex = 0;
@@ -66,7 +68,8 @@ export const LogLine = React.memo(
                 } else if (PATTERNS.placeholder.test(matchedText)) {
                     const placeholderMatch = matchedText.match(PATTERNS.placeholder);
                     const idx = parseInt(placeholderMatch[1], 10);
-                    // A log line can contain the sentinel literally; keep the raw token then.
+                    // Fail safe: an index with no capture means the line carried the
+                    // sentinel itself — show the raw token rather than nothing.
                     result.push({ type: 'quoted', content: quotedMatches[idx] ?? matchedText });
                 } else if (PATTERNS.filepath.test(matchedText)) {
                     result.push({ type: 'filepath', content: matchedText });

@@ -10,19 +10,7 @@ import { logsAPI } from '../utils/api/logs.js';
 
 const LOG_LEVELS = ['critical', 'error', 'warning', 'info', 'debug'];
 
-/**
- * Logs Page - Log viewer with real-time updates
- *
- * Provides comprehensive log viewing interface with:
- * - Module and file selection
- * - Real-time content updates (1s polling)
- * - Search and highlighting
- * - Log-level filtering
- * - Sort order (newest/oldest first)
- * - Scroll-to-top/bottom navigation
- * - Download and upload capabilities
- * - Keyboard shortcuts (Ctrl/Cmd+F for search)
- */
+/** Log viewer: tails the selected module's file, filters by level and text, downloads or copies it. */
 export default function Logs() {
     // Data hooks
     const { modules } = useLogModules();
