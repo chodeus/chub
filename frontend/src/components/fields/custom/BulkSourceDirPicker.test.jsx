@@ -1,10 +1,15 @@
 /** Guards the failed-load message: a failed fetch must not read as "nothing configured". */
 import { render, screen, fireEvent } from '@testing-library/react';
 
-const search = vi.hoisted(() => ({ impl: null }));
+const search = vi.hoisted(() => ({ impl: null, options: null }));
 
 vi.mock('../../../utils/api/posters.js', () => ({
-    postersAPI: { searchGoogleDrive: () => search.impl() },
+    postersAPI: {
+        searchGoogleDrive: (params, options) => {
+            search.options = options;
+            return search.impl();
+        },
+    },
 }));
 
 const { BulkSourceDirPicker } = await import('./BulkSourceDirPicker.jsx');
@@ -27,5 +32,15 @@ describe('BulkSourceDirPicker', () => {
         openPanel();
 
         expect(await screen.findByText(/No Google Drives configured/)).toBeInTheDocument();
+    });
+
+    it('aborts the in-flight search when it unmounts', () => {
+        search.impl = () => new Promise(() => {});
+        const { unmount } = render(<BulkSourceDirPicker directories={[]} onChange={() => {}} />);
+
+        expect(search.options.signal.aborted).toBe(false);
+        unmount();
+
+        expect(search.options.signal.aborted).toBe(true);
     });
 });

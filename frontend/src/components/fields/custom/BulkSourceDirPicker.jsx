@@ -24,17 +24,23 @@ export const BulkSourceDirPicker = React.memo(
 
         useEffect(() => {
             let mounted = true;
+            // apiCore.get gives a signalled caller its own request, so aborting here
+            // never rejects the shared promise another caller is waiting on.
+            const controller = new AbortController();
             setLoading(true);
             postersAPI
-                .searchGoogleDrive({})
+                .searchGoogleDrive({}, { signal: controller.signal })
                 .then(resp => {
                     const list = resp?.data?.sources;
                     if (mounted && Array.isArray(list)) setSources(list);
                 })
-                .catch(() => mounted && setLoadFailed(true))
+                .catch(err => {
+                    if (mounted && err?.name !== 'AbortError') setLoadFailed(true);
+                })
                 .finally(() => mounted && setLoading(false));
             return () => {
                 mounted = false;
+                controller.abort();
             };
         }, []);
 

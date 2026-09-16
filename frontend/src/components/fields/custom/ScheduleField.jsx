@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { FieldWrapper, FieldLabel, FieldError, FieldDescription } from '../primitives';
 import { PillSelector, ScheduleTypePanel, ScheduleSummary } from '../features/schedule';
 
@@ -118,6 +118,8 @@ export const ScheduleField = React.memo(
     }) => {
         const [scheduleType, setScheduleType] = useState('daily');
         const [scheduleData, setScheduleData] = useState({});
+        // The data as queued: within a tick this leads committed state.
+        const queuedData = useRef(scheduleData);
 
         // Parse incoming value into type and data
         const parseScheduleValue = useCallback(val => {
@@ -222,9 +224,12 @@ export const ScheduleField = React.memo(
         useEffect(() => {
             const parsed = parseScheduleValue(value);
             setScheduleType(prev => (prev === parsed.type ? prev : parsed.type));
-            setScheduleData(prev =>
-                JSON.stringify(prev) === JSON.stringify(parsed.data) ? prev : parsed.data
-            );
+            // Compare against the queued data, not committed state: an update made
+            // earlier in this tick is not committed yet and must not be undone.
+            if (JSON.stringify(queuedData.current) !== JSON.stringify(parsed.data)) {
+                queuedData.current = parsed.data;
+                setScheduleData(parsed.data);
+            }
         }, [value, parseScheduleValue]);
 
         // Handle schedule type change
@@ -255,6 +260,7 @@ export const ScheduleField = React.memo(
                         break;
                 }
 
+                queuedData.current = newData;
                 setScheduleData(newData);
 
                 // Compose and emit new value
@@ -267,18 +273,22 @@ export const ScheduleField = React.memo(
         // Handle schedule data change
         const handleDataChange = useCallback(
             newDataOrUpdater => {
+                // Apply to the latest queued data: two updates in one tick would both
+                // read the committed snapshot, and the first would be lost.
+                const previous = queuedData.current;
                 const updatedData =
                     typeof newDataOrUpdater === 'function'
-                        ? newDataOrUpdater(scheduleData)
+                        ? newDataOrUpdater(previous)
                         : newDataOrUpdater;
+                queuedData.current = updatedData;
                 setScheduleData(updatedData);
 
                 const newValue = composeScheduleString(scheduleType, updatedData);
-                if (newValue !== composeScheduleString(scheduleType, scheduleData)) {
+                if (newValue !== composeScheduleString(scheduleType, previous)) {
                     onChange(newValue);
                 }
             },
-            [scheduleType, scheduleData, onChange]
+            [scheduleType, onChange]
         );
 
         const inputId = `field-${field.key}`;

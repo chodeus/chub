@@ -284,11 +284,13 @@ export const postersAPI = {
      * @param {string} searchParams.mediaType - Media type filter
      * @returns {Promise<Object>} GDrive search results
      */
-    searchGoogleDrive: (searchParams = {}) => {
+    searchGoogleDrive: (searchParams = {}, options = {}) => {
         const params = new URLSearchParams(searchParams);
+        // Options stay a second argument: only the first is serialised as query params.
         return apiCore.get(`/posters/sources/gdrive/search?${params}`, {
             useCache: true,
             cacheTTL: 2 * 60 * 1000, // 2 minutes cache for GDrive
+            ...options,
         });
     },
 
