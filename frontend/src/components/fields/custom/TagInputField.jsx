@@ -1,35 +1,9 @@
-/**
- * TagInputField - Form integration for tag input system
- *
- * Provides primitive composition following test-ui patterns with standard
- * field interface. Handles both tag_input and tag_display via configuration.
- *
- * Field Types Supported:
- * - tag_input: Full editing capabilities with add/remove (primary color)
- * - tag_display: Display-only mode (accent color)
- *
- * Configuration Mapping:
- * - field.suggestions → TagInput suggestions (array or function)
- * - field.allowCustom → TagInput allowCustom (default: true)
- * - field.placeholder → TagInput placeholder
- * - field.maxItems → TagInput maxItems
- * - field.caseSensitive → TagInput caseSensitive (default: false)
- */
+/** Form wrapper for TagInput: tag_input edits, tag_display is read-only; both read field config. */
 
 import React, { useCallback } from 'react';
 import { FieldWrapper, FieldLabel, FieldError, FieldDescription } from '../primitives';
 import { TagInput } from '../features/tag/TagInput';
 
-/**
- * TagInputField component for form integration of tag input system
- *
- * @param {Object} field - Field configuration object from schema
- * @param {string|string[]} value - Current field value (array of strings)
- * @param {Function} onChange - Value change handler (value) => void
- * @param {boolean} disabled - Field disabled state
- * @param {boolean} highlightInvalid - Show validation error state
- * @param {string} errorMessage - Error message to display
- */
 export const TagInputField = React.memo(
     ({
         field,
@@ -105,7 +79,12 @@ export const TagInputField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel label={field.label} required={field.required} />
+                <FieldLabel
+                    htmlFor={inputId}
+                    id={`${inputId}-label`}
+                    label={field.label}
+                    required={field.required}
+                />
 
                 <TagInput
                     {...tagInputProps}

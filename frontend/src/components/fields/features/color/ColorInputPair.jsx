@@ -32,6 +32,7 @@ export const ColorInputPair = React.memo(
         placeholder = '#000000',
         required = false,
         className = '',
+        'aria-describedby': ariaDescribedby,
         ...props
     }) => {
         // Generate unique IDs for both inputs
@@ -68,7 +69,7 @@ export const ColorInputPair = React.memo(
             <div
                 className={`flex gap-2 items-stretch ${className}`.trim()}
                 role="group"
-                aria-labelledby={`${baseId}-label`}
+                aria-label={label}
                 {...props}
             >
                 <ColorPicker
@@ -89,6 +90,7 @@ export const ColorInputPair = React.memo(
                     placeholder={placeholder}
                     required={required}
                     aria-label={textAriaLabel}
+                    aria-describedby={ariaDescribedby}
                 />
             </div>
         );

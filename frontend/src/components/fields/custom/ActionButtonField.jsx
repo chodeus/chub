@@ -33,18 +33,16 @@ export const ActionButtonField = ({ field, rowData = null, disabled = false }) =
     // while that payload is unchanged. That drops a stale "success" after the
     // folder id is edited, or (with array rows keyed by index) after a row above
     // is removed and this instance is reused to render a different row.
-    const payloadKey = (field.payloadFields || []).map(k => (rowData || {})[k] ?? '').join(' ');
+    const src = rowData || {};
+    const payload = Object.fromEntries((field.payloadFields || []).map(k => [k, src[k]]));
+    // Key on the body the request actually sends, so "" and null stay distinct requests.
+    const payloadKey = JSON.stringify(payload);
     const shown = result && result.forKey === payloadKey ? result : null;
 
     const run = useCallback(async () => {
         setBusy(true);
         setResult(null);
         try {
-            const src = rowData || {};
-            const payload = {};
-            (field.payloadFields || []).forEach(k => {
-                payload[k] = src[k];
-            });
             const res = await apiCore.post(field.endpoint, payload);
             const msg = res?.message || 'Success';
             setResult({ ok: true, message: msg, forKey: payloadKey });
@@ -56,7 +54,7 @@ export const ActionButtonField = ({ field, rowData = null, disabled = false }) =
         } finally {
             setBusy(false);
         }
-    }, [field.endpoint, field.payloadFields, rowData, payloadKey, toast]);
+    }, [field.endpoint, payload, payloadKey, toast]);
 
     const inputId = `field-${field.key}`;
     return (

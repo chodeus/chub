@@ -1,7 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { FieldRow, InputBase } from '../primitives';
 import { FieldButton } from '../features/shared';
-import { useOptionalFormField } from '../../forms/FormContext';
 import { configAPI } from '../../../utils/api';
 import { SECRET_INPUT_PROPS } from '../../../utils/forms/secretInput.js';
 
@@ -19,16 +18,6 @@ export const PasswordField = React.memo(
         errorMessage = null,
         onBlur,
     }) => {
-        // Optional FormContext integration
-        const formField = useOptionalFormField(field.key);
-
-        // Use FormContext if available, otherwise use props
-        const finalValue = formField?.value ?? value;
-        const finalOnChange = formField?.onChange ?? onChange;
-        const finalHighlightInvalid = formField?.highlightInvalid ?? highlightInvalid;
-        const finalErrorMessage = formField?.errorMessage ?? errorMessage;
-        const finalOnBlur = formField?.onBlur ?? onBlur;
-
         // When present, the eye toggle can fetch and show the real saved secret.
         const secretPath = field.secretPath ?? null;
 
@@ -39,41 +28,64 @@ export const PasswordField = React.memo(
         const [revealError, setRevealError] = useState(false);
         const [revealing, setRevealing] = useState(false);
 
+        // Bumped on every edit; a reveal resolving against an older id is stale.
+        const revealId = useRef(0);
+
+        // Re-mask and invalidate during render when secretPath changes: an effect
+        // would paint the previous instance's secret for a frame.
+        const [prevSecretPath, setPrevSecretPath] = useState(secretPath);
+        if (prevSecretPath !== secretPath) {
+            setPrevSecretPath(secretPath);
+            revealId.current += 1;
+            setRevealedValue(null);
+            setRevealError(false);
+            setShowPassword(false);
+            setRevealing(false);
+        }
+
         const handleChange = useCallback(
             e => {
                 // User is typing a new secret — drop the revealed value so the
                 // field behaves like a normal editable input from here on.
+                revealId.current += 1;
                 setRevealedValue(null);
                 setRevealError(false);
-                finalOnChange(e.target.value);
+                // The in-flight reveal is now stale, so it will never clear this itself.
+                setRevealing(false);
+                onChange(e.target.value);
             },
-            [finalOnChange]
+            [onChange]
         );
 
         const togglePasswordVisibility = useCallback(async () => {
             const next = !showPassword;
             // Revealing a saved-but-redacted secret we don't hold yet: fetch the
             // real value before switching the input to plain text.
-            if (next && secretPath && revealedValue === null && finalValue === REDACTED) {
+            if (next && secretPath && revealedValue === null && value === REDACTED) {
+                const requestId = revealId.current;
                 setRevealing(true);
                 setRevealError(false);
                 try {
                     const res = await configAPI.revealSecret(secretPath);
+                    // A stale response owns none of this state — whoever invalidated it reset it.
+                    if (revealId.current !== requestId) return;
                     setRevealedValue(res?.data?.value ?? '');
                 } catch {
-                    setRevealError(true);
-                    setRevealing(false);
-                    return; // stay masked and surface the error
+                    if (revealId.current === requestId) {
+                        setRevealing(false);
+                        setRevealError(true);
+                    }
+                    return; // stay masked
                 }
                 setRevealing(false);
             }
             setShowPassword(next);
-        }, [showPassword, secretPath, revealedValue, finalValue]);
+        }, [showPassword, secretPath, revealedValue, value]);
 
         const inputId = field.id || `field-${field.key}`;
         // Show the fetched real secret once we have it; otherwise the prop value
         // (which for a saved secret is the "********" placeholder).
-        const displayValue = revealedValue ?? finalValue ?? '';
+        const displayValue = revealedValue ?? value ?? '';
 
         return (
             <FieldRow
@@ -81,8 +93,8 @@ export const PasswordField = React.memo(
                 label={field.label}
                 required={field.required}
                 description={field.description}
-                error={finalErrorMessage || (revealError ? 'Could not reveal secret' : null)}
-                invalid={finalHighlightInvalid}
+                error={errorMessage || (revealError ? 'Could not reveal secret' : null)}
+                invalid={highlightInvalid}
             >
                 <div className="flex">
                     <InputBase
@@ -96,11 +108,11 @@ export const PasswordField = React.memo(
                         maxLength={field.maxLength}
                         minLength={field.minLength}
                         onChange={handleChange}
-                        onBlur={finalOnBlur}
-                        invalid={finalHighlightInvalid}
+                        onBlur={onBlur}
+                        invalid={highlightInvalid}
                         {...SECRET_INPUT_PROPS}
                         aria-describedby={`${field.descId || `${inputId}-desc`} ${field.errorId || `${inputId}-error`}`.trim()}
-                        aria-invalid={finalHighlightInvalid}
+                        aria-invalid={highlightInvalid}
                         className="flex-1 border border-border bg-input rounded-l-lg"
                     />
 
@@ -108,7 +120,6 @@ export const PasswordField = React.memo(
                         onClick={togglePasswordVisibility}
                         disabled={disabled || revealing}
                         ariaLabel={showPassword ? 'Hide password' : 'Show password'}
-                        variant="right"
                         className="text-brand-primary"
                     >
                         <span className="material-symbols-outlined text-lg" aria-hidden="true">

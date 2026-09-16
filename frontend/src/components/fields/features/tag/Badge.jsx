@@ -37,10 +37,7 @@ export const Badge = React.memo(
         ariaProps = {},
         ...restProps
     }) => {
-        // Development-time validation to prevent domain-specific prop drift.
-        // Only inspect caller pass-through props (restProps) — the destructured
-        // props above are Badge's own API, and including them flagged legitimate
-        // names (e.g. `removeLabel` contains "label"), firing on every render.
+        // Dev-only: flags domain-specific names among caller pass-through props only.
         if (import.meta.env.DEV) {
             const propNames = Object.keys(restProps);
             const forbidden = ['tag', 'label', 'status', 'category', 'type'];
@@ -56,8 +53,14 @@ export const Badge = React.memo(
             }
         }
 
-        const isInteractive = Boolean(onClick || onRemove);
         const isRemovable = Boolean(onRemove);
+        // Never both: button semantics here would wrap the native remove button in another button.
+        const isInteractive = Boolean(onClick) && !isRemovable;
+        if (import.meta.env.DEV && onClick && isRemovable) {
+            console.error(
+                'Badge: onClick is ignored with onRemove — render sibling controls instead'
+            );
+        }
         const handleClick = e => {
             if (disabled) return;
             onClick?.(e);
@@ -70,6 +73,8 @@ export const Badge = React.memo(
         };
 
         const handleKeyDown = e => {
+            // Keys pressed on the nested remove button bubble here; act only on the badge's own key events.
+            if (e.target !== e.currentTarget) return;
             if (disabled) return;
 
             if (e.key === 'Enter' || e.key === ' ') {
@@ -141,14 +146,13 @@ export const Badge = React.memo(
             role: isInteractive ? 'button' : undefined,
             tabIndex: isInteractive && !disabled ? 0 : undefined,
             'aria-disabled': disabled,
-            'aria-pressed': focused,
             ...ariaProps,
         };
 
         return (
             <span
                 className={badgeClasses}
-                onClick={onClick ? handleClick : undefined}
+                onClick={isInteractive ? handleClick : undefined}
                 onKeyDown={isInteractive ? handleKeyDown : undefined}
                 {...badgeAriaProps}
                 {...restProps}
@@ -165,7 +169,6 @@ export const Badge = React.memo(
                         disabled={disabled}
                         aria-label={`${removeLabel}: ${children}`}
                         title={`${removeLabel}: ${children}`}
-                        tabIndex={-1} // Badge itself handles focus
                     >
                         <span
                             className="material-symbols-outlined text-current"

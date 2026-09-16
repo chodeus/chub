@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { FieldWrapper, FieldLabel, FieldError, FieldDescription } from '../primitives';
 import { PillSelector, ScheduleTypePanel, ScheduleSummary } from '../features/schedule';
 
@@ -50,6 +50,53 @@ const DAY_TOKEN_TO_KEY = {
     saturday: 'saturday',
 };
 
+const composeScheduleString = (type, data) => {
+    if (!type || !data) {
+        return '';
+    }
+
+    try {
+        switch (type) {
+            case 'hourly': {
+                const minute = data.minute ?? 0;
+                return `hourly(${minute})`;
+            }
+
+            case 'daily': {
+                const times = data.times || [];
+                if (times.length === 0) return '';
+                return `daily(${times.join('|')})`;
+            }
+
+            case 'weekly': {
+                const days = data.days || [];
+                const time = data.time || '09:00';
+                if (days.length === 0) return '';
+                return `weekly(${days.map(day => `${day}@${time}`).join('|')})`;
+            }
+
+            case 'monthly': {
+                const days = data.days || [];
+                const time = data.time || '09:00';
+                if (days.length === 0) return '';
+                return `monthly(${days.map(day => `${day}@${time}`).join('|')})`;
+            }
+
+            case 'cron': {
+                const expression = data.expression || '';
+                if (!expression.trim()) return 'cron()';
+                return `cron(${expression})`;
+            }
+
+            default:
+                return '';
+        }
+    } catch (error) {
+        console.warn('Failed to compose schedule string:', type, data, error);
+        return '';
+    }
+};
+
 /**
  * Main schedule input component using atomic primitives
  * @param {Object} field - Field configuration
@@ -70,7 +117,8 @@ export const ScheduleField = React.memo(
     }) => {
         const [scheduleType, setScheduleType] = useState('daily');
         const [scheduleData, setScheduleData] = useState({});
-        const [, setIsValid] = useState(true);
+        // The data as queued: within a tick this leads committed state.
+        const queuedData = useRef(scheduleData);
 
         // Parse incoming value into type and data
         const parseScheduleValue = useCallback(val => {
@@ -169,63 +217,18 @@ export const ScheduleField = React.memo(
             }
         }, []);
 
-        // Compose schedule string from type and data (pure function, no useCallback needed)
-        const composeScheduleString = (type, data) => {
-            if (!type || !data) {
-                return '';
-            }
-
-            try {
-                switch (type) {
-                    case 'hourly': {
-                        const minute = data.minute || 0;
-                        return `hourly(${minute})`;
-                    }
-
-                    case 'daily': {
-                        const times = data.times || [];
-                        if (times.length === 0) return '';
-                        return `daily(${times.join('|')})`;
-                    }
-
-                    case 'weekly': {
-                        const days = data.days || [];
-                        const time = data.time || '09:00';
-                        if (days.length === 0) return '';
-                        return `weekly(${days.map(day => `${day}@${time}`).join('|')})`;
-                    }
-
-                    case 'monthly': {
-                        const days = data.days || [];
-                        const time = data.time || '09:00';
-                        if (days.length === 0) return '';
-                        return `monthly(${days.map(day => `${day}@${time}`).join('|')})`;
-                    }
-
-                    case 'cron': {
-                        const expression = data.expression || '';
-                        if (!expression.trim()) return 'cron()';
-                        return `cron(${expression})`;
-                    }
-
-                    default:
-                        return '';
-                }
-            } catch (error) {
-                console.warn('Failed to compose schedule string:', type, data, error);
-                return '';
-            }
-        };
-
         // Sync from value on every change (not just type change), or a saved
         // schedule matching the 'daily' default never loads its data. Equality
         // guards prevent re-render loops.
         useEffect(() => {
             const parsed = parseScheduleValue(value);
             setScheduleType(prev => (prev === parsed.type ? prev : parsed.type));
-            setScheduleData(prev =>
-                JSON.stringify(prev) === JSON.stringify(parsed.data) ? prev : parsed.data
-            );
+            // Compare against the queued data, not committed state: an update made
+            // earlier in this tick is not committed yet and must not be undone.
+            if (JSON.stringify(queuedData.current) !== JSON.stringify(parsed.data)) {
+                queuedData.current = parsed.data;
+                setScheduleData(parsed.data);
+            }
         }, [value, parseScheduleValue]);
 
         // Handle schedule type change
@@ -252,10 +255,11 @@ export const ScheduleField = React.memo(
                         newData = { days: [1], time: '09:00' };
                         break;
                     case 'cron':
-                        newData = { expression: '', isValid: true };
+                        newData = { expression: '' };
                         break;
                 }
 
+                queuedData.current = newData;
                 setScheduleData(newData);
 
                 // Compose and emit new value
@@ -268,31 +272,20 @@ export const ScheduleField = React.memo(
         // Handle schedule data change
         const handleDataChange = useCallback(
             newDataOrUpdater => {
-                // Always use functional update to avoid stale closure issues
-                setScheduleData(prevData => {
-                    const updatedData =
-                        typeof newDataOrUpdater === 'function'
-                            ? newDataOrUpdater(prevData)
-                            : newDataOrUpdater;
+                // Apply to the latest queued data: two updates in one tick would both
+                // read the committed snapshot, and the first would be lost.
+                const previous = queuedData.current;
+                const updatedData =
+                    typeof newDataOrUpdater === 'function'
+                        ? newDataOrUpdater(previous)
+                        : newDataOrUpdater;
+                queuedData.current = updatedData;
+                setScheduleData(updatedData);
 
-                    // Update validity for cron expressions
-                    if (scheduleType === 'cron') {
-                        setIsValid(updatedData.isValid !== false);
-                    }
-
-                    // Compose new value
-                    const prevValue = composeScheduleString(scheduleType, prevData);
-                    const newValue = composeScheduleString(scheduleType, updatedData);
-
-                    // Only emit onChange if the value actually changed
-                    // This prevents infinite loops from validation-only updates
-                    if (newValue !== prevValue) {
-                        // Use setTimeout to break out of the current render cycle
-                        setTimeout(() => onChange(newValue), 0);
-                    }
-
-                    return updatedData;
-                });
+                const newValue = composeScheduleString(scheduleType, updatedData);
+                if (newValue !== composeScheduleString(scheduleType, previous)) {
+                    onChange(newValue);
+                }
             },
             [scheduleType, onChange]
         );

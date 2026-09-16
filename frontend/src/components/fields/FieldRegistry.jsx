@@ -9,16 +9,8 @@ import * as CustomFields from './custom';
 import * as ColorFields from './color';
 import * as DirFields from './dir';
 
-/**
- * Field type to component mapping.
- *
- * Resolved lazily to survive the circular import between FieldRegistry and
- * CustomFields.ArrayObjectField (which itself depends on FieldRegistry to
- * render nested subfields). A const object literal evaluated at module-init
- * would capture `CustomFields.ArrayObjectField` as `undefined` during the
- * cycle, producing spurious "Unknown field type: object_array" warnings on
- * first render of settings pages.
- */
+// Resolved lazily: ArrayObjectField imports this module, so an eager table would
+// capture CustomFields.ArrayObjectField as undefined during the import cycle.
 const FIELD_RESOLVERS = {
     text: () => BasicFields.TextField,
     password: () => BasicFields.PasswordField,
@@ -37,7 +29,6 @@ const FIELD_RESOLVERS = {
 
     color: () => ColorFields.ColorField,
     color_list: () => ColorFields.ColorListField,
-    color_list_poster: () => ColorFields.ColorListPosterField,
 
     dir: () => DirFields.DirField,
     dirlist: () => DirFields.DirListField,
@@ -124,8 +115,8 @@ const IMPLEMENTED_FIELD_TYPES = new Set([
     'json',
     'color',
     'color_list',
-    'color_list_poster',
     'dir',
+    'dir_picker',
     'dirlist',
     'dirlist_dragdrop',
     'dirlist_options',
@@ -143,6 +134,9 @@ const IMPLEMENTED_FIELD_TYPES = new Set([
     'schedule',
     'action_button',
 ]);
+
+// The set as it stands before any register() call: unregister() restores exactly this.
+const RESOLVER_IMPLEMENTED_FIELD_TYPES = new Set(IMPLEMENTED_FIELD_TYPES);
 
 /**
  * FieldRegistry class provides methods to register, retrieve, and manage field components
@@ -172,6 +166,8 @@ export class FieldRegistry {
             console.warn(`[FieldRegistry] Overriding existing field type: ${fieldType}`);
         }
         FIELD_COMPONENTS[fieldType] = component;
+        // A registered component IS the implementation; without this the dev page calls it a placeholder.
+        IMPLEMENTED_FIELD_TYPES.add(fieldType);
     }
 
     /**
@@ -206,7 +202,7 @@ export class FieldRegistry {
      * @returns {string[]} Array of placeholder field type strings
      */
     static getPlaceholderFieldTypes() {
-        return Object.keys(FIELD_COMPONENTS).filter(type => !IMPLEMENTED_FIELD_TYPES.has(type));
+        return Object.keys(FIELD_RESOLVERS).filter(type => !IMPLEMENTED_FIELD_TYPES.has(type));
     }
 
     /**
@@ -224,6 +220,10 @@ export class FieldRegistry {
      */
     static unregister(fieldType) {
         delete FIELD_COMPONENTS[fieldType];
+        // Only registration marked it implemented; a placeholder resolver goes back to placeholder.
+        if (!RESOLVER_IMPLEMENTED_FIELD_TYPES.has(fieldType)) {
+            IMPLEMENTED_FIELD_TYPES.delete(fieldType);
+        }
     }
 }
 

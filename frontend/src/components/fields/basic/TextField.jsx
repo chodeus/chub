@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
 import { FieldRow, InputBase } from '../primitives';
-import { useOptionalFormField } from '../../forms/FormContext';
 
 export const TextField = React.memo(
     ({
@@ -11,21 +10,11 @@ export const TextField = React.memo(
         highlightInvalid = false,
         errorMessage = null,
     }) => {
-        // Optional FormContext integration - returns null if not in FormProvider
-        const formField = useOptionalFormField(field.key);
-
-        // Use FormContext if available, otherwise use props
-        const finalValue = formField?.value ?? value;
-        const finalOnChange = formField?.onChange ?? onChange;
-        const finalHighlightInvalid = formField?.highlightInvalid ?? highlightInvalid;
-        const finalErrorMessage = formField?.errorMessage ?? errorMessage;
-        const finalOnBlur = formField?.onBlur;
-
         const handleChange = useCallback(
             e => {
-                finalOnChange(e.target.value);
+                onChange(e.target.value);
             },
-            [finalOnChange]
+            [onChange]
         );
 
         const inputId = field.id || `field-${field.key}`;
@@ -37,14 +26,14 @@ export const TextField = React.memo(
                 required={field.required}
                 helpText={field.helpText}
                 description={field.description}
-                error={finalErrorMessage}
-                invalid={finalHighlightInvalid}
+                error={errorMessage}
+                invalid={highlightInvalid}
             >
                 <InputBase
                     id={inputId}
                     type="text"
                     name={field.key}
-                    value={finalValue || ''}
+                    value={value}
                     placeholder={field.placeholder}
                     disabled={disabled}
                     required={field.required}
@@ -52,10 +41,9 @@ export const TextField = React.memo(
                     minLength={field.minLength}
                     pattern={field.pattern}
                     onChange={handleChange}
-                    onBlur={finalOnBlur}
-                    invalid={finalHighlightInvalid}
+                    invalid={highlightInvalid}
                     aria-describedby={`${field.descId || `${inputId}-desc`} ${field.errorId || `${inputId}-error`}`.trim()}
-                    aria-invalid={finalHighlightInvalid}
+                    aria-invalid={highlightInvalid}
                 />
             </FieldRow>
         );

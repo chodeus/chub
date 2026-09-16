@@ -20,20 +20,27 @@ export const BulkSourceDirPicker = React.memo(
     ({ directories = [], onChange, disabled = false }) => {
         const [sources, setSources] = useState([]);
         const [loading, setLoading] = useState(false);
+        const [loadFailed, setLoadFailed] = useState(false);
 
         useEffect(() => {
             let mounted = true;
+            // apiCore.get gives a signalled caller its own request, so aborting here
+            // never rejects the shared promise another caller is waiting on.
+            const controller = new AbortController();
             setLoading(true);
             postersAPI
-                .searchGoogleDrive({})
+                .searchGoogleDrive({}, { signal: controller.signal })
                 .then(resp => {
                     const list = resp?.data?.sources;
                     if (mounted && Array.isArray(list)) setSources(list);
                 })
-                .catch(() => mounted && setSources([]))
+                .catch(err => {
+                    if (mounted && err?.name !== 'AbortError') setLoadFailed(true);
+                })
                 .finally(() => mounted && setLoading(false));
             return () => {
                 mounted = false;
+                controller.abort();
             };
         }, []);
 
@@ -72,7 +79,11 @@ export const BulkSourceDirPicker = React.memo(
                 groups={groups}
                 addButtonText={count => `Add ${count} selected drive${count === 1 ? '' : 's'}`}
                 onAdd={handleAdd}
-                emptyMessage="No Google Drives configured yet. Add them in Sync GDrive first."
+                emptyMessage={
+                    loadFailed
+                        ? "Couldn't load your configured Google Drives. Reload the page to retry."
+                        : 'No Google Drives configured yet. Add them in Sync GDrive first.'
+                }
                 disabled={disabled}
             />
         );

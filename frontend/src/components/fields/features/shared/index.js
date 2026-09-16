@@ -18,13 +18,11 @@
  *   - RemoveButton: Remove items from collections
  *   - ItemCounter: Display item counts with limits
  *   - EmptyState: Show empty collection states with actions
- *   - StatusMessage: Display status/feedback for field operations
  */
 
 export { AddButton } from './AddButton';
 export { RemoveButton } from './RemoveButton';
 export { ItemCounter } from './ItemCounter';
 export { EmptyState } from './EmptyState';
-export { StatusMessage } from './StatusMessage';
 export { FieldButton } from './FieldButton';
 export { ColorSwatches } from './ColorSwatches';

@@ -139,32 +139,13 @@ export const PlexLibraryExcludeField = React.memo(
                         const missing = orphanedExcluded.includes(library);
                         const libraryId = `${scopeId}exclude-lib-${library}`;
                         return (
-                            <div
+                            <label
                                 key={library}
-                                className={`flex items-center gap-3 py-3 px-4 border rounded-lg cursor-pointer transition-all duration-200 ease-in-out ${
+                                className={`flex items-center gap-3 py-3 px-4 border rounded-lg cursor-pointer transition-all duration-200 ease-in-out focus-within:border-primary ${
                                     isExcluded
                                         ? 'bg-primary/10 border-primary'
                                         : 'bg-surface border-border hover:bg-surface-hover hover:border-primary'
                                 }`}
-                                onClick={e => {
-                                    if (disabled) return;
-                                    if (
-                                        e.target.tagName === 'LABEL' ||
-                                        e.target.tagName === 'INPUT'
-                                    )
-                                        return;
-                                    toggle(library, !isExcluded);
-                                }}
-                                role="button"
-                                tabIndex={disabled ? -1 : 0}
-                                onKeyDown={e => {
-                                    if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
-                                        e.preventDefault();
-                                        toggle(library, !isExcluded);
-                                    }
-                                }}
-                                aria-pressed={isExcluded}
-                                aria-disabled={disabled}
                             >
                                 <CheckboxBase
                                     id={libraryId}
@@ -173,20 +154,20 @@ export const PlexLibraryExcludeField = React.memo(
                                     onChange={e => toggle(library, e.target.checked)}
                                     disabled={disabled}
                                 />
-                                <div className="flex flex-col flex-1 min-w-0">
-                                    <FieldLabel
-                                        htmlFor={libraryId}
-                                        label={library}
-                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
+                                <span className="flex flex-col flex-1 min-w-0">
+                                    <span
+                                        className="text-sm font-medium leading-normal text-fg select-none truncate"
                                         title={library}
-                                    />
+                                    >
+                                        {library}
+                                    </span>
                                     {missing && (
                                         <span className="text-xs text-fg-subtle">
                                             not in the current catalog — still excluded
                                         </span>
                                     )}
-                                </div>
-                            </div>
+                                </span>
+                            </label>
                         );
                     })}
                 </div>

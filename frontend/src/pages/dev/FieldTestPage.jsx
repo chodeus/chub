@@ -235,7 +235,7 @@ const FieldTester = React.memo(
             if (fieldType === 'instances') {
                 return []; // Array for instances field
             }
-            if (fieldType === 'color_list' || fieldType === 'color_list_poster') {
+            if (fieldType === 'color_list') {
                 return []; // Array for color list fields
             }
             if (

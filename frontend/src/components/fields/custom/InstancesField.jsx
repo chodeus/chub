@@ -363,32 +363,7 @@ const PlexLibrarySelector = React.memo(
 
                                     return (
                                         <div key={library}>
-                                            <div
-                                                className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus:border-primary cursor-pointer transition-all duration-200 ease-in-out"
-                                                onClick={e => {
-                                                    // Don't handle click if it came from the label or checkbox input
-                                                    if (disabled) return;
-                                                    if (
-                                                        e.target.tagName === 'LABEL' ||
-                                                        e.target.tagName === 'INPUT'
-                                                    )
-                                                        return;
-                                                    handleLibraryToggle(library, !isSelected);
-                                                }}
-                                                role="button"
-                                                tabIndex={disabled ? -1 : 0}
-                                                onKeyDown={e => {
-                                                    if (
-                                                        (e.key === ' ' || e.key === 'Enter') &&
-                                                        !disabled
-                                                    ) {
-                                                        e.preventDefault();
-                                                        handleLibraryToggle(library, !isSelected);
-                                                    }
-                                                }}
-                                                aria-pressed={isSelected}
-                                                aria-disabled={disabled}
-                                            >
+                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                                 <CheckboxBase
                                                     id={libraryId}
                                                     name={`${instanceName}-libraries`}
@@ -401,15 +376,13 @@ const PlexLibrarySelector = React.memo(
                                                     }
                                                     disabled={disabled}
                                                 />
-                                                <div className="flex flex-col flex-1 min-w-0">
-                                                    <FieldLabel
-                                                        htmlFor={libraryId}
-                                                        label={library}
-                                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
-                                                        title={library}
-                                                    />
-                                                </div>
-                                            </div>
+                                                <span
+                                                    className="flex-1 min-w-0 text-sm font-medium leading-normal text-fg select-none truncate"
+                                                    title={library}
+                                                >
+                                                    {library}
+                                                </span>
+                                            </label>
                                         </div>
                                     );
                                 })}
@@ -429,32 +402,7 @@ const PlexLibrarySelector = React.memo(
 
                                     return (
                                         <div key={library}>
-                                            <div
-                                                className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus:border-primary cursor-pointer transition-all duration-200 ease-in-out"
-                                                onClick={e => {
-                                                    // Don't handle click if it came from the label or checkbox input
-                                                    if (disabled) return;
-                                                    if (
-                                                        e.target.tagName === 'LABEL' ||
-                                                        e.target.tagName === 'INPUT'
-                                                    )
-                                                        return;
-                                                    handleLibraryToggle(library, !isSelected);
-                                                }}
-                                                role="button"
-                                                tabIndex={disabled ? -1 : 0}
-                                                onKeyDown={e => {
-                                                    if (
-                                                        (e.key === ' ' || e.key === 'Enter') &&
-                                                        !disabled
-                                                    ) {
-                                                        e.preventDefault();
-                                                        handleLibraryToggle(library, !isSelected);
-                                                    }
-                                                }}
-                                                aria-pressed={isSelected}
-                                                aria-disabled={disabled}
-                                            >
+                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                                 <CheckboxBase
                                                     id={libraryId}
                                                     name={`${instanceName}-libraries`}
@@ -467,15 +415,13 @@ const PlexLibrarySelector = React.memo(
                                                     }
                                                     disabled={disabled}
                                                 />
-                                                <div className="flex flex-col flex-1 min-w-0">
-                                                    <FieldLabel
-                                                        htmlFor={libraryId}
-                                                        label={library}
-                                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
-                                                        title={library}
-                                                    />
-                                                </div>
-                                            </div>
+                                                <span
+                                                    className="flex-1 min-w-0 text-sm font-medium leading-normal text-fg select-none truncate"
+                                                    title={library}
+                                                >
+                                                    {library}
+                                                </span>
+                                            </label>
                                         </div>
                                     );
                                 })}
@@ -495,32 +441,7 @@ const PlexLibrarySelector = React.memo(
 
                                     return (
                                         <div key={library}>
-                                            <div
-                                                className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus:border-primary cursor-pointer transition-all duration-200 ease-in-out"
-                                                onClick={e => {
-                                                    // Don't handle click if it came from the label or checkbox input
-                                                    if (disabled) return;
-                                                    if (
-                                                        e.target.tagName === 'LABEL' ||
-                                                        e.target.tagName === 'INPUT'
-                                                    )
-                                                        return;
-                                                    handleLibraryToggle(library, !isSelected);
-                                                }}
-                                                role="button"
-                                                tabIndex={disabled ? -1 : 0}
-                                                onKeyDown={e => {
-                                                    if (
-                                                        (e.key === ' ' || e.key === 'Enter') &&
-                                                        !disabled
-                                                    ) {
-                                                        e.preventDefault();
-                                                        handleLibraryToggle(library, !isSelected);
-                                                    }
-                                                }}
-                                                aria-pressed={isSelected}
-                                                aria-disabled={disabled}
-                                            >
+                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                                 <CheckboxBase
                                                     id={libraryId}
                                                     name={`${instanceName}-libraries`}
@@ -533,15 +454,13 @@ const PlexLibrarySelector = React.memo(
                                                     }
                                                     disabled={disabled}
                                                 />
-                                                <div className="flex flex-col flex-1 min-w-0">
-                                                    <FieldLabel
-                                                        htmlFor={libraryId}
-                                                        label={library}
-                                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
-                                                        title={library}
-                                                    />
-                                                </div>
-                                            </div>
+                                                <span
+                                                    className="flex-1 min-w-0 text-sm font-medium leading-normal text-fg select-none truncate"
+                                                    title={library}
+                                                >
+                                                    {library}
+                                                </span>
+                                            </label>
                                         </div>
                                     );
                                 })}
@@ -738,29 +657,7 @@ const PlexInstanceSelector = React.memo(
 
                     return (
                         <div key={instance.name}>
-                            <div
-                                className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus:border-primary cursor-pointer transition-all duration-200 ease-in-out"
-                                onClick={e => {
-                                    // Don't handle click if it came from the label or checkbox input
-                                    if (disabled) return;
-                                    if (
-                                        e.target.tagName === 'LABEL' ||
-                                        e.target.tagName === 'INPUT'
-                                    )
-                                        return;
-                                    handleInstanceToggle(instance.name, !isSelected);
-                                }}
-                                role="button"
-                                tabIndex={disabled ? -1 : 0}
-                                onKeyDown={e => {
-                                    if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
-                                        e.preventDefault();
-                                        handleInstanceToggle(instance.name, !isSelected);
-                                    }
-                                }}
-                                aria-pressed={isSelected}
-                                aria-disabled={disabled}
-                            >
+                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                 <CheckboxBase
                                     id={instanceId}
                                     name="plex-instances"
@@ -770,55 +667,24 @@ const PlexInstanceSelector = React.memo(
                                     }
                                     disabled={disabled}
                                 />
-                                <div className="flex flex-col">
-                                    <FieldLabel
-                                        htmlFor={instanceId}
-                                        label={humanize(instance.name)}
-                                        className="text-sm font-normal leading-normal text-fg cursor-pointer select-none"
-                                    />
+                                <span className="flex flex-col">
+                                    <span className="text-sm font-normal leading-normal text-fg select-none">
+                                        {humanize(instance.name)}
+                                    </span>
                                     {instance.url && (
-                                        <div className="text-xs text-fg-muted">{instance.url}</div>
+                                        <span className="text-xs text-fg-muted">
+                                            {instance.url}
+                                        </span>
                                     )}
-                                </div>
-                            </div>
+                                </span>
+                            </label>
 
                             {isSelected && !emitAsString && (
                                 <div className="flex flex-col gap-4 border-l-2 border-border-subtle">
                                     {/* Poster upload option */}
                                     {showPosterOption && (
                                         <div>
-                                            <div
-                                                className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus:border-primary cursor-pointer transition-all duration-200 ease-in-out"
-                                                onClick={e => {
-                                                    // Don't handle click if it came from the label or checkbox input
-                                                    if (disabled) return;
-                                                    if (
-                                                        e.target.tagName === 'LABEL' ||
-                                                        e.target.tagName === 'INPUT'
-                                                    )
-                                                        return;
-                                                    handlePosterUploadToggle(
-                                                        instance.name,
-                                                        !uploadPosters
-                                                    );
-                                                }}
-                                                role="button"
-                                                tabIndex={disabled ? -1 : 0}
-                                                onKeyDown={e => {
-                                                    if (
-                                                        (e.key === ' ' || e.key === 'Enter') &&
-                                                        !disabled
-                                                    ) {
-                                                        e.preventDefault();
-                                                        handlePosterUploadToggle(
-                                                            instance.name,
-                                                            !uploadPosters
-                                                        );
-                                                    }
-                                                }}
-                                                aria-pressed={uploadPosters}
-                                                aria-disabled={disabled}
-                                            >
+                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                                 <CheckboxBase
                                                     id={uploadId}
                                                     name={`upload-${instance.name}`}
@@ -831,18 +697,16 @@ const PlexInstanceSelector = React.memo(
                                                     }
                                                     disabled={disabled}
                                                 />
-                                                <div className="flex flex-col">
-                                                    <FieldLabel
-                                                        htmlFor={uploadId}
-                                                        label="Upload to this Plex instance"
-                                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none"
-                                                    />
+                                                <span className="flex flex-col">
+                                                    <span className="text-sm font-medium leading-normal text-fg select-none">
+                                                        Upload to this Plex instance
+                                                    </span>
                                                     <span className="text-xs text-fg-subtle">
                                                         Only used when this module&apos;s Apply
                                                         Method is set to Plex.
                                                     </span>
-                                                </div>
-                                            </div>
+                                                </span>
+                                            </label>
                                         </div>
                                     )}
 
@@ -962,28 +826,7 @@ const PlexScopeLibrarySelector = React.memo(
                         const libraryId = `${scopeId}scope-lib-${instanceName}-${library}`;
                         return (
                             <div key={library}>
-                                <div
-                                    className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out"
-                                    onClick={e => {
-                                        if (disabled) return;
-                                        if (
-                                            e.target.tagName === 'LABEL' ||
-                                            e.target.tagName === 'INPUT'
-                                        )
-                                            return;
-                                        handleToggle(library, !isSelected);
-                                    }}
-                                    role="button"
-                                    tabIndex={disabled ? -1 : 0}
-                                    onKeyDown={e => {
-                                        if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
-                                            e.preventDefault();
-                                            handleToggle(library, !isSelected);
-                                        }
-                                    }}
-                                    aria-pressed={isSelected}
-                                    aria-disabled={disabled}
-                                >
+                                <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                     <CheckboxBase
                                         id={libraryId}
                                         name={`${instanceName}-scope-libraries`}
@@ -991,15 +834,13 @@ const PlexScopeLibrarySelector = React.memo(
                                         onChange={e => handleToggle(library, e.target.checked)}
                                         disabled={disabled}
                                     />
-                                    <div className="flex flex-col flex-1 min-w-0">
-                                        <FieldLabel
-                                            htmlFor={libraryId}
-                                            label={library}
-                                            className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
-                                            title={library}
-                                        />
-                                    </div>
-                                </div>
+                                    <span
+                                        className="flex-1 min-w-0 text-sm font-medium leading-normal text-fg select-none truncate"
+                                        title={library}
+                                    >
+                                        {library}
+                                    </span>
+                                </label>
                             </div>
                         );
                     })}
@@ -1157,28 +998,7 @@ const PlexScopeSelector = React.memo(
 
                     return (
                         <div key={instance.name}>
-                            <div
-                                className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out"
-                                onClick={e => {
-                                    if (disabled) return;
-                                    if (
-                                        e.target.tagName === 'LABEL' ||
-                                        e.target.tagName === 'INPUT'
-                                    )
-                                        return;
-                                    handleInstanceToggle(instance.name, !isSelected);
-                                }}
-                                role="button"
-                                tabIndex={disabled ? -1 : 0}
-                                onKeyDown={e => {
-                                    if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
-                                        e.preventDefault();
-                                        handleInstanceToggle(instance.name, !isSelected);
-                                    }
-                                }}
-                                aria-pressed={isSelected}
-                                aria-disabled={disabled}
-                            >
+                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                 <CheckboxBase
                                     id={instanceId}
                                     name="plex-scope-instances"
@@ -1188,17 +1008,17 @@ const PlexScopeSelector = React.memo(
                                     }
                                     disabled={disabled}
                                 />
-                                <div className="flex flex-col">
-                                    <FieldLabel
-                                        htmlFor={instanceId}
-                                        label={humanize(instance.name)}
-                                        className="text-sm font-normal leading-normal text-fg cursor-pointer select-none"
-                                    />
+                                <span className="flex flex-col">
+                                    <span className="text-sm font-normal leading-normal text-fg select-none">
+                                        {humanize(instance.name)}
+                                    </span>
                                     {instance.url && (
-                                        <div className="text-xs text-fg-muted">{instance.url}</div>
+                                        <span className="text-xs text-fg-muted">
+                                            {instance.url}
+                                        </span>
                                     )}
-                                </div>
-                            </div>
+                                </span>
+                            </label>
 
                             {isSelected && (
                                 <div className="flex flex-col gap-4 border-l-2 border-border-subtle pl-4 mt-2 mb-2">
@@ -1381,15 +1201,11 @@ export const InstancesField = React.memo(
                     .filter(type => type !== serviceType)
                     .flatMap(type => serviceSelections[type] || []);
 
-                // Preserve saved instance-name strings not recognized by any
-                // configured service (e.g. an instance renamed/removed in
-                // Settings→Instances). Rebuilding purely from recognized
-                // selections would silently drop them on an unrelated toggle.
+                // Keep entries of any shape that no configured instance claims (renamed or
+                // removed in Settings→Instances), so an unrelated toggle can't drop them.
                 const recognized = instanceTypes.flatMap(type => serviceSelections[type] || []);
                 const safeValue = Array.isArray(value) ? value : [];
-                const unrecognized = safeValue.filter(
-                    item => typeof item === 'string' && !recognized.includes(item)
-                );
+                const unrecognized = safeValue.filter(item => !recognized.includes(item));
 
                 onChange([...otherSelections, ...newSelection, ...unrecognized]);
             },
@@ -1493,7 +1309,7 @@ export const InstancesField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel label={field.label} required={isRequired} />
+                <FieldLabel label={field.label} required={isRequired} helpText={field.helpText} />
 
                 <div id={inputId} className="flex flex-col gap-5">
                     {arrTypes.length > 0 && (

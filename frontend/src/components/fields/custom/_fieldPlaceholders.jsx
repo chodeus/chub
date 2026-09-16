@@ -54,5 +54,3 @@ export const MediaInfoDisplayField = React.memo(props => <UnavailableField {...p
 export const MediaDisplayField = React.memo(props => <UnavailableField {...props} />);
 export const DirPickerField = React.memo(props => <UnavailableField {...props} />);
 export const PosterField = React.memo(props => <UnavailableField {...props} />);
-// NOTE: ColorListPosterField is NOT a placeholder — it has a real implementation
-// in ../color/ColorListPosterField.jsx. Do not re-export a placeholder here.
