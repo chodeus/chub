@@ -83,12 +83,11 @@ export default function Logs() {
     // Keyboard shortcuts (Ctrl/Cmd+F)
     useEffect(() => {
         function handleKeyDown(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+            // preventDefault only when we can actually focus, or ⌘F kills browser find too.
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && searchInputRef.current) {
                 e.preventDefault();
-                if (searchInputRef.current) {
-                    searchInputRef.current.focus();
-                    searchInputRef.current.select();
-                }
+                searchInputRef.current.focus();
+                searchInputRef.current.select();
             }
         }
 
@@ -138,7 +137,6 @@ export default function Logs() {
                     logFiles={logFiles}
                     selectedModule={selectedModule}
                     selectedLogFile={selectedLogFile}
-                    searchTerm={searchTerm}
                     logText={logText}
                     searchInputRef={searchInputRef}
                     onModuleChange={setSelectedModule}

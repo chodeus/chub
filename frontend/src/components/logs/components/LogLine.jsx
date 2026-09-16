@@ -20,29 +20,20 @@ const PATTERNS = {
     placeholder: /^__QUOTED_PLACEHOLDER_(\d+)__$/,
     url: /^https?:\/\//,
     fileref: /^\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]$/,
-    filepath: /^[\w_]+(\.[\w_]+)+$/,
+    // Needs a letter in the first segment, or "3.5" and "12.34" classify as paths.
+    filepath: /^[\w_]*[A-Za-z_][\w_]*(\.[\w_]+)+$/,
     number: /^\d+(\.\d+)?$/,
 };
 
-/**
- * LogLine - Render log line with syntax highlighting using Phase 1 primitives
- * @param {Object} props
- * @param {string} props.line - Log line text
- * @param {string} props.searchTerm - Search term for highlighting
- * @returns {JSX.Element}
- */
+/** One log line, syntax-highlighted; searchTerm changes highlighting only, never parsing. */
 export const LogLine = React.memo(
     ({ line, searchTerm }) => {
-        // Memoize expensive parsing - only re-parse when line changes
         const segments = useMemo(() => {
-            // Operate on the RAW line. Segments below are rendered as React
-            // text children ({content}), which React already escapes safely —
-            // pre-escaping here double-encoded and showed literal entities
-            // (e.g. a "<->" match arrow displayed as "&lt;-&gt;").
+            // Parse the RAW line: React escapes text children already, so
+            // pre-escaping here showed literal entities ("<->" as "&lt;-&gt;").
             let working = line;
             const result = [];
 
-            // 1. Extract quoted strings
             const quotedMatches = [];
             working = working.replace(PATTERNS.quotedString, match => {
                 quotedMatches.push(match);
@@ -51,13 +42,11 @@ export const LogLine = React.memo(
 
             let currentIndex = 0;
 
-            // 2. Parse using pre-compiled combined pattern
             let match;
             // Reset regex lastIndex for reuse
             PATTERNS.combined.lastIndex = 0;
 
             while ((match = PATTERNS.combined.exec(working)) !== null) {
-                // Add text before match
                 if (match.index > currentIndex) {
                     const text = working.slice(currentIndex, match.index);
                     if (text) result.push({ type: 'text', content: text });
@@ -65,7 +54,7 @@ export const LogLine = React.memo(
 
                 const matchedText = match[0];
 
-                // Determine type using pre-compiled patterns (order matters for specificity)
+                // Order matters: the specific patterns must be tried before the general ones.
                 if (PATTERNS.datetime.test(matchedText)) {
                     result.push({ type: 'datetime', content: matchedText });
                 } else if (PATTERNS.level.test(matchedText)) {
@@ -77,7 +66,8 @@ export const LogLine = React.memo(
                 } else if (PATTERNS.placeholder.test(matchedText)) {
                     const placeholderMatch = matchedText.match(PATTERNS.placeholder);
                     const idx = parseInt(placeholderMatch[1], 10);
-                    result.push({ type: 'quoted', content: quotedMatches[idx] });
+                    // A log line can contain the sentinel literally; keep the raw token then.
+                    result.push({ type: 'quoted', content: quotedMatches[idx] ?? matchedText });
                 } else if (PATTERNS.filepath.test(matchedText)) {
                     result.push({ type: 'filepath', content: matchedText });
                 } else if (PATTERNS.number.test(matchedText)) {
@@ -89,25 +79,20 @@ export const LogLine = React.memo(
                 currentIndex = match.index + matchedText.length;
             }
 
-            // Add remaining text
             if (currentIndex < working.length) {
                 const text = working.slice(currentIndex);
                 if (text) result.push({ type: 'text', content: text });
             }
 
             return result;
-        }, [line]); // Only re-parse when line changes
+        }, [line]);
 
-        // Render segments - searchTerm only affects highlighting, not parsing
         const renderedSegments = useMemo(() => {
             const normalizedSearchTerm = searchTerm?.trim().toLowerCase() || '';
             const hasSearch = normalizedSearchTerm.length > 0;
 
-            // For plain-text segments containing the search term, split the
-            // content at match boundaries so only the matching characters
-            // get the highlight rather than the whole segment. Returns null
-            // if the segment doesn't match (caller falls back to its
-            // segment-specific element).
+            // Splits a text segment at the match boundaries so only the matching
+            // characters highlight; null when it doesn't match at all.
             const renderTextWithHighlight = (content, key) => {
                 if (!hasSearch) return null;
                 const lower = content.toLowerCase();
@@ -147,18 +132,13 @@ export const LogLine = React.memo(
                 const key = `seg-${idx}`;
                 const content = segment.content;
 
-                // For text segments with a match, split at the match
-                // boundaries so the highlight covers only the matched
-                // characters, not the entire segment.
                 if (segment.type === 'text' || !segment.type) {
                     const highlighted = renderTextWithHighlight(content, key);
                     if (highlighted) return highlighted;
                 }
 
-                // Non-text segments (level, url, datetime, etc.) keep
-                // whole-element highlighting — they're typically short
-                // tokens where character-level splitting would mangle the
-                // segment-specific rendering.
+                // Non-text segments highlight whole — splitting them would mangle
+                // the segment-specific rendering.
                 const shouldHighlight =
                     hasSearch && content.toLowerCase().includes(normalizedSearchTerm);
 
@@ -206,7 +186,6 @@ export const LogLine = React.memo(
 
         return <div>{renderedSegments}</div>;
     },
-    // Custom comparison: only re-render if line or searchTerm changed
     (prevProps, nextProps) => {
         return prevProps.line === nextProps.line && prevProps.searchTerm === nextProps.searchTerm;
     }
