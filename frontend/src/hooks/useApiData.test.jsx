@@ -37,6 +37,47 @@ describe('useApiData cancellation', () => {
         expect(result.current.data).toBeNull();
     });
 
+    it('stays out of the loading state when cancelled before the request starts', async () => {
+        const pending = deferred();
+        const apiFunction = vi.fn(() => pending.promise);
+        const { result } = renderHook(() =>
+            useApiData({ apiFunction, options: { showErrorToast: false } })
+        );
+
+        act(() => {
+            result.current.cancel();
+        });
+        // Let the scheduled startup microtask run; it must find itself superseded.
+        await act(async () => {});
+
+        expect(result.current.isLoading).toBe(false);
+    });
+
+    it('cancels a scheduled retry when the caller clears', async () => {
+        vi.useFakeTimers();
+        const apiFunction = vi
+            .fn()
+            .mockRejectedValueOnce(new TypeError('network'))
+            .mockResolvedValue({ value: 'late' });
+        const { result } = renderHook(() =>
+            useApiData({
+                apiFunction,
+                options: { retryAttempts: 1, retryDelay: 50, showErrorToast: false },
+            })
+        );
+        await act(async () => {});
+
+        act(() => {
+            result.current.clear();
+        });
+        await act(async () => {
+            vi.advanceTimersByTime(200);
+        });
+
+        expect(result.current.data).toBeNull();
+        vi.useRealTimers();
+    });
+
     it('does not let an in-flight response repopulate cleared data', async () => {
         // Each call gets its own promise, so the second request is genuinely pending.
         let pending = deferred();

@@ -82,6 +82,9 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
 
             return Promise.resolve()
                 .then(() => {
+                    // A cancel or clear between scheduling and this microtask supersedes
+                    // us; starting would raise a spinner the guarded finally never lowers.
+                    if (!isMountedRef.current || seq !== requestSeqRef.current) return;
                     setIsLoading(true);
                     setError(null);
                     if (retryAttempt > 0) {
@@ -222,13 +225,15 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
 
         /** Clear current data and error */
         clear: useCallback(() => {
-            // Bump past the in-flight request, or its response repopulates what we just cleared.
+            // Kill a scheduled retry too: it reuses the current sequence, so bumping
+            // alone would let it pass the guard and repopulate what we just cleared.
+            cleanup();
             requestSeqRef.current += 1;
             setData(null);
             setError(null);
             setRetryCount(0);
             setIsLoading(false);
-        }, []),
+        }, [cleanup]),
 
         /** Cancel ongoing request */
         cancel: useCallback(() => {

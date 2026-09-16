@@ -63,6 +63,38 @@ describe('AuthProvider', () => {
         expect(result.current.user).toBe('dean');
     });
 
+    it('sends the bearer to setup completion even when storage refused the token', async () => {
+        vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+            throw new DOMException('QuotaExceededError');
+        });
+        const calls = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url, init) => {
+                calls.push([url, init]);
+                if (url.includes('/api/auth/status'))
+                    return reply({ success: true, data: { configured: false } });
+                if (url.includes('/api/setup/status'))
+                    return reply({ success: true, data: { completed: false } });
+                if (url.includes('/api/auth/setup'))
+                    return reply({ success: true, data: { token: 't0ken', username: 'dean' } });
+                return reply({ success: true, data: {} });
+            })
+        );
+
+        const { result } = await mountAuth();
+        await act(async () => {
+            await result.current.setup('dean', 'pw');
+        });
+        await act(async () => {
+            await result.current.markSetupComplete();
+        });
+
+        // Without the bearer the server flag stays false and the wizard reopens.
+        const completion = calls.find(([url]) => url.includes('/api/setup/complete'));
+        expect(completion?.[1]?.headers?.Authorization).toBe('Bearer t0ken');
+    });
+
     it('logs out even when storage refuses to drop the token', async () => {
         const { result } = await mountAuth();
         await act(async () => {

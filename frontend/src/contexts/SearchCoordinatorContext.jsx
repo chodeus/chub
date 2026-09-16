@@ -59,8 +59,13 @@ const loadSearchHistory = () => {
     try {
         const stored = localStorage.getItem(SEARCH_HISTORY_KEY);
         const parsed = stored ? JSON.parse(stored) : [];
-        // A non-array in storage would throw from every .filter/.slice below.
-        return Array.isArray(parsed) ? parsed : [];
+        // Entries are read back as item.term.toLowerCase(), so drop any that would throw.
+        return Array.isArray(parsed)
+            ? parsed.filter(
+                  item =>
+                      item && typeof item.term === 'string' && typeof item.searchType === 'string'
+              )
+            : [];
     } catch (error) {
         console.warn('Failed to load search history:', error);
         return [];

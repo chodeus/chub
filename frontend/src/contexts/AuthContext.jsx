@@ -181,16 +181,18 @@ export const AuthProvider = ({ children }) => {
      */
     const markSetupComplete = useCallback(async () => {
         try {
-            const storedToken = getStoredToken();
+            // In-memory first: storage may have refused the token, and without the
+            // bearer the server flag stays false and the wizard reopens on reload.
+            const bearer = token || getStoredToken();
             await fetch('/api/setup/complete', {
                 method: 'POST',
-                headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
+                headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
             });
         } catch {
             // ignore — local state still advances
         }
         setSetupComplete(true);
-    }, []);
+    }, [token]);
 
     const isAuthenticated = Boolean(token);
 
