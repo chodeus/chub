@@ -1,5 +1,5 @@
 /** Guards the start directory (saved path under a matching root, else the first root) and the Go up boundary. */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({ listed: [], roots: [] }));
 
@@ -47,6 +47,16 @@ describe('DirPickerField', () => {
         expect(await screen.findByTitle('/media')).toBeInTheDocument();
         expect(api.listed).toEqual(['/media']);
         expect(screen.queryByText('..')).toBeNull();
+    });
+
+    it('keeps breadcrumb paths canonical when the root is /', async () => {
+        api.roots = ['/'];
+        render(<DirPickerField field={field} value="/media/movies" onChange={() => {}} />);
+        expect(await screen.findByTitle('/media/movies')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'media' }));
+
+        expect(api.listed).toEqual(['/media/movies', '/media']);
     });
 
     it('treats a trailing-slash root as the root itself, so Go up stays hidden', async () => {

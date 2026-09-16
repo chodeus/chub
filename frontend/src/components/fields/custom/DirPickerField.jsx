@@ -198,11 +198,13 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                                 ? currentPath.slice(activeRoot.length)
                                 : currentPath;
                         const parts = rel.split('/').filter(Boolean);
+                        // "/" as the root must not prefix a second slash: //media is not the path.
+                        const base = activeRoot && activeRoot !== '/' ? activeRoot : '';
                         const crumbs = [
                             { name: activeRoot || '/', path: activeRoot || '/' },
                             ...parts.map((p, i) => ({
                                 name: p,
-                                path: `${activeRoot || ''}/${parts.slice(0, i + 1).join('/')}`,
+                                path: `${base}/${parts.slice(0, i + 1).join('/')}`,
                             })),
                         ];
                         return crumbs.map((c, i) => (

@@ -1,6 +1,6 @@
 /** Guards the reveal race: a secret arriving after the user types must not overwrite the edit. */
 import { useState } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({ resolve: null, reject: null }));
 
@@ -19,11 +19,11 @@ const { PasswordField } = await import('./PasswordField.jsx');
 
 const field = { key: 'apikey', label: 'API Key', secretPath: 'tmdb.apikey' };
 
-function Harness({ onChange }) {
+function Harness({ onChange, secretPath = 'tmdb.apikey' }) {
     const [value, setValue] = useState('********');
     return (
         <PasswordField
-            field={field}
+            field={{ ...field, secretPath }}
             value={value}
             onChange={next => {
                 setValue(next);
@@ -40,9 +40,11 @@ describe('PasswordField', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
         fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'typed' } });
-        api.resolve();
+        await act(async () => {
+            api.resolve();
+        });
 
-        await waitFor(() => expect(onChange).toHaveBeenCalledWith('typed'));
+        expect(onChange).toHaveBeenCalledWith('typed');
         expect(screen.getByLabelText('API Key')).toHaveValue('typed');
     });
 
@@ -52,9 +54,23 @@ describe('PasswordField', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
         fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'typed' } });
-        api.reject();
+        await act(async () => {
+            api.reject();
+        });
 
-        await waitFor(() => expect(onChange).toHaveBeenCalledWith('typed'));
+        expect(onChange).toHaveBeenCalledWith('typed');
         expect(screen.queryByText('Could not reveal secret')).toBeNull();
+    });
+
+    it('drops a pending reveal when the secret identity changes', async () => {
+        const { rerender } = render(<Harness onChange={() => {}} secretPath="tmdb.apikey" />);
+        fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
+
+        rerender(<Harness onChange={() => {}} secretPath="plex.token" />);
+        await act(async () => {
+            api.resolve();
+        });
+
+        expect(screen.getByLabelText('API Key')).toHaveValue('********');
     });
 });

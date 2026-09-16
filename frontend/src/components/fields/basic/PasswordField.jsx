@@ -31,6 +31,18 @@ export const PasswordField = React.memo(
         // Bumped on every edit; a reveal resolving against an older id is stale.
         const revealId = useRef(0);
 
+        // A different secret under the same mounted field — InstancesPage keys its
+        // fields by field.key alone, so switching instance changes only secretPath.
+        // Re-mask and invalidate in render: an effect would paint A's secret under B.
+        const [prevSecretPath, setPrevSecretPath] = useState(secretPath);
+        if (prevSecretPath !== secretPath) {
+            setPrevSecretPath(secretPath);
+            revealId.current += 1;
+            setRevealedValue(null);
+            setRevealError(false);
+            setShowPassword(false);
+        }
+
         const handleChange = useCallback(
             e => {
                 // User is typing a new secret — drop the revealed value so the
