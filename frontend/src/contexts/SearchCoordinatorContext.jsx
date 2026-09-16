@@ -58,7 +58,14 @@ const loadSearchHistory = () => {
 
     try {
         const stored = localStorage.getItem(SEARCH_HISTORY_KEY);
-        return stored ? JSON.parse(stored) : [];
+        const parsed = stored ? JSON.parse(stored) : [];
+        // Entries are read back as item.term.toLowerCase(), so drop any that would throw.
+        return Array.isArray(parsed)
+            ? parsed.filter(
+                  item =>
+                      item && typeof item.term === 'string' && typeof item.searchType === 'string'
+              )
+            : [];
     } catch (error) {
         console.warn('Failed to load search history:', error);
         return [];
@@ -117,7 +124,8 @@ export const SearchCoordinatorProvider = ({
      * Save search history when it changes
      */
     useEffect(() => {
-        if (persistHistory && searchHistory.length > 0) {
+        // Must persist an empty list too, or clearing the history never reaches storage.
+        if (persistHistory) {
             saveSearchHistory(searchHistory);
         }
     }, [searchHistory, persistHistory]);
@@ -439,11 +447,10 @@ export const SearchCoordinatorProvider = ({
      * Cleanup on unmount
      */
     useEffect(() => {
+        // Read the ref in the effect body, not the cleanup, per react-hooks/exhaustive-deps.
+        const timeouts = debounceTimeouts.current;
         return () => {
-            // Clear all debounce timeouts
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-            const currentTimeouts = debounceTimeouts.current;
-            Object.values(currentTimeouts).forEach(timeout => {
+            Object.values(timeouts).forEach(timeout => {
                 clearTimeout(timeout);
             });
         };

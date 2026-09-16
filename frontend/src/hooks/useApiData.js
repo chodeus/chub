@@ -42,11 +42,20 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
             abortControllerRef.current = null;
         }
 
-        if (retryTimeoutRef.current) {
+        // Explicit null: a 0 handle is falsy, and clear() relies on this to stop a retry.
+        if (retryTimeoutRef.current !== null) {
             clearTimeout(retryTimeoutRef.current);
             retryTimeoutRef.current = null;
         }
     }, []);
+
+    // Every path that abandons an in-flight request: supersede it so a late response
+    // cannot commit, and clear the spinner its seq-guarded finally will no longer clear.
+    const abandonInFlight = useCallback(() => {
+        cleanup();
+        requestSeqRef.current += 1;
+        setIsLoading(false);
+    }, [cleanup]);
 
     // Determine if retry should happen
     const shouldAttemptRetry = useCallback(
@@ -82,6 +91,9 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
 
             return Promise.resolve()
                 .then(() => {
+                    // A cancel or clear between scheduling and this microtask supersedes
+                    // us; starting would raise a spinner the guarded finally never lowers.
+                    if (!isMountedRef.current || seq !== requestSeqRef.current) return;
                     setIsLoading(true);
                     setError(null);
                     if (retryAttempt > 0) {
@@ -182,9 +194,10 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
             executeRequest(0);
         }
 
-        // Cleanup previous request when dependencies change (but don't mark as unmounted)
+        // Dependencies changed, so abandon the previous request: with immediate false
+        // nothing re-runs to bump the sequence and a late response would still commit.
         return () => {
-            cleanup();
+            abandonInFlight();
         };
     }, dependencies); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -222,13 +235,14 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
 
         /** Clear current data and error */
         clear: useCallback(() => {
+            abandonInFlight();
             setData(null);
             setError(null);
             setRetryCount(0);
-        }, []),
+        }, [abandonInFlight]),
 
         /** Cancel ongoing request */
-        cancel: cleanup,
+        cancel: abandonInFlight,
     };
 };
 

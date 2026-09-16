@@ -25,6 +25,23 @@ const getStoredToken = () => {
     }
 };
 
+/** Storage can throw (Safari private mode, quota) — it must never abort a sign-in. */
+const storeToken = value => {
+    try {
+        localStorage.setItem(TOKEN_STORAGE_KEY, value);
+    } catch {
+        // The session still lives in memory for this tab.
+    }
+};
+
+const clearStoredToken = () => {
+    try {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+        // Callers clear the in-memory session regardless.
+    }
+};
+
 export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(getStoredToken);
     const [user, setUser] = useState(null);
@@ -62,7 +79,7 @@ export const AuthProvider = ({ children }) => {
                         });
                         if (cancelled) return;
                         if (validateRes.status === 401) {
-                            localStorage.removeItem(TOKEN_STORAGE_KEY);
+                            clearStoredToken();
                             setToken(null);
                             setUser(null);
                             return;
@@ -114,7 +131,7 @@ export const AuthProvider = ({ children }) => {
             throw new Error(data.message || 'Login failed');
         }
         const newToken = data.data.token;
-        localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
+        storeToken(newToken);
         setToken(newToken);
         setUser(data.data.username);
         return data;
@@ -131,7 +148,7 @@ export const AuthProvider = ({ children }) => {
             throw new Error(data.message || 'Setup failed');
         }
         const newToken = data.data.token;
-        localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
+        storeToken(newToken);
         setToken(newToken);
         setUser(data.data.username);
         setAuthConfigured(true);
@@ -148,7 +165,7 @@ export const AuthProvider = ({ children }) => {
     }, [token]);
 
     const logout = useCallback(() => {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        clearStoredToken();
         clearStreamToken();
         // Drop the in-memory GET cache so a later login in the same tab can't be
         // served the previous session's cached config/media/list responses.
@@ -164,16 +181,18 @@ export const AuthProvider = ({ children }) => {
      */
     const markSetupComplete = useCallback(async () => {
         try {
-            const storedToken = getStoredToken();
+            // In-memory first: storage may have refused the token, and without the
+            // bearer the server flag stays false and the wizard reopens on reload.
+            const bearer = token || getStoredToken();
             await fetch('/api/setup/complete', {
                 method: 'POST',
-                headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
+                headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
             });
         } catch {
             // ignore — local state still advances
         }
         setSetupComplete(true);
-    }, []);
+    }, [token]);
 
     const isAuthenticated = Boolean(token);
 
