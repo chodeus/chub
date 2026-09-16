@@ -26,6 +26,7 @@ describe('NumberField', () => {
 
         fireEvent.change(input, { target: { value: '5' } });
         expect(input).toHaveValue('5');
+        expect(onChange).not.toHaveBeenCalled();
         fireEvent.change(input, { target: { value: '50' } });
         expect(onChange).toHaveBeenLastCalledWith(50);
     });
@@ -50,6 +51,7 @@ describe('NumberField', () => {
 
         fireEvent.change(input, { target: { value: '12.' } });
         expect(input).toHaveValue('12.');
+        expect(onChange).not.toHaveBeenCalled();
         fireEvent.change(input, { target: { value: '12.5' } });
         expect(input).toHaveValue('12.5');
         expect(onChange).toHaveBeenLastCalledWith(12.5);
