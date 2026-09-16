@@ -78,6 +78,34 @@ describe('useApiData cancellation', () => {
         vi.useRealTimers();
     });
 
+    it('abandons the in-flight request when dependencies change', async () => {
+        const pending = deferred();
+        const apiFunction = vi.fn(() => pending.promise);
+        const { result, rerender } = renderHook(
+            ({ id }) =>
+                useApiData({
+                    apiFunction,
+                    dependencies: [id],
+                    options: { immediate: false, showErrorToast: false },
+                }),
+            { initialProps: { id: 1 } }
+        );
+
+        act(() => {
+            result.current.execute();
+        });
+        await waitFor(() => expect(result.current.isLoading).toBe(true));
+
+        rerender({ id: 2 });
+        await act(async () => {
+            pending.settle({ value: 'stale' });
+        });
+
+        // With immediate false nothing re-runs to bump the sequence, so the cleanup must.
+        expect(result.current.data).toBeNull();
+        expect(result.current.isLoading).toBe(false);
+    });
+
     it('does not let an in-flight response repopulate cleared data', async () => {
         // Each call gets its own promise, so the second request is genuinely pending.
         let pending = deferred();

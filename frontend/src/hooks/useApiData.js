@@ -49,6 +49,14 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
         }
     }, []);
 
+    // Every path that abandons an in-flight request: supersede it so a late response
+    // cannot commit, and clear the spinner its seq-guarded finally will no longer clear.
+    const abandonInFlight = useCallback(() => {
+        cleanup();
+        requestSeqRef.current += 1;
+        setIsLoading(false);
+    }, [cleanup]);
+
     // Determine if retry should happen
     const shouldAttemptRetry = useCallback(
         (err, currentRetryCount) => {
@@ -186,9 +194,10 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
             executeRequest(0);
         }
 
-        // Cleanup previous request when dependencies change (but don't mark as unmounted)
+        // Dependencies changed, so abandon the previous request: with immediate false
+        // nothing re-runs to bump the sequence and a late response would still commit.
         return () => {
-            cleanup();
+            abandonInFlight();
         };
     }, dependencies); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -226,24 +235,14 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
 
         /** Clear current data and error */
         clear: useCallback(() => {
-            // Kill a scheduled retry too: it reuses the current sequence, so bumping
-            // alone would let it pass the guard and repopulate what we just cleared.
-            cleanup();
-            requestSeqRef.current += 1;
+            abandonInFlight();
             setData(null);
             setError(null);
             setRetryCount(0);
-            setIsLoading(false);
-        }, [cleanup]),
+        }, [abandonInFlight]),
 
         /** Cancel ongoing request */
-        cancel: useCallback(() => {
-            cleanup();
-            // Bumping alone strands the spinner: the in-flight .finally is seq-guarded
-            // and will no longer run, so clear isLoading here instead.
-            requestSeqRef.current += 1;
-            setIsLoading(false);
-        }, [cleanup]),
+        cancel: abandonInFlight,
     };
 };
 
