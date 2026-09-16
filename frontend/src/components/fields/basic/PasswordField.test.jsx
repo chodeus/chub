@@ -73,4 +73,14 @@ describe('PasswordField', () => {
 
         expect(screen.getByLabelText('API Key')).toHaveValue('********');
     });
+
+    it('re-enables the reveal toggle when the secret identity changes mid-flight', () => {
+        const { rerender } = render(<Harness onChange={() => {}} secretPath="tmdb.apikey" />);
+        fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
+        expect(screen.getByRole('button', { name: 'Show password' })).toBeDisabled();
+
+        rerender(<Harness onChange={() => {}} secretPath="plex.token" />);
+
+        expect(screen.getByRole('button', { name: 'Show password' })).toBeEnabled();
+    });
 });

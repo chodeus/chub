@@ -50,7 +50,6 @@ const DAY_TOKEN_TO_KEY = {
     saturday: 'saturday',
 };
 
-// Compose schedule string from type and data
 const composeScheduleString = (type, data) => {
     if (!type || !data) {
         return '';

@@ -31,9 +31,8 @@ export const PasswordField = React.memo(
         // Bumped on every edit; a reveal resolving against an older id is stale.
         const revealId = useRef(0);
 
-        // A different secret under the same mounted field — InstancesPage keys its
-        // fields by field.key alone, so switching instance changes only secretPath.
-        // Re-mask and invalidate in render: an effect would paint A's secret under B.
+        // Re-mask and invalidate during render when secretPath changes: an effect
+        // would paint the previous instance's secret for a frame.
         const [prevSecretPath, setPrevSecretPath] = useState(secretPath);
         if (prevSecretPath !== secretPath) {
             setPrevSecretPath(secretPath);
@@ -41,6 +40,7 @@ export const PasswordField = React.memo(
             setRevealedValue(null);
             setRevealError(false);
             setShowPassword(false);
+            setRevealing(false);
         }
 
         const handleChange = useCallback(
@@ -50,6 +50,8 @@ export const PasswordField = React.memo(
                 revealId.current += 1;
                 setRevealedValue(null);
                 setRevealError(false);
+                // The in-flight reveal is now stale, so it will never clear this itself.
+                setRevealing(false);
                 onChange(e.target.value);
             },
             [onChange]
@@ -65,15 +67,14 @@ export const PasswordField = React.memo(
                 setRevealError(false);
                 try {
                     const res = await configAPI.revealSecret(secretPath);
-                    if (revealId.current !== requestId) {
-                        setRevealing(false);
-                        return; // edited while fetching — keep the typed value
-                    }
+                    // A stale response owns none of this state — whoever invalidated it reset it.
+                    if (revealId.current !== requestId) return;
                     setRevealedValue(res?.data?.value ?? '');
                 } catch {
-                    setRevealing(false);
-                    // Same staleness check: a failure after an edit must not re-raise the error.
-                    if (revealId.current === requestId) setRevealError(true);
+                    if (revealId.current === requestId) {
+                        setRevealing(false);
+                        setRevealError(true);
+                    }
                     return; // stay masked
                 }
                 setRevealing(false);
