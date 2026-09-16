@@ -24,13 +24,9 @@ describe('Badge', () => {
         expect(onRemove).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps button semantics and Enter for a badge with a click handler', () => {
+    it('keeps button semantics and Enter for a click-only badge', () => {
         const onClick = vi.fn();
-        render(
-            <Badge onClick={onClick} onRemove={() => {}}>
-                logo
-            </Badge>
-        );
+        render(<Badge onClick={onClick}>logo</Badge>);
         const badge = wrapper();
 
         expect(badge).toHaveAttribute('role', 'button');
@@ -39,19 +35,25 @@ describe('Badge', () => {
         expect(onClick).toHaveBeenCalledTimes(1);
     });
 
-    it('ignores keys pressed on the nested remove button', () => {
+    it('refuses both callbacks rather than nesting controls', () => {
         const onClick = vi.fn();
+        const onRemove = vi.fn();
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
         render(
-            <Badge onClick={onClick} onRemove={() => {}}>
+            <Badge onClick={onClick} onRemove={onRemove}>
                 logo
             </Badge>
         );
 
-        fireEvent.keyDown(screen.getByRole('button', { name: 'Remove item: logo' }), {
-            key: 'Enter',
-        });
-
+        expect(wrapper()).not.toHaveAttribute('role');
+        expect(screen.getAllByRole('button')).toHaveLength(1);
+        fireEvent.click(wrapper());
         expect(onClick).not.toHaveBeenCalled();
+        expect(error).toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove item: logo' }));
+        expect(onRemove).toHaveBeenCalledTimes(1);
+        error.mockRestore();
     });
 
     it('is not exposed as a toggle button', () => {

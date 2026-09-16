@@ -20,4 +20,12 @@ describe('FieldRegistry', () => {
         expect(FieldRegistry.isWorkingFieldType('test_only_extension_field')).toBe(true);
         expect(FieldRegistry.getPlaceholderFieldTypes()).not.toContain('test_only_extension_field');
     });
+
+    it('drops implementation state when an extension type is unregistered', () => {
+        FieldRegistry.register('test_only_unregistered_field', () => null);
+        FieldRegistry.unregister('test_only_unregistered_field');
+
+        expect(FieldRegistry.isWorkingFieldType('test_only_unregistered_field')).toBe(false);
+        expect(FieldRegistry.isWorkingFieldType('dir_picker')).toBe(true);
+    });
 });

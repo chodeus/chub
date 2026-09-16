@@ -18,7 +18,7 @@ export const NumberField = React.memo(
         errorMessage = null,
         onBlur,
     }) => {
-        // Text shown while typing; partial input ("1.", "-") stays here and is never emitted.
+        // Text shown while typing; partial input ("1.", "-") waits here until blur converts or drops it.
         const [draft, setDraft] = useState(null);
         // NaN, not 0: a cleared field (value null) must stay empty instead of snapping back to 0 on blur.
         const numValue = value !== null && value !== undefined ? Number(value) : NaN;

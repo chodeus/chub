@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { FieldRow, InputBase } from '../primitives';
 import { FieldButton } from '../features/shared';
 import { configAPI } from '../../../utils/api';
@@ -28,10 +28,14 @@ export const PasswordField = React.memo(
         const [revealError, setRevealError] = useState(false);
         const [revealing, setRevealing] = useState(false);
 
+        // Bumped on every edit; a reveal resolving against an older id is stale.
+        const revealId = useRef(0);
+
         const handleChange = useCallback(
             e => {
                 // User is typing a new secret — drop the revealed value so the
                 // field behaves like a normal editable input from here on.
+                revealId.current += 1;
                 setRevealedValue(null);
                 setRevealError(false);
                 onChange(e.target.value);
@@ -44,10 +48,15 @@ export const PasswordField = React.memo(
             // Revealing a saved-but-redacted secret we don't hold yet: fetch the
             // real value before switching the input to plain text.
             if (next && secretPath && revealedValue === null && value === REDACTED) {
+                const requestId = revealId.current;
                 setRevealing(true);
                 setRevealError(false);
                 try {
                     const res = await configAPI.revealSecret(secretPath);
+                    if (revealId.current !== requestId) {
+                        setRevealing(false);
+                        return; // edited while fetching — keep the typed value
+                    }
                     setRevealedValue(res?.data?.value ?? '');
                 } catch {
                     setRevealError(true);

@@ -209,6 +209,7 @@ export const ArrayObjectField = ({
                     {/* RemoveButton stays a sibling: a control nested in this button is invalid. */}
                     <button
                         type="button"
+                        disabled={disabled}
                         className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-4 min-w-0 p-3 text-left cursor-pointer focus:outline-2 focus:outline-primary"
                         style={{ outlineOffset: '-2px' }}
                         onClick={() => handleEdit(index)}

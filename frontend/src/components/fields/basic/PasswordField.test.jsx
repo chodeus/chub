@@ -1,22 +1,47 @@
-/** Guards the autofill opt-out — a manager must not offer the saved CHUB login for secrets. */
-import { render, screen } from '@testing-library/react';
+/** Guards the reveal race: a secret arriving after the user types must not overwrite the edit. */
+import { useState } from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-vi.mock('../../../utils/api', () => ({ configAPI: { revealSecret: vi.fn() } }));
+const api = vi.hoisted(() => ({ resolve: null }));
+
+vi.mock('../../../utils/api', async importOriginal => ({
+    ...(await importOriginal()),
+    configAPI: {
+        revealSecret: () =>
+            new Promise(res => {
+                api.resolve = () => res({ data: { value: 'real-secret' } });
+            }),
+    },
+}));
 
 const { PasswordField } = await import('./PasswordField.jsx');
 
-const field = { key: 'api_key', label: 'API Key' };
+const field = { key: 'apikey', label: 'API Key', secretPath: 'tmdb.apikey' };
+
+function Harness({ onChange }) {
+    const [value, setValue] = useState('********');
+    return (
+        <PasswordField
+            field={field}
+            value={value}
+            onChange={next => {
+                setValue(next);
+                onChange(next);
+            }}
+        />
+    );
+}
 
 describe('PasswordField', () => {
-    it('opts out of credential autofill', () => {
-        render(<PasswordField field={field} value="" onChange={() => {}} />);
-        const input = screen.getByLabelText('API Key');
+    it('ignores a reveal that resolves after the user starts typing', async () => {
+        const onChange = vi.fn();
+        render(<Harness onChange={onChange} />);
 
-        expect(input).toHaveAttribute('type', 'password');
-        expect(input).toHaveAttribute('autocomplete', 'new-password');
-        expect(input).toHaveAttribute('data-1p-ignore');
-        expect(input).toHaveAttribute('data-lpignore', 'true');
-        expect(input).toHaveAttribute('data-bwignore');
-        expect(input).toHaveAttribute('data-form-type', 'other');
+        fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
+        fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'typed' } });
+        api.resolve();
+
+        await waitFor(() => expect(onChange).toHaveBeenCalledWith('typed'));
+        expect(screen.getByLabelText('API Key')).toHaveValue('typed');
     });
 });

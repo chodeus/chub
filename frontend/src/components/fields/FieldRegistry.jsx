@@ -217,6 +217,8 @@ export class FieldRegistry {
      */
     static unregister(fieldType) {
         delete FIELD_COMPONENTS[fieldType];
+        // Only registration marked it implemented; a resolver-backed type keeps its own entry.
+        if (!(fieldType in FIELD_RESOLVERS)) IMPLEMENTED_FIELD_TYPES.delete(fieldType);
     }
 }
 

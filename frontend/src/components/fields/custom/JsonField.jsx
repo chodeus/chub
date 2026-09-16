@@ -28,7 +28,7 @@ export const JsonField = ({
                 return String(value);
             }
         }
-        return value || '';
+        return value === null || value === undefined ? '' : String(value);
     }, [value]);
 
     const [textValue, setTextValue] = useState(() => getStringValue());

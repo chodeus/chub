@@ -42,12 +42,14 @@ export const PrimarySourceField = React.memo(
 
         const handleChange = useCallback(
             e => {
-                const chosen = e.target.value;
+                // Resolve against options: the DOM hands back a string, so a numeric value would survive the filter.
+                const chosen = options.find(o => String(o.value) === e.target.value)?.value;
+                if (chosen === undefined) return;
                 // Emit an ordered list: chosen first, then the remaining known
                 // sources (fallbacks) in their declared order.
                 onChange([chosen, ...allValues.filter(v => v !== chosen)]);
             },
-            [onChange, allValues]
+            [onChange, allValues, options]
         );
 
         return (

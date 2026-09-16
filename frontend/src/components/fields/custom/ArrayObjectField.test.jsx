@@ -77,6 +77,16 @@ describe('ArrayObjectField', () => {
         );
     });
 
+    it('does not open a row while the field is disabled', () => {
+        render(<ArrayObjectField field={field} value={rows} onChange={() => {}} disabled />);
+        const row = screen.getByRole('button', { name: /^Alpha/ });
+
+        expect(row).toBeDisabled();
+        fireEvent.click(row);
+
+        expect(screen.queryByRole('button', { name: 'Save Changes' })).toBeNull();
+    });
+
     it('opens a row whose schema has no fields array', () => {
         render(
             <ArrayObjectField

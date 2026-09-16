@@ -53,9 +53,14 @@ export const Badge = React.memo(
             }
         }
 
-        // Only a click handler earns button semantics; otherwise the badge would wrap its own remove button.
-        const isInteractive = Boolean(onClick);
         const isRemovable = Boolean(onRemove);
+        // Never both: button semantics here would wrap the native remove button in another button.
+        const isInteractive = Boolean(onClick) && !isRemovable;
+        if (import.meta.env.DEV && onClick && isRemovable) {
+            console.error(
+                'Badge: onClick is ignored with onRemove — render sibling controls instead'
+            );
+        }
         const handleClick = e => {
             if (disabled) return;
             onClick?.(e);
@@ -147,7 +152,7 @@ export const Badge = React.memo(
         return (
             <span
                 className={badgeClasses}
-                onClick={onClick ? handleClick : undefined}
+                onClick={isInteractive ? handleClick : undefined}
                 onKeyDown={isInteractive ? handleKeyDown : undefined}
                 {...badgeAriaProps}
                 {...restProps}
