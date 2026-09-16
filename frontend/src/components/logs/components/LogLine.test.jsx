@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { LogLine } from './LogLine.jsx';
 
 // The internal quoted-string sentinel; log text is never expected to carry it.
-const SENTINEL = '';
+const SENTINEL = '\uE000';
 
 describe('LogLine', () => {
     it('picks out the timestamp, the level and a quoted title', () => {

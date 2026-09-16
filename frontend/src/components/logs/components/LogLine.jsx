@@ -14,12 +14,12 @@ import {
 const PATTERNS = {
     quotedString: /(['"])(.*?)\1/g,
     combined:
-        /\b\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}\b|\b(CRITICAL|ERROR|WARNING|INFO|DEBUG)\b|https?:\/\/[^\s<>"{}|\\^`\]]+|\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]|\b[\w_]+(\.[\w_]+)+\b|\b\d+(\.\d+)?\b|\d+/g,
+        /\b\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}\b|\b(CRITICAL|ERROR|WARNING|INFO|DEBUG)\b|https?:\/\/[^\s<>"{}|\\^`\]]+|\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]|\b[\w_]+(\.[\w_]+)+\b|\b\d+(\.\d+)?\b|\uE000\d+\uE000/g,
     datetime: /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/,
     level: /^(CRITICAL|ERROR|WARNING|INFO|DEBUG)$/,
     // Private-use sentinel, not a word-like token: a log line can contain
     // "__QUOTED_PLACEHOLDER_0__" itself and must not collide with a real quote.
-    placeholder: /^(\d+)$/,
+    placeholder: /^\uE000(\d+)\uE000$/,
     url: /^https?:\/\//,
     fileref: /^\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]$/,
     // Needs a letter in the first segment, or "3.5" and "12.34" classify as paths.
@@ -39,7 +39,7 @@ export const LogLine = React.memo(
             const quotedMatches = [];
             working = working.replace(PATTERNS.quotedString, match => {
                 quotedMatches.push(match);
-                return `${quotedMatches.length - 1}`;
+                return `\uE000${quotedMatches.length - 1}\uE000`;
             });
 
             let currentIndex = 0;
