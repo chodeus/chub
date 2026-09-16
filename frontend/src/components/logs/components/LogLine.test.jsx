@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { LogLine } from './LogLine.jsx';
 
-// U+E000: the token the old parser substituted for quotes; a log line may carry it.
+// U+E000: a private-use character a log line can legitimately carry.
 const SENTINEL = '\uE000';
 
 describe('LogLine', () => {
@@ -45,8 +45,7 @@ describe('LogLine', () => {
         const line = `said "hello" and ${SENTINEL}0${SENTINEL} too`;
         const { container } = render(<LogLine line={line} searchTerm="" />);
 
-        // The old parser swapped quotes out for a placeholder token, so a line
-        // carrying that token had the quote's text substituted into it.
+        // Nothing may be substituted: the rendered text must equal the input line.
         expect(container.textContent).toBe(line);
         expect(screen.queryAllByText('"hello"')).toHaveLength(1);
     });

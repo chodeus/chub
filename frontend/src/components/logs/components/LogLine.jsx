@@ -16,8 +16,7 @@ const PATTERNS = {
         /(['"]).*?\1|\b\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}\b|\b(CRITICAL|ERROR|WARNING|INFO|DEBUG)\b|https?:\/\/[^\s<>"{}|\\^`\]]+|\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]|\b[\w_]+(\.[\w_]+)+\b|\b\d+(\.\d+)?\b/g,
     datetime: /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/,
     level: /^(CRITICAL|ERROR|WARNING|INFO|DEBUG)$/,
-    // Quotes are matched here, never substituted first: the old placeholder
-    // token collided with log lines that carried that same token literally.
+    // Matched first in the combined pattern, so a quote holding a date or URL stays one unit.
     quoted: /^(['"]).*\1$/,
     url: /^https?:\/\//,
     fileref: /^\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]$/,
@@ -30,8 +29,7 @@ const PATTERNS = {
 export const LogLine = React.memo(
     ({ line, searchTerm }) => {
         const segments = useMemo(() => {
-            // Parse the RAW line: React escapes text children already, so
-            // pre-escaping here showed literal entities ("<->" as "&lt;-&gt;").
+            // Parse the RAW line: React escapes text children, so pre-escaping double-encodes.
             const result = [];
             let currentIndex = 0;
 
