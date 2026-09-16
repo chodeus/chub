@@ -135,6 +135,9 @@ const IMPLEMENTED_FIELD_TYPES = new Set([
     'action_button',
 ]);
 
+// The set as it stands before any register() call: unregister() restores exactly this.
+const RESOLVER_IMPLEMENTED_FIELD_TYPES = new Set(IMPLEMENTED_FIELD_TYPES);
+
 /**
  * FieldRegistry class provides methods to register, retrieve, and manage field components
  */
@@ -217,8 +220,10 @@ export class FieldRegistry {
      */
     static unregister(fieldType) {
         delete FIELD_COMPONENTS[fieldType];
-        // Only registration marked it implemented; a resolver-backed type keeps its own entry.
-        if (!(fieldType in FIELD_RESOLVERS)) IMPLEMENTED_FIELD_TYPES.delete(fieldType);
+        // Only registration marked it implemented; a placeholder resolver goes back to placeholder.
+        if (!RESOLVER_IMPLEMENTED_FIELD_TYPES.has(fieldType)) {
+            IMPLEMENTED_FIELD_TYPES.delete(fieldType);
+        }
     }
 }
 

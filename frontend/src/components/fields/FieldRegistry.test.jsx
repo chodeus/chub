@@ -28,4 +28,12 @@ describe('FieldRegistry', () => {
         expect(FieldRegistry.isWorkingFieldType('test_only_unregistered_field')).toBe(false);
         expect(FieldRegistry.isWorkingFieldType('dir_picker')).toBe(true);
     });
+
+    it('returns a resolver-backed placeholder to the placeholder list when unregistered', () => {
+        FieldRegistry.register('poster', () => null);
+        FieldRegistry.unregister('poster');
+
+        expect(FieldRegistry.isWorkingFieldType('poster')).toBe(false);
+        expect(FieldRegistry.getPlaceholderFieldTypes()).toContain('poster');
+    });
 });

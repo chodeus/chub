@@ -59,9 +59,10 @@ export const PasswordField = React.memo(
                     }
                     setRevealedValue(res?.data?.value ?? '');
                 } catch {
-                    setRevealError(true);
                     setRevealing(false);
-                    return; // stay masked and surface the error
+                    // Same staleness check: a failure after an edit must not re-raise the error.
+                    if (revealId.current === requestId) setRevealError(true);
+                    return; // stay masked
                 }
                 setRevealing(false);
             }
