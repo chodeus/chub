@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { LogLine } from './LogLine.jsx';
 
-// The internal quoted-string sentinel; log text is never expected to carry it.
+// U+E000: the token the old parser substituted for quotes; a log line may carry it.
 const SENTINEL = '\uE000';
 
 describe('LogLine', () => {
@@ -41,10 +41,14 @@ describe('LogLine', () => {
         expect(screen.queryAllByText('"hello"')).toHaveLength(1);
     });
 
-    it('shows a stray sentinel from the log instead of dropping the token', () => {
-        render(<LogLine line={`odd ${SENTINEL}9${SENTINEL} line`} searchTerm="" />);
+    it('never substitutes a quoted value into a lookalike token elsewhere in the line', () => {
+        const line = `said "hello" and ${SENTINEL}0${SENTINEL} too`;
+        const { container } = render(<LogLine line={line} searchTerm="" />);
 
-        expect(screen.getByText(`${SENTINEL}9${SENTINEL}`)).toBeInTheDocument();
+        // The old parser swapped quotes out for a placeholder token, so a line
+        // carrying that token had the quote's text substituted into it.
+        expect(container.textContent).toBe(line);
+        expect(screen.queryAllByText('"hello"')).toHaveLength(1);
     });
 
     it('highlights only the matching characters of a search term', () => {
