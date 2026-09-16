@@ -8,22 +8,7 @@ import { ActionButtons } from './ActionButtons';
 import { useLogControls } from '../context/LogControlsContext';
 import { useUIState } from '../../../contexts/UIStateContext';
 
-/**
- * LogControlsContent - Internal component that renders control UI
- *
- * Consumes LogControlsContext to access collapse state.
- * Consumes UIStateContext to detect sidebar state.
- * Adapts layout based on sidebar state and viewport size.
- *
- * Layout modes:
- * - Desktop with sidebar COLLAPSED (narrow): Full-width stacked rows with show/hide toggle
- * - Desktop with sidebar OPEN (wide): Single-row horizontal layout
- * - Mobile: Collapsible with toggle button
- *
- * @param {Object} props
- * @param {string} props.logText - Current log text (for upload)
- * @returns {JSX.Element}
- */
+/** Control bar UI: stacked with a collapse toggle under 1200px, a wrapping row above it. */
 const LogControlsContent = ({ logText }) => {
     const { isCollapsed } = useLogControls();
     const { viewport } = useUIState();
@@ -37,8 +22,8 @@ const LogControlsContent = ({ logText }) => {
             {/* Show/Hide toggle - always visible in stacked layout */}
             {useStackedLayout && <CollapseButton />}
 
-            {/* Controls - hidden when collapsed */}
-            {!isCollapsed && (
+            {/* Collapse only exists in stacked layout — never hide controls without its toggle. */}
+            {(!useStackedLayout || !isCollapsed) && (
                 <div
                     id="log-controls-content"
                     className={
@@ -59,7 +44,7 @@ const LogControlsContent = ({ logText }) => {
                         </>
                     ) : (
                         <>
-                            {/* Horizontal layout: Flexible single row with wrapping */}
+                            {/* Horizontal layout: a row that wraps when it runs out of width */}
                             <div className="flex-shrink-0 min-w-48">
                                 <ModuleSelect />
                             </div>
@@ -80,38 +65,18 @@ const LogControlsContent = ({ logText }) => {
     );
 };
 
-/**
- * LogControls - Root control toolbar compound
- *
- * Provides control state via LogControlsProvider and composes all
- * control subcomponents. Implements mobile-responsive collapse pattern.
- *
- * Layout:
- * - Desktop (>1024px): Horizontal flexbox with wrapping
- * - Mobile (≤1024px): Collapsible vertical stack with toggle button
- *
- * @param {Object} props
- * @param {Array} props.modules - Available modules
- * @param {Array} props.logFiles - Available log files
- * @param {string} props.logText - Current log text (for upload)
- * @param {Function} props.onModuleChange - Module selection handler
- * @param {Function} props.onLogFileChange - Log file selection handler
- * @param {Function} props.onSearchChange - Search term change handler
- * @param {Function} props.onDownload - Download button handler
- * @param {Function} props.onUpload - Upload button handler
- * @returns {JSX.Element}
- */
+/** Root control toolbar: owns LogControlsProvider and composes the subcomponents. */
 export const LogControls = ({
     modules,
     logFiles,
     selectedModule,
     selectedLogFile,
     logText,
+    searchInputRef,
     onModuleChange,
     onLogFileChange,
     onSearchChange,
     onDownload,
-    onUpload,
 }) => {
     return (
         <LogControlsProvider
@@ -119,11 +84,11 @@ export const LogControls = ({
             logFiles={logFiles}
             selectedModule={selectedModule}
             selectedLogFile={selectedLogFile}
+            searchInputRef={searchInputRef}
             onModuleChange={onModuleChange}
             onLogFileChange={onLogFileChange}
             onSearchChange={onSearchChange}
             onDownload={onDownload}
-            onUpload={onUpload}
         >
             <LogControlsContent logText={logText} />
         </LogControlsProvider>

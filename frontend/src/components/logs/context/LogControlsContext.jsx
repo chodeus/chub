@@ -8,39 +8,21 @@ const getInitialCollapsed = () => {
     return window.innerWidth < MOBILE_BREAKPOINT;
 };
 
-/**
- * LogControlsContext - Provides shared state for all control components
- *
- * Manages control state including module selection, log file selection,
- * search term, and collapse state for mobile responsiveness.
- */
+/** Shared state for the log control bar: selections, search, collapse. */
 const LogControlsContext = createContext(null);
 
-/**
- * LogControlsProvider - Provides control state to subcomponents
- *
- * @param {Object} props
- * @param {React.ReactNode} props.children - Child components
- * @param {Array} props.modules - Available modules
- * @param {Array} props.logFiles - Available log files
- * @param {Function} props.onModuleChange - Module selection handler
- * @param {Function} props.onLogFileChange - Log file selection handler
- * @param {Function} props.onSearchChange - Search term change handler
- * @param {Function} props.onDownload - Download button handler
- * @param {Function} props.onUpload - Upload button handler
- * @returns {JSX.Element}
- */
+/** Provides control state to the log control subcomponents. */
 export function LogControlsProvider({
     children,
     modules,
     logFiles,
     selectedModule,
     selectedLogFile,
+    searchInputRef,
     onModuleChange,
     onLogFileChange,
     onSearchChange,
     onDownload,
-    onUpload,
 }) {
     const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsed);
 
@@ -51,24 +33,19 @@ export function LogControlsProvider({
         selectedModule,
         selectedLogFile,
         isCollapsed,
+        searchInputRef,
         // Actions
         onModuleChange,
         onLogFileChange,
         onSearchChange,
         onDownload,
-        onUpload,
         setIsCollapsed,
     };
 
     return <LogControlsContext.Provider value={value}>{children}</LogControlsContext.Provider>;
 }
 
-/**
- * useLogControls - Access control state from context
- *
- * @returns {Object} Control state and actions
- * @throws {Error} If used outside LogControlsProvider
- */
+/** Access control state; throws outside LogControlsProvider. */
 export function useLogControls() {
     const context = useContext(LogControlsContext);
 

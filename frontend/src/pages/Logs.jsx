@@ -10,19 +10,7 @@ import { logsAPI } from '../utils/api/logs.js';
 
 const LOG_LEVELS = ['critical', 'error', 'warning', 'info', 'debug'];
 
-/**
- * Logs Page - Log viewer with real-time updates
- *
- * Provides comprehensive log viewing interface with:
- * - Module and file selection
- * - Real-time content updates (1s polling)
- * - Search and highlighting
- * - Log-level filtering
- * - Sort order (newest/oldest first)
- * - Scroll-to-top/bottom navigation
- * - Download and upload capabilities
- * - Keyboard shortcuts (Ctrl/Cmd+F for search)
- */
+/** Log viewer: tails the selected module's file, filters by level and text, downloads or copies it. */
 export default function Logs() {
     // Data hooks
     const { modules } = useLogModules();
@@ -83,12 +71,11 @@ export default function Logs() {
     // Keyboard shortcuts (Ctrl/Cmd+F)
     useEffect(() => {
         function handleKeyDown(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+            // preventDefault only when we can actually focus, or ⌘F kills browser find too.
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && searchInputRef.current) {
                 e.preventDefault();
-                if (searchInputRef.current) {
-                    searchInputRef.current.focus();
-                    searchInputRef.current.select();
-                }
+                searchInputRef.current.focus();
+                searchInputRef.current.select();
             }
         }
 
@@ -138,7 +125,6 @@ export default function Logs() {
                     logFiles={logFiles}
                     selectedModule={selectedModule}
                     selectedLogFile={selectedLogFile}
-                    searchTerm={searchTerm}
                     logText={logText}
                     searchInputRef={searchInputRef}
                     onModuleChange={setSelectedModule}

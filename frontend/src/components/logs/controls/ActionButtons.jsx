@@ -1,19 +1,8 @@
 import React from 'react';
 import { useLogControls } from '../context/LogControlsContext';
 import { useUploadState } from '../hooks/useUploadState';
-import Spinner from '../../ui/Spinner';
 
-/**
- * ActionButtons - Download and upload action buttons
- *
- * Renders download button and upload button with 3-click state machine.
- * Download button always enabled, upload button shows loading spinner
- * during upload and cycles through upload/open/copy states.
- *
- * @param {Object} props
- * @param {string} props.logText - Current log text (for upload)
- * @returns {JSX.Element}
- */
+/** Download the log file, or copy the displayed text to the clipboard. */
 export const ActionButtons = ({ logText }) => {
     const { onDownload } = useLogControls();
     const uploadState = useUploadState(logText);
@@ -31,22 +20,14 @@ export const ActionButtons = ({ logText }) => {
                 <span className="material-symbols-outlined text-xl">download</span>
             </button>
 
-            {/* Upload button with 3-click state machine */}
             <button
                 type="button"
                 onClick={uploadState.handleUpload}
-                disabled={uploadState.uploading}
-                className="flex items-center justify-center p-2 rounded-lg border border-border bg-input text-fg hover:bg-surface-alt transition-colors min-h-11 min-w-11 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center p-2 rounded-lg border border-border bg-input text-fg hover:bg-surface-alt transition-colors min-h-11 min-w-11"
                 title={uploadState.tooltipText}
                 aria-label={uploadState.tooltipText}
             >
-                {uploadState.uploading ? (
-                    <Spinner size="small" />
-                ) : (
-                    <span className="material-symbols-outlined text-xl">
-                        {uploadState.buttonIcon}
-                    </span>
-                )}
+                <span className="material-symbols-outlined text-xl">{uploadState.buttonIcon}</span>
             </button>
         </div>
     );

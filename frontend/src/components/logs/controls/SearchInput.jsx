@@ -1,12 +1,9 @@
 import { useState } from 'react';
 import { useLogControls } from '../context/LogControlsContext';
 
-/**
- * SearchInput — compact dark-inset filter field with a leading search icon, a
- * ⌘F hint when empty, and a clear button when filled. Matches the redesign mock.
- */
+/** Filter field with a ⌘F hint; the ref is what Logs.jsx's ⌘F handler focuses. */
 export const SearchInput = () => {
-    const { onSearchChange } = useLogControls();
+    const { onSearchChange, searchInputRef } = useLogControls();
     const [searchValue, setSearchValue] = useState('');
 
     const handleChange = e => {
@@ -29,6 +26,7 @@ export const SearchInput = () => {
                 search
             </span>
             <input
+                ref={searchInputRef}
                 type="text"
                 value={searchValue}
                 onChange={handleChange}
