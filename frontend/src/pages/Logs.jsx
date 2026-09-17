@@ -18,7 +18,10 @@ export default function Logs() {
     // Seed selected module from ?module= so dashboard links deep-link into a
     // specific module's logs. After mount the local state wins — query
     // param is not re-read on subsequent param changes.
-    const [selectedModule, setSelectedModule] = useState(() => searchParams.get('module') || '');
+    const [requestedModule, setRequestedModule] = useState(() => searchParams.get('module') || '');
+    // ?module= is untrusted and reaches four logs API paths; `/`, `?` and `#` reshape
+    // them, and %2F decodes before route matching, so only a listed name is used.
+    const selectedModule = modules.includes(requestedModule) ? requestedModule : '';
     const { logFiles, selectedLogFile, setSelectedLogFile } = useLogFiles(selectedModule);
     const { logText, refresh, inFlightRef } = useLogContent(selectedModule, selectedLogFile);
     useLogPolling(selectedModule, selectedLogFile, refresh, inFlightRef);
@@ -127,7 +130,7 @@ export default function Logs() {
                     selectedLogFile={selectedLogFile}
                     logText={logText}
                     searchInputRef={searchInputRef}
-                    onModuleChange={setSelectedModule}
+                    onModuleChange={setRequestedModule}
                     onLogFileChange={setSelectedLogFile}
                     onSearchChange={setSearchTerm}
                     onDownload={handleDownload}
