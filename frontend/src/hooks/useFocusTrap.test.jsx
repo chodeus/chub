@@ -79,6 +79,20 @@ describe('useFocusTrap', () => {
         expect(screen.getByRole('button', { name: 'Visible' })).toHaveFocus();
     });
 
+    it('skips a control disabled by an ancestor fieldset', () => {
+        // The control carries no disabled attribute of its own, so the selector matches it.
+        render(
+            <Trap>
+                <fieldset disabled>
+                    <button type="button">Locked</button>
+                </fieldset>
+                <button type="button">Visible</button>
+            </Trap>
+        );
+
+        expect(screen.getByRole('button', { name: 'Visible' })).toHaveFocus();
+    });
+
     it('refocuses when the focused control becomes aria-hidden', async () => {
         const { rerender } = render(
             <Trap>

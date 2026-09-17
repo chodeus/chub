@@ -60,9 +60,8 @@ export const useFocusTrap = (containerRef, isActive) => {
         activeTraps.push(container);
         const isTopTrap = () => isTopFocusTrap(container);
 
-        // `display` does NOT inherit, so a child of a display:none wrapper computes its
-        // own value — walking ancestors is the only way to catch it. `visibility` does
-        // inherit, so checking the element alone covers hidden ancestors there.
+        // `display` does not inherit, so walk ancestors; `visibility` does, so the
+        // element's own computed value already covers hidden ancestors.
         const isDisplayed = element => {
             for (let node = element; node instanceof Element; node = node.parentElement) {
                 if (window.getComputedStyle(node).display === 'none') return false;
@@ -75,6 +74,9 @@ export const useFocusTrap = (containerRef, isActive) => {
         const getFocusableElements = () =>
             Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
                 element =>
+                    // `:disabled` also covers controls disabled by an ancestor fieldset,
+                    // which the attribute selectors above cannot see.
+                    !element.matches(':disabled') &&
                     window.getComputedStyle(element).visibility !== 'hidden' &&
                     isDisplayed(element) &&
                     !element.closest('[inert], [aria-hidden="true"], [hidden]')
