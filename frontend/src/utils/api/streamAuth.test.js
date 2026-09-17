@@ -25,6 +25,9 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+    // A committed mint arms a ~9.5 min refresh timer, and resetModules does not cancel
+    // the previous instance's timers — it would outlive the test.
+    streamAuth?.clearStreamToken();
     vi.unstubAllGlobals();
     localStorage.removeItem('chub-auth-token');
 });
@@ -115,6 +118,8 @@ describe('clearStreamToken invalidates an in-flight mint', () => {
         const fresh = deferred();
         const fetchMock = vi
             .fn()
+            // Pending, so a third call fails the assertion below rather than throwing.
+            .mockImplementation(() => deferred().promise)
             .mockImplementationOnce(() => stale.promise)
             .mockImplementationOnce(() => fresh.promise);
         vi.stubGlobal('fetch', fetchMock);
@@ -125,8 +130,13 @@ describe('clearStreamToken invalidates an in-flight mint', () => {
 
         stale.settle(tokenResponse('stale'));
         await staleCall;
+
+        // Joins the pending mint; a third fetch would mean the stale finally nulled it.
+        const joinedCall = streamAuth.ensureStreamToken();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
         fresh.settle(tokenResponse('current'));
-        await freshCall;
+        await Promise.all([freshCall, joinedCall]);
 
         expect(streamAuth.streamTokenSnapshot()).toBe('current');
     });
