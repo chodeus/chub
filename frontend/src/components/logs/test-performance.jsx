@@ -1,11 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LogOutput } from './components';
 
-/**
- * Generate test log data with specified number of lines
- * @param {number} lineCount - Number of log lines to generate
- * @returns {string} Generated log text
- */
+/** Generates `lineCount` fake log lines, roughly one in ten followed by a stack trace. */
 function generateTestLog(lineCount) {
     const levels = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'];
     const modules = ['sync_gdrive', 'border_replacerr', 'poster_renamerr', 'health_checkarr'];
@@ -37,24 +33,26 @@ function generateTestLog(lineCount) {
     return lines.join('\n');
 }
 
-/**
- * LogPerformanceTest - Component for testing LogOutput performance
- */
+/** Dev harness: renders `lineCount` generated log lines and times the render. */
 export function LogPerformanceTest() {
     const [logText, setLogText] = useState('');
     const [renderTime, setRenderTime] = useState(null);
     const [lineCount, setLineCount] = useState(1000);
 
-    const handleGenerate = () => {
-        const startTime = performance.now();
-        const generated = generateTestLog(lineCount);
-        setLogText(generated);
+    const frameRef = useRef(0);
+    useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
 
-        // Use setTimeout to measure after React render completes
-        setTimeout(() => {
-            const endTime = performance.now();
-            setRenderTime(endTime - startTime);
-        }, 0);
+    const handleGenerate = () => {
+        // Clock starts AFTER generation — including it measured the generator, not the
+        // render. Two frames: the first runs after commit, the second after paint.
+        const generated = generateTestLog(lineCount);
+        const startTime = performance.now();
+        setLogText(generated);
+        frameRef.current = requestAnimationFrame(() => {
+            frameRef.current = requestAnimationFrame(() => {
+                setRenderTime(performance.now() - startTime);
+            });
+        });
     };
 
     return (
