@@ -21,6 +21,9 @@ const RETRY_MAX_MS = 300_000;
 let cached = null; // { token: string, expMs: number }
 let inflight = null;
 let refreshTimer = null;
+// Bumped by clearStreamToken: a mint that resolves after a clear must not restore
+// `cached`, notify, re-arm the refresh timer, or null a newer `inflight`.
+let mintGeneration = 0;
 // null = unknown, true = auth on (token required), false = auth not configured
 // (the /stream-token route is open, so image/SSE URLs need no token at all).
 let authConfigured = null;
@@ -142,17 +145,24 @@ export async function ensureStreamToken() {
     if (Date.now() < retryAfterMs) return '';
     if (terminalAuthFailure()) return '';
     if (!inflight) {
+        const generation = mintGeneration;
         const jwt = fullToken();
         inflight = fetch('/api/auth/stream-token', {
             method: 'POST',
             headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
         })
             .then(r => {
+                // Cheap early-out only; r.json() below is async, so the decisive
+                // check must sit adjacent to the side effect it guards.
+                if (generation !== mintGeneration) return null;
                 if (r.ok) return r.json();
                 return r
                     .json()
                     .catch(() => null)
                     .then(body => {
+                        // Re-checked after the parse: handleAuthFailure removes the
+                        // JWT and redirects, so a stale 401 must never reach it.
+                        if (generation !== mintGeneration) return null;
                         handleAuthFailure(r.status, body);
                         return null;
                     });
@@ -162,6 +172,8 @@ export async function ensureStreamToken() {
             // gate open and the loop free to re-arm during an outage.
             .catch(() => null)
             .then(d => {
+                // Re-checked: the retry gate and backoff below are side effects too.
+                if (generation !== mintGeneration) return '';
                 const token = d?.data?.token || '';
                 const ttl = (d?.data?.expires_in || 0) * 1000;
                 // A successful (200) response resolves the auth state: a
@@ -191,7 +203,9 @@ export async function ensureStreamToken() {
             })
             .catch(() => '')
             .finally(() => {
-                inflight = null;
+                // Only clear our own: a stale chain would otherwise null a mint
+                // started after the clear, stranding its callers.
+                if (generation === mintGeneration) inflight = null;
             });
     }
     return inflight;
@@ -211,6 +225,8 @@ export function streamTokenParam() {
 }
 
 export function clearStreamToken() {
+    // Invalidate any mint already in flight; nulling `inflight` alone does not stop it.
+    mintGeneration += 1;
     cached = null;
     inflight = null;
     if (refreshTimer) clearTimeout(refreshTimer);
