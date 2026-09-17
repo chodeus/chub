@@ -24,8 +24,8 @@ export const StatGrid = React.memo(({ children, columns = 3, gap = '4', classNam
         6: 'lg:grid-cols-6',
     };
 
-    // Mobile auto-fits so 3- or 5-card grids leave no orphan row; tablet pins to
-    // 2-up for readability; desktop honours the requested column count.
+    // Mobile auto-fits so 3- or 5-card grids leave no orphan row; tablet uses up
+    // to two columns; desktop honours the requested column count.
     const gridClasses = [
         'grid',
         'grid-cols-auto-fit-xs',

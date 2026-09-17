@@ -1,4 +1,4 @@
-/** Stat primitives, the StatCard composition, and the Grid/List/Inline layouts. */
+/** Re-exports stat primitives and Grid/List/Inline layouts. */
 
 // Re-export primitives
 export * from './primitives';

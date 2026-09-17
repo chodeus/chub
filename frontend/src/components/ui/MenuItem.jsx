@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/** Menu row with icon and label; `onClose` dismisses the parent menu after the press. */
+/** Menu row with an optional icon; `onClose` dismisses the parent menu after the press. */
 const MenuItem = ({
     label,
     iconName,
