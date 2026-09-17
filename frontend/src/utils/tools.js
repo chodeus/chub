@@ -16,9 +16,7 @@
  * humanize(undefined); // => ''
  */
 export function humanize(key) {
-    if (!key || typeof key !== 'string') {
-        return key || '';
-    }
+    if (typeof key !== 'string') return '';
     return key
         .replace(/_/g, ' ') // Replace underscores with spaces
         .replace(/\b\w/g, char => char.toUpperCase()); // Capitalize first letter of each word

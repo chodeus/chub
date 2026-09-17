@@ -9,15 +9,17 @@ const pad2 = n => String(n).padStart(2, '0');
 
 const toDate = value => {
     if (value == null) return null;
-    if (value instanceof Date) return value;
-    if (typeof value === 'number') return new Date(value);
-    if (typeof value === 'string') {
+    let d = null;
+    if (value instanceof Date) d = value;
+    else if (typeof value === 'number') d = new Date(value);
+    else if (typeof value === 'string') {
         // ISO without timezone: treat as UTC so server clocks line up with browser
         const looksNaiveIso = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value);
-        const d = looksNaiveIso ? new Date(value.replace(' ', 'T') + 'Z') : new Date(value);
-        return Number.isNaN(d.getTime()) ? null : d;
+        d = looksNaiveIso ? new Date(value.replace(' ', 'T') + 'Z') : new Date(value);
     }
-    return null;
+    // One validity check for every branch: an invalid Date passed straight in and
+    // `new Date(NaN)` both format as NaN/NaN/NaN otherwise.
+    return d && !Number.isNaN(d.getTime()) ? d : null;
 };
 
 /** dd/mm/yyyy HH:MM:SS */

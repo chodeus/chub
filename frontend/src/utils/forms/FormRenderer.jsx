@@ -26,10 +26,14 @@ import { useToast } from '../../contexts/ToastContext.jsx';
  * @param {string} props.layout - Form layout: 'vertical' | 'horizontal' (default: 'vertical')
  * @param {Object} props.customErrors - Custom error messages for testing purposes
  */
+// Stable identity: a fresh `{}` default would change on every render and retrigger
+// the reset effect below, clobbering values the user just typed.
+const EMPTY_VALUES = {};
+
 export const FormRenderer = React.memo(
     ({
         schema,
-        initialValues = {},
+        initialValues = EMPTY_VALUES,
         onSubmit,
         onChange,
         disabled = false,
