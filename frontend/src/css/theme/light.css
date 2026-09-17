@@ -1,18 +1,10 @@
-/**
- * CHUB Light Theme
- *
- * Indigo-led cool palette (sl1ckbe3ts) designed for a bright, RoomSketch-style
- * floating-panel dashboard. Deep indigo sidebar on a pale-indigo tinted canvas,
- * pastel badge accents for dashboard icons.
- *
- * Theme Application: Applied via data-theme="light" attribute on <html> element
- */
+/* Light theme tokens, applied via data-theme="light" on <html>. */
 
 [data-theme='light'] {
     /* Brand & Semantic Colors */
     --primary: #463fbc; /* Indigo primary */
     --primary-hover: #3a339e;
-    --accent: #1992f3; /* Azure accent for links */
+    --accent: #0d6ab8; /* Link text: 4.9:1 on --bg. Brand hue lives in --azure. */
     --accent-2: #53e8f0; /* Cyan secondary accent */
     --success: #6cbc66;
     --warning: #ffc944;
@@ -71,8 +63,8 @@
     /* Link state colors */
     --link-hover: #3a339e;
     --link-visited: #3a339e;
-    --accent-hover: #1277cc;
-    --accent-visited: #1277cc;
+    --accent-hover: #0a5a9e;
+    --accent-visited: #0a5a9e;
 
     /* Form Control Colors */
     --input-bg: #fff;

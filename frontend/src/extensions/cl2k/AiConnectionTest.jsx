@@ -1,11 +1,6 @@
-// "Test connection" for the CL2K AI provider — the custom settings field type
-// `cl2k_ai_test` (registered in manifest.jsx).
-//
-// Sends NO credentials: GET /api/config serves api_key/client_key redacted, so
-// the browser never holds the real ones and the endpoint reads them server-side.
-// Consequence worth surfacing to the user: it tests SAVED settings, not unsaved
-// edits.
-import React, { useCallback, useState } from 'react';
+// Tests SAVED settings, not unsaved edits — the endpoint reads the keys
+// server-side, because GET /api/config serves them redacted.
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiCore } from '../../utils/api/core';
 import { useToast } from '../../contexts/ToastContext.jsx';
 
@@ -15,20 +10,35 @@ export const Cl2kAiTestField = ({ rootConfig }) => {
     const [result, setResult] = useState(null); // { ok, message }
     const provider = rootConfig?.cl2k_maker?.ai_provider || 'none';
 
+    const abortRef = useRef(null);
+    // The reply lands after an await; without this, a settings page the user has
+    // already left still raises a toast and writes state.
+    useEffect(() => () => abortRef.current?.abort(), []);
+
     const run = useCallback(async () => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
         setBusy(true);
         setResult(null);
         try {
-            const res = await apiCore.post('/cl2k-maker/test-ai', {});
+            const res = await apiCore.post(
+                '/cl2k-maker/test-ai',
+                {},
+                { signal: controller.signal }
+            );
             const message = res?.message || 'Connection works';
             setResult({ ok: true, message });
             toast.success(message);
         } catch (e) {
+            // An abort is this component's own doing, never the provider failing.
+            if (e?.name === 'AbortError') return;
             const message = e?.message || 'Connection test failed';
             setResult({ ok: false, message });
             toast.error(message);
         } finally {
-            setBusy(false);
+            // A superseded run must not clear the busy state of the one that replaced it.
+            if (!controller.signal.aborted) setBusy(false);
         }
     }, [toast]);
 

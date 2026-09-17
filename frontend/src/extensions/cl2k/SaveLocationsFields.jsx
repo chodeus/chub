@@ -1,13 +1,5 @@
-// CL2K maker — Save Locations settings UI (design_handoff_cl2k_save_locations,
-// option 2a: routed cards + coverage strip).
-//
-// Three custom field types registered by manifest.jsx via FieldRegistry.register
-// (a public extension slot — no shared-file edits): the Local Folders and Google
-// Drives cards edit their own config key (local_folders / gdrive_uploads); the
-// Coverage card is read-only. ModuleSettingsPage's field memo only re-renders on
-// a field's OWN value, so the two list fields publish into a tiny module-scope
-// store and the coverage field subscribes to it (its rootConfig prop goes stale
-// as siblings edit).
+// CL2K maker — Save Locations. ModuleSettingsPage memoises a field on its OWN value,
+// so the two list fields publish into a module store that the coverage field reads.
 import React, {
     useCallback,
     useEffect,
@@ -172,6 +164,9 @@ const NameRow = ({
     </div>
 );
 
+let nextRowId = 0;
+const mintRowId = () => `row${(nextRowId += 1)}`;
+
 // Entry-list plumbing shared by both cards: append-in-edit-state (focus the new
 // row's name, scroll it into view), per-row patch, immediate delete (existing
 // CHUB pages don't confirm).
@@ -179,38 +174,116 @@ const useEntryList = (value, onChange, blankEntry) => {
     const entries = useMemo(() => (Array.isArray(value) ? value : []), [value]);
     const [focusIndex, setFocusIndex] = useState(null);
 
+    // Client-only row ids, never persisted: folder_id is the only other handle and
+    // it is editable and may repeat, so an async reply cannot be routed by it.
+    const [ids, setIds] = useState([]);
+    if (ids.length !== entries.length) {
+        // Pad/trim at the tail rather than reissue every id: new keys mid-edit
+        // would remount the rows and pull focus out of the input being typed in.
+        setIds(
+            entries.length > ids.length
+                ? [
+                      ...ids,
+                      ...Array.from({ length: entries.length - ids.length }, () => mintRowId()),
+                  ]
+                : ids.slice(0, entries.length)
+        );
+    }
+
+    // Mirrors for replaceById, which runs after an await; a ref cannot be read
+    // during render, and state read there would be the pre-await snapshot.
+    const idsRef = useRef(ids);
+    const entriesRef = useRef(entries);
+    useEffect(() => {
+        idsRef.current = ids;
+        entriesRef.current = entries;
+    }, [ids, entries]);
+
+    // One commit for every mutation: a reply landing before React commits the
+    // previous one would otherwise index fresh ids into the older entries.
+    const commit = useCallback(
+        (nextIds, nextEntries) => {
+            idsRef.current = nextIds;
+            entriesRef.current = nextEntries;
+            setIds(nextIds);
+            onChange(nextEntries);
+        },
+        [onChange]
+    );
+
     const add = useCallback(() => {
-        setFocusIndex(entries.length);
-        onChange([...entries, { ...blankEntry }]);
-    }, [entries, onChange, blankEntry]);
+        setFocusIndex(entriesRef.current.length);
+        commit([...idsRef.current, mintRowId()], [...entriesRef.current, { ...blankEntry }]);
+    }, [blankEntry, commit]);
 
     const patch = useCallback(
         (index, changes) => {
-            onChange(entries.map((e, i) => (i === index ? { ...e, ...changes } : e)));
+            commit(
+                idsRef.current,
+                entriesRef.current.map((e, i) => (i === index ? { ...e, ...changes } : e))
+            );
         },
-        [entries, onChange]
+        [commit]
     );
 
     const remove = useCallback(
         index => {
-            onChange(entries.filter((_, i) => i !== index));
+            commit(
+                idsRef.current.filter((_, i) => i !== index),
+                entriesRef.current.filter((_, i) => i !== index)
+            );
         },
-        [entries, onChange]
+        [commit]
+    );
+
+    // Swap one row for several, found by client id against the LATEST entries.
+    // Returns false when the row is gone, so the caller cannot report success.
+    const replaceById = useCallback(
+        (rowId, makeRows) => {
+            const before = idsRef.current;
+            const index = before.indexOf(rowId);
+            if (index === -1) return false;
+            const current = entriesRef.current;
+            const parent = current[index];
+            if (!parent) return false;
+            const rows = makeRows(parent);
+            if (!rows || rows.length === 0) return false;
+            commit(
+                [
+                    ...before.slice(0, index),
+                    ...rows.map(() => mintRowId()),
+                    ...before.slice(index + 1),
+                ],
+                current.flatMap((e, i) => (i === index ? rows : [e]))
+            );
+            return true;
+        },
+        [commit]
     );
 
     const toggleType = useCallback(
         (index, type) => {
-            const current = entries[index]?.types || [];
+            const current = entriesRef.current[index]?.types || [];
             patch(index, {
                 types: current.includes(type)
                     ? current.filter(t => t !== type)
                     : [...current, type],
             });
         },
-        [entries, patch]
+        [patch]
     );
 
-    return { entries, add, patch, remove, toggleType, focusIndex, setFocusIndex };
+    return {
+        entries,
+        ids,
+        add,
+        patch,
+        remove,
+        replaceById,
+        toggleType,
+        focusIndex,
+        setFocusIndex,
+    };
 };
 
 const useAutoFocus = (isTarget, clear) => {
@@ -281,11 +354,8 @@ const FolderEntry = ({
 };
 
 export const Cl2kLocalFoldersField = ({ value, onChange, disabled = false }) => {
-    const { entries, add, patch, remove, toggleType, focusIndex, setFocusIndex } = useEntryList(
-        value,
-        onChange,
-        { name: '', path: '', types: [] }
-    );
+    const { entries, ids, add, patch, remove, toggleType, focusIndex, setFocusIndex } =
+        useEntryList(value, onChange, { name: '', path: '', types: [] });
     const [browseIndex, setBrowseIndex] = useState(null);
 
     useEffect(() => {
@@ -317,7 +387,7 @@ export const Cl2kLocalFoldersField = ({ value, onChange, disabled = false }) => 
                 <div className="flex flex-col gap-2.5">
                     {entries.map((entry, i) => (
                         <FolderEntry
-                            key={i}
+                            key={ids[i]}
                             entry={entry}
                             disabled={disabled}
                             onPatch={changes => patch(i, changes)}
@@ -370,17 +440,30 @@ const TestUploadButton = ({ folderId, disabled }) => {
     const [busy, setBusy] = useState(false);
     const canRun = !disabled && !busy && !!(folderId || '').trim();
 
+    const abortRef = useRef(null);
+    // The reply lands after an await; without this, a settings page the user has
+    // already left still raises a toast.
+    useEffect(() => () => abortRef.current?.abort(), []);
+
     const run = useCallback(async () => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
         setBusy(true);
         try {
-            const res = await apiCore.post('/cl2k-maker/test-drive', {
-                gdrive_folder_id: folderId,
-            });
+            const res = await apiCore.post(
+                '/cl2k-maker/test-drive',
+                { gdrive_folder_id: folderId },
+                { signal: controller.signal }
+            );
             toast.success(res?.message || 'Upload works');
         } catch (e) {
+            // An abort is this component's own doing, never a failed upload.
+            if (e?.name === 'AbortError') return;
             toast.error(e?.message || 'Upload test failed');
         } finally {
-            setBusy(false);
+            // A superseded run must not clear the busy state of the one replacing it.
+            if (!controller.signal.aborted) setBusy(false);
         }
     }, [folderId, toast]);
 
@@ -406,12 +489,22 @@ const SplitSubfoldersButton = ({ folderId, disabled, onSplit }) => {
     const [busy, setBusy] = useState(false);
     const canRun = !disabled && !busy && !!(folderId || '').trim();
 
+    const abortRef = useRef(null);
+    // The reply lands after an await; without this, a settings page the user has
+    // already left still raises a toast.
+    useEffect(() => () => abortRef.current?.abort(), []);
+
     const run = useCallback(async () => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
         setBusy(true);
         try {
-            const res = await apiCore.post('/cl2k-maker/gdrive/type-subfolders', {
-                gdrive_folder_id: folderId,
-            });
+            const res = await apiCore.post(
+                '/cl2k-maker/gdrive/type-subfolders',
+                { gdrive_folder_id: folderId },
+                { signal: controller.signal }
+            );
             const subfolders = res?.data?.subfolders || [];
             // Refuse to rewrite the row on a partial answer: a missing type or a
             // blank folder_id would save a destination that silently uploads
@@ -421,12 +514,19 @@ const SplitSubfoldersButton = ({ folderId, disabled, onSplit }) => {
                     subfolders.some(s => s.image_type === t.value && (s.folder_id || '').trim())
                 ) && subfolders.every(s => (s.folder_id || '').trim());
             if (!usable) throw new Error('Drive returned an incomplete set of subfolders');
-            onSplit(subfolders);
+            // onSplit reports false when the row has gone, or when it claims no
+            // types to route; the toast must not claim a split that never landed.
+            if (!onSplit(subfolders)) {
+                throw new Error('Subfolders are ready, but nothing routed to this Drive row');
+            }
             toast.success(res?.message || 'Split into type subfolders');
         } catch (e) {
+            // An abort is this component's own doing, never a failed split.
+            if (e?.name === 'AbortError') return;
             toast.error(e?.message || 'Could not create the type subfolders');
         } finally {
-            setBusy(false);
+            // A superseded run must not clear the busy state of the one replacing it.
+            if (!controller.signal.aborted) setBusy(false);
         }
     }, [folderId, toast, onSplit]);
 
@@ -499,11 +599,8 @@ const DriveEntry = ({
 };
 
 export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) => {
-    const { entries, add, patch, remove, toggleType, focusIndex, setFocusIndex } = useEntryList(
-        value,
-        onChange,
-        { name: '', folder_id: '', types: [] }
-    );
+    const { entries, ids, add, patch, remove, replaceById, toggleType, focusIndex, setFocusIndex } =
+        useEntryList(value, onChange, { name: '', folder_id: '', types: [] });
 
     useEffect(() => {
         publishSaveLocations('gdrive_uploads', Array.isArray(value) ? value : []);
@@ -511,37 +608,25 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
 
     const clearFocus = useCallback(() => setFocusIndex(null), [setFocusIndex]);
 
-    // The subfolders arrive from an async call, so the row must be re-found in
-    // the LATEST entries by its stable folder_id — a captured index could point
-    // at a different row (or stale array) after an add/remove mid-flight.
-    const entriesRef = useRef(entries);
-    useEffect(() => {
-        entriesRef.current = entries;
-    }, [entries]);
-
-    // Replace the split row with one routed row per type. The parent row's own
-    // claimed types are dropped — they now live on the children — and any type
-    // it didn't claim is left unclaimed rather than silently switched on.
+    // Replace the split row with one routed row per type. A claimed type the split
+    // did not return keeps the original row — the endpoint never creates a poster.
     const splitRow = useCallback(
-        (folderId, subfolders) => {
-            const current = entriesRef.current;
-            const index = current.findIndex(e => e.folder_id === folderId);
-            if (index === -1) return; // the row was removed while we fetched
-            const parent = current[index];
-            const claimed = parent.types || [];
-            const children = subfolders
-                // Only types the parent actually claimed. An unclaimed row splits
-                // into nothing and is left untouched by the empty-children return.
-                .filter(s => claimed.includes(s.image_type))
-                .map(s => ({
+        (rowId, subfolders) =>
+            replaceById(rowId, parent => {
+                const claimed = parent.types || [];
+                const routed = subfolders.filter(s => claimed.includes(s.image_type));
+                const children = routed.map(s => ({
                     name: `${parent.name || 'Drive'} ${s.name}`.trim(),
                     folder_id: s.folder_id,
                     types: [s.image_type],
                 }));
-            if (children.length === 0) return;
-            onChange(current.flatMap((e, i) => (i === index ? children : [e])));
-        },
-        [onChange]
+                // Nothing routed: leave the row untouched and let replaceById say so,
+                // rather than rewriting it to an identical row and reporting success.
+                if (children.length === 0) return [];
+                const kept = claimed.filter(t => !routed.some(s => s.image_type === t));
+                return kept.length > 0 ? [{ ...parent, types: kept }, ...children] : children;
+            }),
+        [replaceById]
     );
 
     return (
@@ -567,13 +652,13 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
                 <div className="flex flex-col gap-2.5">
                     {entries.map((entry, i) => (
                         <DriveEntry
-                            key={i}
+                            key={ids[i]}
                             entry={entry}
                             disabled={disabled}
                             onPatch={changes => patch(i, changes)}
                             onDelete={() => remove(i)}
                             onToggleType={type => toggleType(i, type)}
-                            onSplit={subfolders => splitRow(entry.folder_id, subfolders)}
+                            onSplit={subfolders => splitRow(ids[i], subfolders)}
                             autoFocus={focusIndex === i}
                             clearFocus={clearFocus}
                         />

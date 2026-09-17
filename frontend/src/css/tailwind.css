@@ -25,13 +25,8 @@
 /* Project themes via the data-theme attribute, not a .dark class. */
 @custom-variant dark ([data-theme='dark'] &);
 
-/**
- * Map design tokens (theme/light.css + dark.css) into Tailwind's color
- * namespace. `inline` so the values are substituted directly into utilities
- * (background: var(--surface-alt)) and keep switching per [data-theme] — and so
- * these keys are NOT re-emitted to :root (avoids clobbering the runtime tokens).
- * Each key is the class SUFFIX: --color-surface-alt -> bg-surface-alt / etc.
- */
+/* Token -> Tailwind colour namespace (key = class suffix: bg-surface-alt).
+   NOT `inline`: 8 sites read var(--color-*), which inline stops emitting. */
 @theme {
     /* brand + semantic */
     --color-primary: var(--primary);
