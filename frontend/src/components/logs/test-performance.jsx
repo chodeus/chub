@@ -33,7 +33,7 @@ function generateTestLog(lineCount) {
     return lines.join('\n');
 }
 
-/** Dev harness: renders `lineCount` generated log lines and times the render. */
+/** Dev harness: renders `lineCount` generated entries plus occasional stack traces, and times the render. */
 export function LogPerformanceTest() {
     const [logText, setLogText] = useState('');
     const [renderTime, setRenderTime] = useState(null);
