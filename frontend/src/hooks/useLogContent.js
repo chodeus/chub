@@ -76,11 +76,11 @@ export function useLogContent(selectedModule, selectedLogFile) {
             });
 
         return () => {
-            controller.abort();
-            if (abortRef.current === controller) {
-                abortRef.current = null;
-                inFlightRef.current = false;
-            }
+            // refresh() replaces abortRef.current, so aborting the captured controller
+            // would leave a live refresh to commit content for the old selection.
+            abortRef.current?.abort();
+            abortRef.current = null;
+            inFlightRef.current = false;
         };
     }, [selectedModule, selectedLogFile]);
 

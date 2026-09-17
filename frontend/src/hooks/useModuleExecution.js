@@ -18,9 +18,6 @@ export const useModuleExecution = () => {
     const [runningModules, setRunningModules] = useState(new Set());
     const [runStates, setRunStates] = useState({});
 
-    // `polling` is derived: we poll iff at least one module is running.
-    const polling = runningModules.size > 0;
-
     const toast = useToast();
     const pollingIntervalRef = useRef(null);
     const isMountedRef = useRef(true);
@@ -184,6 +181,9 @@ export const useModuleExecution = () => {
 
     // Initial load and cleanup
     useEffect(() => {
+        // Re-arm: StrictMode runs setup→cleanup→setup, and a toast identity change
+        // re-runs this, so without it the flag stays false and every response is dropped.
+        isMountedRef.current = true;
         loadRunStates();
         return () => {
             isMountedRef.current = false;
@@ -207,7 +207,6 @@ export const useModuleExecution = () => {
     return {
         runningModules,
         runStates,
-        polling,
         executeModule,
         refreshData: loadRunStates,
         // Reflect cross-page truth: a job started elsewhere (Dashboard, Jobs page,

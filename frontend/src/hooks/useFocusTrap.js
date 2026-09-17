@@ -60,13 +60,17 @@ export const useFocusTrap = (containerRef, isActive) => {
         activeTraps.push(container);
         const isTopTrap = () => isTopFocusTrap(container);
 
-        /**
-         * Get all currently focusable elements within container
-         * @returns {HTMLElement[]} Array of focusable elements
-         */
-        const getFocusableElements = () => {
-            return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR));
-        };
+        // Hidden and inert matches satisfy the selector but silently refuse focus.
+        // NOT getClientRects(): jsdom has no layout, so it reports 0 for everything.
+        const getFocusableElements = () =>
+            Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(element => {
+                const style = window.getComputedStyle(element);
+                return (
+                    style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    !element.closest('[inert], [aria-hidden="true"], [hidden]')
+                );
+            });
 
         // Falls back to the container, which needs tabIndex={-1} to take focus.
         (getFocusableElements()[0] ?? container).focus();
