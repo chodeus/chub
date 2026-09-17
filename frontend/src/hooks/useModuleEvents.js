@@ -3,18 +3,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { ensureStreamToken } from '../utils/api/streamAuth.js';
 
 /**
- * useModuleEvents - SSE-based hook for real-time module status updates
- *
- * Subscribes to the /api/modules/events SSE endpoint for push-based
- * status updates. Falls back to polling if SSE connection fails.
- *
- * NOTE: EventSource cannot send custom headers, so the auth token is
- * passed as a query parameter (?token=...) instead.
- *
- * @param {Object} options
- * @param {Function} [options.onStatusChange] - Callback when a module status changes
- * @param {boolean} [options.enabled=true] - Whether to connect
- * @returns {Object} { states, isConnected }
+ * Subscribes to /api/modules/events (SSE) and reconnects 5s after a connection error.
+ * EventSource cannot send headers, so the short-lived stream token goes in the query.
  */
 export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
     const [states, setStates] = useState({});
@@ -27,6 +17,9 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
     const reconnectTimeoutRef = useRef(null);
     const onStatusChangeRef = useRef(onStatusChange);
     const connectRef = useRef(null);
+    // Bumped on every teardown/disable: a connect() resuming after the token await
+    // must not create an EventSource that cleanup has already run past.
+    const generationRef = useRef(0);
 
     // Keep callback ref current without re-triggering effect
     useEffect(() => {
@@ -34,6 +27,7 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
     }, [onStatusChange]);
 
     const connect = useCallback(async () => {
+        const generation = generationRef.current;
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
         }
@@ -49,6 +43,8 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
         } catch {
             // token unavailable — connect without (middleware will 401)
         }
+
+        if (generation !== generationRef.current) return;
 
         const es = new EventSource(sseUrl);
         eventSourceRef.current = es;
@@ -98,26 +94,32 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
     }, [connect]);
 
     useEffect(() => {
-        if (!enabled) {
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
-                eventSourceRef.current = null;
-            }
-            // isConnected is already false via derivation; no setState needed.
-            return;
-        }
-
-        connect();
-
-        return () => {
+        // One teardown for both paths: disabling left the reconnect timer armed,
+        // so it fired and reconnected a hook that was meant to be off.
+        const teardown = () => {
+            generationRef.current += 1;
+            // `enabled && hasOpenSocket` masks a stale true while disabled, so without
+            // this re-enabling reports isConnected before the new stream opens.
+            setHasOpenSocket(false);
             if (eventSourceRef.current) {
                 eventSourceRef.current.close();
                 eventSourceRef.current = null;
             }
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = null;
             }
         };
+
+        if (!enabled) {
+            teardown();
+            // isConnected is already false via derivation; no setState needed.
+            return;
+        }
+
+        connect();
+
+        return teardown;
     }, [enabled, connect]);
 
     return { states, isConnected };

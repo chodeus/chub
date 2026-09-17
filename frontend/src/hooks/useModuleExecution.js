@@ -18,9 +18,6 @@ export const useModuleExecution = () => {
     const [runningModules, setRunningModules] = useState(new Set());
     const [runStates, setRunStates] = useState({});
 
-    // `polling` is derived: we poll iff at least one module is running.
-    const polling = runningModules.size > 0;
-
     const toast = useToast();
     const pollingIntervalRef = useRef(null);
     const isMountedRef = useRef(true);
@@ -28,6 +25,9 @@ export const useModuleExecution = () => {
     const currentIntervalRef = useRef(2000);
     const loadRunStatesRef = useRef(null);
     const runningModulesRef = useRef(runningModules);
+    // Only the newest load may commit: a StrictMode replay and overlapping poll ticks
+    // share one request promise, so every attached handler would otherwise re-fire.
+    const loadGenerationRef = useRef(0);
 
     const BASE_INTERVAL = 2000;
     const MAX_INTERVAL = 30000;
@@ -53,61 +53,60 @@ export const useModuleExecution = () => {
      * inside .then/.catch callbacks — satisfies react-hooks/set-state-in-effect
      * when this is invoked from an effect body.
      */
-    const loadRunStates = useCallback(
-        () =>
-            modulesAPI
-                .fetchRunStates({ useCache: false })
-                .then(data => {
-                    if (!isMountedRef.current) return;
-                    const newStates = data?.data || {};
-                    setRunStates(newStates);
+    const loadRunStates = useCallback(() => {
+        const generation = (loadGenerationRef.current += 1);
+        return modulesAPI
+            .fetchRunStates({ useCache: false })
+            .then(data => {
+                if (!isMountedRef.current || generation !== loadGenerationRef.current) return;
+                const newStates = data?.data || {};
+                setRunStates(newStates);
 
-                    // Detect modules that finished running
-                    const currentRunning = runningModulesRef.current;
-                    if (currentRunning.size > 0) {
-                        const finished = [];
-                        for (const modKey of currentRunning) {
-                            const modState = newStates[modKey];
-                            if (!modState || modState.status !== 'running') {
-                                finished.push(modKey);
-                                if (modState?.status === 'success') {
-                                    toast.success(`${modKey} completed successfully`);
-                                } else if (modState?.status === 'error') {
-                                    toast.error(`${modKey} failed`);
-                                }
+                // Detect modules that finished running
+                const currentRunning = runningModulesRef.current;
+                if (currentRunning.size > 0) {
+                    const finished = [];
+                    for (const modKey of currentRunning) {
+                        const modState = newStates[modKey];
+                        if (!modState || modState.status !== 'running') {
+                            finished.push(modKey);
+                            if (modState?.status === 'success') {
+                                toast.success(`${modKey} completed successfully`);
+                            } else if (modState?.status === 'error') {
+                                toast.error(`${modKey} failed`);
                             }
                         }
-                        if (finished.length > 0) {
-                            setRunningModules(prev => {
-                                const newSet = new Set(prev);
-                                finished.forEach(k => newSet.delete(k));
-                                return newSet;
-                            });
-                        }
                     }
+                    if (finished.length > 0) {
+                        setRunningModules(prev => {
+                            const newSet = new Set(prev);
+                            finished.forEach(k => newSet.delete(k));
+                            return newSet;
+                        });
+                    }
+                }
 
-                    // Reset backoff on success
-                    if (consecutiveErrorsRef.current > 0) {
-                        consecutiveErrorsRef.current = 0;
-                        restartPollingWithInterval(BASE_INTERVAL);
+                // Reset backoff on success
+                if (consecutiveErrorsRef.current > 0) {
+                    consecutiveErrorsRef.current = 0;
+                    restartPollingWithInterval(BASE_INTERVAL);
+                }
+            })
+            .catch(error => {
+                if (isMountedRef.current && generation === loadGenerationRef.current) {
+                    consecutiveErrorsRef.current += 1;
+                    // Exponential backoff: 2s, 4s, 8s, 16s, 30s max
+                    const newInterval = Math.min(
+                        BASE_INTERVAL * Math.pow(2, consecutiveErrorsRef.current),
+                        MAX_INTERVAL
+                    );
+                    if (newInterval !== currentIntervalRef.current) {
+                        restartPollingWithInterval(newInterval);
                     }
-                })
-                .catch(error => {
-                    if (isMountedRef.current) {
-                        consecutiveErrorsRef.current += 1;
-                        // Exponential backoff: 2s, 4s, 8s, 16s, 30s max
-                        const newInterval = Math.min(
-                            BASE_INTERVAL * Math.pow(2, consecutiveErrorsRef.current),
-                            MAX_INTERVAL
-                        );
-                        if (newInterval !== currentIntervalRef.current) {
-                            restartPollingWithInterval(newInterval);
-                        }
-                    }
-                    console.error('Failed to load run states:', error);
-                }),
-        [restartPollingWithInterval, toast]
-    );
+                }
+                console.error('Failed to load run states:', error);
+            });
+    }, [restartPollingWithInterval, toast]);
 
     // Keep refs in sync for interval callbacks (in effects to avoid writes during render)
     useEffect(() => {
@@ -184,6 +183,9 @@ export const useModuleExecution = () => {
 
     // Initial load and cleanup
     useEffect(() => {
+        // Re-arm: StrictMode runs setup→cleanup→setup, and a toast identity change
+        // re-runs this, so without it the flag stays false and every response is dropped.
+        isMountedRef.current = true;
         loadRunStates();
         return () => {
             isMountedRef.current = false;
@@ -207,7 +209,6 @@ export const useModuleExecution = () => {
     return {
         runningModules,
         runStates,
-        polling,
         executeModule,
         refreshData: loadRunStates,
         // Reflect cross-page truth: a job started elsewhere (Dashboard, Jobs page,

@@ -10,7 +10,9 @@ const MAX_RECENT = 8;
 export function useRecentSearches() {
     const [recentSearches, setRecentSearches] = useState(() => {
         try {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            // JSON.parse accepts {} and "term" too; a non-array makes prev.filter throw.
+            return Array.isArray(parsed) ? parsed.filter(s => typeof s === 'string') : [];
         } catch {
             return [];
         }
