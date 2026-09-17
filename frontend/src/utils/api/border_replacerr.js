@@ -50,9 +50,8 @@ export const borderReplacerrAPI = {
     },
 
     /**
-     * Build a preview-composite URL for `<img src>`, which cannot send an
-     * Authorization header. Carries the SHORT-LIVED STREAM TOKEN from
-     * withAuthQuery(), never the session JWT — a URL leaks into logs and history.
+     * Build a preview URL for `<img src>` with the short-lived stream token.
+     * Never the session JWT: a URL leaks into logs and history.
      */
     fileUrl: token => {
         const qs = withAuthQuery();

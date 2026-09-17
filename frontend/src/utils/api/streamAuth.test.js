@@ -64,6 +64,28 @@ describe('clearStreamToken invalidates an in-flight mint', () => {
         expect(onChange).not.toHaveBeenCalled();
     });
 
+    it('does not clear a newly installed JWT when a stale 401 settles', async () => {
+        const pending = deferred();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() => pending.promise)
+        );
+
+        const inFlight = streamAuth.ensureStreamToken();
+        streamAuth.clearStreamToken();
+        // The user signs back in while the old request is still open.
+        localStorage.setItem('chub-auth-token', 'fresh-jwt');
+
+        pending.settle({
+            ok: false,
+            status: 401,
+            json: async () => ({ error_code: 'AUTH_TOKEN_INVALID' }),
+        });
+        await inFlight;
+
+        expect(localStorage.getItem('chub-auth-token')).toBe('fresh-jwt');
+    });
+
     it('lets a mint started after the clear still commit', async () => {
         // The stale chain's finally must not null the newer request.
         const stale = deferred();

@@ -20,6 +20,10 @@ const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABA
 /**
  * Posters API client for artwork management
  */
+// Paging params only: 0 is legitimate, but null/''/true all coerce to a finite
+// number, so the type has to be checked rather than Number(value).
+const isFiniteNumber = value => typeof value === 'number' && Number.isFinite(value);
+
 export const postersAPI = {
     /**
      * Download a poster file to the user's disk.
@@ -379,9 +383,10 @@ export const postersAPI = {
         if (options.query) params.set('query', options.query);
         if (options.style) params.set('style', options.style);
         if (options.image_type) params.set('image_type', options.image_type);
-        // Number.isFinite, not truthiness: an explicit 0 offset is a real value.
-        if (Number.isFinite(Number(options.limit))) params.set('limit', options.limit);
-        if (Number.isFinite(Number(options.offset))) params.set('offset', options.offset);
+        // Explicit 0 is a real value, but null/''/true all coerce to a finite
+        // number — so test the type, never Number(value).
+        if (isFiniteNumber(options.limit)) params.set('limit', options.limit);
+        if (isFiniteNumber(options.offset)) params.set('offset', options.offset);
         const url = params.toString() ? `/posters/browse?${params}` : '/posters/browse';
         return apiCore.get(url, opts);
     },
@@ -627,9 +632,8 @@ export const postersAPI = {
     /** List poster variants grouped by media item (Plex Metadata scan). */
     listPlexMetadataByMedia: (params = {}) => {
         const qs = new URLSearchParams();
-        // Number.isFinite, not truthiness: an explicit 0 offset is a real value.
-        if (Number.isFinite(Number(params.limit))) qs.set('limit', params.limit);
-        if (Number.isFinite(Number(params.offset))) qs.set('offset', params.offset);
+        if (isFiniteNumber(params.limit)) qs.set('limit', params.limit);
+        if (isFiniteNumber(params.offset)) qs.set('offset', params.offset);
         if (params.only_bloat) qs.set('only_bloat', 'true');
         if (params.force) qs.set('force', 'true');
         if (params.media_type && params.media_type !== 'all')
@@ -652,9 +656,8 @@ export const postersAPI = {
     /** Flat list of bloat variants, largest first (cache-only read). */
     listPlexMetadataBloat: (params = {}) => {
         const qs = new URLSearchParams();
-        // Number.isFinite, not truthiness: an explicit 0 offset is a real value.
-        if (Number.isFinite(Number(params.limit))) qs.set('limit', params.limit);
-        if (Number.isFinite(Number(params.offset))) qs.set('offset', params.offset);
+        if (isFiniteNumber(params.limit)) qs.set('limit', params.limit);
+        if (isFiniteNumber(params.offset)) qs.set('offset', params.offset);
         return apiCore.get(`/posters/plex-metadata/bloat?${qs.toString()}`);
     },
 

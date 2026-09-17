@@ -152,6 +152,9 @@ export async function ensureStreamToken() {
             headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
         })
             .then(r => {
+                // Before handleAuthFailure, not after: a stale 401 would otherwise
+                // clear a JWT installed since the clear and redirect to /login.
+                if (generation !== mintGeneration) return null;
                 if (r.ok) return r.json();
                 return r
                     .json()
@@ -166,7 +169,7 @@ export async function ensureStreamToken() {
             // gate open and the loop free to re-arm during an outage.
             .catch(() => null)
             .then(d => {
-                // Cleared while this was in flight: commit nothing.
+                // Re-checked: the retry gate and backoff below are side effects too.
                 if (generation !== mintGeneration) return '';
                 const token = d?.data?.token || '';
                 const ttl = (d?.data?.expires_in || 0) * 1000;

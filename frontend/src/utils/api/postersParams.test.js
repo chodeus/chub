@@ -48,3 +48,32 @@ describe('explicit zero paging values survive', () => {
         expect(lastUrl()).not.toContain('offset=');
     });
 });
+
+describe('coercible non-numbers are rejected, not serialized', () => {
+    // Number(null), Number('') and Number(true) are all finite, so a coercion
+    // check would send limit=null, limit= and limit=true.
+    it.each([
+        ['null', null],
+        ['an empty string', ''],
+        ['a boolean', true],
+    ])('drops %s from browsePosters', (_, value) => {
+        postersAPI.browsePosters({ limit: value, offset: value });
+
+        expect(lastUrl()).not.toContain('limit=');
+        expect(lastUrl()).not.toContain('offset=');
+    });
+
+    it('drops a non-numeric string rather than sending it', () => {
+        postersAPI.listPlexMetadataByMedia({ limit: '25', offset: 'abc' });
+
+        expect(lastUrl()).not.toContain('limit=');
+        expect(lastUrl()).not.toContain('offset=');
+    });
+
+    it('drops coercible values from listPlexMetadataBloat too', () => {
+        postersAPI.listPlexMetadataBloat({ limit: null, offset: '' });
+
+        expect(lastUrl()).not.toContain('limit=');
+        expect(lastUrl()).not.toContain('offset=');
+    });
+});
