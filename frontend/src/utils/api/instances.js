@@ -205,7 +205,9 @@ export const instancesAPI = {
      * @returns {Promise<Array>} List of Plex libraries
      */
     fetchPlexLibraries: (instanceName, options = {}) => {
-        return apiCore.get(`/plex/${instanceName}/libraries`, {
+        // A name may hold `/`, `?` or `#`, which would re-shape the URL before the
+        // backend ever validates it.
+        return apiCore.get(`/plex/${encodeURIComponent(instanceName)}/libraries`, {
             useCache: true,
             cacheTTL: 10 * 60 * 1000, // 10 minutes cache for library data
             ...options,
@@ -234,14 +236,16 @@ export const instancesAPI = {
      * @returns {Promise<Object>} Update response
      */
     updateInstanceLibraries: async (instanceName, enabledLibraries) => {
-        const result = await apiCore.patch(`/plex/${instanceName}/libraries`, {
+        // Encode once and reuse: the cache key below must match the URL fetched.
+        const encodedName = encodeURIComponent(instanceName);
+        const result = await apiCore.patch(`/plex/${encodedName}/libraries`, {
             enabled_libraries: enabledLibraries,
         });
         // The catalog + per-instance library lists are cached under /plex/*,
         // which the instance-path mutation clear doesn't touch — drop them so
         // every picker and the opt-in UI refetch the new enabled state.
         apiCore.clearCache('/plex/libraries');
-        apiCore.clearCache(`/plex/${instanceName}/libraries`);
+        apiCore.clearCache(`/plex/${encodedName}/libraries`);
         return result;
     },
 };

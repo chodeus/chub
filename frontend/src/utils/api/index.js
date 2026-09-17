@@ -21,7 +21,8 @@ import { labelarrAPI } from './labelarr.js';
 import { nestarrAPI } from './nestarr.js';
 import { webhooksAPI } from './webhooks.js';
 
-// Re-export everything
+// Re-export the clients below. Others (border_replacerr, cl2k_maker,
+// posterSelfHeal, streamAuth) are imported directly from their modules.
 export { apiCore, APIError };
 export { configAPI };
 export { modulesAPI };
@@ -37,10 +38,7 @@ export { labelarrAPI };
 export { nestarrAPI };
 export { webhooksAPI };
 
-/**
- * Consolidated API client for convenience
- * All domain APIs accessible through a single object
- */
+/** The clients above, reachable through one object. Not an exhaustive API index. */
 export const api = {
     core: apiCore,
     config: configAPI,

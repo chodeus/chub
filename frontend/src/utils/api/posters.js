@@ -379,8 +379,9 @@ export const postersAPI = {
         if (options.query) params.set('query', options.query);
         if (options.style) params.set('style', options.style);
         if (options.image_type) params.set('image_type', options.image_type);
-        if (options.limit) params.set('limit', options.limit);
-        if (options.offset) params.set('offset', options.offset);
+        // Number.isFinite, not truthiness: an explicit 0 offset is a real value.
+        if (Number.isFinite(Number(options.limit))) params.set('limit', options.limit);
+        if (Number.isFinite(Number(options.offset))) params.set('offset', options.offset);
         const url = params.toString() ? `/posters/browse?${params}` : '/posters/browse';
         return apiCore.get(url, opts);
     },
@@ -626,8 +627,9 @@ export const postersAPI = {
     /** List poster variants grouped by media item (Plex Metadata scan). */
     listPlexMetadataByMedia: (params = {}) => {
         const qs = new URLSearchParams();
-        if (params.limit) qs.set('limit', params.limit);
-        if (params.offset) qs.set('offset', params.offset);
+        // Number.isFinite, not truthiness: an explicit 0 offset is a real value.
+        if (Number.isFinite(Number(params.limit))) qs.set('limit', params.limit);
+        if (Number.isFinite(Number(params.offset))) qs.set('offset', params.offset);
         if (params.only_bloat) qs.set('only_bloat', 'true');
         if (params.force) qs.set('force', 'true');
         if (params.media_type && params.media_type !== 'all')
@@ -650,8 +652,9 @@ export const postersAPI = {
     /** Flat list of bloat variants, largest first (cache-only read). */
     listPlexMetadataBloat: (params = {}) => {
         const qs = new URLSearchParams();
-        if (params.limit) qs.set('limit', params.limit);
-        if (params.offset) qs.set('offset', params.offset);
+        // Number.isFinite, not truthiness: an explicit 0 offset is a real value.
+        if (Number.isFinite(Number(params.limit))) qs.set('limit', params.limit);
+        if (Number.isFinite(Number(params.offset))) qs.set('offset', params.offset);
         return apiCore.get(`/posters/plex-metadata/bloat?${qs.toString()}`);
     },
 

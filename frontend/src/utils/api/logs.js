@@ -37,16 +37,13 @@ export const logsAPI = {
     fetchLogFiles: async (moduleName, forceRefresh = false) => {
         if (!moduleName) return [];
 
-        try {
-            const response = await apiCore.get(`/logs/${moduleName}`, {
-                useCache: !forceRefresh,
-                cacheTTL: 5 * 60 * 1000, // 5 minutes
-            });
-            return response.data?.files || [];
-        } catch (error) {
-            console.error('Failed to fetch log files:', error);
-            return [];
-        }
+        // Let failures reject: useLogFiles already sets an error state, and
+        // swallowing to [] renders "no log files" for a request that broke.
+        const response = await apiCore.get(`/logs/${moduleName}`, {
+            useCache: !forceRefresh,
+            cacheTTL: 5 * 60 * 1000, // 5 minutes
+        });
+        return response.data?.files || [];
     },
 
     /**
@@ -77,12 +74,14 @@ export const logsAPI = {
                 headers,
                 signal,
             });
-            if (!res.ok) return '';
+            // Reject like downloadLogFile does: '' is a legitimate empty file, so
+            // returning it for a failure hid the error from useLogContent's catch.
+            if (!res.ok) throw new Error(`Log request failed with status ${res.status}`);
             return await res.text();
         } catch (error) {
-            if (error?.name === 'AbortError') throw error;
-            console.error('Failed to fetch log content:', error);
-            return '';
+            // AbortError is the caller cancelling, not a failure worth logging.
+            if (error?.name !== 'AbortError') console.error('Failed to fetch log content:', error);
+            throw error;
         }
     },
 

@@ -50,11 +50,9 @@ export const borderReplacerrAPI = {
     },
 
     /**
-     * Build the URL for a generated preview composite. The browser fetches
-     * the bytes through the standard <img> mechanism, which can't send an
-     * Authorization header — so we append the JWT as a `token` query param
-     * (the auth middleware accepts both header- and query-param tokens).
-     * Mirrors the same pattern postersAPI.getPreviewUrl uses.
+     * Build a preview-composite URL for `<img src>`, which cannot send an
+     * Authorization header. Carries the SHORT-LIVED STREAM TOKEN from
+     * withAuthQuery(), never the session JWT — a URL leaks into logs and history.
      */
     fileUrl: token => {
         const qs = withAuthQuery();

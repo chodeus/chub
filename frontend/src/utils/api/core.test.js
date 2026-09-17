@@ -67,6 +67,9 @@ describe('apiCore.combineSignals relay fallback (no AbortSignal.any)', () => {
     });
     afterEach(() => {
         AbortSignal.any = saved;
+        // Here, not in the test body: a failing assertion would skip it and leak
+        // the stubbed fetch into the next test, which then fails for no reason.
+        vi.unstubAllGlobals();
     });
 
     it('still aborts from either source', () => {
@@ -105,7 +108,6 @@ describe('apiCore.combineSignals relay fallback (no AbortSignal.any)', () => {
         await apiCore.makeRequest('/ok', { signal: caller.signal });
 
         expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
-        vi.unstubAllGlobals();
     });
 
     it('does not accumulate listeners across many SUCCESSFUL requests', async () => {
@@ -122,7 +124,6 @@ describe('apiCore.combineSignals relay fallback (no AbortSignal.any)', () => {
         }
         expect(add).toHaveBeenCalledTimes(4);
         expect(remove).toHaveBeenCalledTimes(4);
-        vi.unstubAllGlobals();
     });
 
     it('does not accumulate listeners on a caller signal reused across requests', () => {
