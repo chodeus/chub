@@ -23,9 +23,8 @@ export default {
             Component: PosterHealReviewPage,
         },
     ],
-    // Without this the page is reachable ONLY from a badge on the CL2K Maker page
-    // that renders when the open count is non-zero — so a run that reports work
-    // left for review can point at a page with no way to reach it.
+    // Without this the page is reachable only from a CL2K Maker badge shown when the
+    // open count is non-zero — a run reporting work left could point nowhere.
     navChildren: [
         {
             parentId: 'poster',

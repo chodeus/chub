@@ -1,8 +1,5 @@
 @layer components {
-    /* ===========================================
-     CHUB pastel badge bubbles (dashboard quick-start icons)
-     Five variants map to --badge-1..5-bg/fg theme tokens.
-     =========================================== */
+    /* Five variants mapping to the --badge-1..5-bg/fg theme tokens. */
 
     .badge-bubble {
         display: inline-flex;

@@ -1,16 +1,4 @@
-/**
- * Spinner - Reusable loading spinner component
- *
- * A simple, reusable spinner that can be used in buttons, forms,
- * Suspense fallbacks, or anywhere a loading indicator is needed.
- *
- * @param {Object} props - Component props
- * @param {string} [props.size='medium'] - Spinner size: 'small', 'medium', 'large'
- * @param {string} [props.text] - Optional text to display below spinner
- * @param {string} [props.className] - Additional CSS classes
- * @param {boolean} [props.center=false] - Center the spinner with padding
- * @returns {JSX.Element} Spinner component
- */
+/** Loading spinner for buttons, forms and Suspense fallbacks. */
 const Spinner = ({ size = 'medium', text, className = '', center = false }) => {
     const sizeMap = {
         small: 'w-4 h-4',

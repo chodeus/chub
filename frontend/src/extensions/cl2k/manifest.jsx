@@ -12,9 +12,8 @@ import {
 
 const Cl2kMakerPage = React.lazy(() => import('../../pages/poster/Cl2kMakerPage.jsx'));
 
-// Custom field types for the Save Locations redesign. Registered at module
-// scope — manifests are eagerly imported at app init (src/extensions/index.js),
-// so the types exist before ModuleSettingsPage first resolves them.
+// Registered at module scope: manifests are eagerly imported at app init, so these
+// types exist before ModuleSettingsPage first resolves them.
 FieldRegistry.register('cl2k_local_folders', Cl2kLocalFoldersField);
 FieldRegistry.register('cl2k_gdrive_uploads', Cl2kGdriveUploadsField);
 FieldRegistry.register('cl2k_coverage', Cl2kCoverageField);
@@ -45,12 +44,8 @@ export default {
     settingsModules: [{ after: 'border_replacerr', entry: CL2K_MAKER_MODULE_ENTRY }],
     configModules: [{ after: 'border_replacerr', key: 'cl2k_maker' }],
     capabilities: {
-        // Extra Unmatched Assets row action: jump into the maker with the row's
-        // ids prefilled. Shown whenever the row has ANY of tmdb/tvdb/imdb — a
-        // TVDB-only Sonarr show (no TMDB cross-link) still gets the link; the
-        // maker resolves a tmdb_id on entry when one exists. The optional
-        // `asset` arg (from the Additional-artwork view) maps the missing
-        // artwork type to the maker tab so it opens ready to build it.
+        // Shown whenever the row has ANY of tmdb/tvdb/imdb, so a TVDB-only Sonarr show
+        // still gets the link. The optional `asset` arg picks the maker tab to open.
         'unmatchedAssets.rowAction': (item, asset) => {
             if (!(item.tmdb_id || item.tvdb_id || item.imdb_id)) return null;
             const ASSET_TAB = { background: 'background', logo: 'logo', squareart: 'square' };

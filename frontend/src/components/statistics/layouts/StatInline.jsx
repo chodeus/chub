@@ -1,35 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * StatInline - Horizontal inline layout for statistics cards
- *
- * Displays StatCard components in a horizontal row with
- * optional wrapping for responsive layouts.
- *
- * @param {Object} props
- * @param {React.ReactNode} props.children - StatCard components
- * @param {string} [props.gap="4"] - Gap size: "2", "3", "4", "6"
- * @param {boolean} [props.wrap=true] - Allow wrapping on small screens
- * @param {string} [props.className=""] - Additional CSS classes
- * @returns {JSX.Element}
- *
- * @example
- * // Inline stats for header/footer
- * <StatInline>
- *   <StatCard label="Users" value={1234} variant="minimal" />
- *   <StatCard label="Orders" value={567} variant="minimal" />
- * </StatInline>
- *
- * @example
- * // No wrapping (horizontal scroll on small screens)
- * <StatInline wrap={false}>
- *   <StatCard label="Q1" value={1000} />
- *   <StatCard label="Q2" value={1200} />
- *   <StatCard label="Q3" value={1400} />
- *   <StatCard label="Q4" value={1600} />
- * </StatInline>
- */
+/** StatCards in a horizontal row; `wrap={false}` scrolls instead of wrapping. */
 export const StatInline = React.memo(({ children, gap = '4', wrap = true, className = '' }) => {
     if (!children) return null;
 

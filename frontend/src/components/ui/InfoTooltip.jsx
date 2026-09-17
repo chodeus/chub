@@ -1,19 +1,7 @@
 import React, { useId, useState } from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * Inline info affordance: a small ⓘ that reveals longer help text on hover or
- * keyboard focus. Sits next to a field label so the inline description can stay
- * short while the full guidance (the field's `helpText`) stays one reveal away.
- * Renders nothing when there is no text to show.
- *
- * Hover and focus-within alone left every field's helpText unreachable on a
- * touch screen, so the button also toggles it outright.
- *
- * The 15px glyph sits in a real 24px box; touch-expand takes the coarse-pointer
- * hit area to 44px, which reaches ~6px into the control below (a mis-tap opens
- * the tooltip rather than focusing the field — the honest trade for a 15px icon).
- */
+/** Inline ⓘ that reveals help text on hover, focus, or click; renders nothing without `text`. */
 const InfoTooltip = ({ text, label = 'More info' }) => {
     const [open, setOpen] = useState(false);
     const tooltipId = useId();

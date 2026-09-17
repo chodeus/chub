@@ -1,28 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * ButtonIcon - Icon primitive using Material Symbols
- *
- * Responsibilities:
- * - Render Material Symbols icon
- * - Size variants matching button sizes
- * - Icon-only or icon with text spacing
- * - ARIA hidden for decorative icons
- * - Theme-aware icon colors (inherits from button)
- *
- * Size Scale Philosophy:
- * - Meaningful differentiation between sizes (12-16px gaps)
- * - Material Design guidelines: 24px minimum for toolbar icons
- * - Accessibility: Larger sizes improve visibility for users with visual differences
- *
- * @param {Object} props - Component props
- * @param {string} props.icon - Material Symbols icon name
- * @param {string} props.size - Icon size (small, medium, large)
- * @param {string} props.className - Additional CSS classes
- * @param {boolean} props['aria-hidden'] - Hide from screen readers
- * @returns {JSX.Element}
- */
+/** Material Symbols icon sized to the button scale; aria-hidden by default. */
 export const ButtonIcon = React.memo(
     ({ icon, size = 'medium', className = '', 'aria-hidden': ariaHidden = true }) => {
         // Map size to text size utilities (Material Symbols uses font-size)

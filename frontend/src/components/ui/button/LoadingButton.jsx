@@ -2,24 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { ButtonBase, ButtonIcon, ButtonText, ButtonSpinner } from './primitives';
 
-/**
- * LoadingButton - Button with loading state composer
- *
- * Composes: ButtonBase + ButtonIcon (optional) + ButtonText + ButtonSpinner (when loading)
- *
- * @param {Object} props - Component props
- * @param {React.ReactNode} props.children - Button label content
- * @param {Function} props.onClick - Click handler
- * @param {boolean} props.loading - Loading state
- * @param {string} props.loadingText - Text to show when loading
- * @param {string} props.variant - Button variant
- * @param {string} props.size - Button size
- * @param {boolean} props.disabled - Disabled state
- * @param {boolean} props.fullWidth - Full width button
- * @param {string} props.icon - Optional icon (hidden during loading)
- * @param {string} props.className - Additional classes
- * @returns {JSX.Element}
- */
+/** Button that swaps its icon for a spinner while `loading`. */
 export const LoadingButton = React.memo(
     ({
         children,

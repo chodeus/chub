@@ -1,7 +1,5 @@
-// Read-only Module Settings strip: which save locations the healer assesses for
-// id/title/year drift. Carries no config value — it never calls onChange, so its
-// key never lands in formData. Renders INSIDE ModuleSettingsPage's own section
-// card, so it must not draw a second outer card.
+// Read-only strip: never calls onChange, so its key never lands in formData. Renders
+// INSIDE ModuleSettingsPage's section card, so it must not draw a second outer card.
 import React, { useEffect, useState } from 'react';
 import { posterSelfHealAPI } from '../../utils/api/posterSelfHeal.js';
 

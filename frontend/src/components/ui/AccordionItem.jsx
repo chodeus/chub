@@ -1,28 +1,10 @@
 import { useState, useContext, createContext } from 'react';
 
-/**
- * Context for sharing accordion state between AccordionItem and subcomponents
- * @typedef {Object} AccordionItemContextValue
- * @property {boolean} isExpanded - Current expanded state
- * @property {Function} handleToggle - Toggle handler function
- */
+/** Shares { isExpanded, handleToggle } with the Header and Body subcomponents. */
 const AccordionItemContext = createContext(null);
 
-/**
- * AccordionItem - Manages accordion state and animation
- *
- * Supports both controlled and uncontrolled modes:
- * - Uncontrolled: Use `defaultExpanded` prop, component manages state internally
- * - Controlled: Use `isExpanded` and `onToggle` props, parent manages state
- *
- * @param {Object} props - Component props
- * @param {React.ReactNode} props.children - Must contain Header and Body subcomponents
- * @param {boolean} [props.defaultExpanded=false] - Initial expanded state (uncontrolled mode)
- * @param {boolean} [props.isExpanded] - Controlled expanded state
- * @param {Function} [props.onToggle] - Callback when toggled: (isExpanded: boolean) => void
- * @param {string} [props.className] - Additional CSS classes for item container
- * @returns {JSX.Element} AccordionItem component
- */
+/** Accordion row: uncontrolled via `defaultExpanded`, or controlled by passing
+ *  `isExpanded` together with `onToggle`. */
 export const AccordionItem = ({
     children,
     defaultExpanded = false,
@@ -57,18 +39,7 @@ export const AccordionItem = ({
     );
 };
 
-/**
- * AccordionItem.Header - Renders header content with click handling
- *
- * Supports both direct children and render prop patterns:
- * - Direct: `<Header>Content</Header>`
- * - Render prop: `<Header>{({ isExpanded }) => <div>...</div>}</Header>`
- *
- * @param {Object} props - Component props
- * @param {React.ReactNode|Function} props.children - Header content or render function
- * @param {string} [props.className] - Additional CSS classes for header
- * @returns {JSX.Element} Header component
- */
+/** Header row; `children` may be a render prop receiving { isExpanded }. */
 const AccordionHeader = ({ children, className = '' }) => {
     const context = useContext(AccordionItemContext);
 
@@ -107,14 +78,7 @@ const AccordionHeader = ({ children, className = '' }) => {
 AccordionHeader.displayName = 'AccordionItem.Header';
 AccordionItem.Header = AccordionHeader;
 
-/**
- * AccordionItem.Body - Renders expanded content with animation
- *
- * @param {Object} props - Component props
- * @param {React.ReactNode} props.children - Body content
- * @param {string} [props.className] - Additional CSS classes for body
- * @returns {JSX.Element} Body component
- */
+/** Body content; aria-hidden while the item is collapsed. */
 const AccordionBody = ({ children, className = '' }) => {
     const context = useContext(AccordionItemContext);
 

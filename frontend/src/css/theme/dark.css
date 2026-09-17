@@ -1,12 +1,4 @@
-/**
- * CHUB Dark Theme
- *
- * Indigo-led cool palette (sl1ckbe3ts) tuned for low-light viewing. Brighter
- * indigo primary on deep indigo surfaces; pastel badge accents reused
- * (with darker foreground swapped where needed for contrast).
- *
- * Theme Application: Applied via data-theme="dark" attribute on <html> element
- */
+/* Dark theme tokens, applied via data-theme="dark" on <html>. */
 
 :root,
 [data-theme='dark'] {

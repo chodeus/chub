@@ -12,10 +12,6 @@ const BREAKPOINTS = {
 // Create context
 const UIStateContext = createContext();
 
-/**
- * Custom hook to use UI state context
- * @returns {Object} UI state context value with methods and state
- */
 export const useUIState = () => {
     const context = useContext(UIStateContext);
     if (!context) {
@@ -24,10 +20,6 @@ export const useUIState = () => {
     return context;
 };
 
-/**
- * Get current viewport size
- * @returns {Object} Viewport dimensions and breakpoint info
- */
 const getViewportInfo = () => {
     if (typeof window === 'undefined') {
         return {
@@ -76,9 +68,6 @@ export const UIStateProvider = ({
     });
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    /**
-     * Persist UI state to localStorage
-     */
     const persistState = useCallback(
         state => {
             if (!persistUIState || typeof window === 'undefined') return;
@@ -95,9 +84,6 @@ export const UIStateProvider = ({
         [persistUIState]
     );
 
-    /**
-     * Handle viewport changes
-     */
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
@@ -115,9 +101,6 @@ export const UIStateProvider = ({
         return () => window.removeEventListener('resize', handleResize);
     }, [mobileMenuOpen]);
 
-    /**
-     * Toggle sidebar collapsed state
-     */
     const toggleSidebar = useCallback(() => {
         setSidebarCollapsed(prev => {
             const newState = !prev;
@@ -126,10 +109,6 @@ export const UIStateProvider = ({
         });
     }, [persistState]);
 
-    /**
-     * Set sidebar collapsed state
-     * @param {boolean} collapsed - Whether sidebar should be collapsed
-     */
     const setSidebarCollapsedState = useCallback(
         collapsed => {
             setSidebarCollapsed(collapsed);
@@ -138,16 +117,10 @@ export const UIStateProvider = ({
         [persistState]
     );
 
-    /**
-     * Toggle mobile menu
-     */
     const toggleMobileMenu = useCallback(() => {
         setMobileMenuOpen(prev => !prev);
     }, []);
 
-    /**
-     * Close mobile menu
-     */
     const closeMobileMenu = useCallback(() => {
         setMobileMenuOpen(false);
     }, []);

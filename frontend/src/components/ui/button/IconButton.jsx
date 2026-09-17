@@ -2,25 +2,8 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { ButtonBase, ButtonIcon } from './primitives';
 
-/**
- * IconButton - Icon-only button composer
- *
- * Composes: ButtonBase + ButtonIcon
- *
- * CALLER-CONTROL: Callers specify complete styling via className
- * Default: aspect-square (square button) when no className provided
- * Override: Provide className for complete control (rectangular, etc.)
- *
- * @param {Object} props - Component props
- * @param {string} props.icon - Material Symbols icon name
- * @param {Function} props.onClick - Click handler
- * @param {string} props.variant - Button variant
- * @param {string} props.size - Button size
- * @param {boolean} props.disabled - Disabled state
- * @param {string} props['aria-label'] - Accessibility label (required for icon-only)
- * @param {string} props.className - Complete styling (overrides default aspect-square)
- * @returns {JSX.Element}
- */
+/** Icon-only button. A `className` REPLACES the default aspect-square entirely,
+ *  and `aria-label` is required because there is no text. */
 export const IconButton = React.memo(
     ({
         icon,

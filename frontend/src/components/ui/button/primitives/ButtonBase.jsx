@@ -1,56 +1,8 @@
 import React, { useCallback } from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * ButtonBase - Core button primitive with interaction and styling
- *
- * Responsibilities:
- * - Base <button> element with semantic HTML
- * - Focus management and keyboard navigation
- * - Disabled state handling
- * - Click interaction
- * - Size variants (small, medium, large)
- * - Variant styles (primary, secondary, success, danger, ghost, warning, info, muted, surface)
- * - Utility class overrides for edge cases (bgClass, textClass, sizeClass, hoverClass)
- * - Full width option
- * - ARIA attributes for accessibility
- * - Theme-aware colors via utility classes
- *
- * Usage Examples:
- *
- * // Common case: variant only
- * <ButtonBase variant="primary">Save</ButtonBase>
- *
- * // Extended variants: theme colors
- * <ButtonBase variant="warning">Warning Action</ButtonBase>
- * <ButtonBase variant="info">Info Action</ButtonBase>
- *
- * // Utility overrides: edge cases
- * <ButtonBase variant="primary" bgClass="bg-surface-elevated">Custom BG</ButtonBase>
- * <ButtonBase variant="ghost" sizeClass="px-8 py-5 text-2xl">Large Custom</ButtonBase>
- * <ButtonBase variant="secondary" hoverClass="hover:bg-warning-bg">Custom Hover</ButtonBase>
- *
- * // Precedence: utility overrides win
- * <ButtonBase variant="primary" bgClass="bg-warning" textClass="text-fg">
- *   // Uses warning background and primary text, NOT primary variant colors
- * </ButtonBase>
- *
- * @param {Object} props - Component props
- * @param {ReactNode} props.children - Button content (icons, text, spinner)
- * @param {Function} props.onClick - Click handler
- * @param {boolean} props.disabled - Disabled state
- * @param {string} props.variant - Button variant (primary, secondary, success, danger, ghost, warning, info, muted, surface)
- * @param {string} props.size - Button size (small, medium, large) - provides guidance for common cases
- * @param {string} props.bgClass - Background utility override (e.g., 'bg-surface-elevated', 'bg-warning')
- * @param {string} props.textClass - Text color utility override (e.g., 'text-warning', 'text-fg')
- * @param {string} props.sizeClass - Size utility override (e.g., 'px-8 py-4 text-xl', 'min-h-12 px-6')
- * @param {string} props.hoverClass - Hover state utility override (e.g., 'hover:bg-warning-bg', 'hover:shadow-lg')
- * @param {boolean} props.fullWidth - Expand to full container width
- * @param {string} props.type - Button type (button, submit, reset)
- * @param {string} props.className - Additional CSS classes (final catch-all)
- * @param {string} props['aria-label'] - Accessibility label
- * @returns {JSX.Element}
- */
+/** Core button primitive; `variant` supplies the styling.
+ *  The bgClass/textClass/sizeClass/hoverClass overrides WIN over the variant. */
 export const ButtonBase = React.memo(
     ({
         children,

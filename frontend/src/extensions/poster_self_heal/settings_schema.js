@@ -1,6 +1,5 @@
-// poster_self_heal — Module Settings schema fragment.
-// Spliced into SETTINGS_SCHEMA / SETTINGS_MODULES by manifest.jsx.
-// Runnable (no runnable:false): it runs on a schedule to detect drift.
+// poster_self_heal schema fragment. Runnable (no `runnable: false`): it runs on a
+// schedule to detect id/title/year drift.
 
 export const POSTER_SELF_HEAL_SCHEMA = {
     key: 'poster_self_heal',

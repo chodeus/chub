@@ -2,13 +2,8 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Button } from './button';
 
-/**
- * Pagination — Previous / Next + jump-to-page select.
- *
- * Renders nothing when totalPages <= 1, so callers don't need to wrap it in
- * a `totalPages > 1 && ...` guard. The jump-to-page <select> generates one
- * <option> per page; native selects scale fine into the low thousands.
- */
+/** Previous/Next plus a jump-to-page select. Renders nothing when totalPages <= 1,
+ *  so callers need no guard; the select scales into the low thousands. */
 const Pagination = ({ currentPage, totalPages, onPageChange, className = '' }) => {
     if (!totalPages || totalPages <= 1) return null;
 

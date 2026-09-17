@@ -1,14 +1,7 @@
 import React from 'react';
 import { LogLine } from './LogLine';
 
-/**
- * LogBlock - Render block of log lines (multi-line entries like stack traces)
- * @param {Object} props
- * @param {Array<string>} props.lines - Log lines in block
- * @param {string} props.levelClass - Block log level (for styling)
- * @param {string} props.searchTerm - Search term for highlighting
- * @returns {JSX.Element}
- */
+/** One block of log lines — a multi-line entry such as a stack trace. */
 export const LogBlock = React.memo(
     ({ lines, levelClass, searchTerm }) => {
         return (
