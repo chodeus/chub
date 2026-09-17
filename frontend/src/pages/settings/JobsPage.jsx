@@ -359,8 +359,6 @@ export const JobsPage = () => {
             <PageHeader
                 title="Jobs"
                 description="Queued, running and completed runs — retry failures or clear old jobs."
-                badge={2}
-                icon="work_history"
                 actions={
                     <div className="flex items-center gap-2">
                         <LoadingButton

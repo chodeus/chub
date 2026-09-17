@@ -1085,6 +1085,7 @@ const TitlePicker = ({ onPick, toast }) => {
             <div className="mb-3.5">
                 <SegmentedControl
                     size="sm"
+                    ariaLabel="Title kind"
                     options={KIND_OPTIONS}
                     value={kind}
                     onChange={setKind}

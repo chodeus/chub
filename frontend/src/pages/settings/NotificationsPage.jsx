@@ -671,6 +671,7 @@ const TriggerPill = ({ active, label, tone, onClick }) => {
     return (
         <button
             type="button"
+            aria-pressed={active}
             onClick={onClick}
             className="touch-expand flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-[12px] font-semibold transition-colors"
             style={{
