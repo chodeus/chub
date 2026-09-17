@@ -59,7 +59,7 @@ const tryFetch = async (url, internal) => {
  */
 export const fetchGdrivePresets = async presetUrl => {
     // A non-string would throw on startsWith before the try below, so the fallback
-    // this function exists for could never run. Both callers pass a string today.
+    // this function exists for could never run.
     const url =
         typeof presetUrl === 'string' && presetUrl ? presetUrl : GDRIVE_PRESETS_FALLBACK_URL;
     const isInternal = url.startsWith('/api/');
