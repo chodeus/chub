@@ -1,15 +1,7 @@
 import React from 'react';
 import { useLogControls } from '../context/LogControlsContext';
 
-/**
- * CollapseButton - Collapse toggle button
- *
- * Toggles visibility of control toolbar.
- * Shows expand/collapse icon and text based on current state.
- * Visibility controlled by parent component based on layout mode.
- *
- * @returns {JSX.Element}
- */
+/** Toolbar collapse toggle; the parent decides whether it renders at all, by layout mode. */
 export const CollapseButton = () => {
     const { isCollapsed, setIsCollapsed } = useLogControls();
 

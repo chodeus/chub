@@ -3,20 +3,7 @@ import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 import { calculateOptimalPosition, isElementVisible } from '../../utils/positioning';
 
-/**
- * Reusable dropdown container component
- *
- * Provides dropdown functionality that can be used anywhere in the app.
- * Handles click-outside, escape key, and focus management.
- *
- * @param {Object} props - Component props
- * @param {boolean} props.isOpen - Whether dropdown is visible
- * @param {Function} props.onClose - Callback when dropdown should close
- * @param {React.ReactNode} props.children - Dropdown content
- * @param {React.RefObject} props.anchorRef - Reference to element that triggers dropdown
- * @param {string} [props.className] - Additional CSS classes
- * @param {string} [props.placement='bottom-right'] - Where to position dropdown relative to anchor
- */
+/** Portalled dropdown positioned against `anchorRef`; closes on outside click and Escape. */
 const Dropdown = ({
     isOpen,
     onClose,

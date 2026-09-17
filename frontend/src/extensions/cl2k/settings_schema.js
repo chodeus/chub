@@ -1,13 +1,11 @@
-// CL2K maker — Module Settings schema fragment.
-// Spliced into SETTINGS_SCHEMA / SETTINGS_MODULES by manifest.jsx
-// (anchored after border_replacerr, its position before the extension split).
+// CL2K maker schema fragment, spliced into SETTINGS_SCHEMA / SETTINGS_MODULES by
+// manifest.jsx, anchored after border_replacerr.
 
 export const CL2K_MAKER_SCHEMA = {
     key: 'cl2k_maker',
     label: 'CL2K Maker',
-    // Config-only: posters are generated on-demand from the CL2K Poster Maker
-    // page, so there is no batch run. `runnable: false` hides the Run button +
-    // Dry-run (ModuleSettingsPage) and drops it from the Schedule and Dashboard.
+    // `runnable: false` hides Run + Dry-run and drops it from the Schedule and
+    // Dashboard: posters are generated on demand from the maker page.
     runnable: false,
     fields: [
         {
@@ -44,12 +42,8 @@ export const CL2K_MAKER_SCHEMA = {
             placeholder: '0',
             description: 'poster_cache priority for generated posters (higher wins on match).',
         },
-        // ─── Save locations (routed cards + coverage, option 2a) ──
-        // Custom field types registered by manifest.jsx from
-        // SaveLocationsFields.jsx; each card renders its own description, add
-        // button, entry list and empty state. Nothing here is required — zero
-        // locations is valid (unrouted art stays downloadable from the maker
-        // page).
+        // Nothing here is required — zero save locations is valid, and unrouted art
+        // stays downloadable from the maker page.
         {
             key: 'local_folders',
             label: 'Local Folders',

@@ -3,21 +3,7 @@ import PropTypes from 'prop-types';
 import { Card } from '../Card';
 import { IconButton } from '../../button/IconButton';
 
-/**
- * MediaCard - Preset card pattern for media items
- *
- * Common pattern: Image + Title + Metadata + Actions
- *
- * @param {Object} props - Component props
- * @param {string} props.image - Image source URL
- * @param {string} props.title - Card title
- * @param {string} props.subtitle - Optional subtitle
- * @param {string} props.metadata - Metadata text (year, rating, etc.)
- * @param {Function} props.onClick - Card click handler
- * @param {Function} props.onMoreClick - More options click handler
- * @param {boolean} props.selected - Selected state
- * @returns {JSX.Element}
- */
+/** Preset card for media: image, title, metadata, and a more-options action. */
 export const MediaCard = React.memo(
     ({
         image,

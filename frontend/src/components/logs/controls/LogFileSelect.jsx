@@ -1,10 +1,7 @@
 import React from 'react';
 import { useLogControls } from '../context/LogControlsContext';
 
-/**
- * LogFileSelect — compact dark-inset log-file picker with a mono filename,
- * matching the redesign mock. Disabled when no files are available.
- */
+/** Log-file picker; disabled when no files are available. */
 export const LogFileSelect = () => {
     const { logFiles, selectedLogFile, onLogFileChange } = useLogControls();
     const disabled = !logFiles || logFiles.length === 0;

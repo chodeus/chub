@@ -2,10 +2,7 @@ import React from 'react';
 import { useLogControls } from '../context/LogControlsContext';
 import { humanize } from '../../../utils/tools';
 
-/**
- * ModuleSelect — compact dark-inset module picker with a leading status dot,
- * matching the redesign mock.
- */
+/** Module picker with a leading status dot. */
 export const ModuleSelect = () => {
     const { modules, selectedModule, onModuleChange } = useLogControls();
 

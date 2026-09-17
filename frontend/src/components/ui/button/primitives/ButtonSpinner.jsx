@@ -1,22 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * ButtonSpinner - Loading spinner primitive
- *
- * Responsibilities:
- * - Loading spinner animation
- * - Size variants matching button sizes
- * - Accessible loading announcements
- * - Theme-aware spinner colors (inherits)
- * - Reduced motion support
- *
- * @param {Object} props - Component props
- * @param {string} props.size - Spinner size (small, medium, large)
- * @param {string} props.className - Additional CSS classes
- * @param {string} props['aria-label'] - Accessibility label
- * @returns {JSX.Element}
- */
+/** Loading spinner sized to match the button sizes. */
 export const ButtonSpinner = React.memo(
     ({ size = 'medium', className = '', 'aria-label': ariaLabel = 'Loading' }) => {
         // Size mapping to utility classes

@@ -1,26 +1,5 @@
-// Discovery point for self-registering frontend extensions.
-//
-// An extension is a folder under src/extensions/<name>/ with a manifest.jsx
-// default-exporting an object; every field is optional:
-//
-//   routes: [{ path, pageName, pageDescription, Component }]
-//       Mounted by App.jsx inside the authed layout, each wrapped in a
-//       PageErrorBoundary (Component is typically React.lazy).
-//   navChildren: [{ parentId, before?, item }]
-//       Sidebar children spliced into NAV_SECTIONS under the parent item
-//       with id === parentId, before the child id `before` (or appended).
-//   settingsSchema: [{ after?, before?, entry }]
-//       Module blocks spliced into SETTINGS_SCHEMA anchored on a core key.
-//   settingsModules: [{ after?, before?, entry }]
-//       Entries spliced into SETTINGS_MODULES the same way.
-//   configModules: [{ after?, before?, key }]
-//       Keys spliced into useModuleSchema's CONFIG_MODULE_KEYS.
-//   capabilities: { [name]: value }
-//       Named hooks core pages can query via extensionCapability(name) —
-//       e.g. a function that builds an extra action for a table row.
-//
-// With no extension folders present (main) every aggregate below is empty
-// and the consumers render exactly as if this module did not exist.
+// Discovery point for self-registering extensions: src/extensions/<name>/manifest.jsx
+// default-exports any of { routes, navChildren, settingsSchema, settingsModules, configModules, capabilities }.
 
 import { makeUnavailableNotice } from './UnavailableNotice.jsx';
 
@@ -39,9 +18,8 @@ async function fetchEnabledExtensions() {
     return new Set(Array.isArray(names) ? names : []);
 }
 
-// Resolved once at module load (top-level await), before any consumer reads the
-// registry — several consume it at import time, so reactivity can't gate them.
-// Any failure or a 3s stall reads as "no extensions": fail lean, never broken.
+// Resolved at module load (top-level await) because several consumers read the registry
+// at import time. Any failure or a 3s stall reads as "no extensions": fail lean, never broken.
 const ENABLED =
     ALL.length === 0
         ? new Set()
@@ -52,12 +30,8 @@ const ENABLED =
 
 const MANIFESTS = ALL.filter(entry => ENABLED.has(entry.name)).map(entry => entry.manifest);
 
-/**
- * Splice anchored additions into a copy of `list`.
- * Each addition is { entry, after?: anchor, before?: anchor }; `keyOf` maps a
- * list element to the identifier anchors refer to. Unanchored or unmatched
- * additions are appended.
- */
+/** Splice anchored additions into a copy of `list`; `keyOf` maps an element to the
+ *  identifier `after`/`before` refer to. Unanchored or unmatched additions append. */
 export function spliceByAnchor(list, additions, keyOf) {
     const result = [...list];
     for (const { entry, after, before } of additions) {

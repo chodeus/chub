@@ -1,10 +1,7 @@
 import React from 'react';
 
-// Provenance stamp for a poster's build style, overlaid on the poster corner.
-// A dark solid chip so it reads over any artwork, with brand-coloured text so
-// CL2K / MM2K / other styles stay distinguishable. Shared by the Unmatched,
-// Asset Search, and CL2K Maker grids so the stamp is identical everywhere.
-// The caller supplies position + text size via `className`.
+// Build-style stamp for a poster corner, shared by the Unmatched, Asset Search and
+// CL2K Maker grids. The caller supplies position and text size via `className`.
 const STYLE_COLOR = {
     CL2K: { text: '#c9bcff', border: 'rgba(135,103,247,0.55)' },
     MM2K: { text: '#ffd257', border: 'rgba(255,201,68,0.5)' },

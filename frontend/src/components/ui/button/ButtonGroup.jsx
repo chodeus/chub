@@ -1,18 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * ButtonGroup - Multiple buttons with shared styling
- *
- * Composes: Multiple Button/IconButton components
- *
- * @param {Object} props - Component props
- * @param {ReactNode} props.children - Button components
- * @param {string} props.orientation - Horizontal or vertical layout
- * @param {string} props.spacing - Gap between buttons
- * @param {string} props.className - Additional classes
- * @returns {JSX.Element}
- */
+/** Row or column of buttons sharing orientation and spacing. */
 export const ButtonGroup = React.memo(
     ({ children, orientation = 'horizontal', spacing = 'medium', className = '' }) => {
         // Build class names

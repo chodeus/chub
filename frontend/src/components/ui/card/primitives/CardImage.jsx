@@ -1,25 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * CardImage - Card image primitive
- *
- * Responsibilities:
- * - Card image display
- * - Aspect ratio control
- * - Loading state
- * - Error state
- * - Alt text for accessibility
- * - Object-fit control
- *
- * @param {Object} props - Component props
- * @param {string} props.src - Image source URL
- * @param {string} props.alt - Alt text for accessibility
- * @param {string} props.aspectRatio - Aspect ratio (16/9, 4/3, 1/1, 3/2)
- * @param {string} props.objectFit - CSS object-fit value
- * @param {string} props.className - Additional CSS classes
- * @returns {JSX.Element}
- */
+/** Card image in an aspect-ratio box, with loading and error states. */
 export const CardImage = React.memo(
     ({ src, alt, aspectRatio = '16/9', objectFit = 'cover', className = '' }) => {
         const [isLoading, setIsLoading] = useState(true);

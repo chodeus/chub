@@ -1,10 +1,5 @@
-/**
- * The Poster Healer "Assessed locations" settings strip.
- *
- * The registry assertion matters: scripts/check-field-types.js only scans the
- * three CORE schema files, so an extension field type that doesn't resolve fails
- * silently at runtime instead of failing CI.
- */
+/** check-field-types.js scans only the three CORE schema files, so an extension field
+ *  type that fails to resolve dies silently at runtime instead of failing CI. */
 import { render, screen, waitFor } from '@testing-library/react';
 
 const mockAPI = { coverage: vi.fn() };
@@ -24,9 +19,8 @@ describe('field type registration', () => {
     it('registers the exact type the schema asks for', () => {
         const field = POSTER_SELF_HEAL_SCHEMA.fields.find(f => f.key === 'assessed_locations');
         expect(field).toBeTruthy();
-        // Identity, not truthiness: getField() returns an UnknownFieldType
-        // placeholder for an unregistered type, so a truthy check can never fail
-        // and a typo'd `type:` would sail through CI into a blank settings row.
+        // Identity, not truthiness: getField() returns an UnknownFieldType placeholder,
+        // so a truthy check can never fail and a typo'd `type:` would reach CI green.
         expect(FieldRegistry.getField(field.type)).toBe(PosterSelfHealCoverageField);
     });
 });

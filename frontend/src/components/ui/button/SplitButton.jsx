@@ -3,21 +3,7 @@ import PropTypes from 'prop-types';
 import { Button } from './Button';
 import { IconButton } from './IconButton';
 
-/**
- * SplitButton - Compound button with dropdown
- *
- * Composes: Button + IconButton + Dropdown menu
- *
- * @param {Object} props - Component props
- * @param {React.ReactNode} props.children - Primary button label content
- * @param {Function} props.onClick - Primary action handler
- * @param {Array} props.options - Dropdown options [{label, icon, onClick}]
- * @param {string} props.variant - Button variant
- * @param {string} props.size - Button size
- * @param {boolean} props.disabled - Disabled state
- * @param {string} props.icon - Primary button icon
- * @returns {JSX.Element}
- */
+/** Primary action plus a dropdown of `options`, each {label, icon, onClick}. */
 export const SplitButton = React.memo(
     ({
         children,

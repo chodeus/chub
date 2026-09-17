@@ -1,22 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * CardFooter - Card footer primitive
- *
- * Responsibilities:
- * - Card footer container
- * - Action buttons layout
- * - Metadata display
- * - Proper padding and spacing
- * - Theme-aware colors
- *
- * @param {Object} props - Component props
- * @param {ReactNode} props.children - Footer content (buttons, metadata)
- * @param {string} props.align - Content alignment (left, center, right, space-between)
- * @param {string} props.className - Additional CSS classes
- * @returns {JSX.Element}
- */
+/** Card footer; `align` maps to the layout utility classes. */
 export const CardFooter = React.memo(({ children, align = 'right', className = '' }) => {
     // Map alignment prop to utility classes (layout.css)
     const alignClasses = {

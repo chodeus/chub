@@ -3,21 +3,7 @@ import PropTypes from 'prop-types';
 import { Card } from '../Card';
 import { Button } from '../../button/Button';
 
-/**
- * ActionCard - Preset card pattern for action-oriented cards
- *
- * Common pattern: Title + Description + Primary Action
- *
- * @param {Object} props - Component props
- * @param {string} props.title - Card title
- * @param {string} props.description - Card description
- * @param {string} props.actionLabel - Primary action button label
- * @param {Function} props.onAction - Primary action handler
- * @param {string} props.actionVariant - Action button variant
- * @param {string} props.actionIcon - Action button icon
- * @param {ReactNode} props.secondaryAction - Optional secondary action
- * @returns {JSX.Element}
- */
+/** Preset card: title, description and a primary action, plus an optional secondary. */
 export const ActionCard = React.memo(
     ({
         title,

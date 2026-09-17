@@ -1,23 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * CardHeader - Card header primitive
- *
- * Responsibilities:
- * - Card header container
- * - Title and subtitle layout
- * - Action slot for buttons/icons
- * - Proper semantic HTML (h3 for title)
- * - Theme-aware colors
- *
- * @param {Object} props - Component props
- * @param {string} props.title - Card title
- * @param {string} props.subtitle - Optional subtitle
- * @param {ReactNode} props.action - Optional action element (button/icon)
- * @param {string} props.className - Additional CSS classes
- * @returns {JSX.Element}
- */
+/** Card header: title as an h3, optional subtitle and action slot. */
 export const CardHeader = React.memo(
     ({ title, subtitle = null, action = null, className = '' }) => {
         return (

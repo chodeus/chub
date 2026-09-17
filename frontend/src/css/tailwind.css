@@ -1,25 +1,11 @@
-/**
- * Tailwind v4 — wired to CHUB design tokens.
- *
- * MUST be imported as a JS entry (main.jsx), NOT via a nested CSS `@import url()`:
- * @tailwindcss/vite only runs @source/@theme/@utility for a directly-imported root.
- *
- * Preflight (Tailwind's reset) is intentionally EXCLUDED: base.css owns resets.
- * We import only the theme + utilities layers. Legacy utilities (src/css/utilities)
- * also live in @layer utilities, so during the migration both coexist; only NEW
- * class names (text-fg*, bg-error/10, z-*, …) resolve solely from Tailwind.
- *
- * Layer order MUST match base.css's `@layer vendor, reset, theme, base, components,
- * utilities, pages` and be declared here (this file loads first) — otherwise `reset` gets
- * appended AFTER `utilities` and the img/element resets out-prioritize every utility.
- */
+/* MUST be a JS entry (main.jsx): @tailwindcss/vite runs @source/@theme/@utility only
+   for a directly-imported root. Layer order must match base.css's, declared here first. */
 @layer vendor, reset, theme, base, components, utilities, pages;
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
-/* Explicit content source: auto-detection misses src/ here (the git root sits a
-   level above frontend/, and this file is reached via an @import chain). Paths
-   are relative to this file (src/css/ -> ../ = src/). */
+/* Explicit source: auto-detection misses src/ (git root sits above frontend/).
+   Paths are relative to this file: src/css/ -> ../ = src/. */
 @source '../**/*.{jsx,js}';
 
 /* Project themes via the data-theme attribute, not a .dark class. */
@@ -78,9 +64,7 @@
     --color-default: var(--border); /* legacy alias (.border-default) */
     --color-input-error: var(--error); /* legacy alias (.border-input-error) */
 
-    /* legacy aliases for ':full'-image/missed classes the migration dropped:
-       .bg-error-bg, .bg-warning-bg, .border-error-border,
-       .text-sidebar-secondary, .bg-primary-hover (mirrors old colors.css) */
+    /* Legacy aliases mirroring the old colors.css, for classes the migration dropped. */
     --color-error-bg: color-mix(in srgb, var(--error) 10%, transparent);
     --color-warning-bg: color-mix(in srgb, var(--warning) 10%, transparent);
     --color-error-border: var(--error);
@@ -125,23 +109,19 @@
     --color-badge-5: var(--badge-5-bg);
     --color-badge-5-fg: var(--badge-5-fg);
 
-    /* Font stacks — exact values from utilities/typography.css (override
-       Tailwind's defaults). font-display is an @utility below (its value
-       references --font-display, which would self-reference here). */
+    /* Exact values from utilities/typography.css. font-display is an @utility below:
+       its value references --font-display, which would self-reference here. */
     --font-sans: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
     --font-serif: georgia, 'Times New Roman', serif;
     --font-mono: 'JetBrains Mono', 'SF Mono', monaco, 'Cascadia Code', consolas, monospace;
 
-    /* Clear Tailwind's default radius namespace: tokens.css already owns
-       --radius-* (8/12/16/24px) for components, and the legacy `rounded-*`
-       utilities use DIFFERENT literal values (.25/.5/.75/1rem). Both are ported
-       explicitly as @utility below so neither collides with the other. */
+    /* Cleared: tokens.css owns --radius-* (8/12/16/24px) and the legacy rounded-*
+       utilities use different literals. Both are ported as @utility below. */
     --radius-*: initial;
 }
 
-/* Border radius — literal values mirroring utilities/borders.css (Tailwind's
-   --radius-* namespace was cleared in @theme to avoid colliding with tokens.css's
-   --radius-* component vars). */
+/* Literal values mirroring utilities/borders.css; the --radius-* namespace was
+   cleared in @theme so these cannot collide with tokens.css's component vars. */
 @utility rounded {
     border-radius: 0.5rem;
 }
@@ -212,9 +192,8 @@
 
 /* Named sizes + grid templates (utilities/sizing.css, utilities/layout.css). */
 
-/* App-shell height. Not h-screen: on iOS 100vh is the URL-bar-retracted
-   viewport, and because the shell locks the body and scrolls an inner element
-   the bar never retracts — so the last ~100px sits under it, unreachable. */
+/* Not h-screen: on iOS 100vh is the URL-bar-retracted viewport, and the shell locks
+   the body so the bar never retracts — the last ~100px would sit unreachable. */
 @utility h-app {
     height: 100vh;
 }
@@ -274,10 +253,8 @@
     grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
 }
 
-/* Box-shadow ring utilities — legacy used a box-shadow ring, NOT Tailwind's
-   --tw-ring-* system (whose `ring-primary` only sets a colour var and renders
-   nothing without a width). Ported exactly; in @layer utilities (after the
-   Tailwind import) so they win over the same-named color-only ring utilities. */
+/* Box-shadow rings, NOT Tailwind's --tw-ring-* (ring-primary sets only a colour var
+   and renders nothing). In @layer utilities so they beat the color-only ones. */
 @layer utilities {
     .ring-1 {
         box-shadow: 0 0 0 1px rgb(0 0 0 / 10%);
@@ -383,9 +360,8 @@
     touch-action: manipulation;
 }
 
-/* For controls whose rendered size is a design spec and so cannot take
-   touch-target's 44px minimum (the 38x22 Toggle pill). Grows only the hit
-   area, and only on a coarse pointer, so the visual is untouched. */
+/* For controls whose size is a design spec and cannot take touch-target's 44px
+   (the 38x22 Toggle pill). Grows the hit area only, and only on a coarse pointer. */
 
 /* :where() + in-layer so it never outranks an explicit .absolute/.fixed/.sticky
    — those already position the ::after box themselves. */
@@ -444,9 +420,8 @@
     }
 }
 
-/* Separate rule (see h-app): a nested @media inside @utility puts declarations
-   in a position stylelint rejects. Pseudo-element so the hit area grows without
-   affecting layout or the pill's own box. */
+/* Separate rule (see h-app): a nested @media inside @utility lands where stylelint
+   rejects it. Pseudo-element so the hit area grows without affecting layout. */
 @media (pointer: coarse) {
     .touch-expand::after {
         content: '';

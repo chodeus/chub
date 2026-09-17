@@ -2,28 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { CardContainer, CardHeader, CardBody, CardFooter, CardImage } from './primitives';
 
-/**
- * Card - Compound card component with subcomponents
- *
- * Composes: CardContainer + CardHeader + CardBody + CardFooter + CardImage
- *
- * Usage pattern (compound component):
- * <Card>
- *   <Card.Image src="..." alt="..." />
- *   <Card.Header title="..." subtitle="..." />
- *   <Card.Body>Content here</Card.Body>
- *   <Card.Footer>Actions here</Card.Footer>
- * </Card>
- *
- * @param {Object} props - Component props
- * @param {ReactNode} props.children - Card content (subcomponents)
- * @param {boolean} props.hoverable - Enable hover state
- * @param {boolean} props.clickable - Enable click interaction
- * @param {Function} props.onClick - Click handler
- * @param {boolean} props.selected - Selected state
- * @param {string} props.className - Additional classes
- * @returns {JSX.Element}
- */
+/** Compound card: Card.Image, Card.Header, Card.Body, Card.Footer. */
 export const Card = React.memo(
     ({
         children,

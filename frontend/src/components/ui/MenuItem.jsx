@@ -1,20 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * Reusable menu item component
- *
- * Individual menu item with icon, label, and click handling.
- * Can be used in any menu context throughout the app.
- *
- * @param {Object} props - Component props
- * @param {string} props.label - Item label text
- * @param {string} [props.iconName] - Material Symbol icon name
- * @param {Function} [props.onPress] - Click handler for the item
- * @param {boolean} [props.isDisabled] - Whether item is disabled
- * @param {Function} [props.onClose] - Callback to close parent menu/dropdown
- * @param {string} [props.className] - Additional CSS classes
- */
+/** Menu row with an optional icon; `onClose` dismisses the parent menu after the press. */
 const MenuItem = ({
     label,
     iconName,

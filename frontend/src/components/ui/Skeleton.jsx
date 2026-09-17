@@ -1,20 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * Skeleton - Animated placeholder for loading content.
- *
- * Use in place of <Spinner /> when you can describe the shape of the content
- * that's about to appear (a row of cards, a table row, a paragraph). For
- * transient in-button actions, prefer <Spinner /> — skeletons aren't a
- * universal upgrade.
- *
- * @param {Object} props
- * @param {string|number} [props.width] - CSS width (e.g. "100%", "8rem", 200)
- * @param {string|number} [props.height] - CSS height (default "1rem")
- * @param {string} [props.rounded] - One of "none" | "sm" | "md" | "lg" | "full"
- * @param {string} [props.className] - Additional classes
- */
+/** Shaped loading placeholder; prefer <Spinner /> for transient in-button actions. */
 export const Skeleton = React.memo(
     ({ width = '100%', height = '1rem', rounded = 'md', className = '', ...rest }) => {
         const roundedClass = {
