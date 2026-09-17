@@ -15,7 +15,17 @@ const toDate = value => {
     else if (typeof value === 'string') {
         // ISO without timezone: treat as UTC so server clocks line up with browser
         const looksNaiveIso = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value);
+        const isoDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
         d = looksNaiveIso ? new Date(value.replace(' ', 'T') + 'Z') : new Date(value);
+        // An out-of-range day rolls over ('2026-02-30' parses as 2026-03-02), so getTime()
+        // accepts a date nobody wrote. Only these two forms are UTC-anchored enough to compare.
+        if (
+            (looksNaiveIso || isoDateOnly) &&
+            !Number.isNaN(d.getTime()) &&
+            d.toISOString().slice(0, 10) !== value.slice(0, 10)
+        ) {
+            d = null;
+        }
     }
     // One validity check for every branch: an invalid Date passed straight in and
     // `new Date(NaN)` both format as NaN/NaN/NaN otherwise.

@@ -42,8 +42,7 @@ const tryFetch = async (url, internal) => {
         const payload = await apiCore.get(path, { useCache: false });
         return normalizeGdrivePayload(payload, true);
     }
-    // Mirrors cl2k_maker.js: bounds the external request so a stalled host still
-    // reaches the fallback below.
+    // Mirrors cl2k_maker.js: aborts a stalled external request so failure handling can continue.
     const resp = await fetch(url, { signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`);
     const payload = await resp.json();

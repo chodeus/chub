@@ -15,6 +15,12 @@ describe('datetime formatters reject invalid dates', () => {
         expect(formatDate(NaN)).toBe('');
     });
 
+    it('returns empty for a day the calendar does not have', () => {
+        expect(formatDate('2026-02-30')).toBe('');
+        expect(formatDate('2026-02-29')).toBe('');
+        expect(formatDateTime('2026-04-31T12:00:00')).toBe('');
+    });
+
     it('still formats the values it is given in practice', () => {
         expect(formatDate(new Date(Date.UTC(2026, 8, 17)))).toMatch(/^\d{2}\/\d{2}\/2026$/);
         expect(formatDateTime('2026-09-17 08:30:00')).toMatch(
