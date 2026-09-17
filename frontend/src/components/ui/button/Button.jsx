@@ -12,7 +12,7 @@ import { ButtonBase, ButtonIcon, ButtonText } from './primitives';
  * - Overrides: bgClass, textClass, sizeClass, hoverClass (for edge cases)
  *
  * @param {Object} props - Component props
- * @param {string} props.children - Button label text
+ * @param {React.ReactNode} props.children - Button label content
  * @param {Function} props.onClick - Click handler
  * @param {string} props.variant - Button variant (see ButtonBase for full list)
  * @param {string} props.size - Button size (small, medium, large)

@@ -1,21 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * ServiceIcon - Displays service icon from homarr-labs dashboard-icons CDN
- *
- * Renders professional SVG icons from homarr-labs dashboard-icons CDN for
- * popular services (Discord, Notifiarr, Radarr, Sonarr, Plex). Does NOT handle
- * Material Symbols - use those directly in consuming components (e.g., email).
- * Provides consistent sizing and graceful fallback on error.
- *
- * @param {Object} props - Component props
- * @param {string} props.service - Service identifier (discord|notifiarr|radarr|sonarr|plex)
- * @param {string} props.size - Icon size (small: 20px, medium: 24px, large: 32px, xlarge: 48px)
- * @param {string} props.className - Additional CSS classes
- * @returns {JSX.Element|null}
- */
+/** CDN service icon; renders null for an unknown service or a failed load. Not for Material Symbols. */
 export const ServiceIcon = React.memo(({ service, size = 'medium', className = '' }) => {
+    // Track WHICH service failed, so switching to another one un-hides the icon —
+    // hiding the node via style.display left it hidden forever after a reuse.
+    const [failedService, setFailedService] = useState(null);
+
     // Only homarr-labs CDN services (NO Material Symbols like email)
     const iconMap = {
         discord: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/discord.svg',
@@ -44,6 +35,8 @@ export const ServiceIcon = React.memo(({ service, size = 'medium', className = '
         return null;
     }
 
+    if (failedService === normalizedService) return null;
+
     // Render SVG from CDN
     return (
         <img
@@ -51,9 +44,9 @@ export const ServiceIcon = React.memo(({ service, size = 'medium', className = '
             alt={`${service} icon`}
             style={{ width: iconSize, height: iconSize }}
             className={`inline-block ${className}`}
-            onError={e => {
+            onError={() => {
                 console.warn(`Failed to load icon for ${service}`);
-                e.target.style.display = 'none';
+                setFailedService(normalizedService);
             }}
         />
     );

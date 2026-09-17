@@ -127,6 +127,8 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                         <div className="mb-4 rounded-lg border border-border bg-surface-alt">
                             <button
                                 type="button"
+                                aria-expanded={historyOpen}
+                                aria-controls="edit-media-history"
                                 onClick={() => setHistoryOpen(o => !o)}
                                 className="touch-expand w-full flex items-center justify-between px-3 py-2 text-sm text-fg-muted hover:text-fg"
                             >
@@ -141,7 +143,10 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                 </span>
                             </button>
                             {historyOpen && (
-                                <div className="border-t border-border px-3 py-2 max-h-56 overflow-y-auto text-xs">
+                                <div
+                                    id="edit-media-history"
+                                    className="border-t border-border px-3 py-2 max-h-56 overflow-y-auto text-xs"
+                                >
                                     {historyLoading && <p className="text-fg-subtle">Loading…</p>}
                                     {historyError && !historyLoading && (
                                         <p className="text-error">{historyError}</p>
@@ -193,11 +198,15 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                 key={field.key}
                                 className={field.key === 'title' ? 'sm:col-span-2' : ''}
                             >
-                                <label className="block text-xs font-medium text-fg-muted mb-1">
+                                <label
+                                    htmlFor={`edit-media-${field.key}`}
+                                    className="block text-xs font-medium text-fg-muted mb-1"
+                                >
                                     {field.label}
                                 </label>
                                 {field.type === 'select' ? (
                                     <select
+                                        id={`edit-media-${field.key}`}
                                         value={formData[field.key] || ''}
                                         onChange={e => handleChange(field.key, e.target.value)}
                                         className="w-full h-11 px-3 bg-surface border border-border rounded-lg text-fg text-sm focus:border-primary outline-none"
@@ -210,6 +219,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                     </select>
                                 ) : (
                                     <input
+                                        id={`edit-media-${field.key}`}
                                         type="text"
                                         value={formData[field.key] || ''}
                                         onChange={e => handleChange(field.key, e.target.value)}

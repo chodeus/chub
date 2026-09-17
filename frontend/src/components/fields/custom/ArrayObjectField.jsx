@@ -612,6 +612,7 @@ export const ArrayObjectField = ({
                         <div>
                             <SegmentedControl
                                 size="sm"
+                                ariaLabel="Search mode"
                                 options={[
                                     { value: 'upgrade', label: 'Upgrade' },
                                     { value: 'missing', label: 'Missing' },

@@ -253,6 +253,7 @@ const IncompleteMetadataCard = () => {
                         <button
                             key={f.key}
                             type="button"
+                            aria-pressed={active}
                             onClick={() => toggleField(f.key)}
                             className="inline-flex items-center min-h-11 px-3 rounded-full text-sm cursor-pointer"
                             style={{

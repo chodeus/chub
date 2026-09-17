@@ -8,7 +8,7 @@ import { ButtonBase, ButtonIcon, ButtonText, ButtonSpinner } from './primitives'
  * Composes: ButtonBase + ButtonIcon (optional) + ButtonText + ButtonSpinner (when loading)
  *
  * @param {Object} props - Component props
- * @param {string} props.children - Button label text
+ * @param {React.ReactNode} props.children - Button label content
  * @param {Function} props.onClick - Click handler
  * @param {boolean} props.loading - Loading state
  * @param {string} props.loadingText - Text to show when loading

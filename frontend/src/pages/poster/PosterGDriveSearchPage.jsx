@@ -189,6 +189,7 @@ const PosterGDriveSearchPage = () => {
             {sources.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3">
                     <SegmentedControl
+                        ariaLabel="Filter sources"
                         options={FILTER_OPTIONS}
                         value={filterBy}
                         onChange={setFilterBy}

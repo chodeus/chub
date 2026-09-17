@@ -8,7 +8,7 @@ import PropTypes from 'prop-types';
  * specified column count on desktop.
  *
  * Responsive Behavior:
- * - Mobile (default): 1 column
+ * - Mobile (default): auto-fit from 10rem, so 2+ columns once the viewport allows
  * - Tablet (md): min(columns, 2) columns
  * - Desktop (lg): specified columns
  *
@@ -36,14 +36,26 @@ export const StatGrid = React.memo(({ children, columns = 3, gap = '4', classNam
         6: 'gap-6',
     };
 
+    // Spelled out, not interpolated: Tailwind scans source text, so a built class
+    // name only survives if some other file happens to write it literally.
+    const mdColsClasses = { 1: 'md:grid-cols-1', 2: 'md:grid-cols-2' };
+    const lgColsClasses = {
+        1: 'lg:grid-cols-1',
+        2: 'lg:grid-cols-2',
+        3: 'lg:grid-cols-3',
+        4: 'lg:grid-cols-4',
+        5: 'lg:grid-cols-5',
+        6: 'lg:grid-cols-6',
+    };
+
     // Mobile uses auto-fit so 3- or 5-card grids don't produce orphan rows;
     // tablet pins to a 2-up grid for readability; desktop honours the requested
     // column count.
     const gridClasses = [
         'grid',
         'grid-cols-auto-fit-xs',
-        `md:grid-cols-${Math.min(columns, 2)}`,
-        `lg:grid-cols-${columns}`,
+        mdColsClasses[Math.min(columns, 2)] || mdColsClasses[2],
+        lgColsClasses[columns] || lgColsClasses[3],
         gapClasses[gap] || gapClasses['4'],
         className,
     ]
