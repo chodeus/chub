@@ -608,24 +608,23 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
 
     const clearFocus = useCallback(() => setFocusIndex(null), [setFocusIndex]);
 
-    // Replace the split row with one routed row per type. The parent row's own
-    // claimed types are dropped — they now live on the children — and any type
-    // it didn't claim is left unclaimed rather than silently switched on.
+    // Replace the split row with one routed row per type. A claimed type the split
+    // did not return keeps the original row — the endpoint never creates a poster.
     const splitRow = useCallback(
         (rowId, subfolders) =>
             replaceById(rowId, parent => {
                 const claimed = parent.types || [];
-                return (
-                    subfolders
-                        // Only types the parent actually claimed. An unclaimed row splits
-                        // into nothing, which replaceById reports as a failure.
-                        .filter(s => claimed.includes(s.image_type))
-                        .map(s => ({
-                            name: `${parent.name || 'Drive'} ${s.name}`.trim(),
-                            folder_id: s.folder_id,
-                            types: [s.image_type],
-                        }))
-                );
+                const routed = subfolders.filter(s => claimed.includes(s.image_type));
+                const children = routed.map(s => ({
+                    name: `${parent.name || 'Drive'} ${s.name}`.trim(),
+                    folder_id: s.folder_id,
+                    types: [s.image_type],
+                }));
+                // Nothing routed: leave the row untouched and let replaceById say so,
+                // rather than rewriting it to an identical row and reporting success.
+                if (children.length === 0) return [];
+                const kept = claimed.filter(t => !routed.some(s => s.image_type === t));
+                return kept.length > 0 ? [{ ...parent, types: kept }, ...children] : children;
             }),
         [replaceById]
     );

@@ -128,4 +128,27 @@ describe('Cl2kGdriveUploadsField', () => {
 
         await waitFor(() => expect(names()).toEqual(['A Logos', 'A Backgrounds', 'B Square']));
     });
+
+    it('keeps a claimed type the split did not return on the original row', async () => {
+        mockPost.mockResolvedValue({ data: { subfolders: SUBFOLDERS } });
+        render(<Harness initial={[{ name: 'A', folder_id: 'X', types: ['poster', 'logo'] }]} />);
+
+        fireEvent.click(splitButtons()[0]);
+
+        // The endpoint only ever creates logos/backgrounds/squareart, so a poster
+        // claim would otherwise vanish with the parent row it replaced.
+        await waitFor(() => expect(names()).toEqual(['A', 'A Logos']));
+        expect(screen.getAllByLabelText('Drive folder ID')[0]).toHaveValue('X');
+    });
+
+    it('reports a failure when only unroutable types are claimed', async () => {
+        mockPost.mockResolvedValue({ data: { subfolders: SUBFOLDERS } });
+        render(<Harness initial={[{ name: 'A', folder_id: 'X', types: ['poster'] }]} />);
+
+        fireEvent.click(splitButtons()[0]);
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalled());
+        expect(toast.success).not.toHaveBeenCalled();
+        expect(names()).toEqual(['A']);
+    });
 });
