@@ -69,8 +69,8 @@ export const useFocusTrap = (containerRef, isActive) => {
             return true;
         };
 
-        // Hidden and inert matches satisfy the selector but silently refuse focus.
-        // NOT getClientRects(): jsdom has no layout, so it reports 0 for everything.
+        // Hidden, inert and disabled matches refuse focus; aria-hidden ones accept it but
+        // must not get it. NOT getClientRects(): jsdom has no layout and reports 0 for all.
         const getFocusableElements = () =>
             Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
                 element =>

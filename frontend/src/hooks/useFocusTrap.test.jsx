@@ -1,4 +1,4 @@
-/** Guards that the focus trap skips matches that cannot actually take focus. */
+/** Guards that the focus trap skips matches that cannot take focus, and aria-hidden ones that must not. */
 import { useRef } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { useFocusTrap } from './useFocusTrap.js';
