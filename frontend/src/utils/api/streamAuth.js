@@ -152,14 +152,17 @@ export async function ensureStreamToken() {
             headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
         })
             .then(r => {
-                // Before handleAuthFailure, not after: a stale 401 would otherwise
-                // clear a JWT installed since the clear and redirect to /login.
+                // Cheap early-out only; r.json() below is async, so the decisive
+                // check must sit adjacent to the side effect it guards.
                 if (generation !== mintGeneration) return null;
                 if (r.ok) return r.json();
                 return r
                     .json()
                     .catch(() => null)
                     .then(body => {
+                        // Re-checked after the parse: handleAuthFailure removes the
+                        // JWT and redirects, so a stale 401 must never reach it.
+                        if (generation !== mintGeneration) return null;
                         handleAuthFailure(r.status, body);
                         return null;
                     });
