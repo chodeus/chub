@@ -98,6 +98,9 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
         // so it fired and reconnected a hook that was meant to be off.
         const teardown = () => {
             generationRef.current += 1;
+            // `enabled && hasOpenSocket` masks a stale true while disabled, so without
+            // this re-enabling reports isConnected before the new stream opens.
+            setHasOpenSocket(false);
             if (eventSourceRef.current) {
                 eventSourceRef.current.close();
                 eventSourceRef.current = null;

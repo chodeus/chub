@@ -60,17 +60,25 @@ export const useFocusTrap = (containerRef, isActive) => {
         activeTraps.push(container);
         const isTopTrap = () => isTopFocusTrap(container);
 
+        // `display` does NOT inherit, so a child of a display:none wrapper computes its
+        // own value — walking ancestors is the only way to catch it. `visibility` does
+        // inherit, so checking the element alone covers hidden ancestors there.
+        const isDisplayed = element => {
+            for (let node = element; node instanceof Element; node = node.parentElement) {
+                if (window.getComputedStyle(node).display === 'none') return false;
+            }
+            return true;
+        };
+
         // Hidden and inert matches satisfy the selector but silently refuse focus.
         // NOT getClientRects(): jsdom has no layout, so it reports 0 for everything.
         const getFocusableElements = () =>
-            Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(element => {
-                const style = window.getComputedStyle(element);
-                return (
-                    style.display !== 'none' &&
-                    style.visibility !== 'hidden' &&
+            Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+                element =>
+                    window.getComputedStyle(element).visibility !== 'hidden' &&
+                    isDisplayed(element) &&
                     !element.closest('[inert], [aria-hidden="true"], [hidden]')
-                );
-            });
+            );
 
         // Falls back to the container, which needs tabIndex={-1} to take focus.
         (getFocusableElements()[0] ?? container).focus();
@@ -95,27 +103,28 @@ export const useFocusTrap = (containerRef, isActive) => {
             }
         };
 
-        /**
-         * Handle dynamic content changes
-         * Refocuses container if active element is removed
-         */
+        // Containment is not enough: an attribute change can leave the focused control
+        // in the DOM but no longer eligible, so re-check eligibility, not just presence.
         const handleMutation = () => {
+            if (!isTopTrap()) return;
             const focusableElements = getFocusableElements();
             const activeElement = document.activeElement;
+            const eligible =
+                activeElement === container || focusableElements.includes(activeElement);
 
-            // If focused element was removed, focus first available element or the container
-            if (isTopTrap() && !container.contains(activeElement)) {
+            if (!eligible) {
                 (focusableElements[0] ?? container).focus();
             }
         };
 
         // Set up MutationObserver for dynamic content
         observerRef.current = new MutationObserver(handleMutation);
+        // No attributeFilter: eligibility now also depends on style, hidden, inert and
+        // aria-hidden, and any filter here silently drifts out of sync with it.
         observerRef.current.observe(container, {
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ['disabled', 'tabindex'],
         });
 
         // On document: a click on dialog text drops focus to <body>, where the container never sees Tab.

@@ -1,6 +1,6 @@
 /** Guards that the focus trap skips matches that cannot actually take focus. */
 import { useRef } from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { useFocusTrap } from './useFocusTrap.js';
 
 const Trap = ({ children }) => {
@@ -63,5 +63,42 @@ describe('useFocusTrap', () => {
         );
 
         expect(screen.getByRole('dialog')).toHaveFocus();
+    });
+
+    it('skips a control inside a display:none ancestor', () => {
+        // `display` does not inherit, so the button computes its own value.
+        render(
+            <Trap>
+                <div style={{ display: 'none' }}>
+                    <button type="button">Buried</button>
+                </div>
+                <button type="button">Visible</button>
+            </Trap>
+        );
+
+        expect(screen.getByRole('button', { name: 'Visible' })).toHaveFocus();
+    });
+
+    it('refocuses when the focused control becomes aria-hidden', async () => {
+        const { rerender } = render(
+            <Trap>
+                <div>
+                    <button type="button">First</button>
+                </div>
+                <button type="button">Second</button>
+            </Trap>
+        );
+        expect(screen.getByRole('button', { name: 'First' })).toHaveFocus();
+
+        rerender(
+            <Trap>
+                <div aria-hidden="true">
+                    <button type="button">First</button>
+                </div>
+                <button type="button">Second</button>
+            </Trap>
+        );
+
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Second' })).toHaveFocus());
     });
 });

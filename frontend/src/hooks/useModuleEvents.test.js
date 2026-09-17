@@ -57,6 +57,21 @@ describe('useModuleEvents', () => {
         expect(opened).toHaveLength(0);
     });
 
+    it('reports disconnected until the replacement stream opens', async () => {
+        const { result, rerender } = renderHook(({ enabled }) => useModuleEvents({ enabled }), {
+            initialProps: { enabled: true },
+        });
+        await act(async () => streamAuth.__state.resolve('stream-token'));
+        act(() => opened[0].onopen());
+        expect(result.current.isConnected).toBe(true);
+
+        rerender({ enabled: false });
+        rerender({ enabled: true });
+
+        // The replacement is still awaiting its token; liveness must not carry over.
+        expect(result.current.isConnected).toBe(false);
+    });
+
     it('closes the connection it opened when the hook unmounts', async () => {
         const { unmount } = renderHook(() => useModuleEvents());
         await act(async () => streamAuth.__state.resolve('stream-token'));
