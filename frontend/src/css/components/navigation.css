@@ -1,8 +1,4 @@
 @layer components {
-    /* ===========================================
-     CHUB SIDEBAR NAVIGATION (dark sidebar, indigo pills)
-     =========================================== */
-
     .sidebar-nav-link {
         color: var(--sidebar-text-secondary);
     }
@@ -26,6 +22,12 @@
     .sidebar-nav-link--active:hover {
         background: var(--primary-hover);
         color: var(--on-color-text);
+    }
+
+    /* The shared ring is --primary, invisible on the --primary pill. White clears
+       3:1 on both themes' active fills; --primary on the sidebar is only 2.5:1. */
+    .sidebar-nav-link--active:focus-visible {
+        outline-color: var(--on-color-text);
     }
 
     .sidebar-nav-link--child {
