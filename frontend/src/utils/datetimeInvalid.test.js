@@ -10,7 +10,6 @@ describe('datetime formatters reject invalid dates', () => {
         expect(formatTime(new Date('nope'))).toBe('');
     });
 
-    // The review cited only the Date branch; the number branch had the same bug.
     it('returns empty for a NaN timestamp', () => {
         expect(formatDateTime(NaN)).toBe('');
         expect(formatDate(NaN)).toBe('');

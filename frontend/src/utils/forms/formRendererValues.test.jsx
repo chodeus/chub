@@ -3,8 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Bounds the render loop the fix prevents: unfixed, this file otherwise ran 154s
-// and killed the vitest worker with no verdict rather than failing an assertion.
+// Fails the test when a render loop exceeds the expected bound.
 const h = vi.hoisted(() => ({ renders: 0 }));
 
 vi.mock('../../contexts/ToastContext.jsx', () => ({
@@ -48,7 +47,7 @@ function Parent() {
             <button type="button" onClick={() => setTick(t => t + 1)}>
                 rerender {tick}
             </button>
-            <FormRenderer schema={schema} showSubmit={false} />
+            <FormRenderer schema={schema} showSubmit={false} onChange={() => undefined} />
         </div>
     );
 }
