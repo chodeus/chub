@@ -48,6 +48,9 @@ export function LogPerformanceTest() {
         const generated = generateTestLog(lineCount);
         const startTime = performance.now();
         setLogText(generated);
+        // A second click must not strand the first measurement's callbacks: the ref
+        // holds whichever frame is still outstanding, so cancelling it is enough.
+        cancelAnimationFrame(frameRef.current);
         frameRef.current = requestAnimationFrame(() => {
             frameRef.current = requestAnimationFrame(() => {
                 setRenderTime(performance.now() - startTime);
