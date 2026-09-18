@@ -137,8 +137,15 @@ def test_lean_boot_hides_extension_routes_but_keeps_config(tmp_path):
         CONFIG_DIR=str(tmp_path),
         LOG_DIR=str(tmp_path / "logs"),
     )
+    # The child inserts '.' into sys.path, so it must start at the repo root
+    # rather than wherever pytest happened to be invoked from.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     proc = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, env=env
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=repo_root,
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
     assert "LEAN-OK" in proc.stdout

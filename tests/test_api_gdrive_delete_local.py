@@ -6,6 +6,7 @@ SQLite DB so the guardrails (config membership, allow-list, root refusal) and
 the actual rmtree + row purge run for real."""
 
 import os
+import shutil
 import sys
 import tempfile
 
@@ -136,16 +137,20 @@ def test_rejects_unconfigured_path(db_app, monkeypatch, tmp_path):
 
 
 def test_refuses_filesystem_root(db_app, monkeypatch):
-    app, db, _ = db_app
+    app, _db, _ = db_app
     # A pathological drive configured at "/". Membership + allow-list pass, but
     # the root guard must refuse — and must NOT delete anything.
     _patch_config(monkeypatch, ["/"])
+    # The handler imports shutil inside the function, so patch the module
+    # attribute itself — patching it on the router module would miss.
+    removed = []
+    monkeypatch.setattr(shutil, "rmtree", lambda p, *a, **k: removed.append(p))
 
     client = TestClient(app)
     resp = client.post("/api/posters/gdrive/delete-local", json={"location": "/"})
     assert resp.status_code == 400, resp.text
     assert resp.json()["error_code"] == "GDRIVE_LOCATION_UNSAFE"
-    assert os.path.isdir("/")
+    assert removed == []
 
 
 def test_missing_folder_still_purges_rows(db_app, monkeypatch, tmp_path):

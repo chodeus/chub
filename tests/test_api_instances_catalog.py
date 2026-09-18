@@ -2,17 +2,28 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.api import instances as instances_mod
 from backend.api.instances import _PlexFetchError, _fetch_plex_libraries
 from backend.util.plex_library_cache import get_cached_libraries, invalidate, _CACHE
 
 
-def test_fetch_plex_libraries_blocks_ssrf_url():
+def test_fetch_plex_libraries_blocks_ssrf_url(monkeypatch):
     # Link-local metadata address must be refused before any network call.
     plex = SimpleNamespace(url="http://169.254.169.254", api="token")
+    # Tripwire: a regressed guard would otherwise reach the real metadata
+    # service from CI, so fail here instead of letting the request out.
+    calls = []
+
+    def _no_network(*a, **k):
+        calls.append(a)
+        raise AssertionError("the SSRF guard let a request through")
+
+    monkeypatch.setattr(instances_mod.requests, "get", _no_network)
     with pytest.raises(_PlexFetchError) as exc:
         _fetch_plex_libraries(plex)
     assert exc.value.code == "URL_BLOCKED"
     assert exc.value.status_code == 400
+    assert calls == []
 
 
 def test_fetch_plex_libraries_missing_credentials():

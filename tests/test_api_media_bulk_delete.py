@@ -4,6 +4,7 @@ duplicate cleanup (_bulk_delete_sync + _remove_media_item).
 Rows are seeded without arr_id, so the *arr round-trip is skipped and only the
 local-cache deletion path runs — deterministic and offline."""
 
+import json
 import os
 import sys
 import tempfile
@@ -81,6 +82,6 @@ def test_bulk_delete_removes_all_ids(db):
 def test_bulk_delete_reports_missing_ids(db):
     a = _seed(db, "Dune")
     res = _bulk_delete_sync(db, StubLogger(), [a, 999999], False, False)
-    body = res.body.decode()
-    assert '"failed"' in body
+    payload = json.loads(res.body)
+    assert [f["id"] for f in payload["data"]["failed"]] == [999999]
     assert db.media.get_by_id(a) is None

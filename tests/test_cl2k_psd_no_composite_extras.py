@@ -4,6 +4,7 @@ Doubles as a layer-presence guard: every expected layer must survive the export.
 
 import builtins
 import io
+import sys
 
 import pytest
 from PIL import Image, ImageDraw
@@ -25,6 +26,9 @@ def no_composite_extras(monkeypatch):
             raise ImportError(f"{name} is not installed (psd-tools[composite] extra)")
         return real_import(name, *args, **kwargs)
 
+    # Earlier cl2k tests import psd_export first, and a cached module skips its
+    # own import statements — so without this the guard is never exercised.
+    monkeypatch.delitem(sys.modules, "backend.util.cl2k.psd_export", raising=False)
     monkeypatch.setattr(builtins, "__import__", guard)
 
 

@@ -1,6 +1,7 @@
 """Correctness half of the 2026-09 sweep — one test per confirmed bug."""
 
 import pathlib
+import threading
 import time
 
 import pytest
@@ -273,19 +274,26 @@ def test_web_server_returns_once_uvicorn_reports_started(monkeypatch):
     )
     log.get_adapter = lambda *a, **k: log
 
+    release = threading.Event()
+    stopped = threading.Event()
+
     class _ReadyServer:
         def __init__(self, config):
             self.started = False
 
         def run(self):
             self.started = True
-            time.sleep(5)  # serve; the caller must not wait for this
+            release.wait(30)  # serve; the caller must not wait for this
+            stopped.set()
 
     monkeypatch.setattr(server_mod.uvicorn, "Server", _ReadyServer)
     monkeypatch.setattr(server_mod.uvicorn, "Config", lambda *a, **k: object())
-    began = time.monotonic()
-    server_mod.start_web_server(logger=log, module_orchestrator=None)
-    assert time.monotonic() - began < 2
+    try:
+        server_mod.start_web_server(logger=log, module_orchestrator=None)
+        # Returned while run() was still serving, not after it finished.
+        assert not stopped.is_set()
+    finally:
+        release.set()
 
 
 def test_web_server_readiness_timeout_fails_the_boot(monkeypatch):

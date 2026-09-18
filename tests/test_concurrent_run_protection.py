@@ -6,6 +6,7 @@
    returns deferred=True when the lock is already held (job_processor.py).
 """
 
+import logging
 import os
 import sys
 import time
@@ -34,23 +35,36 @@ def test_logger_start_time_resets_on_reinit(tmp_path, monkeypatch):
     instead of this run's duration.
     """
     monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    # Both outlive the test: the set, and the handler Logger attaches to the
+    # module's global logger, which holds a file under tmp_path.
+    module_logger = logging.getLogger("test_logger_reset_a")
+    saved_handlers = list(module_logger.handlers)
+    saved = set(Logger._initialized)
     Logger._initialized.clear()
 
-    first = Logger(log_level="INFO", module_name="test_logger_reset_a")
-    first_start = first.start_time
-    assert isinstance(first_start, datetime)
+    try:
+        first = Logger(log_level="INFO", module_name="test_logger_reset_a")
+        first_start = first.start_time
+        assert isinstance(first_start, datetime)
 
-    time.sleep(0.02)
+        time.sleep(0.02)
 
-    second = Logger(log_level="INFO", module_name="test_logger_reset_a")
-    second_start = second.start_time
+        second = Logger(log_level="INFO", module_name="test_logger_reset_a")
+        second_start = second.start_time
 
-    assert second_start > first_start, (
-        f"second start_time {second_start} should be after first {first_start}"
-    )
-    # _logger.start_time mirror is also reset (log_outro reads it from
-    # the underlying logging.Logger via the adapter path).
-    assert second._logger.start_time == second_start
+        assert second_start > first_start, (
+            f"second start_time {second_start} should be after first {first_start}"
+        )
+        # _logger.start_time mirror is also reset (log_outro reads it from
+        # the underlying logging.Logger via the adapter path).
+        assert second._logger.start_time == second_start
+    finally:
+        for handler in list(module_logger.handlers):
+            if handler not in saved_handlers:
+                module_logger.removeHandler(handler)
+                handler.close()
+        Logger._initialized.clear()
+        Logger._initialized.update(saved)
 
 
 def test_enqueue_module_run_dedupes_by_module_name(tmp_path):
