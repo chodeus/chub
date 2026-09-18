@@ -1,0 +1,39 @@
+/** Guards the placeholder list: derived from the registry table, not from what has rendered. */
+import { FieldRegistry } from './FieldRegistry.jsx';
+
+describe('FieldRegistry', () => {
+    it('lists the placeholder types before any field has rendered', () => {
+        expect(FieldRegistry.getPlaceholderFieldTypes().sort()).toEqual([
+            'media_display',
+            'media_info_display',
+            'poster',
+        ]);
+    });
+
+    it('counts dir_picker as implemented', () => {
+        expect(FieldRegistry.isWorkingFieldType('dir_picker')).toBe(true);
+    });
+
+    it('counts a registered extension type as implemented, not a placeholder', () => {
+        FieldRegistry.register('test_only_extension_field', () => null);
+
+        expect(FieldRegistry.isWorkingFieldType('test_only_extension_field')).toBe(true);
+        expect(FieldRegistry.getPlaceholderFieldTypes()).not.toContain('test_only_extension_field');
+    });
+
+    it('drops implementation state when an extension type is unregistered', () => {
+        FieldRegistry.register('test_only_unregistered_field', () => null);
+        FieldRegistry.unregister('test_only_unregistered_field');
+
+        expect(FieldRegistry.isWorkingFieldType('test_only_unregistered_field')).toBe(false);
+        expect(FieldRegistry.isWorkingFieldType('dir_picker')).toBe(true);
+    });
+
+    it('returns a resolver-backed placeholder to the placeholder list when unregistered', () => {
+        FieldRegistry.register('poster', () => null);
+        FieldRegistry.unregister('poster');
+
+        expect(FieldRegistry.isWorkingFieldType('poster')).toBe(false);
+        expect(FieldRegistry.getPlaceholderFieldTypes()).toContain('poster');
+    });
+});
