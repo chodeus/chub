@@ -36,6 +36,8 @@ describe('FloatField', () => {
         render(<Harness onChange={onChange} />);
 
         fireEvent.change(screen.getByLabelText('Threshold'), { target: { value: '-' } });
+        // The point of the test: "-" must emit nothing at all, not merely something finite.
+        expect(onChange).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Increase Threshold' }));
 
         expect(onChange.mock.calls.flat().every(v => v === null || Number.isFinite(v))).toBe(true);
