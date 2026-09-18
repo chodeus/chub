@@ -64,9 +64,7 @@ def _persist(monkeypatch, tmp_path, *, upload_raises=None):
         if upload_raises:
             raise RuntimeError(upload_raises)
 
-    monkeypatch.setattr(
-        "backend.util.cl2k.gdrive_upload.upload_file", fake_upload, raising=False
-    )
+    monkeypatch.setattr("backend.util.cl2k.gdrive_upload.upload_file", fake_upload)
     monkeypatch.setattr(
         maker, "cl2k_generated_for", lambda db: types.SimpleNamespace(
             mark_uploaded=lambda *a, **k: None, record=lambda *a, **k: None
@@ -77,7 +75,7 @@ def _persist(monkeypatch, tmp_path, *, upload_raises=None):
         local_folders=[], gdrive_uploads=[], style="CL2K", priority=0
     )
     full = types.SimpleNamespace(cl2k_maker=cfg, sync_gdrive=object())
-    monkeypatch.setattr("backend.util.config.load_config", lambda: full, raising=False)
+    monkeypatch.setattr("backend.util.config.load_config", lambda: full)
 
     class FakeNotifier:
         def __init__(self, *a, **k):
@@ -87,9 +85,7 @@ def _persist(monkeypatch, tmp_path, *, upload_raises=None):
             notes.append((event, output))
             return {}
 
-    monkeypatch.setattr(
-        "backend.util.notification.NotificationManager", FakeNotifier, raising=False
-    )
+    monkeypatch.setattr("backend.util.notification.NotificationManager", FakeNotifier)
     db = types.SimpleNamespace(
         poster=types.SimpleNamespace(bulk_upsert=lambda rows: None)
     )

@@ -4,7 +4,6 @@ Each test mounts an individual router on a fresh app to avoid the heavy
 lifespan startup (database, workers) of the production app.
 """
 
-import contextlib
 import os
 import sys
 
@@ -230,34 +229,25 @@ def test_border_list_returns_bundled_variants(tmp_path, monkeypatch, app_with_ro
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("DOCKER_ENV", "true")
 
-    # Bundled PNGs are gitignored locally — drop a couple of stubs into
-    # the bundled dir so the test can assert against a known set, then
-    # clean them up regardless of result.
-    bundled_dir = border_router._BUNDLED_BORDERS_DIR / "christmas"
-    created = []
+    # Build the bundled set under tmp_path rather than the repo's own assets
+    # dir; the router reads this module global per request, so patching lands.
+    bundled_root = tmp_path / "bundled"
+    bundled_dir = bundled_root / "christmas"
+    bundled_dir.mkdir(parents=True)
     from PIL import Image as _Image
 
     for stem in ("v1", "v2"):
-        path = bundled_dir / f"{stem}.png"
-        if not path.exists():
-            bundled_dir.mkdir(parents=True, exist_ok=True)
-            _Image.new("RGBA", (10, 15), (0, 0, 0, 0)).save(path)
-            created.append(path)
-    try:
-        app = app_with_router(border_router.router)
-        client = TestClient(app)
-        resp = client.get("/api/border-replacerr/borders/%F0%9F%8E%84%20Christmas")
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["data"]["folder"] == "christmas"
-        assert {"v1", "v2"}.issubset(set(body["data"]["bundled"]))
-        assert body["data"]["user"] == []
-    finally:
-        for path in created:
-            # Teardown is best-effort: the file may already be gone if the
-            # test cleaned it up, or the dir may be readonly in some CI envs.
-            with contextlib.suppress(OSError):
-                path.unlink()
+        _Image.new("RGBA", (10, 15), (0, 0, 0, 0)).save(bundled_dir / f"{stem}.png")
+    monkeypatch.setattr(border_router, "_BUNDLED_BORDERS_DIR", bundled_root)
+
+    app = app_with_router(border_router.router)
+    client = TestClient(app)
+    resp = client.get("/api/border-replacerr/borders/%F0%9F%8E%84%20Christmas")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["data"]["folder"] == "christmas"
+    assert {"v1", "v2"}.issubset(set(body["data"]["bundled"]))
+    assert body["data"]["user"] == []
 
 
 def test_border_list_unknown_holiday_returns_empty(app_with_router):
@@ -409,16 +399,20 @@ def test_delete_poster_aborts_before_row_delete_on_bad_config(
 
         poster = _Poster()
 
-    app = app_with_router(posters_router.router)
-    app.state.db = _DB()
-    app.add_exception_handler(ConfigError, handle_config_error)
-    client = TestClient(app, raise_server_exceptions=False)
-    resp = client.request("DELETE", "/api/posters/1", json={"deleteFile": True})
+    try:
+        app = app_with_router(posters_router.router)
+        app.state.db = _DB()
+        app.add_exception_handler(ConfigError, handle_config_error)
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.request("DELETE", "/api/posters/1", json={"deleteFile": True})
 
-    assert resp.status_code == 500
-    assert resp.json()["error_code"] == "CONFIG_INVALID"
-    assert deleted == []  # the row survives a broken config
-    clear_config_cache()
+        assert resp.status_code == 500
+        assert resp.json()["error_code"] == "CONFIG_INVALID"
+        assert deleted == []  # the row survives a broken config
+    finally:
+        # Must run even on a failed assertion, or the broken config leaks into
+        # the process-wide cache and fails later tests for an unrelated reason.
+        clear_config_cache()
 
 
 def test_delete_poster_refuses_file_outside_allowed_roots(
@@ -704,18 +698,22 @@ def test_webhook_config_read_failure_rejects_without_enqueue(
 
         worker = _Worker()
 
-    app = app_with_router(webhooks_router.router)
-    app.state.db = _DB()
-    app.add_exception_handler(ConfigError, handle_config_error)
-    client = TestClient(app, raise_server_exceptions=False)
-    resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
+    try:
+        app = app_with_router(webhooks_router.router)
+        app.state.db = _DB()
+        app.add_exception_handler(ConfigError, handle_config_error)
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.post("/api/webhooks/poster/add", json={"eventType": "Download"})
 
-    # The secret dependency propagates ConfigError to the shared handler
-    # before the body runs — CONFIG_INVALID, and nothing was enqueued.
-    assert resp.status_code == 500
-    assert resp.json()["error_code"] == "CONFIG_INVALID"
-    assert enqueued == []
-    clear_config_cache()
+        # The secret dependency propagates ConfigError to the shared handler
+        # before the body runs — CONFIG_INVALID, and nothing was enqueued.
+        assert resp.status_code == 500
+        assert resp.json()["error_code"] == "CONFIG_INVALID"
+        assert enqueued == []
+    finally:
+        # Must run even on a failed assertion, or the broken config leaks into
+        # the process-wide cache and fails later tests for an unrelated reason.
+        clear_config_cache()
 
 
 def test_webhook_signed_path_still_accepted(monkeypatch):

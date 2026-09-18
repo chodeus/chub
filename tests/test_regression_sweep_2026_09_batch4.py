@@ -202,9 +202,29 @@ def test_instance_toggle_rejects_a_missing_or_non_boolean_enabled(body, code):
 def test_unsupported_optimize_format_is_rejected(fmt):
     """The endpoint documents jpeg/webp/png; resolve_format defaults anything
     else to JPEG, so mode=optimize would rewrite the library silently."""
+    from backend.api import posters as posters_router
     from backend.util.poster_images import SUPPORTED_FORMATS
 
     assert fmt not in SUPPORTED_FORMATS
+
+    class _Stub:
+        def get_adapter(self, *a, **kw):
+            return self
+
+        def __getattr__(self, _name):
+            return lambda *a, **kw: None
+
+    app = FastAPI()
+    app.state.logger = _Stub()
+    app.state.db = object()
+    app.include_router(posters_router.router)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/api/posters/optimize", json={"format": fmt, "mode": "optimize"})
+
+    # Membership alone proves nothing: the endpoint must refuse, or
+    # mode=optimize silently rewrites the whole library as JPEG.
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "INVALID_FORMAT"
 
 
 @pytest.mark.parametrize("fmt", ["jpeg", "jpg", "webp", "png", "PNG"])

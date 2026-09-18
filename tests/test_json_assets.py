@@ -5,6 +5,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 # package-lock.json is generated + huge; `npm ci` already validates it.
 EXCLUDED = {"frontend/package-lock.json"}
@@ -12,9 +14,12 @@ EXCLUDED = {"frontend/package-lock.json"}
 
 def _tracked_json_files():
     """Return repo-relative paths of every git-tracked *.json outside EXCLUDED."""
-    out = subprocess.check_output(
-        ["git", "ls-files", "*.json"], cwd=REPO_ROOT, text=True
-    )
+    try:
+        out = subprocess.check_output(
+            ["git", "ls-files", "*.json"], cwd=REPO_ROOT, text=True
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        pytest.skip(f"git checkout unavailable: {exc}")
     return [p for p in out.splitlines() if p and p not in EXCLUDED]
 
 

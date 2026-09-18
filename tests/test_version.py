@@ -149,6 +149,9 @@ def test_published_build_reads_the_env_of_the_tag_its_flavour_tracks(
 @pytest.mark.parametrize("leg", ["token", "manifests/latest", "blobs/"])
 def test_published_build_is_none_when_the_registry_fails(leg, monkeypatch):
     """Unknown must never raise an update badge."""
+    # An ambient CHUB_IMAGE_FLAVOR=full would request manifests/full, missing
+    # the failing leg entirely and returning a build number instead of None.
+    monkeypatch.delenv("CHUB_IMAGE_FLAVOR", raising=False)
     monkeypatch.setattr(
         "backend.util.version.requests.get", _ghcr(**{leg: _Resp(ok=False, status=503)})
     )

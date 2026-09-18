@@ -445,13 +445,13 @@ def test_sync_single_asset_no_live_match_reports_not_found(tmp_path):
         url = "http://plex:32400"
 
         def get_libraries(self):
-            return ["Films"]
+            return []  # no libraries, so the live fallback resolves no target
 
         def section_type(self, name):
             return "movie"
 
         def upload_poster(self, **kw):
-            return False  # live search finds nothing anywhere
+            raise AssertionError("no target should have been resolved")
 
         def remove_label(self, *a, **k):
             pass
@@ -480,7 +480,59 @@ def test_sync_single_asset_no_live_match_reports_not_found(tmp_path):
     )
 
     assert result.success is False
-    assert result.reason in ("Upload to Plex failed", "No matching Plex entry found")
+    assert result.reason == "No matching Plex entry found"
+
+
+def test_sync_single_asset_live_target_that_uploads_nothing_reports_upload_failed(
+    tmp_path,
+):
+    """A live fallback target exists but the per-library search pushes nothing.
+    Production reports that as the upload failing, not as not-found."""
+    from types import SimpleNamespace
+
+    poster = tmp_path / "Ghost Movie (2099).jpg"
+    poster.write_bytes(b"poster-bytes")
+
+    class FakePlex:
+        url = "http://plex:32400"
+
+        def get_libraries(self):
+            return ["Films"]
+
+        def section_type(self, name):
+            return "movie"
+
+        def upload_poster(self, **kw):
+            return False  # live search finds nothing in that library
+
+        def remove_label(self, *a, **k):
+            pass
+
+    up = object.__new__(PosterUploader)
+    up.force = True
+    up.config = SimpleNamespace(upload_delay_ms=0)
+    up.logger = SimpleNamespace(
+        warning=lambda *a, **k: None, debug=lambda *a, **k: None
+    )
+    up.db = SimpleNamespace(media=SimpleNamespace(update=lambda **kw: None))
+    up._live_lib_types = {}
+
+    result = up._sync_single_asset(
+        asset={
+            "title": "Ghost Movie",
+            "asset_type": "movie",
+            "year": "2099",
+            "instance_name": "Chodeus",
+            "renamed_file": str(poster),
+        },
+        plex_client=FakePlex(),
+        index={},
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert result.success is False
+    assert result.reason == "Upload to Plex failed"
 
 
 def test_sync_single_asset_dedupes_same_library(tmp_path):

@@ -10,6 +10,7 @@ Two independent production faults are pinned here:
 """
 
 import logging
+import time
 
 import pytest
 
@@ -363,5 +364,10 @@ def test_formatter_renders_the_original_event_time():
 
     rendered = formatter.format(record)
 
-    assert formatter.formatTime(record, formatter.datefmt) in rendered
+    # Derive the expectation independently: format() rewrites record.created,
+    # so formatTime(record) would only echo whatever it just rendered.
+    expected = time.strftime(formatter.datefmt, time.localtime(flush_time - 2937))
+    flushed = time.strftime(formatter.datefmt, time.localtime(flush_time))
+    assert expected in rendered
+    assert flushed not in rendered
     assert record.created == flush_time - 2937

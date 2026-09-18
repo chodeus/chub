@@ -10,6 +10,7 @@ Covers:
 """
 
 import os
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
@@ -250,7 +251,9 @@ def test_open_read_connection_is_read_only(db):
     conn = db.poster.open_read_connection()
     try:
         assert conn.execute("SELECT COUNT(*) FROM poster_cache").fetchone() is not None
-        with pytest.raises(Exception):
+        with pytest.raises(
+            sqlite3.OperationalError, match="^attempt to write a readonly database$"
+        ):
             conn.execute(
                 "INSERT INTO poster_cache (asset_type, file) VALUES ('movie', '/x/y')"
             )

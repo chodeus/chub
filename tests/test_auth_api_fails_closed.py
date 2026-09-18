@@ -11,19 +11,15 @@ from backend.util.config import ConfigError
 
 
 @pytest.fixture
-def client(monkeypatch):
-    """Auth router on a bare app, with the real ConfigError -> 503 handler."""
+def client():
+    """Auth router on a bare app, with the production ConfigError handler."""
+    from backend.api.main import handle_config_error
+
     app = FastAPI()
+    # handle_config_error reads its logger off app.state, not through Depends.
+    app.state.logger = _StubLogger()
     app.include_router(auth_api.router)
-
-    @app.exception_handler(ConfigError)
-    async def _handler(request, exc):  # mirrors backend/api/main.py
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(
-            {"success": False, "code": "CONFIG_INVALID", "message": str(exc)},
-            status_code=503,
-        )
+    app.add_exception_handler(ConfigError, handle_config_error)
 
     # Override, don't monkeypatch: Depends bound the original at import time.
     app.dependency_overrides[auth_api.get_logger] = _StubLogger
@@ -32,6 +28,9 @@ def client(monkeypatch):
 
 class _StubLogger:
     """No-op logger so the handlers can log without app.state."""
+
+    def get_adapter(self, *_a, **_kw):
+        return self
 
     def __getattr__(self, _name):
         return lambda *a, **k: None
@@ -55,7 +54,8 @@ def test_setup_denies_and_never_writes_when_config_is_unreadable(client, monkeyp
     )
 
     assert resp.status_code != 200, "setup succeeded against an unreadable config"
-    assert resp.status_code == 503
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
     assert saved == [], "credentials were written despite the config read failing"
 
 
@@ -67,5 +67,6 @@ def test_auth_status_does_not_report_unconfigured_when_config_is_unreadable(
 
     resp = client.get("/api/auth/status")
 
-    assert resp.status_code == 503
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
     assert resp.json().get("data", {}).get("configured") is not False
