@@ -281,7 +281,7 @@ const AppliedVariantTable = ({ style }) => {
 const PosterStatsPage = () => {
     const toast = useToast();
     const [period, setPeriod] = useState('');
-    const [variantsOpen, setVariantsOpen] = useState(false);
+    const [activeVariant, setActiveVariant] = useState(null);
 
     const fetchStatsWithPeriod = useCallback(
         () => postersAPI.fetchStatistics(period ? { period } : {}),
@@ -452,12 +452,12 @@ const PosterStatsPage = () => {
                         color: 'text-success',
                         sub:
                             grandTotal.total > 0
-                                ? `${(grandTotal.total - grandTotal.unmatched).toLocaleString()} linked to library`
+                                ? `${(grandTotal.total - (grandTotal.unmatched ?? 0)).toLocaleString()} linked to library`
                                 : null,
                     },
                     {
                         label: 'UNMATCHED',
-                        value: (grandTotal.unmatched || 0).toLocaleString(),
+                        value: (grandTotal.unmatched ?? 0).toLocaleString(),
                         color: 'text-warning',
                         sub: 'no library item',
                     },
@@ -569,10 +569,13 @@ const PosterStatsPage = () => {
                         </p>
                         <BreakdownBars
                             bars={variantBars}
-                            onSelect={() => setVariantsOpen(o => !o)}
+                            activeLabel={activeVariant}
+                            onSelect={label =>
+                                setActiveVariant(prev => (prev === label ? null : label))
+                            }
                         />
                     </div>
-                    {variantsOpen && (
+                    {activeVariant && (
                         <div className="mt-4">
                             <div className="flex items-center justify-between gap-2 mb-2">
                                 <p className="text-sm text-fg-muted">
@@ -582,14 +585,10 @@ const PosterStatsPage = () => {
                                     icon="close"
                                     variant="ghost"
                                     aria-label="Hide variant lists"
-                                    onClick={() => setVariantsOpen(false)}
+                                    onClick={() => setActiveVariant(null)}
                                 />
                             </div>
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                {variantBars.map(b => (
-                                    <AppliedVariantTable key={b.label} style={b.label} />
-                                ))}
-                            </div>
+                            <AppliedVariantTable key={activeVariant} style={activeVariant} />
                         </div>
                     )}
                     {sourceBars.length > 0 && (

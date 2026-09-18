@@ -115,7 +115,7 @@ const PosterGDriveSearchPage = () => {
     }, [sources, filterBy, sortBy, now]);
 
     const totalFiles = useMemo(
-        () => sources.reduce((sum, s) => sum + (s.file_count || 0), 0),
+        () => sources.reduce((sum, s) => sum + (s.file_count ?? 0), 0),
         [sources]
     );
     const lastSyncLabel = useMemo(() => {
@@ -311,17 +311,17 @@ const PosterGDriveSearchPage = () => {
                                         >
                                             {source.location}
                                         </span>
-                                        <span className="font-mono text-xs text-fg-muted">
-                                            {(source.file_count || 0).toLocaleString()}
-                                        </span>
                                         <span
-                                            className="font-mono text-[11.5px] text-fg-subtle truncate"
+                                            className="font-mono text-xs text-fg-muted"
                                             title={
                                                 source.size_bytes > 0
                                                     ? formatSize(source.size_bytes)
                                                     : undefined
                                             }
                                         >
+                                            {(source.file_count ?? 0).toLocaleString()}
+                                        </span>
+                                        <span className="font-mono text-[11.5px] text-fg-subtle truncate">
                                             {formatLastSynced(source._lastSyncedMs)}
                                         </span>
                                         <span

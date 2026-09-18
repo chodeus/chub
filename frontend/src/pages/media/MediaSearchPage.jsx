@@ -156,10 +156,10 @@ const MediaSearchPage = () => {
     );
 
     const recent = useRecentQueries('chub_media_search_recent');
+    const { record: recordRecent } = recent;
     useEffect(() => {
-        if (term && hasResults) recent.record(term);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [term, hasResults]);
+        if (term && hasResults) recordRecent(term);
+    }, [term, hasResults, recordRecent]);
 
     const items = useMemo(() => results?.data?.items || results?.items || [], [results]);
     const total = useMemo(
