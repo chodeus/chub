@@ -106,7 +106,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
                 })
                 .then(result => {
                     // Ignore a superseded (out-of-order) response.
-                    if (!isMountedRef.current || seq !== requestSeqRef.current) return;
+                    if (!isMountedRef.current || seq !== requestSeqRef.current) return false;
                     const finalData = transform ? transform(result) : result;
                     setData(finalData);
                     setRetryCount(0);
@@ -114,10 +114,11 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
                         toast.success(successMessage);
                     }
                     if (onSuccess) onSuccess(finalData);
+                    return true;
                 })
                 .catch(err => {
-                    if (!isMountedRef.current || seq !== requestSeqRef.current) return;
-                    if (err.name === 'AbortError') return;
+                    if (!isMountedRef.current || seq !== requestSeqRef.current) return false;
+                    if (err.name === 'AbortError') return false;
 
                     setError(err);
 
@@ -127,7 +128,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
                                 executeRequestRef.current(retryAttempt + 1, executeOptions);
                             }
                         }, retryDelay);
-                        return;
+                        return false;
                     }
 
                     if (showErrorToast) {
@@ -141,6 +142,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
                             toast.error(errorMessage);
                         }
                     }
+                    return false;
                 })
                 .finally(() => {
                     if (isMountedRef.current && seq === requestSeqRef.current) {
@@ -168,7 +170,8 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
         executeRequestRef.current = executeRequest;
     }, [executeRequest]);
 
-    // Manual execution function
+    // Resolves true only when fresh data was committed. Errors are swallowed here,
+    // so a resolved promise on its own does not mean the fetch succeeded.
     const execute = useCallback(
         (executeOptions = {}) => {
             return executeRequest(0, executeOptions);

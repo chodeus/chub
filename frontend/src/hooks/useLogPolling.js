@@ -2,20 +2,7 @@ import { useEffect, useRef } from 'react';
 
 export const LOG_POLL_INTERVAL_MS = 5000;
 
-/**
- * useLogPolling - Auto-refresh log content
- *
- * Polls the refresh callback every LOG_POLL_INTERVAL_MS when both module and file
- * are selected. Clears interval on unmount or when selections change.
- * Skips ticks while a fetch is already in flight so slow log reads don't
- * stack up.
- *
- * @param {string} selectedModule - Currently selected module
- * @param {string} selectedLogFile - Currently selected log file
- * @param {Function} refreshCallback - Function to call every interval
- * @param {{current: boolean}} [inFlightRef] - Optional ref to skip overlapping polls
- * @returns {void}
- */
+/** Polls refreshCallback every LOG_POLL_INTERVAL_MS while a module and file are selected, skipping ticks that overlap an in-flight fetch. */
 export function useLogPolling(selectedModule, selectedLogFile, refreshCallback, inFlightRef) {
     const intervalRef = useRef(null);
 

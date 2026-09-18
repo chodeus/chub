@@ -136,3 +136,37 @@ describe('useApiData cancellation', () => {
         expect(result.current.isLoading).toBe(false);
     });
 });
+
+// Errors are swallowed here, so callers cannot tell a failed refresh from a
+// successful one by awaiting it — the resolved value is the only signal.
+describe('useApiData execute() outcome', () => {
+    it('resolves true when data was committed and false when the request failed', async () => {
+        const apiFunction = vi
+            .fn()
+            .mockResolvedValueOnce({ value: 'ok' })
+            // A plain Error is not retryable, so this settles through the catch.
+            .mockRejectedValueOnce(new Error('boom'));
+        const { result } = renderHook(() =>
+            useApiData({
+                apiFunction,
+                options: { immediate: false, showErrorToast: false, retryAttempts: 0 },
+            })
+        );
+
+        let committed;
+        await act(async () => {
+            committed = await result.current.execute();
+        });
+        expect(committed).toBe(true);
+        expect(result.current.data).toEqual({ value: 'ok' });
+
+        let failed;
+        await act(async () => {
+            failed = await result.current.execute();
+        });
+        expect(failed).toBe(false);
+        // The previous data is left in place, which is why the caller must not
+        // drop its optimistic value on a resolved-but-failed refresh.
+        expect(result.current.data).toEqual({ value: 'ok' });
+    });
+});
