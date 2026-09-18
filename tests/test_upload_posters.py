@@ -486,8 +486,7 @@ def test_sync_single_asset_no_live_match_reports_not_found(tmp_path):
 def test_sync_single_asset_live_target_that_uploads_nothing_reports_upload_failed(
     tmp_path,
 ):
-    """A live fallback target exists but the per-library search pushes nothing.
-    Production reports that as the upload failing, not as not-found."""
+    """A live target that uploads nothing reports upload failure, not not-found."""
     from types import SimpleNamespace
 
     poster = tmp_path / "Ghost Movie (2099).jpg"

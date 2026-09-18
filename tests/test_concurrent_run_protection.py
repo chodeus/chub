@@ -6,6 +6,7 @@
    returns deferred=True when the lock is already held (job_processor.py).
 """
 
+import logging
 import os
 import sys
 import time
@@ -34,8 +35,10 @@ def test_logger_start_time_resets_on_reinit(tmp_path, monkeypatch):
     instead of this run's duration.
     """
     monkeypatch.setenv("LOG_DIR", str(tmp_path))
-    # Process-wide set: restore it, or a later Logger() for an already-seen
-    # module repeats setup and log rotation (its handlers are reused, not doubled).
+    # Both outlive the test: the set, and the handler Logger attaches to the
+    # module's global logger, which holds a file under tmp_path.
+    module_logger = logging.getLogger("test_logger_reset_a")
+    saved_handlers = list(module_logger.handlers)
     saved = set(Logger._initialized)
     Logger._initialized.clear()
 
@@ -56,6 +59,10 @@ def test_logger_start_time_resets_on_reinit(tmp_path, monkeypatch):
         # the underlying logging.Logger via the adapter path).
         assert second._logger.start_time == second_start
     finally:
+        for handler in list(module_logger.handlers):
+            if handler not in saved_handlers:
+                module_logger.removeHandler(handler)
+                handler.close()
         Logger._initialized.clear()
         Logger._initialized.update(saved)
 
