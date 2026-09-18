@@ -32,6 +32,9 @@ function normalizeMapping(m) {
         app_instance: m.app_instance || '',
         labels: toLabelList(m.labels),
         plex_instances: (m.plex_instances || []).map(p => ({
+            // Removing a row shifts every later index, so an index key would re-map a
+            // mounted LabelarrLibraryPicker onto the next target's instance.
+            _key: `p${_uid++}`,
             instance: p.instance || '',
             library_names: Array.isArray(p.library_names)
                 ? p.library_names.filter(Boolean)
@@ -466,7 +469,7 @@ const MappingCard = ({
         onChange({
             plex_instances: [
                 ...mapping.plex_instances,
-                { instance: plexOptions[0] || '', library_names: [] },
+                { _key: `p${_uid++}`, instance: plexOptions[0] || '', library_names: [] },
             ],
         });
     const removePlex = idx =>
@@ -607,7 +610,7 @@ const MappingCard = ({
                         ) : (
                             mapping.plex_instances.map((p, idx) => (
                                 <div
-                                    key={idx}
+                                    key={p._key || idx}
                                     className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-2 items-start"
                                 >
                                     <select

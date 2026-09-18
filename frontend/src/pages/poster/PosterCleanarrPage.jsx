@@ -891,7 +891,9 @@ const PosterCleanarrPage = () => {
             // can optimistically remove them from the UI when the job succeeds.
             // Null = full-library run; we don't know what got deleted, so we
             // leave deletedPaths alone (user re-scans for a fresh count).
-            pendingCleanupTargetsRef.current = body.target_paths || null;
+            // Only the bloat pass touches the selected variants; with bloat off the
+            // mode is 'nothing', so nothing was deleted and nothing may be hidden.
+            pendingCleanupTargetsRef.current = cleanBloat ? body.target_paths || null : null;
             setLiveJobId(jobId);
             setSelectedPaths(new Set());
         } catch {

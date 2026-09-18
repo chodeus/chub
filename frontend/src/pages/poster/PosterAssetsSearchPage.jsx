@@ -562,15 +562,19 @@ const PosterAssetsSearchPage = () => {
                     <div className="grid gap-2">
                         {collections.map((col, i) => (
                             <div key={col.id || i}>
-                                <div
-                                    className="p-3 rounded-lg bg-surface border border-border flex items-center justify-between cursor-pointer hover:bg-surface-alt"
-                                    onClick={() =>
-                                        setExpandedCollection(
-                                            expandedCollection === col.id ? null : col.id
-                                        )
-                                    }
-                                >
-                                    <div className="flex items-center gap-2">
+                                {/* Toggle and delete are SIBLINGS: IconButton renders a
+                                    button, so nesting it would be invalid markup. */}
+                                <div className="p-3 rounded-lg bg-surface border border-border flex items-center justify-between hover:bg-surface-alt">
+                                    <button
+                                        type="button"
+                                        aria-expanded={expandedCollection === col.id}
+                                        className="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 cursor-pointer"
+                                        onClick={() =>
+                                            setExpandedCollection(
+                                                expandedCollection === col.id ? null : col.id
+                                            )
+                                        }
+                                    >
                                         <span className="material-symbols-outlined text-sm text-fg-muted">
                                             {expandedCollection === col.id
                                                 ? 'expand_less'
@@ -584,7 +588,7 @@ const PosterAssetsSearchPage = () => {
                                                 ({col.poster_count} posters)
                                             </span>
                                         )}
-                                    </div>
+                                    </button>
                                     <IconButton
                                         icon="delete"
                                         aria-label="Delete collection"
