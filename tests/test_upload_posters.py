@@ -434,8 +434,7 @@ def test_sync_single_asset_live_fallback_when_absent_from_cache(tmp_path):
 
 
 def test_sync_single_asset_no_live_match_reports_not_found(tmp_path):
-    """When neither the cache nor a live search finds the item in any library,
-    it still reports the clear 'No matching Plex entry found' failure."""
+    """No cache match and no live library target reports no matching Plex entry."""
     from types import SimpleNamespace
 
     poster = tmp_path / "Ghost Movie (2099).jpg"
