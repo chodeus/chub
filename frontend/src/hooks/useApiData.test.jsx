@@ -15,6 +15,12 @@ const deferred = () => {
     return { promise, settle };
 };
 
+// Suite-level: a failed assertion inside a fake-timer test would otherwise leave
+// them installed for every later test in this file.
+afterEach(() => {
+    vi.useRealTimers();
+});
+
 describe('useApiData cancellation', () => {
     it('drops the loading state when a request is cancelled', async () => {
         const pending = deferred();
@@ -75,7 +81,6 @@ describe('useApiData cancellation', () => {
         });
 
         expect(result.current.data).toBeNull();
-        vi.useRealTimers();
     });
 
     it('abandons the in-flight request when dependencies change', async () => {
