@@ -2,7 +2,7 @@
  * Spinner component testing page
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Spinner } from '../../components/ui';
 import { useToast } from '../../contexts/ToastContext.jsx';
 
@@ -93,16 +93,21 @@ const LoadingStateSimulation = React.memo(() => {
         save: false,
     });
 
-    const { toast } = useToast();
+    const toast = useToast();
+    const timersRef = useRef([]);
+
+    useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
     const simulateLoading = useCallback(
         (key, duration = 2000) => {
             setLoadingStates(prev => ({ ...prev, [key]: true }));
 
-            setTimeout(() => {
-                setLoadingStates(prev => ({ ...prev, [key]: false }));
-                toast.success(`${key} operation completed!`);
-            }, duration);
+            timersRef.current.push(
+                setTimeout(() => {
+                    setLoadingStates(prev => ({ ...prev, [key]: false }));
+                    toast.success(`${key} operation completed!`);
+                }, duration)
+            );
         },
         [toast]
     );
@@ -174,11 +179,16 @@ const AnimationPerformanceTest = React.memo(() => {
     const [spinnerCount, setSpinnerCount] = useState(1);
     const [isStressed, setIsStressed] = useState(false);
 
+    const stressTimerRef = useRef(null);
+
+    useEffect(() => () => clearTimeout(stressTimerRef.current), []);
+
     const stressTest = useCallback(() => {
         setIsStressed(true);
         setSpinnerCount(50);
 
-        setTimeout(() => {
+        clearTimeout(stressTimerRef.current);
+        stressTimerRef.current = setTimeout(() => {
             setIsStressed(false);
             setSpinnerCount(1);
         }, 5000);

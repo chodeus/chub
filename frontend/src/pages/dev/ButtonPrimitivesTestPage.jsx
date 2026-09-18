@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PageHeader } from '../../components/ui';
 import { Card } from '../../components/ui/card/Card';
 import { Button } from '../../components/ui/button/Button';
@@ -24,9 +24,14 @@ export const ButtonPrimitivesTestPage = () => {
     const [size, setSize] = useState('medium');
     const [isLoading, setIsLoading] = useState(false);
 
+    const loadingTimerRef = useRef(null);
+
+    useEffect(() => () => clearTimeout(loadingTimerRef.current), []);
+
     const handleLoadingDemo = () => {
         setIsLoading(true);
-        setTimeout(() => setIsLoading(false), 2000);
+        clearTimeout(loadingTimerRef.current);
+        loadingTimerRef.current = setTimeout(() => setIsLoading(false), 2000);
     };
 
     return (

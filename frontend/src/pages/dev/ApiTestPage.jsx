@@ -2,7 +2,7 @@
  * API testing page
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { api } from '../../utils/api/index.js';
@@ -284,7 +284,7 @@ const ErrorTestComponent = React.memo(() => {
                         : errorType === '400'
                           ? 'configAPI.fetchSection()'
                           : errorType === '500'
-                            ? 'systemAPI.test()'
+                            ? 'apiCore.get()'
                             : 'systemAPI.getVersion()'}
                 </p>
                 <p>
@@ -305,12 +305,17 @@ ErrorTestComponent.displayName = 'ErrorTestComponent';
  */
 const ToastTestComponent = React.memo(() => {
     const toast = useToast();
+    const timersRef = useRef([]);
+
+    useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
     const testToasts = useCallback(() => {
         toast.success('Success! Everything is working perfectly.');
-        setTimeout(() => toast.error('Error! Something went wrong.'), 500);
-        setTimeout(() => toast.warning('Warning! Please check your settings.'), 1000);
-        setTimeout(() => toast.info('Info: Here is some useful information.'), 1500);
+        timersRef.current.push(
+            setTimeout(() => toast.error('Error! Something went wrong.'), 500),
+            setTimeout(() => toast.warning('Warning! Please check your settings.'), 1000),
+            setTimeout(() => toast.info('Info: Here is some useful information.'), 1500)
+        );
     }, [toast]);
 
     return (

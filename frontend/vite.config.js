@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     react({
-      // Use SWC for React 19 support
+      // Use the automatic JSX runtime
       jsxRuntime: 'automatic'
     })
   ],

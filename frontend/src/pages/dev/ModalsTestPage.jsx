@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal } from '../../components/ui';
 import { Button } from '../../components/ui';
 import FieldRegistry from '../../components/fields/FieldRegistry';
@@ -74,14 +74,29 @@ const ModalsTestPage = () => {
         setFormOpen(false);
     };
 
+    const mountedRef = useRef(true);
+
+    // Set on mount, not just cleared on unmount: a StrictMode double-mount runs
+    // the cleanup first, which would otherwise leave this false for the real
+    // mount. Same trap as useMountedRef in Cl2kMakerPage.
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
+
     const handleStressTest = async () => {
         setStressTestRunning(true);
         setStressTestCount(0);
 
         for (let i = 0; i < 10; i++) {
+            // Twenty sequential waits, so stop touching state once unmounted.
+            if (!mountedRef.current) return;
             setStressTestCount(i + 1);
             setSizeModalOpen('small');
             await new Promise(resolve => setTimeout(resolve, 100));
+            if (!mountedRef.current) return;
             setSizeModalOpen(null);
             await new Promise(resolve => setTimeout(resolve, 100));
         }
