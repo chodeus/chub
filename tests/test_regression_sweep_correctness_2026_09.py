@@ -275,6 +275,7 @@ def test_web_server_returns_once_uvicorn_reports_started(monkeypatch):
     log.get_adapter = lambda *a, **k: log
 
     release = threading.Event()
+    stopped = threading.Event()
 
     class _ReadyServer:
         def __init__(self, config):
@@ -283,14 +284,16 @@ def test_web_server_returns_once_uvicorn_reports_started(monkeypatch):
         def run(self):
             self.started = True
             release.wait(30)  # serve; the caller must not wait for this
+            stopped.set()
 
     monkeypatch.setattr(server_mod.uvicorn, "Server", _ReadyServer)
     monkeypatch.setattr(server_mod.uvicorn, "Config", lambda *a, **k: object())
-    server_mod.start_web_server(logger=log, module_orchestrator=None)
-    # Returned while run() was still serving — the invariant a wall-clock
-    # budget only stood in for, and which host load could break.
-    assert not release.is_set()
-    release.set()
+    try:
+        server_mod.start_web_server(logger=log, module_orchestrator=None)
+        # Returned while run() was still serving, not after it finished.
+        assert not stopped.is_set()
+    finally:
+        release.set()
 
 
 def test_web_server_readiness_timeout_fails_the_boot(monkeypatch):
