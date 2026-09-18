@@ -1,0 +1,626 @@
+"""Tests for backend/util/helper.py — match, extraction, table, variant logic."""
+
+import os
+
+
+from backend.util.helper import (
+    classify_match,
+    compare_strings,
+    create_bar,
+    create_table,
+    dict_diff,
+    extract_ids,
+    extract_mbid,
+    extract_year,
+    generate_title_variants,
+    get_config_dir,
+    get_log_dir,
+    is_match,
+    progress,
+)
+
+
+# --- classify_match ---
+
+
+def test_classify_match_id_is_high_confidence():
+    status, conf = classify_match(True, "ID match: tmdb_id")
+    assert status == "matched"
+    assert conf >= 0.95
+
+
+def test_classify_match_loose_is_needs_review():
+    status, conf = classify_match(True, "Titles match under loose string comparison")
+    assert status == "needs_review"
+    assert conf < 0.7
+
+
+def test_classify_match_normalized_is_matched_medium():
+    status, conf = classify_match(
+        True, "Asset normalized title equals media normalized title"
+    )
+    assert status == "matched"
+    assert 0.7 <= conf < 0.95
+
+
+def test_classify_match_no_match_is_unmatched():
+    assert classify_match(False, "") == ("unmatched", 0.0)
+
+
+# --- extract_year ---
+
+
+def test_extract_year_matches_parenthesized():
+    assert extract_year("Movie (1999)") == 1999
+
+
+def test_extract_year_returns_none_when_absent():
+    assert extract_year("Movie") is None
+
+
+def test_extract_year_ignores_collection_marker():
+    # year_regex has negative lookahead for "Collection"
+    assert extract_year("Movie (2020) Collection extras") is None
+
+
+# --- extract_ids ---
+
+
+def test_extract_ids_tmdb():
+    tmdb, tvdb, imdb = extract_ids("Movie {tmdb-12345}")
+    assert tmdb == 12345
+    assert tvdb is None
+    assert imdb is None
+
+
+def test_extract_ids_tvdb_variants():
+    tmdb, tvdb, imdb = extract_ids("Show {tvdb 99}")
+    assert tvdb == 99
+
+
+def test_extract_ids_imdb_tt_prefix():
+    tmdb, tvdb, imdb = extract_ids("Movie {imdb-tt1234567}")
+    assert imdb == "tt1234567"
+
+
+def test_extract_ids_returns_none_when_absent():
+    assert extract_ids("Just a title") == (None, None, None)
+
+
+# --- extract_mbid ---
+
+
+def test_extract_mbid_tag():
+    mbid = extract_mbid("REZZ {mbid-12345678-1234-1234-1234-123456789abc}")
+    assert mbid == "12345678-1234-1234-1234-123456789abc"
+
+
+def test_extract_mbid_lowercases():
+    mbid = extract_mbid("Artist {mbid-ABCDEF12-3456-7890-ABCD-EF1234567890}")
+    assert mbid == "abcdef12-3456-7890-abcd-ef1234567890"
+
+
+def test_extract_mbid_absent():
+    assert extract_mbid("Inception (2010) {tmdb-27205}") is None
+    assert extract_mbid("") is None
+
+
+# --- is_match: musicbrainz ---
+
+
+def test_is_match_musicbrainz_id_equal():
+    ok, reason = is_match(
+        {"musicbrainz_id": "abc-123", "title": "Different"},
+        {"musicbrainz_id": "abc-123", "title": "Whatever"},
+    )
+    assert ok and reason == "ID match: musicbrainz_id"
+
+
+def test_is_match_musicbrainz_id_differs_rejects():
+    # Both carry an MBID and they differ → no match, never falls through to a
+    # title heuristic (which would let two artists' albums collide).
+    ok, _ = is_match(
+        {"musicbrainz_id": "abc-123", "title": "Greatest Hits"},
+        {"musicbrainz_id": "xyz-999", "title": "Greatest Hits"},
+    )
+    assert ok is False
+
+
+def test_is_match_musicbrainz_one_sided_falls_back_to_title():
+    # Only one side has an MBID → fall through to title heuristics.
+    ok, _ = is_match(
+        {"title": "REZZ", "normalized_title": "rezz"},
+        {"musicbrainz_id": "abc-123", "title": "REZZ", "normalized_title": "rezz"},
+    )
+    assert ok is True
+
+
+def test_is_match_album_same_title_different_artist_rejected():
+    # No MBID on either side; same album title under different artists must NOT
+    # match (parent-scoping gate).
+    ok, _ = is_match(
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "ABBA",
+        },
+    )
+    assert ok is False
+
+
+def test_is_match_album_same_title_same_artist_matches():
+    ok, _ = is_match(
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+    )
+    assert ok is True
+
+
+def test_is_match_album_missing_one_parent_still_matches():
+    # When one side lacks a parent we can't disambiguate — fall through (match).
+    ok, _ = is_match(
+        {"title": "Greatest Hits", "normalized_title": "greatesthits"},
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+    )
+    assert ok is True
+
+
+# --- compare_strings ---
+
+
+def test_compare_strings_ignores_punctuation_and_case():
+    assert compare_strings("Mr & Mrs Smith", "Mr&Mrs.Smith") is True
+    assert compare_strings("the matrix!", "The Matrix") is True
+
+
+def test_compare_strings_distinguishes_different():
+    assert compare_strings("Inception", "Interstellar") is False
+
+
+# --- generate_title_variants ---
+
+
+def test_generate_title_variants_drops_leading_article():
+    variants = generate_title_variants("The Matrix")
+    assert "Matrix" in variants["alternate_titles"]
+
+
+def test_generate_title_variants_adds_collection_when_missing():
+    variants = generate_title_variants("Star Wars")
+    assert "Star Wars Collection" in variants["alternate_titles"]
+
+
+def test_generate_title_variants_does_not_add_collection_if_present():
+    variants = generate_title_variants("Star Wars Collection")
+    # Should not add another "... Collection Collection"
+    assert "Star Wars Collection Collection" not in variants["alternate_titles"]
+
+
+def test_generate_title_variants_alignment():
+    variants = generate_title_variants("The Matrix")
+    assert len(variants["alternate_titles"]) == len(
+        variants["normalized_alternate_titles"]
+    )
+
+
+# --- is_match ---
+
+
+def test_is_match_id_tmdb():
+    # Years included because a tmdb id is namespaced — it only reports an
+    # "ID match" reason once a year corroborates it.
+    asset = {"tmdb_id": "123", "year": 2020}
+    media = {"tmdb_id": "123", "year": 2020}
+    matched, reason = is_match(asset, media)
+    assert matched
+    assert "tmdb_id" in reason
+
+
+def test_is_match_tmdb_namespace_collision_rejected():
+    """movie 79063 and tv 79063 are different entities. A logo-only artwork drive
+    has no season/tvdb files to type its TV entries as shows, so they reach the
+    matcher typed "movie" carrying only {tmdb-N} — the years must reject them."""
+    asset = {"title": "Cunk on Earth", "tmdb_id": "79063", "year": 2022}
+    media = {"title": "The Unkabogable Praybeyt Benjamin", "tmdb_id": "79063", "year": 2011}
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_tmdb_id_with_agreeing_year_still_matches():
+    asset = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    media = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
+def test_is_match_yearless_tmdb_collision_rejected():
+    """A yearless asset carries no tiebreak, so tmdb equality alone can't carry it.
+    3,482 rows in a live library are yearless with only a tmdb id."""
+    asset = {"title": "Cunk on Earth", "normalized_title": "cunkonearth", "tmdb_id": "79063"}
+    media = {
+        "title": "The Unkabogable Praybeyt Benjamin",
+        "normalized_title": "theunkabogablepraybeytbenjamin",
+        "tmdb_id": "79063",
+        "year": 2011,
+    }
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_tmdb_rejected_when_the_media_has_no_year():
+    """The asset knowing a year is not enough — with no media year there is
+    nothing to agree WITH, so a shared tmdb number proves nothing."""
+    asset = {
+        "title": "Cunk on Earth",
+        "normalized_title": "cunkonearth",
+        "tmdb_id": "79063",
+        "year": 2022,
+    }
+    media = {
+        "title": "The Unkabogable Praybeyt Benjamin",
+        "normalized_title": "theunkabogablepraybeytbenjamin",
+        "tmdb_id": "79063",
+    }
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_tmdb_accepts_a_secondary_year():
+    """secondary_year/folder_year count as known media years, not just `year`."""
+    asset = {"title": "Inception", "tmdb_id": "27205", "year": 2010}
+    media = {"title": "Inception", "tmdb_id": "27205", "secondary_year": 2010}
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
+def test_is_match_yearless_tmdb_still_matches_when_the_title_agrees():
+    """An untrusted tmdb agreement falls through to the title checks rather than
+    rejecting outright, so a genuine yearless poster still lands."""
+    asset = {"title": "Inception", "normalized_title": "inception", "tmdb_id": "27205"}
+    media = {
+        "title": "Inception",
+        "normalized_title": "inception",
+        "tmdb_id": "27205",
+        "year": 2010,
+    }
+    matched, reason = is_match(asset, media)
+    assert matched and reason
+
+
+def test_is_match_tvdb_id_not_gated_by_year():
+    """tvdb ids are globally unique, so a year disagreement must NOT block them —
+    180 live rows match on tvdb while carrying a stale/other-namespace tmdb id."""
+    asset = {"title": "Doctor Who", "tvdb_id": "78804", "year": 1963}
+    media = {"title": "Doctor Who", "tvdb_id": "78804", "year": 2005}
+    matched, reason = is_match(asset, media)
+    assert matched and "tvdb_id" in reason
+
+
+def test_is_match_imdb_id_not_gated_by_year():
+    asset = {"title": "Doctor Who", "imdb_id": "tt0436992", "year": 1963}
+    media = {"title": "Doctor Who", "imdb_id": "tt0436992", "year": 2005}
+    matched, reason = is_match(asset, media)
+    assert matched and "imdb_id" in reason
+
+
+def test_is_match_agreeing_tmdb_survives_a_stale_imdb_tag():
+    """A later disagreeing source must NOT veto an agreeing one. Real case: the
+    show "Lynley" (2025) carries tt33022310 on the poster and tt33040971 in *arr
+    — one entity, one stale tag. Rejecting on any conflict loses its poster AND
+    logo, and every such conflict measured against a live library was this shape."""
+    asset = {
+        "title": "Lynley",
+        "normalized_title": "lynley",
+        "tmdb_id": "12345",
+        "imdb_id": "tt33022310",
+        "year": 2025,
+    }
+    media = {
+        "title": "Lynley",
+        "normalized_title": "lynley",
+        "tmdb_id": "12345",
+        "imdb_id": "tt33040971",
+        "year": 2025,
+    }
+    matched, reason = is_match(asset, media)
+    assert matched and "tmdb_id" in reason
+
+
+def test_is_match_id_mismatch_blocks_title_fallback():
+    """When both have IDs and they don't match, return False (no title fallback)."""
+    asset = {"tmdb_id": "1", "title": "Same Title", "year": 2020}
+    media = {"tmdb_id": "2", "title": "Same Title", "year": 2020}
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_title_match_no_ids():
+    asset = {"title": "Inception", "year": 2010}
+    media = {"title": "Inception", "year": 2010}
+    matched, reason = is_match(asset, media)
+    assert matched
+    assert reason  # has a diagnostic string
+
+
+def test_is_match_year_mismatch_blocks_title_match():
+    asset = {"title": "Inception", "year": 2010}
+    media = {"title": "Inception", "year": 1999}
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_year_within_one_tolerated():
+    # Plex/TMDB/*arr year drift (production vs. release year): a 1-year gap on a
+    # title match must still match (e.g. Plex says 2012, TMDB says 2013).
+    asset = {"title": "Thanks for Sharing", "year": 2013}
+    media = {"title": "Thanks for Sharing", "year": 2012}
+    matched, _ = is_match(asset, media)
+    assert matched is True
+
+
+def test_is_match_year_off_by_two_blocks():
+    # Tolerance is strictly ±1 — a 2-year gap is still a mismatch.
+    asset = {"title": "Thanks for Sharing", "year": 2014}
+    media = {"title": "Thanks for Sharing", "year": 2012}
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_normalized_title_match():
+    asset = {"normalized_title": "inception", "year": 2010}
+    media = {"normalized_title": "inception", "year": 2010}
+    matched, _ = is_match(asset, media)
+    assert matched
+
+
+def test_is_match_no_match_returns_empty_reason():
+    matched, reason = is_match(
+        {"title": "A", "year": 1900}, {"title": "B", "year": 2000}
+    )
+    assert matched is False
+    assert reason == ""
+
+
+def test_is_match_imdb_id_match():
+    asset = {"imdb_id": "tt1234567"}
+    media = {"imdb_id": "tt1234567"}
+    matched, reason = is_match(asset, media)
+    assert matched
+    assert "imdb_id" in reason
+
+
+def test_is_match_imdb_invalid_format_ignored():
+    """imdb_id must start with 'tt' to count as a valid ID."""
+    asset = {"imdb_id": "1234567", "title": "X", "year": 2000}  # invalid imdb
+    media = {"imdb_id": "1234567", "title": "X", "year": 2000}
+    matched, _ = is_match(asset, media)
+    # IDs invalid -> falls through to title matching -> match by title
+    assert matched is True
+
+
+# --- New behavior added in 57cd537 (ID-source overlap rule) ---
+
+
+def test_is_match_falls_back_to_title_when_id_sources_dont_overlap():
+    """Asset has only tmdb_id, media has only tvdb_id — no shared source,
+    so title/year heuristics should still run."""
+    asset = {"tmdb_id": "5", "title": "Show", "year": 2020}
+    media = {"tvdb_id": "9", "title": "Show", "year": 2020}
+    matched, reason = is_match(asset, media)
+    assert matched is True
+    # Match should land on a title rule, not an ID rule
+    assert "ID match" not in reason
+
+
+def test_is_match_shared_id_mismatch_short_circuits_even_with_other_unique_ids():
+    """Both have tmdb_id (values differ); media also has tvdb_id only.
+    The shared source mismatching short-circuits to False."""
+    asset = {"tmdb_id": "1", "title": "T", "year": 2020}
+    media = {"tmdb_id": "2", "tvdb_id": "9", "title": "T", "year": 2020}
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
+def test_is_match_zero_ids_treated_as_missing():
+    """ID values of 0 / "0" / "" / "None" should be ignored as invalid,
+    leaving title fallback in play."""
+    asset = {"tmdb_id": 0, "title": "X", "year": 2020}
+    media = {"tmdb_id": "0", "title": "X", "year": 2020}
+    matched, _ = is_match(asset, media)
+    # No valid shared ID -> title match wins
+    assert matched is True
+
+
+def test_is_match_imdb_id_case_insensitive():
+    """imdb_id should normalize case before comparison."""
+    asset = {"imdb_id": "TT1234567"}
+    media = {"imdb_id": "tt1234567"}
+    matched, reason = is_match(asset, media)
+    assert matched is True
+    assert "imdb_id" in reason
+
+
+def test_is_match_year_accepts_string_form():
+    """Year stored as a string (DB JSON form) should still match."""
+    asset = {"title": "Inception", "year": "2010"}
+    media = {"title": "Inception", "year": 2010}
+    matched, _ = is_match(asset, media)
+    assert matched is True
+
+
+def test_is_match_year_none_string_treated_as_missing():
+    """Literal 'None' / '' should be normalized to None and skip the year check."""
+    asset = {"title": "Inception", "year": "None"}
+    media = {"title": "Inception", "year": ""}
+    matched, _ = is_match(asset, media)
+    assert matched is True  # both years None -> year check passes
+
+
+def test_is_match_alternate_titles_as_json_string():
+    """media.alternate_titles can arrive as a JSON-encoded string from the DB."""
+    asset = {"title": "AltName", "year": 2020}
+    media = {
+        "title": "Canonical",
+        "year": 2020,
+        "alternate_titles": '["AltName", "OtherName"]',
+    }
+    matched, reason = is_match(asset, media)
+    assert matched is True
+    assert "alternate" in reason.lower()
+
+
+def test_is_match_normalized_alternate_titles_as_json_string():
+    asset = {"normalized_title": "altname", "year": 2020}
+    media = {
+        "normalized_title": "canonical",
+        "year": 2020,
+        "normalized_alternate_titles": '["altname"]',
+    }
+    matched, _ = is_match(asset, media)
+    assert matched is True
+
+
+def test_is_match_invalid_json_alternate_titles_handled():
+    """Malformed JSON in alternate_titles must not raise."""
+    asset = {"title": "X", "year": 2020}
+    media = {"title": "X", "year": 2020, "alternate_titles": "not-json"}
+    matched, _ = is_match(asset, media)
+    # Falls back to direct title equality
+    assert matched is True
+
+
+def test_is_match_folder_year_annotation():
+    """When media has 'folder' with (YYYY), match parses folder_title/year."""
+    asset = {"title": "Inception", "year": 2010}
+    media = {"folder": "/data/movies/Inception (2010)"}
+    matched, _ = is_match(asset, media)
+    # After processing media should have folder_title/year populated
+    assert media.get("folder_title") == "Inception"
+    assert media.get("folder_year") == 2010
+    assert matched
+
+
+# --- dict_diff ---
+
+
+def test_dict_diff_detects_change():
+    diffs = dict_diff({"a": 1}, {"a": 2})
+    assert ("a", 1, 2) in diffs
+
+
+def test_dict_diff_detects_addition():
+    diffs = dict_diff({}, {"a": 1})
+    assert ("a", None, 1) in diffs
+
+
+def test_dict_diff_nested():
+    diffs = dict_diff({"x": {"y": 1}}, {"x": {"y": 2}})
+    assert any("x.y" in path for path, _, _ in diffs)
+
+
+def test_dict_diff_no_change_returns_empty():
+    assert dict_diff({"a": 1}, {"a": 1}) == []
+
+
+def test_dict_diff_list_grow():
+    diffs = dict_diff([1, 2], [1, 2, 3])
+    assert any(new == 3 for _, _, new in diffs)
+
+
+# --- create_table ---
+
+
+def test_create_table_renders_rows():
+    out = create_table([["Header"], ["Row1"]])
+    assert "Header" in out
+    assert "Row1" in out
+
+
+def test_create_table_empty():
+    assert "No data" in create_table([])
+
+
+# --- create_bar ---
+
+
+def test_create_bar_centers_text():
+    bar = create_bar("OK")
+    assert "OK" in bar
+    assert len(bar.splitlines()[1]) >= 76
+
+
+# --- progress ---
+
+
+def test_progress_dummy_when_console_off(monkeypatch):
+    monkeypatch.delenv("LOG_TO_CONSOLE", raising=False)
+    result = list(progress([1, 2, 3]))
+    assert result == [1, 2, 3]
+
+
+# --- get_log_dir / get_config_dir ---
+
+
+def test_get_log_dir_uses_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    d = get_log_dir("modx")
+    assert d.startswith(str(tmp_path))
+    assert os.path.isdir(d)
+
+
+def test_get_config_dir_returns_path():
+    d = get_config_dir()
+    assert isinstance(d, str) and d
+
+
+def test_is_match_folder_normalized_title_fallback():
+    """When a media row's title differs from its folder, an asset matching the
+    folder-derived title should still match. Regression: is_match read
+    media['normalized_folder'] but the field is set as
+    'normalized_folder_title', so this fallback was dead."""
+    asset = {"title": "The Lovers", "normalized_title": "thelovers", "year": 2023}
+    media = {
+        "title": "Lovers, The",
+        "normalized_title": "loversthe",
+        "folder": "/tv/The Lovers (2023)",
+        "year": 2023,
+        "alternate_titles": "[]",
+        "normalized_alternate_titles": "[]",
+    }
+    matched, reason = is_match(asset, media)
+    assert matched is True
+    assert "folder" in reason.lower()
+
+
+def test_is_match_yearless_asset_matches_yeared_media():
+    """A yearless poster should match a yeared media row on title (year absent
+    on one side = unknown, not a mismatch)."""
+    asset = {"title": "Breaking Bad", "normalized_title": "breakingbad"}
+    media = {"title": "Breaking Bad", "normalized_title": "breakingbad", "year": 2008}
+    matched, _ = is_match(asset, media)
+    assert matched is True
+
+
+def test_is_match_both_years_present_and_differ_still_blocks():
+    """When BOTH sides have a year and they differ, it must still block."""
+    asset = {"title": "The Lovers", "year": 2017}
+    media = {"title": "The Lovers", "year": 2023}
+    matched, _ = is_match(asset, media)
+    assert matched is False

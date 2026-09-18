@@ -1,0 +1,936 @@
+"""Tests for the posters.py query methods that moved into the DB interfaces.
+
+Two layers: the new PosterCache / MediaCache / CollectionCache methods against a
+real temp database, then the poster handlers whose contract nothing else pinned.
+"""
+
+import os
+import sys
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from backend.util.config import ChubConfig, ConfigError  # noqa: E402
+from backend.util.database import ChubDB  # noqa: E402
+from backend.util.path_safety import is_path_allowed  # noqa: E402
+
+
+class _StubLog:
+    """Swallows every log call; get_adapter returns itself."""
+
+    def __getattr__(self, _):
+        """Any log method is a no-op."""
+        return lambda *a, **k: None
+
+    def get_adapter(self, *_a, **_kw):
+        """Adapters are the same sink."""
+        return self
+
+
+@pytest.fixture
+def db(tmp_path):
+    """A ChubDB backed by a real (temporary) sqlite file."""
+    with ChubDB(_StubLog(), db_path=str(tmp_path / "chub.db")) as database:
+        yield database
+
+
+def _client(db):
+    """Mount the posters router on a bare app carrying main.py's ConfigError handler."""
+    import backend.api.main as apimain
+    import backend.api.posters as posters
+
+    app = FastAPI()
+    app.state.logger = _StubLog()
+    app.state.db = db
+    app.add_exception_handler(ConfigError, apimain.handle_config_error)
+    app.include_router(posters.router)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def _seed_poster(db, title, file=None, folder="/src", **fields):
+    """Upsert one poster_cache row and return its integer id."""
+    path = file or f"/src/{title}.jpg"
+    db.poster.upsert(
+        {
+            "title": title,
+            "normalized_title": title.lower(),
+            "year": 2021,
+            "tmdb_id": None,
+            "tvdb_id": None,
+            "imdb_id": None,
+            "season_number": None,
+            "folder": folder,
+            "file": path,
+            "asset_type": "movie",
+            **fields,
+        }
+    )
+    row = db.poster.execute_query(
+        "SELECT id FROM poster_cache WHERE file=?", (path,), fetch_one=True
+    )
+    return row["id"]
+
+
+def _seed_media(db, title, instance_name="radarr", original_file=None, **fields):
+    """Upsert one media row (optionally matched to a poster file) and return its id."""
+    item = {"title": title, "normalized_title": title.lower(), "year": 2021, **fields}
+    db.media.upsert(item, "movie", "radarr", instance_name)
+    row = db.media.execute_query(
+        "SELECT id FROM media_cache WHERE title=? AND instance_name=?",
+        (title, instance_name),
+        fetch_one=True,
+    )
+    if original_file:
+        db.media.update(
+            asset_type="movie",
+            title=title,
+            year=2021,
+            instance_name=instance_name,
+            matched_value=1,
+            original_file=original_file,
+            id=row["id"],
+        )
+    return row["id"]
+
+
+# --- PosterCache.get_collections / get_collection ---------------------------
+
+
+def test_get_collections_orders_by_name_not_insertion(db):
+    """The list is name-ascending, so insertion order must not leak through."""
+    db.poster.create_collection("Zebra", None, "2026-01-01T00:00:00")
+    db.poster.create_collection("Alpha", None, "2026-01-02T00:00:00")
+
+    assert [c["name"] for c in db.poster.get_collections()] == ["Alpha", "Zebra"]
+
+
+def test_get_collection_returns_the_row_or_none(db):
+    """A known id resolves its own row; an unknown id is None, never a stray row."""
+    first = db.poster.create_collection("Halloween", "spooky", "2026-01-01T00:00:00")
+    db.poster.create_collection("Xmas", "merry", "2026-01-02T00:00:00")
+
+    row = db.poster.get_collection(first)
+    assert row["name"] == "Halloween" and row["description"] == "spooky"
+    assert db.poster.get_collection(999999) is None
+
+
+# --- PosterCache.get_collection_posters ------------------------------------
+
+
+def test_get_collection_posters_is_scoped_and_title_ordered(db):
+    """Only this collection's posters come back, title-ascending."""
+    zebra = _seed_poster(db, "Zebra")
+    alpha = _seed_poster(db, "Alpha")
+    other = _seed_poster(db, "Other")
+    mine = db.poster.create_collection("Mine", None, "2026-01-01T00:00:00")
+    theirs = db.poster.create_collection("Theirs", None, "2026-01-01T00:00:00")
+    db.poster.add_collection_item(mine, zebra)
+    db.poster.add_collection_item(mine, alpha)
+    db.poster.add_collection_item(theirs, other)
+
+    rows = db.poster.get_collection_posters(mine)
+    assert [r["title"] for r in rows] == ["Alpha", "Zebra"]
+    assert set(rows[0]) == {
+        "id",
+        "asset_type",
+        "title",
+        "year",
+        "season_number",
+        "folder",
+        "file",
+        "style",
+    }
+
+
+def test_get_collection_posters_drops_membership_rows_with_no_poster(db):
+    """The JOIN is the filter: an item pointing at a deleted poster isn't returned."""
+    kept = _seed_poster(db, "Kept")
+    coll = db.poster.create_collection("Mine", None, "2026-01-01T00:00:00")
+    db.poster.add_collection_item(coll, kept)
+    db.poster.add_collection_item(coll, 999999)
+
+    assert [r["id"] for r in db.poster.get_collection_posters(coll)] == [kept]
+
+
+# --- PosterCache.remove_collection_item / delete_collection -----------------
+
+
+def test_remove_collection_item_reports_the_rows_it_deleted(db):
+    """The count is the DB's rowcount, so a repeat removal reports zero."""
+    poster = _seed_poster(db, "Dune")
+    coll = db.poster.create_collection("Mine", None, "2026-01-01T00:00:00")
+    db.poster.add_collection_item(coll, poster)
+
+    assert db.poster.remove_collection_item(coll, poster) == 1
+    assert db.poster.remove_collection_item(coll, poster) == 0
+
+
+def test_remove_collection_item_leaves_the_poster_in_other_collections(db):
+    """(collection_id, poster_id) is the unique key — both must be in the WHERE."""
+    poster = _seed_poster(db, "Dune")
+    mine = db.poster.create_collection("Mine", None, "2026-01-01T00:00:00")
+    theirs = db.poster.create_collection("Theirs", None, "2026-01-01T00:00:00")
+    db.poster.add_collection_item(mine, poster)
+    db.poster.add_collection_item(theirs, poster)
+
+    db.poster.remove_collection_item(mine, poster)
+    assert db.poster.get_collection_posters(mine) == []
+    assert [r["id"] for r in db.poster.get_collection_posters(theirs)] == [poster]
+
+
+def test_delete_collection_takes_its_membership_rows_with_it(db):
+    """The collection and its items go; a sibling collection is untouched."""
+    poster = _seed_poster(db, "Dune")
+    doomed = db.poster.create_collection("Doomed", None, "2026-01-01T00:00:00")
+    keeper = db.poster.create_collection("Keeper", None, "2026-01-01T00:00:00")
+    db.poster.add_collection_item(doomed, poster)
+    db.poster.add_collection_item(keeper, poster)
+
+    db.poster.delete_collection(doomed)
+    assert db.poster.get_collection(doomed) is None
+    assert db.poster.get_collection_posters(doomed) == []
+    assert [r["id"] for r in db.poster.get_collection_posters(keeper)] == [poster]
+
+
+# --- PosterCache.find_missing_dimensions -----------------------------------
+
+
+def test_find_missing_dimensions_skips_rows_that_already_have_both(db):
+    """A row is only pending while width OR height is still NULL."""
+    measured = _seed_poster(db, "Measured")
+    pending = _seed_poster(db, "Pending")
+    db.poster.record_dimensions(measured, 1000, 1500)
+
+    assert [r["id"] for r in db.poster.find_missing_dimensions()] == [pending]
+
+
+def test_find_missing_dimensions_walks_ids_in_order_under_the_limit(db):
+    """Batches are id-ordered so an incremental backfill can't loop on one page."""
+    ids = [_seed_poster(db, t) for t in ("One", "Two", "Three")]
+
+    rows = db.poster.find_missing_dimensions(limit=2)
+    assert [r["id"] for r in rows] == ids[:2]
+    assert set(rows[0]) == {"id", "file"}
+
+
+# --- PosterCache.added_since -----------------------------------------------
+
+
+def test_added_since_reads_the_cutoff_as_an_instant_not_a_string(db):
+    """created_at is stored in UTC; a cutoff in another offset must be converted first."""
+    _seed_poster(db, "Later", created_at="2026-01-05T10:00:00+00:00")
+    _seed_poster(db, "Earlier", created_at="2026-01-05T08:00:00+00:00")
+
+    # 17:00+08:00 is 09:00 UTC, but a TEXT compare reads "17" as after both rows.
+    rows = db.poster.added_since("2026-01-05T17:00:00+08:00")
+    assert [r["title"] for r in rows] == ["Later"]
+
+
+# --- MediaCache / CollectionCache approve_match + reopen_for_review ---------
+
+
+def test_approve_match_promotes_the_row_and_clears_conflicts(db):
+    """Approval writes matched/1.0 and empties the conflict list."""
+    mid = _seed_media(db, "Dune")
+    db.media.update(
+        asset_type="movie",
+        title="Dune",
+        year=2021,
+        instance_name="radarr",
+        match_status="needs_review",
+        match_confidence=0.4,
+        conflict_ids='[{"tmdb_id": 1}]',
+        id=mid,
+    )
+
+    db.media.approve_match(mid)
+
+    row = db.media.get_by_id(mid)
+    assert row["match_status"] == "matched"
+    assert row["match_confidence"] == 1.0
+    assert row["conflict_ids"] == "[]"
+
+
+def test_approve_match_touches_only_the_requested_media_row(db):
+    """The WHERE carries the row id — a sibling keeps its review state."""
+    target = _seed_media(db, "Dune")
+    bystander = _seed_media(db, "Sicario")
+    for mid in (target, bystander):
+        db.media.reopen_for_review(mid)
+
+    db.media.approve_match(target)
+
+    assert db.media.get_by_id(bystander)["match_status"] == "needs_review"
+
+
+def test_reopen_for_review_sends_a_media_row_back(db):
+    """Unlocking flips match_status back to needs_review."""
+    mid = _seed_media(db, "Dune")
+    db.media.approve_match(mid)
+
+    db.media.reopen_for_review(mid)
+
+    assert db.media.get_by_id(mid)["match_status"] == "needs_review"
+
+
+def test_collection_approve_and_reopen_round_trip(db):
+    """CollectionCache carries the same pair against collections_cache."""
+    db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+    cid = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")["id"]
+
+    db.collection.approve_match(cid)
+    row = db.collection.get_by_id(cid)
+    assert row["match_status"] == "matched" and row["match_confidence"] == 1.0
+    assert row["conflict_ids"] == "[]"
+
+    db.collection.reopen_for_review(cid)
+    assert db.collection.get_by_id(cid)["match_status"] == "needs_review"
+
+
+def test_approve_and_reopen_move_the_lock_in_the_same_statement(db):
+    """Each transition writes match_status and user_confirmed together, not in two."""
+    mid = _seed_media(db, "Dune")
+
+    calls = []
+    real = db.media.execute_query
+    db.media.execute_query = lambda q, *a, **k: (calls.append(q), real(q, *a, **k))[1]
+    try:
+        db.media.approve_match(mid)
+        approve_writes = [q for q in calls if q.strip().upper().startswith("UPDATE")]
+        calls.clear()
+        db.media.reopen_for_review(mid)
+        reopen_writes = [q for q in calls if q.strip().upper().startswith("UPDATE")]
+    finally:
+        db.media.execute_query = real
+
+    assert len(approve_writes) == 1, "approve must not split state and lock"
+    assert len(reopen_writes) == 1, "reopen must not split state and lock"
+
+
+def test_approve_locks_the_row_and_reopen_releases_it(db):
+    """Approval sets user_confirmed; reopening clears it."""
+    mid = _seed_media(db, "Dune")
+
+    db.media.approve_match(mid)
+    assert db.media.get_by_id(mid)["user_confirmed"] == 1
+
+    db.media.reopen_for_review(mid)
+    assert db.media.get_by_id(mid)["user_confirmed"] == 0
+
+
+def test_ignoring_releases_the_lock_but_restoring_leaves_it_alone(db):
+    """set_ignored(True) drops the lock; set_ignored(False) must not re-grant it."""
+    mid = _seed_media(db, "Dune")
+    db.media.approve_match(mid)
+
+    db.media.set_ignored(mid, True)
+    row = db.media.get_by_id(mid)
+    assert row["ignored"] == 1 and row["user_confirmed"] == 0
+
+    db.media.approve_match(mid)  # re-lock, then restore from ignored
+    db.media.set_ignored(mid, False)
+    row = db.media.get_by_id(mid)
+    assert row["ignored"] == 0
+    assert row["user_confirmed"] == 1, "restoring must not clear an existing lock"
+
+
+def test_collection_transitions_carry_the_lock_too(db):
+    """CollectionCache mirrors the media behaviour against collections_cache."""
+    db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+    cid = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")["id"]
+
+    db.collection.approve_match(cid)
+    assert db.collection.get_by_id(cid)["user_confirmed"] == 1
+
+    db.collection.set_ignored(cid, True)
+    assert db.collection.get_by_id(cid)["user_confirmed"] == 0
+
+    db.collection.reopen_for_review(cid)
+    assert db.collection.get_by_id(cid)["user_confirmed"] == 0
+
+
+# --- MediaCache.find_by_original_file_basename -----------------------------
+
+
+def test_find_by_original_file_basename_escapes_like_metacharacters(db):
+    """`_` in a filename must be literal, not a single-character wildcard."""
+    _seed_media(db, "Dune", original_file="/src/Dune_2021.jpg")
+    _seed_media(db, "Sicario", original_file="/src/DuneX2021.jpg")
+
+    rows = db.media.find_by_original_file_basename("Dune_2021.jpg")
+    assert [r["title"] for r in rows] == ["Dune"]
+
+
+def test_find_by_original_file_basename_returns_the_unmatch_fields(db):
+    """The caller re-keys media_cache.update from these columns."""
+    _seed_media(db, "Dune", original_file="/src/Dune (2021).jpg")
+
+    rows = db.media.find_by_original_file_basename("Dune (2021).jpg")
+    assert set(rows[0]) == {
+        "id",
+        "title",
+        "instance_name",
+        "asset_type",
+        "year",
+        "season_number",
+    }
+
+
+# --- Route contracts not covered elsewhere ---------------------------------
+
+
+def test_collections_route_hydrates_each_collection_with_its_posters(db):
+    """GET /collections returns the join result and its count per collection."""
+    poster = _seed_poster(db, "Dune")
+    filled = db.poster.create_collection("Filled", None, "2026-01-01T00:00:00")
+    db.poster.create_collection("Empty", None, "2026-01-02T00:00:00")
+    db.poster.add_collection_item(filled, poster)
+
+    body = _client(db).get("/api/posters/collections").json()
+    collections = body["data"]["collections"]
+    assert [c["name"] for c in collections] == ["Empty", "Filled"]
+    assert collections[0]["poster_count"] == 0
+    assert collections[1]["poster_count"] == 1
+    assert [p["title"] for p in collections[1]["posters"]] == ["Dune"]
+
+
+def test_create_collection_route_returns_the_row_it_just_inserted(db):
+    """The read-back is by the new id, so an older same-named row can't win."""
+    db.poster.create_collection("Halloween", "older", "2026-01-01T00:00:00")
+
+    resp = _client(db).post(
+        "/api/posters/collections", json={"name": "Halloween", "description": "newer"}
+    )
+    assert resp.status_code == 200
+    created = resp.json()["data"]["collection"]
+    assert created["description"] == "newer"
+    assert created["id"] == db.poster.get_collection_id_by_name("Halloween")
+
+
+def test_create_collection_route_requires_a_name(db):
+    """A nameless collection is a 400, not an unnamed row."""
+    resp = _client(db).post("/api/posters/collections", json={"description": "x"})
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "MISSING_NAME"
+    assert db.poster.get_collections() == []
+
+
+def test_add_to_collection_route_404s_for_an_unknown_collection(db):
+    """The existence check runs before the insert, so no orphan item is written."""
+    poster = _seed_poster(db, "Dune")
+
+    resp = _client(db).post(
+        "/api/posters/collections/999999/add", json={"poster_id": poster}
+    )
+    assert resp.status_code == 404
+    assert resp.json()["error_code"] == "COLLECTION_NOT_FOUND"
+
+
+def test_add_to_collection_route_is_idempotent(db):
+    """Re-adding the same poster keeps one membership row, not two."""
+    poster = _seed_poster(db, "Dune")
+    coll = db.poster.create_collection("Mine", None, "2026-01-01T00:00:00")
+    client = _client(db)
+
+    for _ in range(2):
+        resp = client.post(
+            f"/api/posters/collections/{coll}/add", json={"poster_id": poster}
+        )
+        assert resp.status_code == 200
+    assert len(db.poster.get_collection_posters(coll)) == 1
+
+
+def test_remove_from_collection_route_404s_when_the_pair_is_absent(db):
+    """The 404 is driven by the deleted rowcount, not by a separate lookup."""
+    poster = _seed_poster(db, "Dune")
+    coll = db.poster.create_collection("Mine", None, "2026-01-01T00:00:00")
+    db.poster.add_collection_item(coll, poster)
+    client = _client(db)
+
+    first = client.delete(f"/api/posters/collections/{coll}/remove/{poster}")
+    second = client.delete(f"/api/posters/collections/{coll}/remove/{poster}")
+    assert first.status_code == 200
+    assert second.status_code == 404
+    assert second.json()["error_code"] == "ITEM_NOT_FOUND"
+
+
+def test_delete_collection_route_404s_then_deletes_everything(db):
+    """An unknown id is a 404; a known one takes its membership rows with it."""
+    poster = _seed_poster(db, "Dune")
+    coll = db.poster.create_collection("Mine", None, "2026-01-01T00:00:00")
+    db.poster.add_collection_item(coll, poster)
+    client = _client(db)
+
+    missing = client.delete("/api/posters/collections/999999")
+    assert missing.status_code == 404
+    deleted = client.delete(f"/api/posters/collections/{coll}")
+    assert deleted.status_code == 200
+    assert db.poster.get_collection(coll) is None
+    assert db.poster.get_collection_posters(coll) == []
+
+
+def test_approve_then_unlock_route_round_trips_a_media_row(db):
+    """Approve locks the row; unlock reopens it and drops the lock."""
+    mid = _seed_media(db, "Dune")
+    client = _client(db)
+
+    approved = client.post(f"/api/posters/match/{mid}/approve")
+    assert approved.status_code == 200
+    row = db.media.get_by_id(mid)
+    assert row["match_status"] == "matched" and row["user_confirmed"] == 1
+
+    unlocked = client.post(f"/api/posters/match/{mid}/unlock")
+    assert unlocked.status_code == 200
+    row = db.media.get_by_id(mid)
+    assert row["match_status"] == "needs_review" and row["user_confirmed"] == 0
+
+
+def test_approve_route_writes_to_collections_when_kind_is_collection(db):
+    """kind=collection must reach CollectionCache, not the media table."""
+    db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+    cid = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")["id"]
+    decoy = _seed_media(db, "Dune")
+
+    resp = _client(db).post(f"/api/posters/match/{cid}/approve?kind=collection")
+    assert resp.status_code == 200
+    assert db.collection.get_by_id(cid)["match_status"] == "matched"
+    assert db.media.get_by_id(decoy)["match_status"] is None
+
+
+def test_backfill_dimensions_route_measures_only_the_unmeasured(
+    db, tmp_path, monkeypatch
+):
+    """Rows with a readable file get width/height; a missing file is skipped."""
+    from PIL import Image
+
+    real = tmp_path / "Dune.jpg"
+    Image.new("RGB", (400, 600)).save(real)
+    measurable = _seed_poster(db, "Dune", file=str(real))
+    _seed_poster(db, "Ghost", file=str(tmp_path / "gone.jpg"))
+    # The route confines every row, so tmp_path has to be a configured root.
+    monkeypatch.setattr("backend.util.config.load_config", _rooted_config(tmp_path))
+
+    body = _client(db).post("/api/posters/backfill-dimensions").json()
+    assert body["data"] == {"updated": 1, "skipped": 1, "batch_size": 200}
+    row = db.poster.get_by_integer_id(measurable)
+    assert (row["width"], row["height"]) == (400, 600)
+
+
+def test_delete_poster_route_unmatches_the_media_it_was_applied_to(db):
+    """Deleting the poster row clears the media rows pointing at that file."""
+    poster = _seed_poster(db, "Dune", file="Dune (2021).jpg", folder="/src")
+    mid = _seed_media(db, "Dune", original_file="/src/Dune (2021).jpg")
+
+    body = _client(db).delete(f"/api/posters/{poster}").json()
+    assert body["data"]["media_unmatched"] == 1
+    row = db.media.get_by_id(mid)
+    assert row["matched"] == 0 and row["original_file"] == ""
+
+
+def test_delete_poster_route_leaves_lookalike_filenames_matched(db):
+    """`_` in the deleted poster's name must not wildcard onto another row."""
+    poster = _seed_poster(db, "Dune", file="Dune_2021.jpg", folder="/src")
+    literal = _seed_media(db, "Dune", original_file="/src/Dune_2021.jpg")
+    lookalike = _seed_media(db, "Sicario", original_file="/src/DuneX2021.jpg")
+
+    body = _client(db).delete(f"/api/posters/{poster}").json()
+    assert body["data"]["media_unmatched"] == 1
+    assert db.media.get_by_id(literal)["matched"] == 0
+    assert db.media.get_by_id(lookalike)["matched"] == 1
+
+
+# --- Stage 2: helpers that moved out of posters.py --------------------------
+
+
+def test_rank_candidates_ranks_matches_first_and_drops_prefix_noise(db):
+    """The picker's shared ranker: real match first, same-prefix strangers dropped."""
+    from backend.util.asset_candidates import rank_candidates
+
+    _seed_poster(db, "Dune", file="/src/Dune (2021).jpg")
+    _seed_poster(db, "Dungeons and Dragons Honor Among Thieves")
+    row = db.media.get_by_id(_seed_media(db, "Dune"))
+
+    ranked = rank_candidates(db, row, "movie")
+
+    assert [c["title"] for c, *_ in ranked] == ["Dune"]
+    assert ranked[0][1] is True
+
+
+def test_rank_candidates_caps_the_pool_across_alternate_titles(db):
+    """The 800 cap is absolute: extra alternate titles must not each add another 800."""
+    from backend.util.asset_candidates import rank_candidates
+
+    calls = []
+
+    class _Poster:
+        def get_candidates_by_prefix(self, prefix, **kw):
+            calls.append(prefix)
+            return [
+                {"file": f"/src/{prefix}-{i}.jpg", "title": "Dune", "id": i}
+                for i in range(800)
+            ]
+
+    class _DB:
+        poster = _Poster()
+
+    row = {
+        "title": "Dune",
+        "normalized_title": "dune",
+        "alternate_titles": '["Duna", "Dyuna"]',
+    }
+
+    rank_candidates(_DB(), row, "movie")
+
+    # One title fills the pool; the remaining two must never be queried.
+    assert len(calls) == 1, calls
+
+
+def test_rank_candidates_scopes_to_the_requested_image_type(db):
+    """An artwork lookup must not surface the poster row for the same title."""
+    from backend.util.asset_candidates import rank_candidates
+
+    _seed_poster(db, "Dune", file="/src/Dune (2021).jpg")
+    _seed_poster(db, "Dune", file="/src/Dune (2021) - Logo.png", image_type="logo")
+    row = db.media.get_by_id(_seed_media(db, "Dune"))
+
+    ranked = rank_candidates(db, row, "movie", image_type="logo")
+
+    assert [c["file"] for c, *_ in ranked] == ["/src/Dune (2021) - Logo.png"]
+
+
+def test_resolve_format_maps_aliases_and_falls_back_to_jpeg():
+    """Every download/optimize call resolves its target through this one map."""
+    from backend.util.poster_images import resolve_format
+
+    assert resolve_format("jpg") == ("JPEG", ".jpg")
+    assert resolve_format("WEBP") == ("WEBP", ".webp")
+    assert resolve_format(None) == ("JPEG", ".jpg")
+
+
+def test_thumbnail_and_download_refuse_rows_outside_allowed_roots(
+    db, monkeypatch, tmp_path
+):
+    """A poisoned row pointing outside every configured root is 403, not served."""
+    victim = tmp_path / "elsewhere" / "secret.jpg"
+    victim.parent.mkdir()
+    victim.write_bytes(b"x")
+    pid = _seed_poster(db, "Evil", file=str(victim), folder=str(victim.parent))
+
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    # Precondition: the 403s below must come from confinement, not from a
+    # tmp_path that happened to be unreachable.
+    assert not is_path_allowed(str(victim), ChubConfig())
+    client = _client(db)
+
+    thumb = client.get(f"/api/posters/{pid}/thumbnail")
+    dl = client.post(f"/api/posters/{pid}/download")
+    assert thumb.status_code == 403, thumb.text
+    assert dl.status_code == 403, dl.text
+
+
+def _config_error():
+    """Stand-in load_config for a malformed config file."""
+    raise ConfigError("corrupt config")
+
+
+def test_thumbnail_surfaces_config_error_as_config_invalid(db, monkeypatch):
+    """A malformed config reaches main.py's handler, not the generic 500."""
+    pid = _seed_poster(db, "Dune")
+    monkeypatch.setattr("backend.util.config.load_config", _config_error)
+
+    resp = _client(db).get(f"/api/posters/{pid}/thumbnail")
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_download_surfaces_config_error_as_config_invalid(db, monkeypatch):
+    """Same for the download route — CONFIG_INVALID, not POSTER_DOWNLOAD_ERROR."""
+    pid = _seed_poster(db, "Dune")
+    monkeypatch.setattr("backend.util.config.load_config", _config_error)
+
+    resp = _client(db).post(f"/api/posters/{pid}/download")
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_optimize_surfaces_config_error_as_config_invalid(db, monkeypatch):
+    """Optimize loads config to confine its writes; a bad one is CONFIG_INVALID."""
+    monkeypatch.setattr("backend.util.config.load_config", _config_error)
+
+    resp = _client(db).post("/api/posters/optimize", json={"mode": "report"})
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_cleanup_route_refuses_asset_dirs_outside_allowed_roots(db, monkeypatch):
+    """asset_dirs feed a deleting job — an outside dir is a 400, never enqueued."""
+    import backend.api.posters as posters
+
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    client = _client(db)
+    # The real dependency builds a file-backed module logger.
+    client.app.dependency_overrides[posters.get_cleanarr_logger] = _StubLog
+
+    resp = client.post(
+        "/api/posters/plex-metadata/cleanup",
+        json={"mode": "remove", "asset_dirs": ["/etc"]},
+    )
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error_code"] == "INVALID_MODE"
+
+
+def test_cleanup_route_rejects_malformed_field_types(db, monkeypatch):
+    """A non-string mode or non-bool flag is a 400, not a 500 and not a silent enable."""
+    import backend.api.posters as posters
+
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    client = _client(db)
+    client.app.dependency_overrides[posters.get_cleanarr_logger] = _StubLog
+
+    for body in ({"mode": 5}, {"mode": "report", "orphan_assets_enabled": "false"}):
+        resp = client.post("/api/posters/plex-metadata/cleanup", json=body)
+        assert resp.status_code == 400, resp.text
+        assert resp.json()["error_code"] == "INVALID_MODE"
+
+
+def test_cleanup_route_surfaces_config_error_as_config_invalid(db, monkeypatch):
+    """The cleanup route loads config too — malformed must not read as INVALID_MODE."""
+    import backend.api.posters as posters
+
+    monkeypatch.setattr("backend.util.config.load_config", _config_error)
+    client = _client(db)
+    client.app.dependency_overrides[posters.get_cleanarr_logger] = _StubLog
+
+    resp = client.post(
+        "/api/posters/plex-metadata/cleanup", json={"mode": "remove"}
+    )
+
+    assert resp.status_code == 500
+    assert resp.json()["error_code"] == "CONFIG_INVALID"
+
+
+def test_optimize_poster_files_skips_rows_outside_allowed_roots(db, tmp_path):
+    """A poisoned row is skipped and left on disk; the confined poster still runs."""
+    from PIL import Image
+
+    from backend.util.poster_images import optimize_poster_files
+
+    allowed = tmp_path / "posters"
+    allowed.mkdir()
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    good = allowed / "Dune.jpg"
+    evil = outside / "secret.jpg"
+    for path in (good, evil):
+        Image.new("RGB", (2000, 3000)).save(path)
+    untouched = evil.read_bytes()
+    _seed_poster(db, "Dune", file=str(good), folder=str(allowed))
+    _seed_poster(db, "Evil", file=str(evil), folder=str(outside))
+
+    config = ChubConfig()
+    config.poster_renamerr.source_dirs = [str(allowed)]
+
+    _msg, data = optimize_poster_files(
+        db, _StubLog(), config, 1000, 1500, "JPEG", ".jpg", 85, "optimize"
+    )
+
+    assert (data["processed"], data["skipped"], data["failed"]) == (1, 1, 0)
+    assert evil.read_bytes() == untouched
+    with Image.open(good) as img:
+        assert img.size == (1000, 1500)
+
+
+# --- Review round 1: guards the split moved ---------------------------------
+
+
+def _rooted_config(root):
+    """Stand-in load_config whose only allowed root is `root`."""
+
+    def _load(*_a, **_kw):
+        config = ChubConfig()
+        config.poster_renamerr.source_dirs = [str(root)]
+        return config
+
+    return _load
+
+
+def _seed_oversized(db, tmp_path, monkeypatch, title="Dune"):
+    """Point load_config at tmp_path and cache one 2000x3000 poster inside it."""
+    from PIL import Image
+
+    poster = tmp_path / f"{title}.jpg"
+    Image.new("RGB", (2000, 3000)).save(poster)
+    _seed_poster(db, title, file=str(poster), folder=str(tmp_path))
+    monkeypatch.setattr("backend.util.config.load_config", _rooted_config(tmp_path))
+    return poster
+
+
+def test_optimize_route_refuses_an_unknown_mode(db, tmp_path, monkeypatch):
+    """A typo'd mode is a 400 — anything but 'report' rewrites files on disk."""
+    poster = _seed_oversized(db, tmp_path, monkeypatch)
+    before = poster.read_bytes()
+
+    resp = _client(db).post("/api/posters/optimize", json={"mode": "repot"})
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error_code"] == "INVALID_MODE"
+    assert poster.read_bytes() == before
+
+
+def test_optimize_route_still_reports_and_still_optimizes(db, tmp_path, monkeypatch):
+    """The two honoured modes keep working: report is a dry run, optimize rewrites."""
+    from PIL import Image
+
+    poster = _seed_oversized(db, tmp_path, monkeypatch)
+    before = poster.read_bytes()
+    client = _client(db)
+
+    report = client.post("/api/posters/optimize", json={"mode": "report"})
+    assert report.status_code == 200, report.text
+    assert report.json()["data"]["mode"] == "report"
+    assert report.json()["data"]["processed"] == 1
+    assert poster.read_bytes() == before
+
+    run = client.post("/api/posters/optimize", json={"mode": "optimize"})
+    assert run.status_code == 200, run.text
+    assert run.json()["data"]["processed"] == 1
+    with Image.open(poster) as img:
+        assert img.size == (1000, 1500)
+
+
+def test_apply_route_refuses_a_poster_row_with_no_path(db):
+    """An empty file would lock the row as matched with no source; 404 instead."""
+    mid = _seed_media(db, "Dune")
+    db.poster.upsert(
+        {
+            "title": "Dune",
+            "normalized_title": "dune",
+            "year": 2021,
+            "tmdb_id": None,
+            "tvdb_id": None,
+            "imdb_id": None,
+            "season_number": None,
+            "folder": "/src",
+            "file": "",
+            "asset_type": "movie",
+        }
+    )
+    pid = db.poster.execute_query(
+        "SELECT id FROM poster_cache WHERE file=''", fetch_one=True
+    )["id"]
+
+    resp = _client(db).post(f"/api/posters/match/{mid}/apply?poster_id={pid}")
+
+    assert resp.status_code == 404, resp.text
+    row = db.media.get_by_id(mid)
+    assert row["match_status"] is None and row["user_confirmed"] == 0
+
+
+def test_backfill_dimensions_skips_rows_outside_allowed_roots(
+    db, tmp_path, monkeypatch
+):
+    """poster_cache.file is persisted data — an outside row is skipped, not opened."""
+    from PIL import Image
+
+    allowed = tmp_path / "posters"
+    allowed.mkdir()
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    good = allowed / "Dune.jpg"
+    evil = outside / "secret.jpg"
+    for path in (good, evil):
+        Image.new("RGB", (400, 600)).save(path)
+    measurable = _seed_poster(db, "Dune", file=str(good), folder=str(allowed))
+    poisoned = _seed_poster(db, "Evil", file=str(evil), folder=str(outside))
+    monkeypatch.setattr("backend.util.config.load_config", _rooted_config(allowed))
+
+    body = _client(db).post("/api/posters/backfill-dimensions").json()
+
+    assert body["data"] == {"updated": 1, "skipped": 1, "batch_size": 200}
+    assert db.poster.get_by_integer_id(measurable)["width"] == 400
+    assert db.poster.get_by_integer_id(poisoned)["width"] is None
+
+
+def test_added_since_rejects_a_cutoff_sqlite_would_compare_as_text(db):
+    """A lone quote must not sort above every row and return the whole table."""
+    _seed_poster(db, "Old", created_at="2020-01-01T00:00:00+00:00")
+    _seed_poster(db, "New", created_at="2026-01-01T00:00:00+00:00")
+    client = _client(db)
+
+    bad = client.get("/api/posters/added-since", params={"cutoff": "'"})
+    assert bad.status_code == 400, bad.text
+    assert bad.json()["error_code"] == "INVALID_CUTOFF"
+
+    good = client.get(
+        "/api/posters/added-since", params={"cutoff": "2025-01-01T00:00:00+00:00"}
+    )
+    assert good.status_code == 200, good.text
+    assert [row["title"] for row in good.json()["data"]["items"]] == ["New"]
+
+
+def test_routes_do_not_advertise_parameters_they_ignore(db):
+    """`sort` and `force` were accepted and dropped on the floor — both are gone."""
+    client = _client(db)
+    schema = client.get("/openapi.json").json()
+
+    def _params(path):
+        return {p["name"] for p in schema["paths"][path]["get"].get("parameters", [])}
+
+    assert "sort" not in _params("/api/posters/search")
+    assert "force" not in _params("/api/posters/plex-metadata/by-media")
+    assert "force" not in _params("/api/posters/plex-metadata/bloat")
+    # A client that still sends the dropped param is ignored, not rejected.
+    assert client.get("/api/posters/search?sort=title").status_code == 200
+
+
+def test_optimize_updates_the_row_in_place_with_an_absolute_path(
+    db, tmp_path, monkeypatch
+):
+    """A format-converting optimize must move the row, not mint a second one."""
+    poster = _seed_oversized(db, tmp_path, monkeypatch, title="Arrival")
+    before = db.poster.execute_query(
+        "SELECT COUNT(*) AS n FROM poster_cache", fetch_one=True
+    )["n"]
+
+    resp = _client(db).post(
+        "/api/posters/optimize", json={"mode": "optimize", "format": "png"}
+    )
+    assert resp.status_code == 200, resp.text
+
+    rows = db.poster.execute_query("SELECT id, file FROM poster_cache", fetch_all=True)
+    assert len(rows) == before  # no duplicate row minted
+    stored = rows[0]["file"]
+    assert os.path.isabs(stored), stored  # not a bare basename
+    assert os.path.isfile(stored), stored  # and it still resolves
+    assert not poster.exists()  # the converted source was removed
+
+
+def test_optimize_keeps_the_original_when_the_cache_update_fails(
+    db, tmp_path, monkeypatch
+):
+    """Persist before the destructive step, or a failed row update orphans the file."""
+    poster = _seed_oversized(db, tmp_path, monkeypatch, title="Sicario")
+
+    def _boom(*_a, **_kw):
+        raise RuntimeError("db gone")
+
+    monkeypatch.setattr(type(db.poster), "record_optimized_file", _boom)
+    resp = _client(db).post(
+        "/api/posters/optimize", json={"mode": "optimize", "format": "png"}
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert poster.exists()  # original survived
+    assert not (tmp_path / "Sicario.png").exists()  # converted copy rolled back
+    assert resp.json()["data"]["processed"] == 0  # and it did not claim success
+    stored = db.poster.execute_query(
+        "SELECT file FROM poster_cache", fetch_one=True
+    )["file"]
+    assert stored == str(poster)  # row still points at the surviving file
