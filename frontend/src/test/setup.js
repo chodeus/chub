@@ -21,6 +21,10 @@ if (!globalThis.localStorage) {
 // Modal portals into #modal-root, which lives in index.html — without it every
 // modal renders nothing and assertions fail as "no dialog" rather than a mount error.
 beforeEach(() => {
+    // Both the fallback store above and native jsdom storage outlive a test, so
+    // auth/UI state written by one changes what the next one mounts.
+    localStorage.clear();
+
     const root = document.createElement('div');
     root.id = 'modal-root';
     document.body.appendChild(root);

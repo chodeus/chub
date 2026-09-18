@@ -235,7 +235,8 @@ const SettingsMockPage = () => {
                                                                             0,
                                                                             30
                                                                         )}
-                                                                        ...
+                                                                        {field.placeholder.length >
+                                                                            30 && '...'}
                                                                     </span>
                                                                 )}
                                                             </div>

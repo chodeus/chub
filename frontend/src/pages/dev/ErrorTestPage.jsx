@@ -72,6 +72,7 @@ const ErrorTestPage = () => {
                 </h1>
                 <p className="text-base text-fg-muted max-w-prose mx-auto">
                     This page validates that the new primitive composition architecture produces
+                    consistent error handling.
                 </p>
             </div>
 
