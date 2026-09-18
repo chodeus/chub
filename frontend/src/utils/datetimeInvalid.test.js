@@ -21,6 +21,8 @@ describe('datetime formatters reject invalid dates', () => {
         expect(formatDateTime('2026-04-31T12:00:00')).toBe('');
         expect(formatDateTime('2026-02-30T12:00:00Z')).toBe('');
         expect(formatDateTime('2026-04-31T12:00:00+00:00')).toBe('');
+        expect(formatDateTime('2026-02-30T12:00Z')).toBe('');
+        expect(formatDateTime('2026-02-30T12:00:00+10:00')).toBe('');
     });
 
     it('still formats the values it is given in practice', () => {

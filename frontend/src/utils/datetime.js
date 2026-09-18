@@ -15,19 +15,15 @@ const toDate = value => {
     else if (typeof value === 'string') {
         // ISO without timezone: treat as UTC so server clocks line up with browser
         const looksNaiveIso = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value);
-        // Date-only, naive, Z and a zero offset all name their date in UTC. A non-zero
-        // offset does not, so its date part may legitimately differ from the parsed one.
-        const utcAnchored =
-            /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]00:00)?)?$/.test(value);
         d = looksNaiveIso ? new Date(value.replace(' ', 'T') + 'Z') : new Date(value);
-        // An out-of-range day rolls over ('2026-02-30' parses as 2026-03-02), so getTime()
-        // alone accepts a date nobody wrote.
-        if (
-            utcAnchored &&
-            !Number.isNaN(d.getTime()) &&
-            d.toISOString().slice(0, 10) !== value.slice(0, 10)
-        ) {
-            d = null;
+        // An out-of-range day rolls over ('2026-02-30' becomes 2026-03-02), so the calendar
+        // date is checked alone: it names the same day whatever time or offset follows it.
+        const datePart = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+        if (datePart) {
+            const probe = new Date(`${datePart[1]}T00:00:00Z`);
+            const rolled =
+                Number.isNaN(probe.getTime()) || probe.toISOString().slice(0, 10) !== datePart[1];
+            if (rolled) d = null;
         }
     }
     // One validity check for every branch: an invalid Date passed straight in and
