@@ -51,6 +51,10 @@ const STATUS_DOT = {
     cancelled: 'bg-fg-dim',
 };
 
+// The retry endpoint accepts error and success jobs only (api/jobs.py retry_job);
+// JobStatus has no 'failed' member, so never branch on one.
+const canRetry = job => job.status === 'error' || job.status === 'success';
+
 const STATUS_COLORS = {
     pending: 'bg-warning/20 text-warning',
     running: 'bg-primary/20 text-fg',
@@ -481,7 +485,7 @@ export const JobsPage = () => {
                                         variant="ghost"
                                         onClick={() => handleToggleDetail(job.id, job)}
                                     />
-                                    {(job.status === 'error' || job.status === 'success') && (
+                                    {canRetry(job) && (
                                         <LoadingButton
                                             loading={isRetrying}
                                             loadingText="..."
@@ -598,8 +602,7 @@ export const JobsPage = () => {
                                             {formatTime(job.received_at || job.created_at)}
                                         </td>
                                         <td className="px-2 sm:px-4 py-3 text-right">
-                                            {(job.status === 'error' ||
-                                                job.status === 'failed') && (
+                                            {canRetry(job) && (
                                                 <button
                                                     type="button"
                                                     disabled={isRetrying}

@@ -171,9 +171,12 @@ export const SystemSettingsPage = () => {
             setPending(p => ({ ...p, [key]: value }));
             try {
                 await configAPI.updateConfig({ general: { [key]: value } });
-                refreshGeneral();
+                // Drop the override only once the refresh has landed, or the stale
+                // server copy shows through before the new one arrives.
+                await refreshGeneral();
             } catch {
                 toast.error('Failed to save setting');
+            } finally {
                 setPending(p => {
                     const next = { ...p };
                     delete next[key];

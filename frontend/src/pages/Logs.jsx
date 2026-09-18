@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useLogModules } from '../hooks/useLogModules.js';
 import { useLogFiles } from '../hooks/useLogFiles.js';
 import { useLogContent } from '../hooks/useLogContent.js';
-import { useLogPolling } from '../hooks/useLogPolling.js';
+import { useLogPolling, LOG_POLL_INTERVAL_MS } from '../hooks/useLogPolling.js';
 import { LogControls } from '../components/logs/controls/LogControls.jsx';
 import { LogOutput } from '../components/logs/components/LogOutput.jsx';
 import { logsAPI } from '../utils/api/logs.js';
@@ -115,7 +115,9 @@ export default function Logs() {
                 </div>
                 <span className="inline-flex items-center gap-2 h-[30px] px-3 rounded-full bg-accent/10 border border-accent/25">
                     <span className="w-[7px] h-[7px] rounded-full bg-accent" aria-hidden="true" />
-                    <span className="font-mono text-[11px] text-accent">live tail · 1s</span>
+                    <span className="font-mono text-[11px] text-accent">
+                        live tail · {LOG_POLL_INTERVAL_MS / 1000}s
+                    </span>
                 </span>
             </div>
 

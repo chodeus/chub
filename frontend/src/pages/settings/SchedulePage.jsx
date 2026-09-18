@@ -171,6 +171,9 @@ export const SchedulePage = () => {
         } catch (error) {
             console.error('Failed to save schedule:', error);
             toast.error(`Failed to save schedule: ${error.message || 'Unknown error'}`);
+            // updateSchedule can land before updateScheduleBlocks fails, so the
+            // persisted base schedule has to be re-read on this path too.
+            await refetchSchedules({ useCache: false });
             setIsSaving(false);
         }
     }, [

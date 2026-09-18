@@ -114,11 +114,13 @@ export const ModulesHubPage = () => {
             setBusyKey(key);
             try {
                 await configAPI.updateConfig({ general: { disabled_modules: next } });
-                refreshGeneral();
+                // The finally clears the override, so it lands after this refresh
+                // rather than exposing the stale server copy in between.
+                await refreshGeneral();
             } catch {
                 toast.error('Failed to update module');
-                setOverride(disabled); // roll back
             } finally {
+                setOverride(null);
                 setBusyKey(null);
             }
         },

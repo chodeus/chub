@@ -381,7 +381,7 @@ const DashboardPage = () => {
         return { total, enabled, reachable, probedCount, uptimePct };
     }, [instancesRaw, healthSnapshotsData]);
 
-    const upcomingRuns = useMemo(() => {
+    const scheduledRuns = useMemo(() => {
         const now = new Date(tick);
         const entries = [];
         // Parse a server-supplied ISO next-run, guarding against bad values.
@@ -417,8 +417,8 @@ const DashboardPage = () => {
             });
         }
         entries.sort((a, b) => a.next.getTime() - b.next.getTime());
-        return entries.slice(0, upcomingLimit);
-    }, [schedules, nextRuns, subSchedules, tick, upcomingLimit]);
+        return entries;
+    }, [schedules, nextRuns, subSchedules, tick]);
 
     // Currently-running modules ride at the top of the "Up next" rail (with a
     // pulsing dot + indeterminate bar) ahead of the scheduled entries.
@@ -432,11 +432,14 @@ const DashboardPage = () => {
             label: humanize(m.name),
             running: true,
         }));
-        return [...running, ...upcomingRuns.map(e => ({ ...e, running: false }))].slice(
+        // Only the rail is capped. The module table reads the full list, or every
+        // module past the cap shows "—", which the column means as "not scheduled".
+        const upcoming = scheduledRuns.slice(0, upcomingLimit);
+        return [...running, ...upcoming.map(e => ({ ...e, running: false }))].slice(
             0,
             Math.max(upcomingLimit, running.length)
         );
-    }, [runningModules, upcomingRuns, upcomingLimit]);
+    }, [runningModules, scheduledRuns, upcomingLimit]);
 
     if (isLoading && moduleList.length === 0) {
         // Skeleton placeholders for the module-card grid + health row so the
@@ -682,7 +685,7 @@ const DashboardPage = () => {
                                         ? 'success'
                                         : 'idle';
                                 const auto = !!schedule;
-                                const upc = upcomingRuns.find(e => e.id === mod.name);
+                                const upc = scheduledRuns.find(e => e.id === mod.name);
                                 const nextText = isRunning
                                     ? 'running…'
                                     : upc
