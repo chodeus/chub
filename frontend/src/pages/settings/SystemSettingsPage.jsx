@@ -166,22 +166,28 @@ export const SystemSettingsPage = () => {
         setBackupDir(serverBackupDir);
     }
 
+    const clearPending = useCallback(key => {
+        setPending(p => {
+            const next = { ...p };
+            delete next[key];
+            return next;
+        });
+    }, []);
+
     const saveGeneral = useCallback(
         async (key, value) => {
             setPending(p => ({ ...p, [key]: value }));
             try {
                 await configAPI.updateConfig({ general: { [key]: value } });
-                refreshGeneral();
+                // refreshGeneral resolves even when it failed and left `general`
+                // stale, so drop the saved value only once it reports fresh data.
+                if (await refreshGeneral()) clearPending(key);
             } catch {
                 toast.error('Failed to save setting');
-                setPending(p => {
-                    const next = { ...p };
-                    delete next[key];
-                    return next;
-                });
+                clearPending(key);
             }
         },
-        [refreshGeneral, toast]
+        [refreshGeneral, toast, clearPending]
     );
 
     // DB stats + backups list.

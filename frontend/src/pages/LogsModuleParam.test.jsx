@@ -11,7 +11,10 @@ vi.mock('react-router', () => ({
 vi.mock('../hooks/useLogModules.js', () => ({ useLogModules: () => ({ modules: h.modules }) }));
 vi.mock('../hooks/useLogFiles.js', () => ({ useLogFiles: h.files }));
 vi.mock('../hooks/useLogContent.js', () => ({ useLogContent: h.content }));
-vi.mock('../hooks/useLogPolling.js', () => ({ useLogPolling: () => {} }));
+vi.mock('../hooks/useLogPolling.js', async importOriginal => ({
+    ...(await importOriginal()),
+    useLogPolling: () => {},
+}));
 vi.mock('../components/logs/components/LogOutput.jsx', () => ({ LogOutput: () => <div /> }));
 vi.mock('../utils/api/logs.js', () => ({ logsAPI: { downloadLogFile: vi.fn() } }));
 

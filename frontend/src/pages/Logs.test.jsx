@@ -14,7 +14,12 @@ vi.mock('../hooks/useLogFiles.js', () => ({
 vi.mock('../hooks/useLogContent.js', () => ({
     useLogContent: () => ({ logText: 'a line', refresh: vi.fn(), inFlightRef: { current: false } }),
 }));
-vi.mock('../hooks/useLogPolling.js', () => ({ useLogPolling: () => {} }));
+// Spread the real module: LOG_POLL_INTERVAL_MS must come from the hook that
+// owns it, or the badge assertion below tests a number written twice.
+vi.mock('../hooks/useLogPolling.js', async importOriginal => ({
+    ...(await importOriginal()),
+    useLogPolling: () => {},
+}));
 vi.mock('../components/logs/components/LogOutput.jsx', () => ({ LogOutput: () => <div /> }));
 vi.mock('../utils/api/logs.js', () => ({ logsAPI: { downloadLogFile: vi.fn() } }));
 
@@ -55,5 +60,14 @@ describe('Logs ⌘F shortcut', () => {
         expect(screen.queryByLabelText('Search logs')).toBeNull();
 
         expect(pressFind().defaultPrevented).toBe(false);
+    });
+});
+
+describe('Logs live-tail badge', () => {
+    it('reports the interval useLogPolling actually polls on, not a hardcoded 1s', () => {
+        render(<Logs />);
+
+        expect(screen.getByText(/live tail · 5s/)).toBeTruthy();
+        expect(screen.queryByText(/live tail · 1s/)).toBeNull();
     });
 });

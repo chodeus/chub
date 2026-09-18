@@ -105,8 +105,9 @@ const SetupWizardPage = () => {
                 const res = await configAPI.fetchConfig({ section: 'tmdb' });
                 const cfg = res?.data ?? res ?? {};
                 const key = cfg.apikey ?? cfg?.tmdb?.apikey ?? '';
+                // Every config read redacts secrets to "********" (util/config.py),
+                // so a present key means "configured", never an editable value.
                 if (!cancelled && key) {
-                    setTmdbKey(key);
                     setTmdbValid(true);
                 }
             } catch {

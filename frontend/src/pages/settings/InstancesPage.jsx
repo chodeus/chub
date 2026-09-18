@@ -862,9 +862,7 @@ export const InstancesPage = () => {
                                 </div>
                                 <div>
                                     <span className="text-fg-muted">Instance:</span>{' '}
-                                    <span className="font-medium">
-                                        {humanize(modalInstanceData?.name)}
-                                    </span>
+                                    <span className="font-medium">{modalInstanceData?.name}</span>
                                 </div>
                                 <div>
                                     <span className="text-fg-muted">URL:</span>{' '}
