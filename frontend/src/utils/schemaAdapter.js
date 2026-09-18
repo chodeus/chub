@@ -182,7 +182,7 @@ export function adaptModuleSchema(moduleKey, jsonSchema, uiHints = {}) {
 
 /**
  * Merge backend-derived schemas with the static fallback.
- * Backend schemas take priority; static entries fill gaps.
+ * Static entries take priority; backend-only fields are appended.
  *
  * @param {Array} backendSchemas - Array of { key, label, fields } from adaptModuleSchema
  * @param {Array} staticSchemas - SETTINGS_SCHEMA from constants

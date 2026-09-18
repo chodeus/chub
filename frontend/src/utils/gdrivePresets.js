@@ -13,6 +13,8 @@ import { apiCore } from './api/core.js';
 export const GDRIVE_PRESETS_FALLBACK_URL =
     'https://raw.githubusercontent.com/Drazzilb08/daps-gdrive-presets/CL2K/presets.json';
 
+const EXTERNAL_FETCH_TIMEOUT_MS = 15_000;
+
 // Presets ship with a bare curator name + a style tag; the UI shows the style
 // as a prefix ("CL2K Solen") so the same curator across styles stays distinct.
 export const prefixGdriveNames = arr =>
@@ -40,7 +42,8 @@ const tryFetch = async (url, internal) => {
         const payload = await apiCore.get(path, { useCache: false });
         return normalizeGdrivePayload(payload, true);
     }
-    const resp = await fetch(url);
+    // Mirrors cl2k_maker.js: aborts a stalled external request so failure handling can continue.
+    const resp = await fetch(url, { signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`);
     const payload = await resp.json();
     return normalizeGdrivePayload(payload, false);
@@ -55,15 +58,19 @@ const tryFetch = async (url, internal) => {
  * @returns {Promise<Array>} Normalized, style-prefixed preset list.
  */
 export const fetchGdrivePresets = async presetUrl => {
-    const isInternal = presetUrl.startsWith('/api/');
+    // A non-string would throw on startsWith before the try below, so the fallback
+    // this function exists for could never run.
+    const url =
+        typeof presetUrl === 'string' && presetUrl ? presetUrl : GDRIVE_PRESETS_FALLBACK_URL;
+    const isInternal = url.startsWith('/api/');
     let arr = [];
     try {
-        arr = await tryFetch(presetUrl, isInternal);
+        arr = await tryFetch(url, isInternal);
     } catch (err) {
-        console.warn(`[gdrivePresets] primary preset fetch failed (${presetUrl}):`, err);
+        console.warn(`[gdrivePresets] primary preset fetch failed (${url}):`, err);
     }
 
-    if ((!Array.isArray(arr) || arr.length === 0) && presetUrl !== GDRIVE_PRESETS_FALLBACK_URL) {
+    if ((!Array.isArray(arr) || arr.length === 0) && url !== GDRIVE_PRESETS_FALLBACK_URL) {
         try {
             console.warn('[gdrivePresets] falling back to upstream preset URL');
             arr = await tryFetch(GDRIVE_PRESETS_FALLBACK_URL, false);
