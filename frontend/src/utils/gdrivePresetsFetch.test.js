@@ -1,4 +1,4 @@
-/** Guards that a bad preset URL still reaches the fallback, and that the external fetch is bounded. */
+/** Guards the preset fetch: a non-string URL, a bounded external request, the internal route. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./api/core.js', () => ({ apiCore: { get: vi.fn() } }));

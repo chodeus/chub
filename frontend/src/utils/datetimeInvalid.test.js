@@ -1,4 +1,4 @@
-/** Guards that an unparseable date formats as '' rather than NaN/NaN/NaN. */
+/** Guards that invalid date input formats as '' rather than NaN/NaN/NaN. */
 import { describe, expect, it } from 'vitest';
 
 const { formatDate, formatDateTime, formatTime } = await import('./datetime.js');
