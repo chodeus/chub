@@ -35,7 +35,7 @@ def test_logger_start_time_resets_on_reinit(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("LOG_DIR", str(tmp_path))
     # Process-wide set: restore it, or a later Logger() for an already-seen
-    # module re-runs __init__ and attaches duplicate handlers.
+    # module repeats setup and log rotation (its handlers are reused, not doubled).
     saved = set(Logger._initialized)
     Logger._initialized.clear()
 
