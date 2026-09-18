@@ -452,12 +452,12 @@ const PosterStatsPage = () => {
                         color: 'text-success',
                         sub:
                             grandTotal.total > 0
-                                ? `${(grandTotal.total - (grandTotal.unmatched || 0)).toLocaleString()} linked to library`
+                                ? `${(grandTotal.total - (grandTotal.unmatched ?? 0)).toLocaleString()} linked to library`
                                 : null,
                     },
                     {
                         label: 'UNMATCHED',
-                        value: (grandTotal.unmatched || 0).toLocaleString(),
+                        value: (grandTotal.unmatched ?? 0).toLocaleString(),
                         color: 'text-warning',
                         sub: 'no library item',
                     },
