@@ -173,7 +173,8 @@ export const cl2kMakerAPI = {
     seasonsStatus: jobId => apiCore.get(`/cl2k-maker/seasons-status/${jobId}`, { useCache: false }),
 
     /** Re-text a poster: AI-erase the old text, redraw in CL2K font. `preview=true`
-     *  returns {preview_b64}. `opts` spreads last so it cannot drop the long timeout. */
+     *  returns {preview_b64}. `opts` spreads last, so a caller `timeout` overrides
+     *  AI_TIMEOUT_MS — no caller does today, and a short one would abort mid-edit. */
     retext: (req, opts) =>
         apiCore.post('/cl2k-maker/retext', req, { timeout: AI_TIMEOUT_MS, ...opts }),
 
