@@ -1,17 +1,5 @@
-/**
- * Short-lived, scope-limited "stream" tokens for URL-embedded auth.
- *
- * `<img>` and `EventSource` can't send an Authorization header, so those URLs
- * carry the token as a query param — which leaks into proxy/access logs and
- * browser history. Putting the full 24h session token there is dangerous; this
- * mints a minutes-long, GET-only, image/SSE-scoped token instead (see
- * POST /api/auth/stream-token + AuthMiddleware STREAM_PATH_PREFIXES).
- *
- * The token is refreshed PROACTIVELY (a timer set for just before each expiry)
- * so it never lapses while the tab is open — otherwise image URLs would be
- * built with no token during the gap and 401. Subscribers (useStreamToken) are
- * notified on every change so image grids re-render with a valid token.
- */
+/** Minutes-long, GET-only, image/SSE-scoped tokens: `<img>` and EventSource can't send a
+ *  header, and a query param leaks into logs, so the 24h session JWT must never go there. */
 
 const TOKEN_STORAGE_KEY = 'chub-auth-token';
 const SKEW_MS = 30_000; // refresh this long before expiry
@@ -61,23 +49,14 @@ export function streamTokenSnapshot() {
     return (cached && cached.token) || '';
 }
 
-/**
- * True once we've confirmed auth is NOT configured (the /stream-token endpoint
- * returned an empty token on a successful response). In that state the image /
- * SSE routes are open, so callers should build token-less URLs instead of
- * waiting for a token that will never arrive. Returns false while unknown or
- * while auth is on — so a blank placeholder is shown until a real token lands
- * (avoiding a 401 flash) rather than firing a token-less request that 401s.
- */
+/** True only once auth is confirmed OFF, so callers build token-less URLs. False while
+ *  unknown — a placeholder beats firing a token-less request that 401s. */
 export function streamAuthDisabled() {
     return authConfigured === false;
 }
 
-/**
- * Mirror the 401 handling in core.js (this module uses a raw fetch, so it never
- * reaches that handler): a dead session must land on /login rather than leave
- * the app rendering an error it can't recover from.
- */
+/** Mirrors core.js's 401 handling — this module uses a raw fetch, so it never reaches
+ *  that handler, and a dead session must land on /login. */
 function handleAuthFailure(status, body) {
     const code = body?.error_code;
     if (status !== 401 || (code !== 'AUTH_REQUIRED' && code !== 'AUTH_TOKEN_INVALID')) {
@@ -94,12 +73,8 @@ function handleAuthFailure(status, body) {
     }
 }
 
-/**
- * True while the last failure was a handled 401 and no new credential has
- * arrived. Retrying then cannot succeed, and AuthContext keeps a 4-minute
- * interval alive on /login (where handleAuthFailure does not navigate), so
- * without this the timers mint forever against a cleared session.
- */
+/** True while the last failure was a handled 401 with no new credential since.
+ *  Without this the /login timers mint forever against a cleared session. */
 function terminalAuthFailure() {
     if (rejectedJwt === null) return false;
     const jwt = fullToken();
@@ -211,13 +186,8 @@ export async function ensureStreamToken() {
     return inflight;
 }
 
-/**
- * Synchronous accessor for building `<img src>` during render: returns the
- * cached stream token, kicking off a refresh when missing/stale. Prefetched on
- * auth (see AuthContext) and kept warm by the proactive refresh above, so it's
- * ready before image grids render; components using useStreamToken re-render
- * once it arrives.
- */
+/** Synchronous accessor for building `<img src>` during render; kicks off a refresh
+ *  when missing or stale. useStreamToken re-renders once one arrives. */
 export function streamTokenParam() {
     const current = fresh();
     if (!current && authConfigured !== false) ensureStreamToken();

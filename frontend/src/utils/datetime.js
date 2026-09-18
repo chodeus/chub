@@ -1,9 +1,4 @@
-/**
- * Shared datetime formatting helpers.
- *
- * Format is fixed to dd/mm/yyyy HH:MM:SS (24h) regardless of browser locale, so
- * timestamps render the same way the backend writes them in log files.
- */
+/** Datetime helpers fixed to dd/mm/yyyy HH:MM:SS (24h) regardless of locale, matching how the backend writes log files. */
 
 const pad2 = n => String(n).padStart(2, '0');
 

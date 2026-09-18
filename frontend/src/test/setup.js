@@ -35,10 +35,8 @@ afterEach(() => {
     document.getElementById('modal-root')?.remove();
 });
 
-// jsdom implements neither, and both are used during render — matchMedia by the
-// mobile/pointer hooks, IntersectionObserver by lazy-loading grids.
-// Plain functions, NOT vi.fn(): `mockReset` strips a mock's implementation
-// between tests, which would make matchMedia() return undefined on test 2+.
+// Plain functions, NOT vi.fn(): `mockReset` strips a mock's implementation between
+// tests, which would make matchMedia() return undefined from test 2 onward.
 if (!window.matchMedia) {
     window.matchMedia = query => ({
         matches: false,

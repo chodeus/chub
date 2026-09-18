@@ -1,25 +1,10 @@
-/**
- * CHUB Logs API Module
- *
- * Handles log file access and content retrieval:
- * - Log module listing
- * - Log file retrieval for specific modules
- * - Log content fetching
- * - Log download URLs
- */
+/** Logs API: module and file listing, tailed content, and downloads. */
 
 import { apiCore } from './core.js';
 import { downloadBlob } from '../download.js';
 
-/**
- * Logs API client for file-based log viewing
- */
 export const logsAPI = {
-    /**
-     * Fetch available log modules
-     * @param {boolean} forceRefresh - Bypass cache if true
-     * @returns {Promise<Array<string>>} List of module names
-     */
+    /** Available log modules. */
     fetchLogModules: async (forceRefresh = false) => {
         const response = await apiCore.get('/logs', {
             useCache: !forceRefresh,
@@ -28,12 +13,7 @@ export const logsAPI = {
         return response.data?.modules || [];
     },
 
-    /**
-     * Fetch log files for specific module
-     * @param {string} moduleName - Module name
-     * @param {boolean} forceRefresh - Bypass cache if true
-     * @returns {Promise<Array<string>>} List of log file names
-     */
+    /** Log files for one module. */
     fetchLogFiles: async (moduleName, forceRefresh = false) => {
         if (!moduleName) return [];
 
@@ -46,16 +26,8 @@ export const logsAPI = {
         return response.data?.files || [];
     },
 
-    /**
-     * Fetch log file content.
-     * Passes `tail=N` to the backend so multi-MB logs only ship the last N
-     * lines rather than the whole file each poll.
-     * @param {string} moduleName - Module name
-     * @param {string} fileName - Log file name
-     * @param {AbortSignal} [signal] - Optional AbortSignal to cancel the request
-     * @param {number} [tail=5000] - Max lines to request from the tail; 0 = full file
-     * @returns {Promise<string>} Log file content as text
-     */
+    /** Log content, sending `tail=N` so multi-MB files don't ship whole each poll.
+     *  `tail = 0` requests the full file. */
     fetchLogContent: async (moduleName, fileName, signal, tail = 5000) => {
         if (!moduleName || !fileName) return '';
 
@@ -85,26 +57,14 @@ export const logsAPI = {
         }
     },
 
-    /**
-     * Get log download URL
-     * @param {string} moduleName - Module name
-     * @param {string} fileName - Log file name
-     * @returns {string} Download URL for log file
-     */
+    /** Download URL for a log file. */
     getLogDownloadUrl: (moduleName, fileName) => {
         if (!moduleName || !fileName) return '';
         return `/api/logs/${moduleName}/${fileName}`;
     },
 
-    /**
-     * Download a log file to the user's disk. Fetches with the auth header
-     * so the backend can't reject with 401 (which would otherwise be saved
-     * as the file body).
-     * @param {string} moduleName - Module name
-     * @param {string} fileName - Log file name
-     * @returns {Promise<void>}
-     * @throws {Error} If the fetch fails or the server returns non-OK
-     */
+    /** Download a log file. Fetches with the auth header, or a 401 body would be
+     *  saved as the file. */
     downloadLogFile: async (moduleName, fileName) => {
         if (!moduleName || !fileName) {
             throw new Error('Module name and file name are required');

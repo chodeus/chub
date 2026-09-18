@@ -2,17 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { SETTINGS_SCHEMA } from '../../utils/constants/settings_schema.js';
 import { AccordionItem } from '../../components/ui/AccordionItem.jsx';
 
-/**
- * Settings Mock Page - Layout prototype for schema-driven accordion interface
- *
- * This mock demonstrates the key design patterns from the action plan:
- * - Progressive disclosure accordion interface
- * - Mobile-first vertical layout
- * - Schema-driven module generation
- * - Clean aesthetic with proper spacing
- *
- * @returns {JSX.Element} Settings mock layout
- */
+/** Layout prototype for the schema-driven settings accordion. */
 const SettingsMockPage = () => {
     // Track which modules are expanded (progressive disclosure)
     const [expandedModules, setExpandedModules] = useState(['sync_gdrive']); // Start with one expanded
@@ -25,16 +15,6 @@ const SettingsMockPage = () => {
         );
     }, []);
 
-    // TODO: Handle expand/collapse all (not implemented in UI yet)
-    // const expandAll = useCallback(() => {
-    //     setExpandedModules(SETTINGS_SCHEMA.map(module => module.key));
-    // }, []);
-
-    // const collapseAll = useCallback(() => {
-    //     setExpandedModules([]);
-    // }, []);
-
-    // Mock header search integration
     const handleSettingsSearch = useCallback(query => {
         if (!query) {
             setFilteredModules(SETTINGS_SCHEMA);
@@ -59,9 +39,7 @@ const SettingsMockPage = () => {
         // In real implementation, this would register with SearchCoordinatorProvider
         console.log('Mock: Registering settings search handler with header search system');
 
-        // Simulate search integration with window message for demo.
-        // Only accept messages from the same origin — required defence
-        // against cross-origin postMessage injection.
+        // Same-origin only — required defence against cross-origin postMessage injection.
         const handleSearchMessage = event => {
             if (event.origin !== window.location.origin) {
                 return;
@@ -74,27 +52,6 @@ const SettingsMockPage = () => {
         window.addEventListener('message', handleSearchMessage);
         return () => window.removeEventListener('message', handleSearchMessage);
     }, [handleSettingsSearch]);
-
-    // TODO: Get field type summary for mock display (not used in current UI)
-    // const getFieldTypeSummary = fields => {
-    //     if (!fields || fields.length === 0) return 'No fields configured';
-
-    //     const types = fields.reduce((acc, field) => {
-    //         acc[field.type] = (acc[field.type] || 0) + 1;
-    //         return acc;
-    //     }, {});
-
-    //     const summary = Object.entries(types)
-    //         .map(([type, count]) => `${count} ${type}`)
-    //         .slice(0, 3) // Show first 3 types
-    //         .join(', ');
-
-    //     const total = fields.length;
-    //     const remaining =
-    //         Object.keys(types).length > 3 ? ` (+${Object.keys(types).length - 3} more)` : '';
-
-    //     return `${total} fields: ${summary}${remaining}`;
-    // };
 
     return (
         <div className="p-6 max-w-4xl mx-auto min-h-screen">

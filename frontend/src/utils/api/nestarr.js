@@ -1,46 +1,19 @@
-/**
- * CHUB Nestarr API Module
- *
- * Handles unmatched and nested media detection and resolution:
- * - Comparing ARR media against Plex to find unmatched items (opt-in via
- *   library mappings)
- * - Scanning for incorrectly nested media folders and stray/misplaced files
- * - Fixing nested items by moving to correct locations
- */
+/** Nestarr API: detects unmatched and wrongly-nested media, and moves it back.
+ *  Unmatched comparison is opt-in per library mapping. */
 
 import { apiCore } from './core.js';
 
-/**
- * Nestarr API client for nested media detection
- */
 export const nestarrAPI = {
-    /**
-     * Get cached scan results from the last run (persists across page navigations)
-     * @returns {Promise<Object>} Cached results with issues array and scanned_at timestamp
-     */
+    /** Last run's cached results; persists across page navigations. */
     getResults: () => apiCore.get('/nestarr/results', { useCache: false }),
 
-    /**
-     * Scan all instances for nested media issues
-     * @returns {Promise<Object>} Scan results with issues array
-     */
+    /** Scan every instance for nested-media issues. */
     scan: () => apiCore.post('/nestarr/scan', {}, { timeout: 120000 }),
 
-    /**
-     * Preview what a fix would do before executing
-     * @param {Object} params - Same as fix params
-     * @returns {Promise<Object>} Preview with current/target paths and rename info
-     */
+    /** Dry-run a fix: current/target paths and rename info. Same params as `fix`. */
     preview: params => apiCore.post('/nestarr/preview', params),
 
-    /**
-     * Fix a nested media item by moving it to the correct path
-     * @param {Object} params - Fix parameters
-     * @param {string} params.instance_type - "radarr", "sonarr", or "lidarr"
-     * @param {string} params.instance_name - Instance name
-     * @param {number} params.media_id - Media ID to fix
-     * @param {string} params.target_path - Target path to move to
-     * @returns {Promise<Object>} Fix result
-     */
+    /** Move a nested item to its correct path. Takes instance_type, instance_name,
+     *  media_id and target_path. */
     fix: params => apiCore.post('/nestarr/fix', params),
 };
