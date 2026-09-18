@@ -1,24 +1,9 @@
-/**
- * CHUB Jobs API Module
- *
- * Handles job queue operations using REAL CHUB endpoints:
- * - GET /api/jobs - List jobs with filtering
- * - GET /api/jobs/stats - Job statistics
- * - GET /api/jobs/{id} - Get specific job details
- * - POST /api/jobs/{id}/retry - Retry failed job
- */
+/** Jobs API: the job queue under /api/jobs. */
 
 import { apiCore } from './core.js';
 
-/**
- * Jobs API client matching actual CHUB backend endpoints
- */
 export const jobsAPI = {
-    /**
-     * Get job statistics
-     * @param {Object} options - Request options
-     * @returns {Promise<Object>} Job statistics
-     */
+    /** Job statistics. */
     getStats: (options = {}) => {
         return apiCore.get('/jobs/stats', {
             useCache: true,
@@ -27,14 +12,7 @@ export const jobsAPI = {
         });
     },
 
-    /**
-     * List jobs with optional filtering
-     * @param {Object} filters - Job filters
-     * @param {string} filters.status - Filter by status
-     * @param {number} filters.limit - Limit number of results
-     * @param {Object} options - Request options
-     * @returns {Promise<Object>} List of jobs
-     */
+    /** List jobs, optionally filtered by status, job_type or limit. */
     listJobs: (filters = {}, options = {}) => {
         const params = new URLSearchParams();
 
@@ -57,12 +35,7 @@ export const jobsAPI = {
         });
     },
 
-    /**
-     * Get specific job details
-     * @param {number} jobId - Job ID
-     * @param {Object} options - Request options
-     * @returns {Promise<Object>} Job details
-     */
+    /** One job's details. */
     getJob: (jobId, options = {}) => {
         return apiCore.get(`/jobs/${jobId}`, {
             useCache: true,
@@ -71,21 +44,12 @@ export const jobsAPI = {
         });
     },
 
-    /**
-     * Retry failed job
-     * @param {number} jobId - Job ID to retry
-     * @param {Object} options - Request options
-     * @returns {Promise<Object>} Retry response
-     */
+    /** Requeue a job. The endpoint accepts only error or success jobs. */
     retryJob: (jobId, options = {}) => {
         return apiCore.post(`/jobs/${jobId}/retry`, {}, options);
     },
 
-    /**
-     * Delete completed/errored jobs older than `days` (default 30).
-     * @param {number} days - Age threshold in days
-     * @returns {Promise<Object>} { deleted }
-     */
+    /** Delete completed/errored jobs older than `days`. */
     deleteOldJobs: (days = 30) => {
         return apiCore.delete(`/jobs/old?days=${days}`);
     },

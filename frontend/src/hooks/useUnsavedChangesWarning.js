@@ -21,13 +21,8 @@ const sameDocumentUrl = href => {
     }
 };
 
-/**
- * Warn before discarding unsaved form changes.
- *
- * Handles browser unloads plus normal in-app anchor navigation. The app uses
- * BrowserRouter rather than a data router, so React Router's useBlocker is not
- * available without a larger router migration.
- */
+/** Warns before discarding unsaved changes, on unload and in-app anchor navigation.
+ *  `useBlocker` is unavailable: the app mounts BrowserRouter, not a data router. */
 export function useUnsavedChangesWarning(isDirty, message = DEFAULT_MESSAGE) {
     useEffect(() => {
         if (!isDirty) return undefined;

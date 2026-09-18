@@ -1,24 +1,5 @@
-/**
- * CL2K Poster Maker API client.
- *
- * Powers the CL2K Poster Maker page. Entry points (TMDB title search, ID/URL
- * paste, Unmatched-Assets deep link) all resolve to a tmdb_id + kind; the art
- * picker lists every logo/backdrop; preview renders without saving; generate
- * writes the poster into the configured source_dir and records provenance.
- *
- *   GET  /api/cl2k-maker/search            TMDB title search
- *   GET  /api/cl2k-maker/resolve           tvdb/imdb id -> tmdb id
- *   GET  /api/cl2k-maker/images            all TMDB logos + backdrops (picker)
- *   GET  /api/cl2k-maker/fanart-images     fanart.tv logo + background (picker)
- *   POST /api/cl2k-maker/preview           render to JPEG, no save (binary)
- *   POST /api/cl2k-maker/generate          render + write + cache + provenance
- *   GET  /api/cl2k-maker/generated         provenance (recent)
- *   POST /api/cl2k-maker/psd-export        layered .psd (binary)
- *   POST /api/cl2k-maker/generate-seasons  generate posters for many seasons
- *
- * /preview and /psd-export return raw bytes, so they bypass apiCore (which reads
- * the body as JSON/text) and use a small fetch helper that returns a Blob.
- */
+/** CL2K Poster Maker API. Its binary endpoints go through postBlob, bypassing apiCore,
+ *  which would corrupt raw bytes by reading the body as JSON/text. */
 
 import { apiCore } from './core.js';
 
@@ -38,13 +19,8 @@ const qs = params => {
     return sp.toString();
 };
 
-/**
- * POST JSON and return the raw response body as a Blob. Used for the binary
- * preview / .psd endpoints, which apiCore would corrupt by reading as text.
- * Mirrors apiCore's Bearer-token injection. `signal` (optional AbortSignal)
- * cancels the request — live previews abort a stale render when the sliders
- * move again instead of letting requests pile up on the backend.
- */
+/** POST JSON, returning the raw body as a Blob. `signal` aborts a stale render when
+ *  the sliders move again, instead of piling requests on the backend. */
 const postBlob = async (path, body, { signal } = {}) => {
     // AI-bound blobs get the same ceiling as the JSON calls; a caller signal wins.
     signal = signal ?? AbortSignal.timeout(AI_TIMEOUT_MS);
@@ -196,29 +172,17 @@ export const cl2kMakerAPI = {
     /** Poll a background season batch's progress. */
     seasonsStatus: jobId => apiCore.get(`/cl2k-maker/seasons-status/${jobId}`, { useCache: false }),
 
-    /**
-     * Re-text a finished poster: AI-erase the brushed old text + redraw a label
-     * in CL2K font. preview=true returns {preview_b64}; else saves the poster.
-     * Uses a long client timeout — the OpenAI gpt-image-1 edit can take 30–120s
-     * (backend ai_timeout defaults to 120s). The default 30s client timeout would
-     * abort while the backend is still working, surfacing nothing in the logs.
-     * `opts` carries a caller signal; spread last so it can't drop the timeout.
-     */
+    /** Re-text a poster: AI-erase the old text, redraw in CL2K font. `preview=true`
+     *  returns {preview_b64}. `opts` spreads last so it cannot drop the long timeout. */
     retext: (req, opts) =>
         apiCore.post('/cl2k-maker/retext', req, { timeout: AI_TIMEOUT_MS, ...opts }),
 
-    /** Detect text regions on a poster for mask prefill. `req` = { image_b64 |
-     *  image_path, min_score }; returns { regions: [{polygon, score}...], mask:
-     *  b64 PNG (white = text, image dims) }. Long timeout — detection runs on the
-     *  AI sidecar and a 4K poster upload + OCR can outlast the default 30s. */
+    /** Detect text regions for mask prefill; returns regions + a white-is-text mask.
+     *  Long timeout: a 4K upload plus OCR outlasts the 30s default. */
     detectText: req => apiCore.post('/cl2k-maker/detect-text', req, { timeout: AI_TIMEOUT_MS }),
 
-    /** Shrink a brushed block erase-mask down to the title glyph strokes so the
-     *  inpainter fills thin gaps (sharp) instead of one big block (blurry).
-     *  `req` = { image_b64 | image_path, mask_b64, color_tol? }; returns
-     *  { tightened: bool, mask: b64 PNG (white = remove) | null }. Pure local
-     *  compute (no AI provider), but a 4K poster upload can outlast the 30s
-     *  default, so use the long timeout. */
+    /** Shrink a brushed erase-mask to the glyph strokes, so the inpainter fills thin
+     *  gaps sharply rather than one blurry block. Local compute, but long timeout. */
     tightenMask: req => apiCore.post('/cl2k-maker/tighten-mask', req, { timeout: AI_TIMEOUT_MS }),
 
     /** Start a background File-as-is season batch (one source poster, re-filed per

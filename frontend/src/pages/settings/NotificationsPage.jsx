@@ -16,10 +16,8 @@ import { withExtensionConfigModuleKeys } from '../../extensions/index.js';
 const REDACTED = '********';
 const CHIP_LIMIT = 6;
 
-// The modules a destination can report on — every runnable module in display
-// order (extension modules spliced at their anchors), minus the non-notifiable
-// "general"/"main" pseudo-sections and config-only modules (CL2K Maker) that
-// never run to notify. Kept in sync with Settings → Modules, not hard-coded.
+// Runnable modules only: drops the "general"/"main" pseudo-sections and config-only
+// modules that never run to notify. Derived from Settings → Modules, not hard-coded.
 const MODULE_KEYS = withExtensionConfigModuleKeys(moduleOrder).filter(
     m => m !== 'general' && m !== 'main' && !CONFIG_ONLY_MODULE_KEYS.has(m)
 );
@@ -61,13 +59,8 @@ const targetLine = d =>
         ? `Discord · incoming webhook${d.config?.bot_name ? ` · ${d.config.bot_name}` : ''}`
         : `Notifiarr · channel ${d.config?.channel_id ?? '—'}`;
 
-/**
- * Notifications settings — per-destination outbound alerting.
- *
- * Each destination (a Discord webhook or Notifiarr alert) fans out to the
- * modules it should report on, with independent success/failure triggers and
- * an enable toggle. Wired to the destinations config/API.
- */
+/** Notifications settings: each destination fans out to chosen modules, with its own
+ *  success/failure triggers and enable toggle. */
 export const NotificationsPage = () => {
     const toast = useToast();
 

@@ -1,16 +1,8 @@
 /** Formats an external ID for display — returns null if empty/falsy */
 export const formatId = val => (val ? String(val) : null);
 
-/** Build a Discord-ready poster-request block for a single item.
- * Returns {text, hasTmdb} or null when no usable id is available.
- *
- * For series with exactly one missing season and no missing main poster,
- * the TMDb link points directly at that season's page so the recipient
- * lands on the right poster spread instead of the show's main page.
- *
- * The backend resolves most missing tmdb_id values via TMDB's /find API
- * (configurable under Settings → TMDB), so this fallback chain rarely
- * reaches TVDb in practice. */
+/** Discord-ready poster-request block: {text, hasTmdb}, or null when no usable id exists.
+ *  A series missing exactly one season AND not its main poster links to that season's TMDb page. */
 export const buildPosterRequestText = (item, type) => {
     const title = item.title || 'Unknown';
     const year = item.year ? ` (${item.year})` : '';

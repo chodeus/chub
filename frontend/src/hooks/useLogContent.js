@@ -5,23 +5,8 @@ import { logsAPI } from '../utils/api/logs.js';
 // on the first poll.
 const LOG_TAIL_LINES = 5000;
 
-/**
- * useLogContent - Fetch log file content
- *
- * Fetches log content when module and file are selected, and provides
- * a manual refresh function for polling. In-flight fetches are cancelled
- * on unmount or when the selected module/file changes, and overlapping
- * refresh calls are skipped so slow fetches don't pile up.
- *
- * @param {string} selectedModule - Currently selected module
- * @param {string} selectedLogFile - Currently selected log file
- * @returns {Object} Log content state
- * @property {string} logText - Log file content
- * @property {boolean} loading - Loading state
- * @property {Error|null} error - Error state
- * @property {Function} refresh - Manual refresh function (returns Promise)
- * @property {{current: boolean}} inFlightRef - Ref that's true while a fetch is running
- */
+/** Log content plus a `refresh` for polling. In-flight fetches abort on unmount or
+ *  selection change, and overlapping refreshes are skipped so slow reads don't pile up. */
 export function useLogContent(selectedModule, selectedLogFile) {
     const [logText, setLogText] = useState('');
     const [loading, setLoading] = useState(false);

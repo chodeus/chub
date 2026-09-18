@@ -2,12 +2,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router';
 import { NAV_TITLES } from '../components/navSections.js';
 
-/**
- * Map of canonical pathname → user-facing page name. Kept in sync with the
- * Breadcrumbs route map so the browser tab and breadcrumb trail speak the
- * same language. Core routes only — extension routes fall through to
- * NAV_TITLES, which is derived from the nav tree they already register into.
- */
+/** Core routes only — extension routes fall through to NAV_TITLES. Mirrors the Breadcrumbs route map. */
 const ROUTE_TITLES = {
     '/login': 'Sign in',
     '/setup': 'Setup',
@@ -37,14 +32,7 @@ const ROUTE_TITLES = {
 
 const SUFFIX = 'CHUB';
 
-/**
- * Hook that keeps `document.title` in sync with the current route so the
- * browser tab actually tells the user which page they're on. Without this
- * every tab just reads "CHUB · Media Manager" and tab-switching is
- * useless.
- *
- * Drop it into Layout once — don't sprinkle it per page.
- */
+/** Syncs `document.title` to the route. Mount once in Layout, not per page. */
 export function useDocumentTitle() {
     const { pathname } = useLocation();
 

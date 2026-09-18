@@ -1,19 +1,8 @@
-/**
- * Touch Device Detection Utilities
- *
- * Provides reliable touch device detection for showing appropriate UI controls:
- * - Touch devices: Show up/down arrow buttons for reordering
- * - Non-touch devices: Show drag handles for drag-and-drop
- */
+/** Touch detection: reorder arrows on touch devices, drag handles elsewhere. */
 
 import React from 'react';
 
-/**
- * Detect if the current device supports touch input
- * Uses multiple detection methods for reliability
- *
- * @returns {boolean} True if touch device is detected
- */
+/** True when the device supports touch input. */
 export const isTouchDevice = () => {
     // Check for touch events support
     if ('ontouchstart' in window) {
@@ -44,12 +33,7 @@ export const isTouchDevice = () => {
     return false;
 };
 
-/**
- * React hook for touch device detection with re-render on changes
- * Useful for responsive touch/non-touch UI
- *
- * @returns {boolean} True if touch device is detected
- */
+/** Touch detection that re-renders when pointer capability changes. */
 export const useTouchDevice = () => {
     const [isTouch, setIsTouch] = React.useState(isTouchDevice);
 
@@ -90,13 +74,7 @@ export const useTouchDevice = () => {
     return isTouch;
 };
 
-/**
- * CSS class helper for conditional touch/non-touch styling
- *
- * @param {string} touchClasses - Classes to apply on touch devices
- * @param {string} nonTouchClasses - Classes to apply on non-touch devices
- * @returns {string} Appropriate classes for current device
- */
+/** Picks between touch and non-touch class strings. */
 export const touchClasses = (touchClasses = '', nonTouchClasses = '') => {
     return isTouchDevice() ? touchClasses : nonTouchClasses;
 };

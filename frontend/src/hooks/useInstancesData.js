@@ -1,8 +1,3 @@
-/**
- * Instance Data Management Hook
- * Provides centralized access to instances API data with caching and helper functions
- */
-
 import { useCallback } from 'react';
 import { useApiData } from './useApiData';
 import { configAPI } from '../utils/api/config';
@@ -11,10 +6,7 @@ import {
     getInstanceType as getInstanceTypeUtil,
 } from '../utils/forms/conditionalFields';
 
-/**
- * Hook for managing instance data with API integration
- * @returns {Object} Instance data and helper functions
- */
+/** Instances API data plus lookup helpers. */
 export const useInstancesData = () => {
     const {
         data: instancesResponse,
@@ -34,11 +26,7 @@ export const useInstancesData = () => {
     // Extract instances data from API response - config API nests it under data.instances
     const instancesData = instancesResponse?.data?.instances;
 
-    /**
-     * Get dropdown options for specific allowed instance types
-     * @param {Array} allowedTypes - Array of allowed service types (e.g. ['radarr', 'sonarr'])
-     * @returns {Array} Dropdown options array
-     */
+    /** Dropdown options, optionally narrowed to the given service types. */
     const getInstanceOptions = useCallback(
         (allowedTypes = []) => {
             return generateInstanceOptions(instancesData, allowedTypes);
@@ -46,11 +34,7 @@ export const useInstancesData = () => {
         [instancesData]
     );
 
-    /**
-     * Get instance type for a specific instance name
-     * @param {string} instanceName - Instance name to look up
-     * @returns {string|null} Instance type (radarr, sonarr, plex) or null
-     */
+    /** Service type for an instance name, or null. */
     const getInstanceType = useCallback(
         instanceName => {
             return getInstanceTypeUtil(instanceName, instancesData);
@@ -58,28 +42,18 @@ export const useInstancesData = () => {
         [instancesData]
     );
 
-    /**
-     * Check if instances data is ready for use
-     * @returns {boolean} True if data is loaded and available
-     */
+    /** True once the data has loaded without error. */
     const isInstancesReady = useCallback(() => {
         return !isLoading && !error && !!instancesData;
     }, [isLoading, error, instancesData]);
 
-    /**
-     * Get all available service types
-     * @returns {Array} Array of service type strings
-     */
+    /** The service types present in the data. */
     const getAvailableServiceTypes = useCallback(() => {
         if (!instancesData) return [];
         return Object.keys(instancesData);
     }, [instancesData]);
 
-    /**
-     * Get instances for a specific service type
-     * @param {string} serviceType - Service type (radarr, sonarr, plex)
-     * @returns {Object} Instance objects for the service type
-     */
+    /** Instances for one service type, or {}. */
     const getInstancesForServiceType = useCallback(
         serviceType => {
             if (!instancesData || !serviceType) return {};

@@ -1,9 +1,5 @@
 import { useEffect, useRef } from 'react';
 
-/**
- * Focusable element selector query
- * Includes all interactive elements that can receive keyboard focus
- */
 const FOCUSABLE_SELECTOR = [
     'a[href]',
     'button:not([disabled])',
@@ -19,33 +15,8 @@ const activeTraps = [];
 /** True when `container` is the most recently activated trap. */
 export const isTopFocusTrap = container => activeTraps[activeTraps.length - 1] === container;
 
-/**
- * useFocusTrap - Trap keyboard focus within a container element
- *
- * Manages focus behavior for modal dialogs and other overlay components:
- * - Stores original focused element for restoration on deactivation
- * - Focuses first focusable element when activated
- * - TAB cycles forward through focusable elements (wraps to beginning)
- * - Shift+TAB cycles backward through focusable elements (wraps to end)
- * - Restores focus to original element when deactivated
- * - Handles dynamic content with MutationObserver
- *
- * @example
- * const containerRef = useRef(null);
- * useFocusTrap(containerRef, isModalOpen);
- *
- * return (
- *   <div ref={containerRef} role="dialog">
- *     <button>First focusable</button>
- *     <input type="text" />
- *     <button>Last focusable</button>
- *   </div>
- * );
- *
- * @param {React.RefObject} containerRef - Reference to container element to trap focus within
- * @param {boolean} isActive - Whether focus trap is currently active
- * @returns {void}
- */
+/** Cycles TAB within `containerRef` while active, restores the previously focused
+ *  element on deactivation, and re-scans via MutationObserver for dynamic content. */
 export const useFocusTrap = (containerRef, isActive) => {
     const previousFocusRef = useRef(null);
     const observerRef = useRef(null);
@@ -85,11 +56,6 @@ export const useFocusTrap = (containerRef, isActive) => {
         // Falls back to the container, which needs tabIndex={-1} to take focus.
         (getFocusableElements()[0] ?? container).focus();
 
-        /**
-         * Handle TAB and Shift+TAB key navigation
-         * Cycles through focusable elements with wrapping
-         * @param {KeyboardEvent} event - Keyboard event
-         */
         const handleKeyDown = event => {
             if (event.key !== 'Tab' || !isTopTrap()) return;
 

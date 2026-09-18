@@ -5,9 +5,8 @@ import react from '@vitejs/plugin-react';
 // makes every test run compile CSS for no benefit.
 export default defineConfig({
     plugins: [react({ jsxRuntime: 'automatic' })],
-    // Vite 8's transform doesn't inherit the plugin's JSX runtime here, so JSX
-    // compiles to React.createElement and every render throws "React is not
-    // defined". Set it explicitly.
+    // Vite 8's transform doesn't inherit the plugin's JSX runtime here, so JSX would
+    // compile to React.createElement and every render throw "React is not defined".
     esbuild: { jsx: 'automatic' },
     test: {
         environment: 'jsdom',

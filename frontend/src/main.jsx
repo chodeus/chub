@@ -6,10 +6,6 @@ import App from './App.jsx';
 import './css/tailwind.css';
 import './css/index.css';
 
-/**
- * Main application entry point
- * Using React 19 createRoot API
- */
 const container = document.getElementById('root');
 const root = createRoot(container);
 

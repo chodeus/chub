@@ -1,26 +1,9 @@
-/**
- * CHUB Instances API Module
- *
- * Handles instance management for external services:
- * - Service instance configuration
- * - Connection testing
- * - Instance health monitoring
- * - Service integration management
- */
+/** Instances API: external service config, connection tests and health. */
 
 import { apiCore } from './core.js';
 
-/**
- * Instances API client for external service management
- */
 export const instancesAPI = {
-    /**
-     * Fetch all configured instances
-     * @param {Object} options - Request options
-     * @param {boolean} options.useCache - Use cached data (default: true)
-     * @param {string} options.type - Filter by instance type
-     * @returns {Promise<Array>} List of configured instances
-     */
+    /** All configured instances, optionally filtered by `options.type`. */
     fetchInstances: async (options = {}) => {
         const { type, ...requestOptions } = options;
         const params = type ? `?type=${type}` : '';
@@ -35,55 +18,27 @@ export const instancesAPI = {
         return response.data || response;
     },
 
-    /**
-     * Create new instance configuration
-     * @param {Object} instanceData - Instance configuration data
-     * @param {string} instanceData.name - Instance name
-     * @param {string} instanceData.type - Instance type (e.g., 'radarr', 'sonarr')
-     * @param {string} instanceData.url - Instance URL
-     * @param {string} instanceData.apiKey - Instance API key
-     * @param {Object} instanceData.settings - Additional instance settings
-     * @returns {Promise<Object>} Created instance
-     */
+    /** Create an instance from { name, type, url, apiKey, settings }. */
     createInstance: instanceData => {
         return apiCore.post('/instances', instanceData);
     },
 
-    /**
-     * Update instance configuration
-     * @param {string} instanceId - Instance identifier
-     * @param {Object} instanceData - Updated instance data
-     * @returns {Promise<Object>} Updated instance
-     */
+    /** Update an instance's configuration. */
     updateInstance: (instanceId, instanceData) => {
         return apiCore.put(`/instances/${instanceId}`, instanceData);
     },
 
-    /**
-     * Delete instance configuration
-     * @param {string} instanceId - Instance identifier
-     * @param {string} serviceType - Service type (radarr, sonarr, or plex)
-     * @returns {Promise<Object>} Deletion response
-     */
+    /** Delete an instance. Takes the exact stored name, not a humanized label. */
     deleteInstance: (instanceId, serviceType) => {
         return apiCore.delete(`/instances/${instanceId}?service=${serviceType}`);
     },
 
-    /**
-     * Test instance configuration without saving
-     * @param {Object} instanceData - Instance configuration to test
-     * @returns {Promise<Object>} Connection test result
-     */
+    /** Test a configuration without saving it. */
     testInstanceConfig: instanceData => {
         return apiCore.post('/instances/test', instanceData);
     },
 
-    /**
-     * Fetch instance health status
-     * @param {string} instanceId - Instance identifier (optional for all instances)
-     * @param {Object} options - Request options
-     * @returns {Promise<Object>} Health status
-     */
+    /** Health for one instance, or all when `instanceId` is null. */
     fetchHealthStatus: (instanceId = null, options = {}) => {
         const url = instanceId ? `/instances/${instanceId}/health` : '/instances/health';
         return apiCore.get(url, {
@@ -92,13 +47,7 @@ export const instancesAPI = {
         });
     },
 
-    /**
-     * Fetch instance statistics
-     * @param {string} instanceId - Instance identifier
-     * @param {Object} options - Statistics options
-     * @param {string} options.period - Time period (24h, 7d, 30d)
-     * @returns {Promise<Object>} Instance statistics
-     */
+    /** Instance statistics; `options.period` is 24h, 7d or 30d. */
     fetchStatistics: (instanceId, options = {}) => {
         const params = new URLSearchParams(options);
         const url = params.toString()
@@ -111,11 +60,7 @@ export const instancesAPI = {
         });
     },
 
-    /**
-     * Fetch supported instance types
-     * @param {Object} options - Request options
-     * @returns {Promise<Array>} List of supported instance types
-     */
+    /** The supported instance types. */
     fetchSupportedTypes: (options = {}) => {
         return apiCore.get('/instances/types', {
             useCache: true,
@@ -124,12 +69,7 @@ export const instancesAPI = {
         });
     },
 
-    /**
-     * Fetch instance type schema
-     * @param {string} instanceType - Type of instance
-     * @param {Object} options - Request options
-     * @returns {Promise<Object>} Instance type schema
-     */
+    /** Config schema for one instance type. */
     fetchTypeSchema: (instanceType, options = {}) => {
         return apiCore.get(`/instances/types/${instanceType}/schema`, {
             useCache: true,
@@ -138,34 +78,17 @@ export const instancesAPI = {
         });
     },
 
-    /**
-     * Enable/disable instance
-     * @param {string} instanceId - Instance identifier
-     * @param {boolean} enabled - Whether to enable the instance
-     * @returns {Promise<Object>} Update response
-     */
+    /** Enable or disable an instance. */
     toggleInstance: (instanceId, enabled) => {
         return apiCore.patch(`/instances/${instanceId}`, { enabled });
     },
 
-    /**
-     * Refresh instance data
-     * @param {string} instanceId - Instance identifier
-     * @returns {Promise<Object>} Refresh response
-     */
+    /** Refresh one instance's cached data. */
     refreshInstance: instanceId => {
         return apiCore.post(`/instances/${instanceId}/refresh`);
     },
 
-    /**
-     * Fetch instance logs
-     * @param {string} instanceId - Instance identifier
-     * @param {Object} options - Log options
-     * @param {number} options.limit - Maximum log entries
-     * @param {string} options.level - Log level filter
-     * @param {Date|string} options.since - Logs since date
-     * @returns {Promise<Object>} Instance logs
-     */
+    /** Instance logs; `options` accepts limit, level and since. */
     fetchInstanceLogs: (instanceId, options = {}) => {
         const params = new URLSearchParams();
 
@@ -188,22 +111,12 @@ export const instancesAPI = {
         });
     },
 
-    /**
-     * Sync instance data
-     * @param {string} instanceId - Instance identifier
-     * @param {Object} options - Sync options
-     * @returns {Promise<Object>} Sync job information
-     */
+    /** Queue a data sync for one instance. */
     syncInstance: (instanceId, options = {}) => {
         return apiCore.post(`/instances/${instanceId}/sync`, options);
     },
 
-    /**
-     * Fetch Plex libraries for a specific instance
-     * @param {string} instanceName - Plex instance name
-     * @param {Object} options - Request options
-     * @returns {Promise<Array>} List of Plex libraries
-     */
+    /** Plex libraries for one instance. */
     fetchPlexLibraries: (instanceName, options = {}) => {
         // A name may hold `/`, `?` or `#`, which would re-shape the URL before the
         // backend ever validates it.
@@ -214,11 +127,7 @@ export const instancesAPI = {
         });
     },
 
-    /**
-     * Fetch catalogued libraries for all Plex instances
-     * @param {Object} options - Request options
-     * @returns {Promise<Object>} Map of instance name → library list
-     */
+    /** Catalogued libraries for every Plex instance, keyed by instance name. */
     fetchPlexCatalog: (options = {}) => {
         return apiCore.get('/plex/libraries', {
             useCache: true,
@@ -227,14 +136,8 @@ export const instancesAPI = {
         });
     },
 
-    /**
-     * Replace a Plex instance's opted-in library allow-list. Libraries not in
-     * the list are hidden everywhere CHUB manages content; the backend also
-     * purges their cached rows and prunes stale per-module selections.
-     * @param {string} instanceName - Plex instance name
-     * @param {string[]} enabledLibraries - Library titles to enable
-     * @returns {Promise<Object>} Update response
-     */
+    /** Replace a Plex instance's opted-in library allow-list. Omitted libraries are
+     *  hidden everywhere, and the backend purges their cached rows. */
     updateInstanceLibraries: async (instanceName, enabledLibraries) => {
         // Encode once and reuse: the cache key below must match the URL fetched.
         const encodedName = encodeURIComponent(instanceName);

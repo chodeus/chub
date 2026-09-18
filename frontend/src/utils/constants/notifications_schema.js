@@ -1,35 +1,4 @@
-/**
- * CHUB Notification Service Schema
- *
- * Schema definitions for notification service configurations.
- * Supports Discord and Notifiarr notification services.
- *
- * Field types used:
- * - text: Standard text input
- * - password: Secure password input
- * - number: Numeric input
- * - color: Color picker
- * - check_box: Boolean toggle
- *
- * All field types are validated against FieldRegistry.
- */
-
-/**
- * Notification service schema definitions
- * @constant {Array<Object>} NOTIFICATIONS_SCHEMA
- *
- * @property {string} type - Service type identifier
- * @property {string} label - Display name for service
- * @property {Array<Object>} fields - Field definitions for service configuration
- *
- * Each field object contains:
- * @property {string} key - Configuration key
- * @property {string} label - Display label
- * @property {string} type - Field type from FieldRegistry
- * @property {boolean} required - Whether field is required
- * @property {string} [placeholder] - Placeholder text
- * @property {Function} [validate] - Optional validation function
- */
+/** Discord and Notifiarr config schemas. Every `type` must exist in FieldRegistry. */
 export const NOTIFICATIONS_SCHEMA = [
     {
         type: 'discord',
