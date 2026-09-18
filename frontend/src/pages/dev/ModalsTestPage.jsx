@@ -76,9 +76,8 @@ const ModalsTestPage = () => {
 
     const mountedRef = useRef(true);
 
-    // Set on mount, not just cleared on unmount: a StrictMode double-mount runs
-    // the cleanup first, which would otherwise leave this false for the real
-    // mount. Same trap as useMountedRef in Cl2kMakerPage.
+    // Set on mount, not just cleared: StrictMode runs the cleanup first, which
+    // would otherwise leave this false for the real mount.
     useEffect(() => {
         mountedRef.current = true;
         return () => {
@@ -101,6 +100,8 @@ const ModalsTestPage = () => {
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
+        // The loop exits through the last delay, so this needs the guard too.
+        if (!mountedRef.current) return;
         setStressTestRunning(false);
     };
 
