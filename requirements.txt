@@ -10,7 +10,7 @@ croniter==6.2.4
 defusedxml==0.7.1
 fastapi==0.141.1
 h11==0.16.0
-idna==3.19
+idna==3.20
 pathvalidate==3.3.1
 pillow==12.3.0
 PlexAPI==4.18.2
@@ -30,6 +30,6 @@ tqdm==4.70.1
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 Unidecode==1.4.0
-urllib3==2.7.0
-uvicorn==0.52.4
+urllib3==2.8.0
+uvicorn==0.53.0
 watchdog==6.0.0
