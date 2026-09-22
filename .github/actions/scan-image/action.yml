@@ -16,6 +16,11 @@ inputs:
     description: Severities that fail the build.
     required: false
     default: CRITICAL
+  platform:
+    description: Platform to scan. Trivy defaults to linux/amd64 and aborts on an
+      image with no amd64 child, so a per-arch digest must say which one it is.
+    required: false
+    default: linux/amd64
 
 runs:
   using: composite
@@ -24,6 +29,8 @@ runs:
     # blocking on those wedges every build on something no change here clears.
     - name: Report
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      env:
+        TRIVY_PLATFORM: ${{ inputs.platform }}
       with:
         # The action's default trivy trails its own releases; pin the scanner.
         version: v0.74.0 # renovate: aquasecurity/trivy
@@ -51,6 +58,8 @@ runs:
 
     - name: Gate
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      env:
+        TRIVY_PLATFORM: ${{ inputs.platform }}
       with:
         version: v0.74.0 # renovate: aquasecurity/trivy
         scan-type: image

@@ -90,6 +90,7 @@ jobs:
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.branch_amd64.outputs.digest }}
           label: branch-amd64
+          platform: linux/amd64
 
       - name: Build branch arm64 for scanning
         id: branch_arm64
@@ -110,6 +111,7 @@ jobs:
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.branch_arm64.outputs.digest }}
           label: branch-arm64
+          platform: linux/arm64
 
       # Assemble the published tags from the exact digests the gates passed. A
       # second build could differ from the scanned one on a cache miss.

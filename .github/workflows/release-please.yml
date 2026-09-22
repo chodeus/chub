@@ -84,6 +84,7 @@ jobs:
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.lean_amd64.outputs.digest }}
           label: lean-amd64
+          platform: linux/amd64
 
       - name: Build lean arm64 for scanning
         id: lean_arm64
@@ -105,6 +106,7 @@ jobs:
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.lean_arm64.outputs.digest }}
           label: lean-arm64
+          platform: linux/arm64
 
       - name: Build full amd64 for scanning
         id: full_amd64
@@ -126,6 +128,7 @@ jobs:
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.full_amd64.outputs.digest }}
           label: full-amd64
+          platform: linux/amd64
 
       - name: Build full arm64 for scanning
         id: full_arm64
@@ -147,6 +150,7 @@ jobs:
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.full_arm64.outputs.digest }}
           label: full-arm64
+          platform: linux/arm64
 
       # Assemble the published tags from the exact digests the gates passed. A
       # second build could differ from the scanned one on a cache miss.
