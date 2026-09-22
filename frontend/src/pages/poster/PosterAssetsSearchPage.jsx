@@ -12,6 +12,7 @@ import { Modal } from '../../components/modals/Modal';
 import { Button, LoadingButton, IconButton, Pagination } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { StyleStamp } from '../../components/ui/StyleStamp.jsx';
+import { useConfirm } from '../../contexts/ConfirmContext.jsx';
 
 // Compact "5d ago" relative time for the GDrive last-sync stat.
 const relTime = ts => {
@@ -120,6 +121,7 @@ function saveFilters(filters) {
 
 const PosterAssetsSearchPage = () => {
     const toast = useToast();
+    const confirm = useConfirm();
     useStreamToken(); // re-render thumbnails once the stream token is ready
     const location = useLocation();
     const { isRunning } = useModuleExecution();
@@ -597,13 +599,13 @@ const PosterAssetsSearchPage = () => {
                                         size="small"
                                         onClick={async e => {
                                             e.stopPropagation();
-                                            if (
-                                                !window.confirm(
-                                                    `Delete collection "${col.name || col.title}"? Poster files will not be removed.`
-                                                )
-                                            ) {
-                                                return;
-                                            }
+                                            const ok = await confirm({
+                                                title: 'Delete collection',
+                                                message: `Delete collection "${col.name || col.title}"? Poster files will not be removed.`,
+                                                confirmLabel: 'Delete',
+                                                variant: 'danger',
+                                            });
+                                            if (!ok) return;
                                             try {
                                                 await postersAPI.deleteCollection(col.id);
                                                 toast.success('Collection deleted');

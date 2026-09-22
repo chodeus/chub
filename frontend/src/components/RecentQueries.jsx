@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import PropTypes from 'prop-types';
+import { useConfirm } from '../contexts/ConfirmContext.jsx';
 
 const MAX_ENTRIES = 6;
 
@@ -53,13 +54,20 @@ export function useRecentQueries(storageKey) {
 }
 
 export default function RecentQueries({ entries, onSelect, onClear, label = 'Recent' }) {
-    const handleClearClick = useCallback(() => {
+    const confirm = useConfirm();
+    const handleClearClick = useCallback(async () => {
         if (!onClear) return;
         // Tiny confirm guard so "Clear" can't be tapped by accident when the
         // chip row gets crowded.
-        if (typeof window !== 'undefined' && !window.confirm('Clear recent searches?')) return;
+        const ok = await confirm({
+            title: 'Clear recent searches',
+            message: 'Clear recent searches?',
+            confirmLabel: 'Clear',
+            variant: 'danger',
+        });
+        if (!ok) return;
         onClear();
-    }, [onClear]);
+    }, [onClear, confirm]);
 
     if (!entries || entries.length === 0) return null;
     return (
