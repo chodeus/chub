@@ -1,10 +1,12 @@
 """Shared router dependencies for the poster API modules."""
 
-from typing import Any
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Request
 
 from backend.api.utils import get_module_logger
+from backend.util.config import load_config
+from backend.util.gdrive_source import build_drive_map, resolve_drive_for_path
 
 router = APIRouter(
     prefix="/api/posters",
@@ -25,3 +27,23 @@ def get_cleanarr_logger(request: Request) -> Any:
     not just scheduled module runs.
     """
     return get_module_logger(request, "poster_cleanarr")
+
+
+def annotate_drive(rows: Optional[List[dict]], path_key: str = "file") -> None:
+    """Stamp each row with `drive`: the configured Google Drive that supplied it.
+
+    Mutates the dicts in `rows`, so it takes a list rather than any iterable — a
+    generator would be consumed here and the caller would see nothing. Never
+    fatal: provenance is a display nicety, so a config that will not load leaves
+    `drive` as None rather than failing the report the caller actually asked for.
+    """
+    if not rows:
+        return
+    try:
+        sync_cfg = getattr(load_config(), "sync_gdrive", None)
+        drive_map = build_drive_map(getattr(sync_cfg, "gdrive_list", None))
+    except Exception:
+        drive_map = {}
+    for row in rows:
+        if isinstance(row, dict):
+            row["drive"] = resolve_drive_for_path(row.get(path_key) or "", drive_map)
