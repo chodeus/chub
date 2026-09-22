@@ -6,13 +6,14 @@ from typing import Any, Optional
 from fastapi import Depends, Query
 from fastapi.responses import JSONResponse
 
-from backend.api.posters._shared import router
+from backend.api.posters._shared import annotate_drive, router
 from backend.api.utils import (
     error,
     get_database,
     get_logger,
     ok,
 )
+from backend.util.config import ConfigError
 from backend.util.database import ChubDB
 
 
@@ -96,7 +97,12 @@ def list_recently_matched(
 ) -> JSONResponse:
     try:
         rows = db.media.get_recently_matched(limit=max(1, min(limit, 500)))
+        annotate_drive(rows)
         return ok(f"{len(rows)} recently matched posters", {"items": rows})
+    except ConfigError:
+        # app.exception_handler(ConfigError) renders the curated, value-redacted
+        # envelope; the generic branch below would report the wrong cause.
+        raise
     except Exception as e:
         logger.error(f"Error listing recently matched posters: {e}")
         return error(

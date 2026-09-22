@@ -21,6 +21,11 @@ from backend.util.constants import (
     season_number_regex,
 )
 from backend.util.database import ChubDB
+from backend.util.gdrive_source import (
+    build_drive_map,
+    resolve_drive_for_path,
+    style_of,
+)
 from backend.util.helper import (
     as_list,
     classify_match,
@@ -1391,35 +1396,18 @@ class PosterRenamerr(ChubModule):
         -> {"/kometa/posters/CL2K/Solen": "CL2K"}. Used at scan time to
         stamp each poster_cache row with the curator style it came from.
         """
-        out: dict = {}
         full_config = getattr(self, "full_config", None)
         sync_cfg = getattr(full_config, "sync_gdrive", None)
-        gdrive_list = getattr(sync_cfg, "gdrive_list", None) or []
-        for entry in gdrive_list:
-            loc = (getattr(entry, "location", "") or "").strip()
-            name = (getattr(entry, "name", "") or "").strip()
-            if not loc or not name:
-                continue
-            head = name.split(None, 1)[0]
-            if head:
-                out[os.path.realpath(loc).rstrip("/")] = head
-        return out
+        drive_map = build_drive_map(getattr(sync_cfg, "gdrive_list", None))
+        return {
+            loc: style for loc, name in drive_map.items() if (style := style_of(name))
+        }
 
     @staticmethod
     def _resolve_style_for_path(path: str, style_map: dict) -> Optional[str]:
         """Return the style of the longest gdrive_list location that is an
         ancestor of `path`. None if no entry matches."""
-        if not style_map:
-            return None
-        real = os.path.realpath(path).rstrip("/")
-        best_style = None
-        best_len = -1
-        for loc, style in style_map.items():
-            if real == loc or real.startswith(loc + "/"):
-                if len(loc) > best_len:
-                    best_style = style
-                    best_len = len(loc)
-        return best_style
+        return resolve_drive_for_path(path, style_map)
 
     def _get_assets_files(
         self,
