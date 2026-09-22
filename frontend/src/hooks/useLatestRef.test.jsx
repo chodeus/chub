@@ -5,12 +5,8 @@ import { useLatestRef } from './useLatestRef.js';
 import { ConfirmProvider, useConfirm } from '../contexts/ConfirmContext.jsx';
 import { UIStateProvider } from '../contexts/UIStateContext.jsx';
 
-/**
- * The discard-vs-save race the confirm dialog introduced: a value captured
- * before `await confirm()` is the one from that render, so a save landing while
- * the dialog is open leaves the discard restoring a stale baseline over it.
- * `readLatest` selects the buggy path from the fixed one.
- */
+/** Models the discard-vs-save race; `readLatest` picks the fixed path (ref)
+ *  over the buggy one (a baseline captured before the await). */
 function DiscardHarness({ readLatest }) {
     const [baseline, setBaseline] = useState('saved-v1');
     const [value, setValue] = useState('edited');
