@@ -6,6 +6,7 @@ import { configAPI } from '../../utils/api/config.js';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+import { useConfirm } from '../../contexts/ConfirmContext.jsx';
 import { Button, LoadingButton } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ColorListField } from '../../components/fields/color/ColorListField.jsx';
@@ -90,16 +91,23 @@ const BorderReplacerrPage = () => {
         });
     }, []);
 
-    const handleDiscard = useCallback(() => {
+    const confirm = useConfirm();
+    const handleDiscard = useCallback(async () => {
         if (!isDirty) return;
-        if (!window.confirm('Discard unsaved changes?')) return;
+        const ok = await confirm({
+            title: 'Discard changes',
+            message: 'Discard unsaved changes?',
+            confirmLabel: 'Discard',
+            variant: 'danger',
+        });
+        if (!ok) return;
         try {
             const parsed = JSON.parse(baseline);
             setConfig(parsed);
         } catch {
             // Baseline should always be valid JSON we wrote; defensive only.
         }
-    }, [baseline, isDirty]);
+    }, [baseline, isDirty, confirm]);
 
     const handleSave = useCallback(async () => {
         if (!config || !fullConfig || !isDirty || isSaving) return;

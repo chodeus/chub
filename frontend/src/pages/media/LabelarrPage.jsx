@@ -10,6 +10,7 @@ import { Button, IconButton, LoadingButton, StatusDot, Toggle } from '../../comp
 import Spinner from '../../components/ui/Spinner.jsx';
 import { formatDateTime } from '../../utils/datetime.js';
 import { formatTimeAgo } from '../../utils/schedule.js';
+import { useConfirm } from '../../contexts/ConfirmContext.jsx';
 
 // labels may be stored as a JSON-ish list or a comma string — normalise to a
 // clean array.
@@ -61,6 +62,7 @@ const arrDotColor = type => (type === 'sonarr' ? '#53e8f0' : '#6cbc66');
 
 const LabelarrPage = () => {
     const toast = useToast();
+    const confirm = useConfirm();
 
     // Run state drives the stats strip (status + last sync).
     const { data: statusData, refresh: refreshStatus } = useApiData({
@@ -160,15 +162,21 @@ const LabelarrPage = () => {
         }
     }, [fullConfig, mappings, isDirty, isSaving, toast]);
 
-    const handleDiscard = useCallback(() => {
+    const handleDiscard = useCallback(async () => {
         if (!isDirty) return;
-        if (!window.confirm('Discard unsaved mapping changes?')) return;
+        const ok = await confirm({
+            title: 'Discard changes',
+            message: 'Discard unsaved mapping changes?',
+            confirmLabel: 'Discard',
+            variant: 'danger',
+        });
+        if (!ok) return;
         try {
             setMappings(JSON.parse(baseline).map(normalizeMapping));
         } catch {
             /* baseline is always our own JSON; defensive only */
         }
-    }, [baseline, isDirty]);
+    }, [baseline, isDirty, confirm]);
 
     // Cmd/Ctrl+S → save.
     useEffect(() => {

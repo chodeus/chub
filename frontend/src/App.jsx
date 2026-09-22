@@ -5,6 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
 import { ErrorProvider } from './components/error/ErrorContext.jsx';
 import { UIStateProvider } from './contexts/UIStateContext.jsx';
+import { ConfirmProvider } from './contexts/ConfirmContext.jsx';
 import { SearchCoordinatorProvider } from './contexts/SearchCoordinatorContext.jsx';
 import { PageErrorBoundary } from './components/error';
 import { extensionRoutes } from './extensions/index.js';
@@ -205,385 +206,393 @@ const App = () => {
         // 3. AuthProvider
         // 4. ErrorProvider
         // 5. UIStateProvider
-        // 6. Router
-        // 7. SearchCoordinatorProvider
-        // 8. RouteErrorBoundary (innermost)
+        // 6. ConfirmProvider (inside UIStateProvider — its dialog is a Modal, which reads UI state)
+        // 7. Router
+        // 8. SearchCoordinatorProvider
+        // 9. RouteErrorBoundary (innermost)
         <ToastProvider>
             <ThemeProvider>
                 <AuthProvider>
                     <ErrorProvider>
                         <UIStateProvider>
-                            <BrowserRouter>
-                                <SearchCoordinatorProvider>
-                                    <RouteErrorBoundary>
-                                        <Suspense fallback={<SuspenseFallback />}>
-                                            <Routes>
-                                                <Route path="/login" element={<LoginRoute />} />
-                                                <Route
-                                                    path="/setup"
-                                                    element={
-                                                        <PageErrorBoundary
-                                                            pageName="Setup Wizard"
-                                                            pageDescription="First-run configuration"
-                                                        >
-                                                            <SetupWizardPage />
-                                                        </PageErrorBoundary>
-                                                    }
-                                                />
-                                                <Route
-                                                    path="/"
-                                                    element={
-                                                        <RequireAuth>
-                                                            <Layout />
-                                                        </RequireAuth>
-                                                    }
-                                                >
+                            <ConfirmProvider>
+                                <BrowserRouter>
+                                    <SearchCoordinatorProvider>
+                                        <RouteErrorBoundary>
+                                            <Suspense fallback={<SuspenseFallback />}>
+                                                <Routes>
+                                                    <Route path="/login" element={<LoginRoute />} />
                                                     <Route
-                                                        index
+                                                        path="/setup"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Setup Wizard"
+                                                                pageDescription="First-run configuration"
+                                                            >
+                                                                <SetupWizardPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="/"
+                                                        element={
+                                                            <RequireAuth>
+                                                                <Layout />
+                                                            </RequireAuth>
+                                                        }
+                                                    >
+                                                        <Route
+                                                            index
+                                                            element={
+                                                                <Navigate to="/dashboard" replace />
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="dashboard"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Dashboard"
+                                                                    pageDescription="Main dashboard overview"
+                                                                >
+                                                                    <DashboardPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+
+                                                        {/* Media Section - Hierarchical Routes */}
+                                                        <Route
+                                                            path="media"
+                                                            element={
+                                                                <Navigate
+                                                                    to="/media/search"
+                                                                    replace
+                                                                />
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="media/search"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Media Search"
+                                                                    pageDescription="Search media collection"
+                                                                >
+                                                                    <MediaSearchPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="media/manage"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Media Management"
+                                                                    pageDescription="Manage media library"
+                                                                >
+                                                                    <MediaManagePage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="media/statistics"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Media Statistics"
+                                                                    pageDescription="Media library statistics"
+                                                                >
+                                                                    <MediaStatsPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+
+                                                        <Route
+                                                            path="media/labelarr"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Label Sync"
+                                                                    pageDescription="Sync labels between services"
+                                                                >
+                                                                    <LabelarrPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+
+                                                        {/* Poster Section - Hierarchical Routes (note: /poster not /posters) */}
+                                                        <Route
+                                                            path="poster"
+                                                            element={
+                                                                <Navigate
+                                                                    to="/poster/search/gdrive"
+                                                                    replace
+                                                                />
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="poster/search/gdrive"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="GDrive Poster Search"
+                                                                    pageDescription="Search GDrive for posters"
+                                                                >
+                                                                    <PosterGDriveSearchPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="poster/search/assets"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Assets Poster Search"
+                                                                    pageDescription="Search local poster assets"
+                                                                >
+                                                                    <PosterAssetsSearchPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="poster/cleanarr"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Poster Cleanarr"
+                                                                    pageDescription="Review and clean up unused Plex poster variants"
+                                                                >
+                                                                    <PosterCleanarrPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="poster/border-replacerr"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Border Replacerr"
+                                                                    pageDescription="Pick colors and themed border art, with live preview on a sample of your matched posters"
+                                                                >
+                                                                    <BorderPreviewPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        {/* Back-compat redirect for any bookmarks still pointing at /poster/manage. */}
+                                                        <Route
+                                                            path="poster/manage"
+                                                            element={
+                                                                <Navigate
+                                                                    to="/poster/cleanarr"
+                                                                    replace
+                                                                />
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="poster/unmatched"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Unmatched Assets"
+                                                                    pageDescription="Media with no matched poster"
+                                                                >
+                                                                    <UnmatchedAssetsPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="poster/statistics"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Poster Statistics"
+                                                                    pageDescription="Poster collection statistics"
+                                                                >
+                                                                    <PosterStatsPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+
+                                                        {/* Extension routes (src/extensions) — none on main */}
+                                                        {extensionRoutes().map(
+                                                            ({
+                                                                path,
+                                                                pageName,
+                                                                pageDescription,
+                                                                Component,
+                                                            }) => (
+                                                                <Route
+                                                                    key={path}
+                                                                    path={path}
+                                                                    element={
+                                                                        <PageErrorBoundary
+                                                                            pageName={pageName}
+                                                                            pageDescription={
+                                                                                pageDescription
+                                                                            }
+                                                                        >
+                                                                            <Component />
+                                                                        </PageErrorBoundary>
+                                                                    }
+                                                                />
+                                                            )
+                                                        )}
+
+                                                        {/* Settings Section - Direct Routes */}
+                                                        <Route
+                                                            path="settings"
+                                                            element={
+                                                                <Navigate
+                                                                    to="/settings/general"
+                                                                    replace
+                                                                />
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/general"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="General Settings"
+                                                                    pageDescription="General CHUB application settings"
+                                                                >
+                                                                    <GeneralSettingsPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        {/* Back-compat redirect — the Interface page merged into General. */}
+                                                        <Route
+                                                            path="settings/interface"
+                                                            element={
+                                                                <Navigate
+                                                                    to="/settings/general"
+                                                                    replace
+                                                                />
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/modules"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Modules"
+                                                                    pageDescription="Module overview and enable toggles"
+                                                                >
+                                                                    <ModulesHubPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/modules/:moduleKey"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Module Settings"
+                                                                    pageDescription="Module-specific configuration settings"
+                                                                >
+                                                                    <ModuleSettingsPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/schedule"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Schedule Settings"
+                                                                    pageDescription="Module scheduling and automation configuration"
+                                                                >
+                                                                    <SchedulePage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/instances"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Instance Management"
+                                                                    pageDescription="Service instance configuration and connection testing"
+                                                                >
+                                                                    <InstancesPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/notifications"
+                                                            element={
+                                                                <PageErrorBoundary pageName="Notification Settings">
+                                                                    <NotificationsPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/jobs"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Job Queue"
+                                                                    pageDescription="Background job management"
+                                                                >
+                                                                    <JobsPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/webhooks"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="Webhooks"
+                                                                    pageDescription="Webhook processors and cleanup operations"
+                                                                >
+                                                                    <WebhooksPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="settings/system"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="System"
+                                                                    pageDescription="Database statistics and maintenance actions"
+                                                                >
+                                                                    <SystemSettingsPage />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+                                                        {/* Logs Route */}
+                                                        <Route
+                                                            path="logs"
+                                                            element={
+                                                                <PageErrorBoundary
+                                                                    pageName="System Logs"
+                                                                    pageDescription="Real-time log viewer with search and download"
+                                                                >
+                                                                    <Logs />
+                                                                </PageErrorBoundary>
+                                                            }
+                                                        />
+
+                                                        {/* Development routes — dev builds only */}
+                                                        {devRoutes.map(
+                                                            ({
+                                                                path,
+                                                                pageName,
+                                                                pageDescription,
+                                                                Component,
+                                                            }) => (
+                                                                <Route
+                                                                    key={path}
+                                                                    path={path}
+                                                                    element={
+                                                                        <PageErrorBoundary
+                                                                            pageName={pageName}
+                                                                            pageDescription={
+                                                                                pageDescription
+                                                                            }
+                                                                        >
+                                                                            <Component />
+                                                                        </PageErrorBoundary>
+                                                                    }
+                                                                />
+                                                            )
+                                                        )}
+                                                    </Route>
+                                                    <Route
+                                                        path="*"
                                                         element={
                                                             <Navigate to="/dashboard" replace />
                                                         }
                                                     />
-                                                    <Route
-                                                        path="dashboard"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Dashboard"
-                                                                pageDescription="Main dashboard overview"
-                                                            >
-                                                                <DashboardPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-
-                                                    {/* Media Section - Hierarchical Routes */}
-                                                    <Route
-                                                        path="media"
-                                                        element={
-                                                            <Navigate to="/media/search" replace />
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="media/search"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Media Search"
-                                                                pageDescription="Search media collection"
-                                                            >
-                                                                <MediaSearchPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="media/manage"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Media Management"
-                                                                pageDescription="Manage media library"
-                                                            >
-                                                                <MediaManagePage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="media/statistics"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Media Statistics"
-                                                                pageDescription="Media library statistics"
-                                                            >
-                                                                <MediaStatsPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-
-                                                    <Route
-                                                        path="media/labelarr"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Label Sync"
-                                                                pageDescription="Sync labels between services"
-                                                            >
-                                                                <LabelarrPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-
-                                                    {/* Poster Section - Hierarchical Routes (note: /poster not /posters) */}
-                                                    <Route
-                                                        path="poster"
-                                                        element={
-                                                            <Navigate
-                                                                to="/poster/search/gdrive"
-                                                                replace
-                                                            />
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="poster/search/gdrive"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="GDrive Poster Search"
-                                                                pageDescription="Search GDrive for posters"
-                                                            >
-                                                                <PosterGDriveSearchPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="poster/search/assets"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Assets Poster Search"
-                                                                pageDescription="Search local poster assets"
-                                                            >
-                                                                <PosterAssetsSearchPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="poster/cleanarr"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Poster Cleanarr"
-                                                                pageDescription="Review and clean up unused Plex poster variants"
-                                                            >
-                                                                <PosterCleanarrPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="poster/border-replacerr"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Border Replacerr"
-                                                                pageDescription="Pick colors and themed border art, with live preview on a sample of your matched posters"
-                                                            >
-                                                                <BorderPreviewPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    {/* Back-compat redirect for any bookmarks still pointing at /poster/manage. */}
-                                                    <Route
-                                                        path="poster/manage"
-                                                        element={
-                                                            <Navigate
-                                                                to="/poster/cleanarr"
-                                                                replace
-                                                            />
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="poster/unmatched"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Unmatched Assets"
-                                                                pageDescription="Media with no matched poster"
-                                                            >
-                                                                <UnmatchedAssetsPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="poster/statistics"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Poster Statistics"
-                                                                pageDescription="Poster collection statistics"
-                                                            >
-                                                                <PosterStatsPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-
-                                                    {/* Extension routes (src/extensions) — none on main */}
-                                                    {extensionRoutes().map(
-                                                        ({
-                                                            path,
-                                                            pageName,
-                                                            pageDescription,
-                                                            Component,
-                                                        }) => (
-                                                            <Route
-                                                                key={path}
-                                                                path={path}
-                                                                element={
-                                                                    <PageErrorBoundary
-                                                                        pageName={pageName}
-                                                                        pageDescription={
-                                                                            pageDescription
-                                                                        }
-                                                                    >
-                                                                        <Component />
-                                                                    </PageErrorBoundary>
-                                                                }
-                                                            />
-                                                        )
-                                                    )}
-
-                                                    {/* Settings Section - Direct Routes */}
-                                                    <Route
-                                                        path="settings"
-                                                        element={
-                                                            <Navigate
-                                                                to="/settings/general"
-                                                                replace
-                                                            />
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/general"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="General Settings"
-                                                                pageDescription="General CHUB application settings"
-                                                            >
-                                                                <GeneralSettingsPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    {/* Back-compat redirect — the Interface page merged into General. */}
-                                                    <Route
-                                                        path="settings/interface"
-                                                        element={
-                                                            <Navigate
-                                                                to="/settings/general"
-                                                                replace
-                                                            />
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/modules"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Modules"
-                                                                pageDescription="Module overview and enable toggles"
-                                                            >
-                                                                <ModulesHubPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/modules/:moduleKey"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Module Settings"
-                                                                pageDescription="Module-specific configuration settings"
-                                                            >
-                                                                <ModuleSettingsPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/schedule"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Schedule Settings"
-                                                                pageDescription="Module scheduling and automation configuration"
-                                                            >
-                                                                <SchedulePage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/instances"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Instance Management"
-                                                                pageDescription="Service instance configuration and connection testing"
-                                                            >
-                                                                <InstancesPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/notifications"
-                                                        element={
-                                                            <PageErrorBoundary pageName="Notification Settings">
-                                                                <NotificationsPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/jobs"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Job Queue"
-                                                                pageDescription="Background job management"
-                                                            >
-                                                                <JobsPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/webhooks"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="Webhooks"
-                                                                pageDescription="Webhook processors and cleanup operations"
-                                                            >
-                                                                <WebhooksPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    <Route
-                                                        path="settings/system"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="System"
-                                                                pageDescription="Database statistics and maintenance actions"
-                                                            >
-                                                                <SystemSettingsPage />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-                                                    {/* Logs Route */}
-                                                    <Route
-                                                        path="logs"
-                                                        element={
-                                                            <PageErrorBoundary
-                                                                pageName="System Logs"
-                                                                pageDescription="Real-time log viewer with search and download"
-                                                            >
-                                                                <Logs />
-                                                            </PageErrorBoundary>
-                                                        }
-                                                    />
-
-                                                    {/* Development routes — dev builds only */}
-                                                    {devRoutes.map(
-                                                        ({
-                                                            path,
-                                                            pageName,
-                                                            pageDescription,
-                                                            Component,
-                                                        }) => (
-                                                            <Route
-                                                                key={path}
-                                                                path={path}
-                                                                element={
-                                                                    <PageErrorBoundary
-                                                                        pageName={pageName}
-                                                                        pageDescription={
-                                                                            pageDescription
-                                                                        }
-                                                                    >
-                                                                        <Component />
-                                                                    </PageErrorBoundary>
-                                                                }
-                                                            />
-                                                        )
-                                                    )}
-                                                </Route>
-                                                <Route
-                                                    path="*"
-                                                    element={<Navigate to="/dashboard" replace />}
-                                                />
-                                            </Routes>
-                                        </Suspense>
-                                    </RouteErrorBoundary>
-                                </SearchCoordinatorProvider>
-                            </BrowserRouter>
+                                                </Routes>
+                                            </Suspense>
+                                        </RouteErrorBoundary>
+                                    </SearchCoordinatorProvider>
+                                </BrowserRouter>
+                            </ConfirmProvider>
                         </UIStateProvider>
                     </ErrorProvider>
                 </AuthProvider>
