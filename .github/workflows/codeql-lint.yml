@@ -290,6 +290,7 @@ jobs:
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: false
+          load: true
           tags: chub:ci-${{ github.sha }}
 
       - name: Build full image (validation only)
@@ -303,7 +304,70 @@ jobs:
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: false
+          load: true
           tags: chub:ci-full-${{ github.sha }}
+
+      # Two tiers, matching chodeus-ops/docker-build.yml: the report tier is wide
+      # and never blocks, the gate tier is narrow and does. ignore-unfixed on both,
+      # so an unfixable base-image CVE cannot wedge the build on something no
+      # change here can clear.
+      - name: Scan lean image (report, non-blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: chub:ci-${{ github.sha }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+          format: table
+          output: trivy-lean.txt
+
+      - name: Scan full image (report, non-blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: chub:ci-full-${{ github.sha }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+          format: table
+          output: trivy-full.txt
+          skip-setup-trivy: true
+
+      - name: Publish scan report
+        if: always()
+        run: |
+          {
+            echo "### Image scan — fixable CRITICAL/HIGH"
+            for pair in "lean:trivy-lean.txt" "full:trivy-full.txt"; do
+              echo "#### ${pair%%:*}"
+              echo '```'
+              cat "${pair##*:}" 2>/dev/null || echo "(no report produced)"
+              echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Gate on fixable CRITICAL (lean)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: chub:ci-${{ github.sha }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+          skip-setup-trivy: true
+
+      - name: Gate on fixable CRITICAL (full)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: chub:ci-full-${{ github.sha }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+          skip-setup-trivy: true
 
   docker-push:
     name: Docker Build & Push
