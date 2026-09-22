@@ -56,8 +56,10 @@ describe('NumberField', () => {
         expect(input).toHaveValue('12.5');
         expect(onChange).toHaveBeenLastCalledWith(12.5);
 
+        // Clear the valid 12.5 first, or it alone satisfies the assertion below.
+        onChange.mockClear();
         fireEvent.change(input, { target: { value: '-' } });
-        expect(onChange.mock.calls.flat().every(v => typeof v === 'number')).toBe(true);
+        expect(onChange).not.toHaveBeenCalled();
     });
 
     it('never emits an out-of-range value, so a save without blur sends the last valid one', () => {

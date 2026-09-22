@@ -29,8 +29,13 @@ describe('ToolBar keyboard navigation', () => {
         const input = screen.getByRole('textbox', { name: 'Filter' });
         await user.click(input);
 
-        await user.keyboard('{ArrowLeft}{ArrowRight}{Home}{End}');
+        await user.type(input, 'abcd');
+        input.setSelectionRange(2, 2);
+        await user.keyboard('{ArrowLeft}');
 
+        // Focus alone passes even if the toolbar preventDefault'd the key, which
+        // it does for Arrow/Home/End — the caret is what proves it reached the input.
         expect(input).toHaveFocus();
+        expect(input.selectionStart).toBe(1);
     });
 });
