@@ -20,7 +20,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5 AS builder
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2 AS builder
 ARG NODE_MAJOR=24
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -87,7 +87,7 @@ RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
 # -------------------------
 # Stage 2: shared runtime base — everything except site-packages
 # -------------------------
-FROM python:3.14-slim@sha256:cae66f2ef0ec51a9891263eeee7f987dacf0a9879e8aa9353d5606e0530619a5 AS runtime-base
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2 AS runtime-base
 
 WORKDIR /app
 
