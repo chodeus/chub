@@ -49,16 +49,18 @@ const REEL_FILTERS = [
 ];
 const REEL_PAGE_SIZE = 10;
 
-// CL2K / MM2K are the *built* poster styles whose provenance matters (they
-// carry a real author); other styles (GDrive / local fetches) get no tag.
+// CL2K / MM2K are the *built* poster styles, which get a style stamp on the
+// thumbnail. Every poster shows its source drive underneath, built or not.
 const BUILT_STYLES = new Set(['CL2K', 'MM2K']);
 
-/** A single poster in the reel: thumbnail + (for CL2K/MM2K) a source tag and
- *  the builder it came from. */
+/** A single poster in the reel: thumbnail, a style stamp for built posters, and
+ *  the configured drive it came from. */
 const ReelPosterCard = ({ poster }) => {
     const [failed, setFailed] = useState(false);
     const isBuilt = BUILT_STYLES.has(poster.style);
-    const builtBy = isBuilt ? poster.folder : null;
+    // Server-resolved against gdrive_list; null for a local source_dir. Not
+    // poster.folder, which names the media folder on a foldered layout.
+    const sourceDrive = poster.drive || null;
     return (
         <div className="shrink-0" style={{ width: 112 }}>
             <div
@@ -90,9 +92,12 @@ const ReelPosterCard = ({ poster }) => {
             <p className="mt-1.5 text-xs font-medium text-fg-muted text-center truncate">
                 {poster.title || `#${poster.id}`}
             </p>
-            {builtBy && (
-                <p className="font-mono text-[9px] text-fg-subtle text-center truncate">
-                    by {builtBy}
+            {sourceDrive && (
+                <p
+                    className="font-mono text-[9px] text-fg-subtle text-center truncate"
+                    title={`Source drive: ${sourceDrive}`}
+                >
+                    {sourceDrive}
                 </p>
             )}
         </div>
