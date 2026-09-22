@@ -6,6 +6,8 @@ import { configAPI } from '../../utils/api/config.js';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+import { useConfirm } from '../../contexts/ConfirmContext.jsx';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { Button, LoadingButton } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ColorListField } from '../../components/fields/color/ColorListField.jsx';
@@ -90,16 +92,25 @@ const BorderReplacerrPage = () => {
         });
     }, []);
 
-    const handleDiscard = useCallback(() => {
+    const confirm = useConfirm();
+    // Read after the await: a save can land while the dialog is open.
+    const baselineRef = useLatestRef(baseline);
+    const handleDiscard = useCallback(async () => {
         if (!isDirty) return;
-        if (!window.confirm('Discard unsaved changes?')) return;
+        const ok = await confirm({
+            title: 'Discard changes',
+            message: 'Discard unsaved changes?',
+            confirmLabel: 'Discard',
+            variant: 'danger',
+        });
+        if (!ok) return;
         try {
-            const parsed = JSON.parse(baseline);
+            const parsed = JSON.parse(baselineRef.current);
             setConfig(parsed);
         } catch {
             // Baseline should always be valid JSON we wrote; defensive only.
         }
-    }, [baseline, isDirty]);
+    }, [isDirty, confirm, baselineRef]);
 
     const handleSave = useCallback(async () => {
         if (!config || !fullConfig || !isDirty || isSaving) return;
