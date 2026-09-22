@@ -7,6 +7,7 @@ import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { useConfirm } from '../../contexts/ConfirmContext.jsx';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { Button, LoadingButton } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ColorListField } from '../../components/fields/color/ColorListField.jsx';
@@ -92,6 +93,8 @@ const BorderReplacerrPage = () => {
     }, []);
 
     const confirm = useConfirm();
+    // Read after the await: a save can land while the dialog is open.
+    const baselineRef = useLatestRef(baseline);
     const handleDiscard = useCallback(async () => {
         if (!isDirty) return;
         const ok = await confirm({
@@ -102,12 +105,12 @@ const BorderReplacerrPage = () => {
         });
         if (!ok) return;
         try {
-            const parsed = JSON.parse(baseline);
+            const parsed = JSON.parse(baselineRef.current);
             setConfig(parsed);
         } catch {
             // Baseline should always be valid JSON we wrote; defensive only.
         }
-    }, [baseline, isDirty, confirm]);
+    }, [isDirty, confirm, baselineRef]);
 
     const handleSave = useCallback(async () => {
         if (!config || !fullConfig || !isDirty || isSaving) return;

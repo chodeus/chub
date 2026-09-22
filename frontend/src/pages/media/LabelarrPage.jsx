@@ -11,6 +11,7 @@ import Spinner from '../../components/ui/Spinner.jsx';
 import { formatDateTime } from '../../utils/datetime.js';
 import { formatTimeAgo } from '../../utils/schedule.js';
 import { useConfirm } from '../../contexts/ConfirmContext.jsx';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 
 // labels may be stored as a JSON-ish list or a comma string — normalise to a
 // clean array.
@@ -75,6 +76,8 @@ const LabelarrPage = () => {
     const [fullConfig, setFullConfig] = useState(null);
     const [mappings, setMappings] = useState(null);
     const [baseline, setBaseline] = useState('');
+    // Read after the await: a save can land while the dialog is open.
+    const baselineRef = useLatestRef(baseline);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -172,11 +175,11 @@ const LabelarrPage = () => {
         });
         if (!ok) return;
         try {
-            setMappings(JSON.parse(baseline).map(normalizeMapping));
+            setMappings(JSON.parse(baselineRef.current).map(normalizeMapping));
         } catch {
             /* baseline is always our own JSON; defensive only */
         }
-    }, [baseline, isDirty, confirm]);
+    }, [isDirty, confirm, baselineRef]);
 
     // Cmd/Ctrl+S → save.
     useEffect(() => {

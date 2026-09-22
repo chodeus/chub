@@ -200,16 +200,8 @@ const RouteErrorBoundary = ({ children }) => {
  */
 const App = () => {
     return (
-        // Provider hierarchy:
-        // 1. ToastProvider (outermost)
-        // 2. ThemeProvider
-        // 3. AuthProvider
-        // 4. ErrorProvider
-        // 5. UIStateProvider
-        // 6. ConfirmProvider (inside UIStateProvider — its dialog is a Modal, which reads UI state)
-        // 7. Router
-        // 8. SearchCoordinatorProvider
-        // 9. RouteErrorBoundary (innermost)
+        // ConfirmProvider must stay inside UIStateProvider: its dialog is a
+        // Modal, which reads UI state. The rest of the order is as nested below.
         <ToastProvider>
             <ThemeProvider>
                 <AuthProvider>

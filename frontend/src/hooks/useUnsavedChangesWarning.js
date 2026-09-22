@@ -49,9 +49,8 @@ export function useUnsavedChangesWarning(isDirty, message = DEFAULT_MESSAGE) {
             const nextUrl = new URL(anchor.href, window.location.href);
             if (nextUrl.origin !== window.location.origin) return;
 
-            // Deliberately window.confirm, not useConfirm: the decision to
-            // preventDefault has to be made synchronously, before this click
-            // propagates. Converting needs the useBlocker/data-router migration.
+            // Stays window.confirm: preventDefault must be decided synchronously.
+            // Converting needs the useBlocker/data-router migration.
             if (!window.confirm(message)) {
                 event.preventDefault();
                 event.stopPropagation();
