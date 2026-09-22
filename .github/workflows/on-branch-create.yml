@@ -68,10 +68,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Scan before publishing, same as every other path that pushes. amd64 is
-      # built and loaded here because buildx cannot load a multi-arch manifest;
-      # the push below reuses it from the gha cache.
-      - name: Build image for scanning
+      # Every platform that gets published is scanned. buildx cannot load a
+      # multi-arch manifest, so each arch is built and loaded separately; the
+      # push below reuses both from the gha cache, so nothing is built twice.
+      - name: Build branch amd64 for scanning
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
@@ -79,18 +79,39 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: chub:branchscan-${{ github.sha }}
+          tags: chub:branchscan-amd64
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=branch-amd64
+          cache-to: type=gha,mode=max,scope=branch-amd64
 
-      - name: Scan image
+      - name: Scan branch amd64
         uses: ./.github/actions/scan-image
         with:
-          image-ref: chub:branchscan-${{ github.sha }}
-          label: branch
+          image-ref: chub:branchscan-amd64
+          label: branch-amd64
+
+      - name: Build branch arm64 for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: chub:branchscan-arm64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha,scope=branch-arm64
+          cache-to: type=gha,mode=max,scope=branch-arm64
+
+      - name: Scan branch arm64
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: chub:branchscan-arm64
+          label: branch-arm64
 
       - name: Build and push Docker image to GHCR
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
@@ -102,6 +123,8 @@ jobs:
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
-          cache-from: type=gha
+          cache-from: |
+            type=gha,scope=branch-amd64
+            type=gha,scope=branch-arm64
           tags: |
             ghcr.io/${{ github.repository_owner }}/chub:${{ steps.get_branch.outputs.BRANCH_TAG }}

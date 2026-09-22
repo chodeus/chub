@@ -59,10 +59,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Scan before publishing a release. buildx cannot load a multi-arch
-      # manifest, so amd64 is built and loaded here; the pushes below reuse it
-      # from the gha cache rather than rebuilding.
-      - name: Build lean image for scanning
+      # Every platform that gets published is scanned. buildx cannot load a
+      # multi-arch manifest, so each arch is built and loaded separately; the
+      # pushes below reuse both from the gha cache, so nothing is built twice.
+      # Scopes are per target AND per arch so the full export cannot clobber
+      # lean's and leave the lean publish missing its own cache.
+      - name: Build lean amd64 for scanning
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
@@ -71,20 +73,42 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: chub:relscan-${{ github.sha }}
+          tags: chub:relscan-amd64
           build-args: |
             BRANCH=main
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=lean-amd64
+          cache-to: type=gha,mode=max,scope=lean-amd64
 
-      - name: Scan lean image
+      - name: Scan lean amd64
         uses: ./.github/actions/scan-image
         with:
-          image-ref: chub:relscan-${{ github.sha }}
-          label: lean
+          image-ref: chub:relscan-amd64
+          label: lean-amd64
 
-      - name: Build full image for scanning
+      - name: Build lean arm64 for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: runtime
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: chub:relscan-arm64
+          build-args: |
+            BRANCH=main
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha,scope=lean-arm64
+          cache-to: type=gha,mode=max,scope=lean-arm64
+
+      - name: Scan lean arm64
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: chub:relscan-arm64
+          label: lean-arm64
+
+      - name: Build full amd64 for scanning
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
@@ -93,18 +117,40 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: chub:relscan-full-${{ github.sha }}
+          tags: chub:relscan-full-amd64
           build-args: |
             BRANCH=main
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=full-amd64
+          cache-to: type=gha,mode=max,scope=full-amd64
 
-      - name: Scan full image
+      - name: Scan full amd64
         uses: ./.github/actions/scan-image
         with:
-          image-ref: chub:relscan-full-${{ github.sha }}
-          label: full
+          image-ref: chub:relscan-full-amd64
+          label: full-amd64
+
+      - name: Build full arm64 for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: chub:relscan-full-arm64
+          build-args: |
+            BRANCH=main
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha,scope=full-arm64
+          cache-to: type=gha,mode=max,scope=full-arm64
+
+      - name: Scan full arm64
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: chub:relscan-full-arm64
+          label: full-arm64
 
       - name: Build and push (lean)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
@@ -119,7 +165,9 @@ jobs:
             BRANCH=main
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
-          cache-from: type=gha
+          cache-from: |
+            type=gha,scope=lean-amd64
+            type=gha,scope=lean-arm64
           tags: |
             ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.tag_name }}
             ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.version }}
@@ -136,7 +184,9 @@ jobs:
             BRANCH=main
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
-          cache-from: type=gha
+          cache-from: |
+            type=gha,scope=full-amd64
+            type=gha,scope=full-arm64
           tags: |
             ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.tag_name }}-full
             ghcr.io/${{ github.repository_owner }}/chub:${{ needs.release.outputs.version }}-full

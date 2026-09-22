@@ -408,10 +408,12 @@ jobs:
             type=sha,prefix=sha-,suffix=-full,format=short,enable={{is_default_branch}}
             type=raw,value=full,enable={{is_default_branch}}
 
-      # Scan before publishing. buildx cannot load a multi-arch manifest, so the
-      # amd64 layer is built and loaded here; the pushes below reuse it from the
-      # gha cache rather than rebuilding it.
-      - name: Build lean image for scanning
+      # Every platform that gets published is scanned. buildx cannot load a
+      # multi-arch manifest, so each arch is built and loaded separately; the
+      # pushes below reuse both from the gha cache, so nothing is built twice.
+      # Cache scopes are per target AND per arch: a shared scope lets the full
+      # export clobber lean's, and the lean publish then misses its own cache.
+      - name: Build lean amd64 for scanning
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
@@ -420,20 +422,42 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: chub:scan-${{ github.sha }}
+          tags: chub:scan-amd64
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=lean-amd64
+          cache-to: type=gha,mode=max,scope=lean-amd64
 
-      - name: Scan lean image
+      - name: Scan lean amd64
         uses: ./.github/actions/scan-image
         with:
-          image-ref: chub:scan-${{ github.sha }}
-          label: lean
+          image-ref: chub:scan-amd64
+          label: lean-amd64
 
-      - name: Build full image for scanning
+      - name: Build lean arm64 for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: runtime
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: chub:scan-arm64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha,scope=lean-arm64
+          cache-to: type=gha,mode=max,scope=lean-arm64
+
+      - name: Scan lean arm64
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: chub:scan-arm64
+          label: lean-arm64
+
+      - name: Build full amd64 for scanning
         if: steps.meta_full.outputs.tags != ''
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
@@ -443,19 +467,43 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: chub:scan-full-${{ github.sha }}
+          tags: chub:scan-full-amd64
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=full-amd64
+          cache-to: type=gha,mode=max,scope=full-amd64
 
-      - name: Scan full image
+      - name: Scan full amd64
         if: steps.meta_full.outputs.tags != ''
         uses: ./.github/actions/scan-image
         with:
-          image-ref: chub:scan-full-${{ github.sha }}
-          label: full
+          image-ref: chub:scan-full-amd64
+          label: full-amd64
+
+      - name: Build full arm64 for scanning
+        if: steps.meta_full.outputs.tags != ''
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: chub:scan-full-arm64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha,scope=full-arm64
+          cache-to: type=gha,mode=max,scope=full-arm64
+
+      - name: Scan full arm64
+        if: steps.meta_full.outputs.tags != ''
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: chub:scan-full-arm64
+          label: full-arm64
 
       - name: Build and push lean image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
@@ -468,7 +516,9 @@ jobs:
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
-          cache-from: type=gha
+          cache-from: |
+            type=gha,scope=lean-amd64
+            type=gha,scope=lean-arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -486,7 +536,9 @@ jobs:
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
-          cache-from: type=gha
+          cache-from: |
+            type=gha,scope=full-amd64
+            type=gha,scope=full-arm64
           tags: ${{ steps.meta_full.outputs.tags }}
           labels: ${{ steps.meta_full.outputs.labels }}
 
