@@ -307,75 +307,17 @@ jobs:
           load: true
           tags: chub:ci-full-${{ github.sha }}
 
-      # Two tiers, matching chodeus-ops/docker-build.yml: the report tier is wide
-      # and never blocks, the gate tier is narrow and does. ignore-unfixed on both,
-      # so an unfixable base-image CVE cannot wedge the build on something no
-      # change here can clear.
-      - name: Scan lean image (report, non-blocking)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: Scan lean image
+        uses: ./.github/actions/scan-image
         with:
-          # The action's default trivy trails its own releases; pin the scanner.
-          version: v0.74.0 # renovate: aquasecurity/trivy
-          scan-type: image
           image-ref: chub:ci-${{ github.sha }}
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: '0'
-          format: table
-          output: trivy-lean.txt
+          label: lean
 
-      - name: Scan full image (report, non-blocking)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: Scan full image
+        uses: ./.github/actions/scan-image
         with:
-          # The action's default trivy trails its own releases; pin the scanner.
-          version: v0.74.0 # renovate: aquasecurity/trivy
-          scan-type: image
           image-ref: chub:ci-full-${{ github.sha }}
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: '0'
-          format: table
-          output: trivy-full.txt
-          skip-setup-trivy: true
-
-      - name: Publish scan report
-        if: always()
-        run: |
-          {
-            echo "### Image scan — fixable CRITICAL/HIGH"
-            for pair in "lean:trivy-lean.txt" "full:trivy-full.txt"; do
-              echo "#### ${pair%%:*}"
-              echo '```'
-              cat "${pair##*:}" 2>/dev/null || echo "(no report produced)"
-              echo '```'
-            done
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Gate on fixable CRITICAL (lean)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          # The action's default trivy trails its own releases; pin the scanner.
-          version: v0.74.0 # renovate: aquasecurity/trivy
-          scan-type: image
-          image-ref: chub:ci-${{ github.sha }}
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-          format: table
-          skip-setup-trivy: true
-
-      - name: Gate on fixable CRITICAL (full)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          # The action's default trivy trails its own releases; pin the scanner.
-          version: v0.74.0 # renovate: aquasecurity/trivy
-          scan-type: image
-          image-ref: chub:ci-full-${{ github.sha }}
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-          format: table
-          skip-setup-trivy: true
+          label: full
 
   docker-push:
     name: Docker Build & Push
@@ -466,6 +408,55 @@ jobs:
             type=sha,prefix=sha-,suffix=-full,format=short,enable={{is_default_branch}}
             type=raw,value=full,enable={{is_default_branch}}
 
+      # Scan before publishing. buildx cannot load a multi-arch manifest, so the
+      # amd64 layer is built and loaded here; the pushes below reuse it from the
+      # gha cache rather than rebuilding it.
+      - name: Build lean image for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: chub:scan-${{ github.sha }}
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan lean image
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: chub:scan-${{ github.sha }}
+          label: lean
+
+      - name: Build full image for scanning
+        if: steps.meta_full.outputs.tags != ''
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: chub:scan-full-${{ github.sha }}
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan full image
+        if: steps.meta_full.outputs.tags != ''
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: chub:scan-full-${{ github.sha }}
+          label: full
+
       - name: Build and push lean image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
@@ -477,6 +468,7 @@ jobs:
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
+          cache-from: type=gha
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -494,6 +486,7 @@ jobs:
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
+          cache-from: type=gha
           tags: ${{ steps.meta_full.outputs.tags }}
           labels: ${{ steps.meta_full.outputs.labels }}
 
