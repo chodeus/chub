@@ -307,75 +307,17 @@ jobs:
           load: true
           tags: chub:ci-full-${{ github.sha }}
 
-      # Two tiers, matching chodeus-ops/docker-build.yml: the report tier is wide
-      # and never blocks, the gate tier is narrow and does. ignore-unfixed on both,
-      # so an unfixable base-image CVE cannot wedge the build on something no
-      # change here can clear.
-      - name: Scan lean image (report, non-blocking)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: Scan lean image
+        uses: ./.github/actions/scan-image
         with:
-          # The action's default trivy trails its own releases; pin the scanner.
-          version: v0.74.0 # renovate: aquasecurity/trivy
-          scan-type: image
           image-ref: chub:ci-${{ github.sha }}
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: '0'
-          format: table
-          output: trivy-lean.txt
+          label: lean
 
-      - name: Scan full image (report, non-blocking)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: Scan full image
+        uses: ./.github/actions/scan-image
         with:
-          # The action's default trivy trails its own releases; pin the scanner.
-          version: v0.74.0 # renovate: aquasecurity/trivy
-          scan-type: image
           image-ref: chub:ci-full-${{ github.sha }}
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: '0'
-          format: table
-          output: trivy-full.txt
-          skip-setup-trivy: true
-
-      - name: Publish scan report
-        if: always()
-        run: |
-          {
-            echo "### Image scan — fixable CRITICAL/HIGH"
-            for pair in "lean:trivy-lean.txt" "full:trivy-full.txt"; do
-              echo "#### ${pair%%:*}"
-              echo '```'
-              cat "${pair##*:}" 2>/dev/null || echo "(no report produced)"
-              echo '```'
-            done
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Gate on fixable CRITICAL (lean)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          # The action's default trivy trails its own releases; pin the scanner.
-          version: v0.74.0 # renovate: aquasecurity/trivy
-          scan-type: image
-          image-ref: chub:ci-${{ github.sha }}
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-          format: table
-          skip-setup-trivy: true
-
-      - name: Gate on fixable CRITICAL (full)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          # The action's default trivy trails its own releases; pin the scanner.
-          version: v0.74.0 # renovate: aquasecurity/trivy
-          scan-type: image
-          image-ref: chub:ci-full-${{ github.sha }}
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-          format: table
-          skip-setup-trivy: true
+          label: full
 
   docker-push:
     name: Docker Build & Push
@@ -466,37 +408,138 @@ jobs:
             type=sha,prefix=sha-,suffix=-full,format=short,enable={{is_default_branch}}
             type=raw,value=full,enable={{is_default_branch}}
 
-      - name: Build and push lean image
+      # Every platform that gets published is scanned. buildx cannot load a
+      # multi-arch manifest, so each arch is built and loaded separately; the
+      # pushes below reuse both from the gha cache, so nothing is built twice.
+      # Cache scopes are per target AND per arch: a shared scope lets the full
+      # export clobber lean's, and the lean publish then misses its own cache.
+      - name: Build lean amd64 for scanning
+        id: lean_amd64
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./deploy/docker/Dockerfile
           target: runtime
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/chub,push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=lean-amd64
+          cache-to: type=gha,mode=max,scope=lean-amd64
 
-      # Branch pushes publish lean only (meta_full has no branch tag) — skip the
-      # second build there instead of pushing a tagless manifest.
-      - name: Build and push full image
+      - name: Scan lean amd64
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.lean_amd64.outputs.digest }}
+          label: lean-amd64
+
+      - name: Build lean arm64 for scanning
+        id: lean_arm64
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: runtime
+          platforms: linux/arm64
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/chub,push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha,scope=lean-arm64
+          cache-to: type=gha,mode=max,scope=lean-arm64
+
+      - name: Scan lean arm64
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.lean_arm64.outputs.digest }}
+          label: lean-arm64
+
+      - name: Build full amd64 for scanning
+        id: full_amd64
         if: steps.meta_full.outputs.tags != ''
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./deploy/docker/Dockerfile
           target: full
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/chub,push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta_full.outputs.labels }}
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
-          push: true
-          tags: ${{ steps.meta_full.outputs.tags }}
-          labels: ${{ steps.meta_full.outputs.labels }}
+          cache-from: type=gha,scope=full-amd64
+          cache-to: type=gha,mode=max,scope=full-amd64
 
+      - name: Scan full amd64
+        if: steps.meta_full.outputs.tags != ''
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.full_amd64.outputs.digest }}
+          label: full-amd64
+
+      - name: Build full arm64 for scanning
+        id: full_arm64
+        if: steps.meta_full.outputs.tags != ''
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          target: full
+          platforms: linux/arm64
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/chub,push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta_full.outputs.labels }}
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          cache-from: type=gha,scope=full-arm64
+          cache-to: type=gha,mode=max,scope=full-arm64
+
+      - name: Scan full arm64
+        if: steps.meta_full.outputs.tags != ''
+        uses: ./.github/actions/scan-image
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.full_arm64.outputs.digest }}
+          label: full-arm64
+
+      # Assemble the published tags from the exact digests the gates passed. A
+      # second build could differ from the scanned one on a cache miss.
+      - name: Publish the scanned lean digests
+        env:
+          REPO: ghcr.io/${{ github.repository_owner }}/chub
+          DIGEST_AMD64: ${{ steps.lean_amd64.outputs.digest }}
+          DIGEST_ARM64: ${{ steps.lean_arm64.outputs.digest }}
+          TAGS: |
+            ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r t; do
+            [ -n "$t" ] && args+=(-t "$t")
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" \
+            "$REPO@$DIGEST_AMD64" "$REPO@$DIGEST_ARM64"
+      # Assemble the published tags from the exact digests the gates passed. A
+      # second build could differ from the scanned one on a cache miss.
+      - name: Publish the scanned full digests
+        if: steps.meta_full.outputs.tags != ''
+        env:
+          REPO: ghcr.io/${{ github.repository_owner }}/chub
+          DIGEST_AMD64: ${{ steps.full_amd64.outputs.digest }}
+          DIGEST_ARM64: ${{ steps.full_arm64.outputs.digest }}
+          TAGS: |
+            ${{ steps.meta_full.outputs.tags }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r t; do
+            [ -n "$t" ] && args+=(-t "$t")
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" \
+            "$REPO@$DIGEST_AMD64" "$REPO@$DIGEST_ARM64"
   notify-failure:
     needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, frontend-tests, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
