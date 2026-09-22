@@ -72,14 +72,13 @@ jobs:
       # multi-arch manifest, so each arch is built and loaded separately; the
       # push below reuses both from the gha cache, so nothing is built twice.
       - name: Build branch amd64 for scanning
+        id: branch_amd64
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./deploy/docker/Dockerfile
           platforms: linux/amd64
-          load: true
-          push: false
-          tags: chub:branchscan-amd64
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/chub,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
@@ -89,18 +88,17 @@ jobs:
       - name: Scan branch amd64
         uses: ./.github/actions/scan-image
         with:
-          image-ref: chub:branchscan-amd64
+          image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.branch_amd64.outputs.digest }}
           label: branch-amd64
 
       - name: Build branch arm64 for scanning
+        id: branch_arm64
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ./deploy/docker/Dockerfile
           platforms: linux/arm64
-          load: true
-          push: false
-          tags: chub:branchscan-arm64
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/chub,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
@@ -110,21 +108,23 @@ jobs:
       - name: Scan branch arm64
         uses: ./.github/actions/scan-image
         with:
-          image-ref: chub:branchscan-arm64
+          image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.branch_arm64.outputs.digest }}
           label: branch-arm64
 
-      - name: Build and push Docker image to GHCR
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
-        with:
-          context: .
-          file: ./deploy/docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
-            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
-          push: true
-          cache-from: |
-            type=gha,scope=branch-amd64
-            type=gha,scope=branch-arm64
-          tags: |
+      # Assemble the published tags from the exact digests the gates passed. A
+      # second build could differ from the scanned one on a cache miss.
+      - name: Publish the scanned branch digests
+        env:
+          REPO: ghcr.io/${{ github.repository_owner }}/chub
+          DIGEST_AMD64: ${{ steps.branch_amd64.outputs.digest }}
+          DIGEST_ARM64: ${{ steps.branch_arm64.outputs.digest }}
+          TAGS: |
             ghcr.io/${{ github.repository_owner }}/chub:${{ steps.get_branch.outputs.BRANCH_TAG }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r t; do
+            [ -n "$t" ] && args+=(-t "$t")
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" \
+            "$REPO@$DIGEST_AMD64" "$REPO@$DIGEST_ARM64"
