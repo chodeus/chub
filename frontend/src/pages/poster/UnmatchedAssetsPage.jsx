@@ -58,9 +58,8 @@ const BUILT_STYLES = new Set(['CL2K', 'MM2K']);
 const ReelPosterCard = ({ poster }) => {
     const [failed, setFailed] = useState(false);
     const isBuilt = BUILT_STYLES.has(poster.style);
-    // `drive` is resolved server-side against gdrive_list; null for a local
-    // source_dir. Deliberately not poster.folder, which on a foldered layout
-    // names the media folder rather than the drive.
+    // Server-resolved against gdrive_list; null for a local source_dir. Not
+    // poster.folder, which names the media folder on a foldered layout.
     const sourceDrive = poster.drive || null;
     return (
         <div className="shrink-0" style={{ width: 112 }}>

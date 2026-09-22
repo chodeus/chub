@@ -1,13 +1,4 @@
-"""Resolve an asset file's path back to the configured Google Drive that supplied it.
-
-Derived at read time rather than stored on the row: `file` already holds the exact
-path and `gdrive_list` is the authority on which drive owns which location, so a
-renamed drive reports its current name instead of a stale copy of it.
-
-This is the single owner of the path -> drive question. `poster_renamerr` builds its
-style stamp on top of it, and the API read paths use it for provenance, so the
-longest-ancestor rule is not spelled out twice.
-"""
+"""Single owner of "which configured Google Drive supplied this file", resolved at read time."""
 
 import os
 from typing import Any, Dict, Iterable, Optional

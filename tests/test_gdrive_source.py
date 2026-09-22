@@ -6,11 +6,14 @@ drive was guessed elsewhere as ``basename(dirname(file))``, which names the medi
 folder rather than the drive on a Kometa-style layout.
 """
 
+import logging
 from types import SimpleNamespace
 
 import pytest
 
 from backend.api.posters._shared import annotate_drive
+from backend.api.posters.reports import list_recently_matched
+from backend.util.config import ConfigError
 from backend.util.gdrive_source import (
     build_drive_map,
     resolve_drive_for_path,
@@ -97,20 +100,47 @@ def test_annotate_drive_stamps_each_row(monkeypatch, tmp_path):
     assert rows[1]["drive"] is None
 
 
-def test_annotate_drive_reports_none_rather_than_failing_when_config_will_not_load(
-    monkeypatch,
-):
-    """Provenance is cosmetic: a broken config must not fail the whole report."""
+def test_annotate_drive_propagates_config_error(monkeypatch):
+    """A broken config must be reported as one.
+
+    Swallowing it would stamp every row `drive: None`, which is exactly what a
+    path on no configured drive looks like — the two states must stay distinct.
+    """
 
     def boom():
-        raise RuntimeError("config unreadable")
+        raise ConfigError("config unreadable")
 
     monkeypatch.setattr("backend.api.posters._shared.load_config", boom)
 
     rows = [{"file": "/posters/CL2K/Solen/a.jpg"}]
-    annotate_drive(rows)
+    with pytest.raises(ConfigError):
+        annotate_drive(rows)
 
-    assert rows[0]["drive"] is None
+    assert "drive" not in rows[0]
+
+
+def test_recently_matched_lets_config_error_reach_the_app_handler(monkeypatch):
+    """The endpoint's generic 500 branch must not swallow it.
+
+    app.exception_handler(ConfigError) renders CONFIG_INVALID with the offending
+    values redacted; the generic branch would report RECENTLY_MATCHED_ERROR and
+    name the wrong cause.
+    """
+
+    def boom():
+        raise ConfigError("config unreadable")
+
+    monkeypatch.setattr("backend.api.posters._shared.load_config", boom)
+
+    class _Media:
+        def get_recently_matched(self, limit):
+            return [{"file": "/posters/CL2K/Solen/a.jpg"}]
+
+    class _DB:
+        media = _Media()
+
+    with pytest.raises(ConfigError):
+        list_recently_matched(limit=10, logger=logging.getLogger("t"), db=_DB())
 
 
 def test_annotate_drive_tolerates_an_empty_list():

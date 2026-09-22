@@ -32,18 +32,15 @@ def get_cleanarr_logger(request: Request) -> Any:
 def annotate_drive(rows: Optional[List[dict]], path_key: str = "file") -> None:
     """Stamp each row with `drive`: the configured Google Drive that supplied it.
 
-    Mutates the dicts in `rows`, so it takes a list rather than any iterable — a
-    generator would be consumed here and the caller would see nothing. Never
-    fatal: provenance is a display nicety, so a config that will not load leaves
-    `drive` as None rather than failing the report the caller actually asked for.
+    Takes a list, not any iterable: it mutates the dicts, and a generator would
+    be consumed here leaving the caller nothing. ConfigError propagates, so a
+    broken config is reported as one instead of every row reading `drive: null`,
+    which is indistinguishable from a path on no configured drive.
     """
     if not rows:
         return
-    try:
-        sync_cfg = getattr(load_config(), "sync_gdrive", None)
-        drive_map = build_drive_map(getattr(sync_cfg, "gdrive_list", None))
-    except Exception:
-        drive_map = {}
+    sync_cfg = getattr(load_config(), "sync_gdrive", None)
+    drive_map = build_drive_map(getattr(sync_cfg, "gdrive_list", None))
     for row in rows:
         if isinstance(row, dict):
             row["drive"] = resolve_drive_for_path(row.get(path_key) or "", drive_map)

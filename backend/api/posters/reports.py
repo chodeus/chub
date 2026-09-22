@@ -13,6 +13,7 @@ from backend.api.utils import (
     get_logger,
     ok,
 )
+from backend.util.config import ConfigError
 from backend.util.database import ChubDB
 
 
@@ -98,6 +99,10 @@ def list_recently_matched(
         rows = db.media.get_recently_matched(limit=max(1, min(limit, 500)))
         annotate_drive(rows)
         return ok(f"{len(rows)} recently matched posters", {"items": rows})
+    except ConfigError:
+        # app.exception_handler(ConfigError) renders the curated, value-redacted
+        # envelope; the generic branch below would report the wrong cause.
+        raise
     except Exception as e:
         logger.error(f"Error listing recently matched posters: {e}")
         return error(
