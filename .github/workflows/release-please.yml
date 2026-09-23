@@ -51,6 +51,7 @@ jobs:
           # silently re-ship the unversioned image this step exists to prevent.
           [ -n "$count" ] || { echo "::error::empty commit count at ${{ needs.release.outputs.tag_name }}"; exit 1; }
           echo "BUILD_NUMBER=$count" >> "$GITHUB_ENV"
+          echo "PACKAGES_DATE=$(date -u +%F)" >> "$GITHUB_ENV"
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
@@ -76,6 +77,7 @@ jobs:
           build-args: |
             BRANCH=main
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+            PACKAGES_DATE=${{ env.PACKAGES_DATE }}
           cache-from: type=gha,scope=lean-amd64
           cache-to: type=gha,mode=max,scope=lean-amd64
 
@@ -98,6 +100,7 @@ jobs:
           build-args: |
             BRANCH=main
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+            PACKAGES_DATE=${{ env.PACKAGES_DATE }}
           cache-from: type=gha,scope=lean-arm64
           cache-to: type=gha,mode=max,scope=lean-arm64
 
@@ -120,6 +123,7 @@ jobs:
           build-args: |
             BRANCH=main
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+            PACKAGES_DATE=${{ env.PACKAGES_DATE }}
           cache-from: type=gha,scope=full-amd64
           cache-to: type=gha,mode=max,scope=full-amd64
 
@@ -142,6 +146,7 @@ jobs:
           build-args: |
             BRANCH=main
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+            PACKAGES_DATE=${{ env.PACKAGES_DATE }}
           cache-from: type=gha,scope=full-arm64
           cache-to: type=gha,mode=max,scope=full-arm64
 
