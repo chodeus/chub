@@ -94,8 +94,6 @@ WORKDIR /app
 # Install minimal runtime dependencies. jdupes comes from Debian instead
 # of being built from codeberg source — sidesteps recurring codeberg
 # outages, and libjodycode is pulled in automatically as a dep.
-# Upgrade first: the pinned base lags trixie-security, and a daily refresh
-# rebuild only picks up fixes if the build installs them.
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends curl git tzdata jdupes && \
