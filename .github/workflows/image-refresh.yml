@@ -16,7 +16,6 @@ jobs:
     # The called workflow can only reduce what this job grants: the pull needs
     # packages: read and the dispatch needs actions: write.
     permissions:
-      contents: read
       packages: read
       actions: write
     # Pin to an immutable SHA, not @main: a commit to chodeus-ops main would
@@ -36,6 +35,6 @@ jobs:
       event_type: workflow
       status: ${{ needs.refresh.result == 'success' && 'info' || 'failure' }}
       title: ${{ needs.refresh.result == 'success' && '♻️ Image refresh dispatched' || '❌ Image refresh failed' }}
-      description: ${{ needs.refresh.result == 'success' && format('{0} pending package upgrade(s); the publish workflow is rebuilding.', needs.refresh.outputs.pending) || 'The package check or the dispatch failed; see the run.' }}
+      description: ${{ needs.refresh.result == 'success' && format('{0} pending package upgrade(s); the publish workflow was dispatched.', needs.refresh.outputs.pending) || 'The package check or the dispatch failed; see the run.' }}
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
