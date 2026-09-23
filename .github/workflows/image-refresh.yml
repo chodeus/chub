@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   refresh:
-    # A reusable workflow gets no permissions from its caller: the pull needs
+    # The called workflow can only reduce what this job grants: the pull needs
     # packages: read and the dispatch needs actions: write.
     permissions:
       contents: read
