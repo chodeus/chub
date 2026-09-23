@@ -1,0 +1,43 @@
+# Drop into .github/workflows/image-refresh.yml of a Docker repo.
+# Once a day, rebuilds the published image when its OS packages have fallen
+# behind, by dispatching the repo's own publish workflow. That workflow's
+# build, scan and smoke gates decide whether the refreshed image ships.
+
+name: Image refresh
+
+on:
+  schedule:
+    - cron: '23 4 * * *'   # daily, off the hour so it does not queue behind everyone's :00 jobs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    # A reusable workflow gets no permissions from its caller: the pull needs
+    # packages: read and the dispatch needs actions: write.
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    # Pin the reusable to an immutable SHA, not @main: a single commit to
+    # chodeus-ops main would otherwise execute in every consumer repo with its
+    # secrets + write token.
+    uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@f381cd035e9fada26b82ae56b5be25c4579a3ea2 # chodeus-ops#29
+    with:
+      # The publish workflow in this repo; it must accept workflow_dispatch.
+      workflow: codeql-lint.yml
+
+  notify:
+    # Only a dispatch or a failure is worth a message; a clean daily check is not.
+    if: always() && (failure() || needs.refresh.outputs.stale == 'true')
+    needs: refresh
+    permissions: {}
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@f381cd035e9fada26b82ae56b5be25c4579a3ea2 # chodeus-ops#29
+    with:
+      event_type: workflow
+      status: ${{ needs.refresh.result == 'success' && 'info' || 'failure' }}
+      title: ${{ needs.refresh.result == 'success' && '♻️ Image refresh dispatched' || '❌ Image refresh failed' }}
+      description: ${{ needs.refresh.result == 'success' && format('{0} pending package upgrade(s); the publish workflow is rebuilding.', needs.refresh.outputs.pending) || 'The drift check could not answer; see the run.' }}
+    secrets: inherit

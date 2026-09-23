@@ -313,6 +313,10 @@ jobs:
           image-ref: chub:ci-${{ github.sha }}
           label: lean
           platform: linux/amd64
+      - name: Smoke test lean image
+        uses: ./.github/actions/smoke-image
+        with:
+          image-ref: chub:ci-${{ github.sha }}
 
       - name: Scan full image
         uses: ./.github/actions/scan-image
@@ -437,6 +441,13 @@ jobs:
           image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.lean_amd64.outputs.digest }}
           label: lean-amd64
           platform: linux/amd64
+
+      # The native leg only: under QEMU the arm64 app takes minutes to come
+      # up and the wait would fail for the emulator, not the image.
+      - name: Smoke test lean amd64
+        uses: ./.github/actions/smoke-image
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/chub@${{ steps.lean_amd64.outputs.digest }}
 
       - name: Build lean arm64 for scanning
         id: lean_arm64
