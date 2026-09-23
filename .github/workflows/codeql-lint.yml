@@ -55,8 +55,9 @@ on:
 permissions:
   contents: read
 
+# The weekly scan never publishes, so it gets its own group: sharing one would let it cancel a refresh build.
 concurrency:
-  group: codeql-lint-${{ github.ref }}
+  group: codeql-lint-${{ github.ref }}-${{ github.event_name == 'schedule' && 'schedule' || 'build' }}
   cancel-in-progress: true
 
 jobs:

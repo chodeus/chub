@@ -25,6 +25,8 @@ jobs:
       # Must accept workflow_dispatch. A cached build must also bust the upgrade layer
       # with a per-build ARG it references, or the rebuild ships the same packages.
       workflow: codeql-lint.yml
+      # Only the default branch publishes :latest, so a manual run from another branch still targets it.
+      ref: ${{ github.event.repository.default_branch }}
 
   notify:
     # Only a dispatch or a failure is worth a message; a clean daily check is not.
