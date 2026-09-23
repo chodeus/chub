@@ -1,7 +1,5 @@
-# Drop into .github/workflows/image-refresh.yml of a Docker repo.
-# Once a day, rebuilds the published image when its OS packages have fallen
-# behind, by dispatching the repo's own publish workflow. That workflow's
-# build, scan and smoke gates decide whether the refreshed image ships.
+# Daily: when the published image's OS packages fall behind, dispatch the pipeline,
+# whose build, scan and smoke gates decide whether the refresh ships.
 
 name: Image refresh
 
@@ -21,9 +19,8 @@ jobs:
       contents: read
       packages: read
       actions: write
-    # Pin the reusable to an immutable SHA, not @main: a single commit to
-    # chodeus-ops main would otherwise execute in every consumer repo with its
-    # secrets + write token.
+    # Pin to an immutable SHA, not @main: a commit to chodeus-ops main would
+    # otherwise run in every consumer repo with its secrets and write token.
     uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@f381cd035e9fada26b82ae56b5be25c4579a3ea2 # chodeus-ops#29
     with:
       # The publish workflow in this repo; it must accept workflow_dispatch.
