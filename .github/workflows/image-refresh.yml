@@ -21,7 +21,7 @@ jobs:
       actions: write
     # Pin to an immutable SHA, not @main: a commit to chodeus-ops main would
     # otherwise run in every consumer repo with its GITHUB_TOKEN (actions: write).
-    uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@f381cd035e9fada26b82ae56b5be25c4579a3ea2 # chodeus-ops#29
+    uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@52b2c94d6b4b9afbc410db848b9fd2dfd6a02ecb # chodeus-ops#29
     with:
       # The publish workflow in this repo; it must accept workflow_dispatch.
       workflow: codeql-lint.yml
@@ -31,11 +31,11 @@ jobs:
     if: always() && (failure() || needs.refresh.outputs.stale == 'true')
     needs: refresh
     permissions: {}
-    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@f381cd035e9fada26b82ae56b5be25c4579a3ea2 # chodeus-ops#29
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@52b2c94d6b4b9afbc410db848b9fd2dfd6a02ecb # chodeus-ops#29
     with:
       event_type: workflow
       status: ${{ needs.refresh.result == 'success' && 'info' || 'failure' }}
       title: ${{ needs.refresh.result == 'success' && '♻️ Image refresh dispatched' || '❌ Image refresh failed' }}
-      description: ${{ needs.refresh.result == 'success' && format('{0} pending package upgrade(s); the publish workflow is rebuilding.', needs.refresh.outputs.pending) || 'The drift check could not answer; see the run.' }}
+      description: ${{ needs.refresh.result == 'success' && format('{0} pending package upgrade(s); the publish workflow is rebuilding.', needs.refresh.outputs.pending) || 'The package check or the dispatch failed; see the run.' }}
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
