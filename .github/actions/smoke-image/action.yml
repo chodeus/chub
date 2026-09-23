@@ -54,5 +54,7 @@ runs:
             echo "::error::not healthy within ${TIMEOUT}s (last state: $state)."
             exit 1
           fi
-          sleep 5
+          # The last poll lands on the deadline itself, so a late healthy is never accepted.
+          remaining=$((deadline - SECONDS))
+          sleep $(( remaining < 5 ? remaining : 5 ))
         done
