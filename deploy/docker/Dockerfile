@@ -89,12 +89,17 @@ RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
 # -------------------------
 FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2 AS runtime-base
 
+# Referenced by the apt layer so a new day rebuilds it instead of reusing a cached upgrade.
+ARG PACKAGES_DATE
+
 WORKDIR /app
 
 # Install minimal runtime dependencies. jdupes comes from Debian instead
 # of being built from codeberg source — sidesteps recurring codeberg
 # outages, and libjodycode is pulled in automatically as a dep.
-RUN apt-get update && \
+RUN echo "packages as of ${PACKAGES_DATE}" && \
+    apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends curl git tzdata jdupes && \
     rm -rf /var/lib/apt/lists/*
 

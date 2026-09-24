@@ -1,0 +1,62 @@
+name: Smoke test a built image
+description: Start the image and wait for its own HEALTHCHECK to report healthy.
+inputs:
+  image-ref:
+    description: Image to start, a local tag or a registry digest.
+    required: true
+  platform:
+    description: Platform to run. A per-arch digest must say which one it is.
+    required: false
+    default: linux/amd64
+  timeout:
+    description: Seconds to wait for healthy; cover the HEALTHCHECK start-period plus a few intervals.
+    required: false
+    default: '180'
+runs:
+  using: composite
+  steps:
+    # Unhealthy, exited, timed out, or no HEALTHCHECK at all fails the step:
+    # an image that scans clean but never comes up must not be published.
+    - name: Wait for healthy
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image-ref }}
+        PLATFORM: ${{ inputs.platform }}
+        TIMEOUT: ${{ inputs.timeout }}
+      run: |
+        set -euo pipefail
+        # The input is a string; a fractional value would fail the arithmetic below cryptically.
+        case "$TIMEOUT" in
+          ''|*[!0-9]*) echo "::error::timeout must be a whole number of seconds, got '${TIMEOUT}'."; exit 1 ;;
+        esac
+        if [ "$TIMEOUT" -lt 1 ]; then
+          echo "::error::timeout must be at least 1 second, got ${TIMEOUT}."
+          exit 1
+        fi
+        docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull -q --platform "$PLATFORM" "$IMAGE" >/dev/null
+        hc=$(docker inspect -f '{{if .Config.Healthcheck}}{{index .Config.Healthcheck.Test 0}}{{else}}NONE{{end}}' "$IMAGE")
+        if [ "$hc" = "NONE" ]; then
+          echo "::error::the image defines no HEALTHCHECK, so there is nothing to wait for."
+          exit 1
+        fi
+        cid=$(docker run -d --platform "$PLATFORM" "$IMAGE")
+        trap 'echo "--- container log (tail)"; docker logs --tail 40 "$cid" 2>&1 || true; docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+        started=$SECONDS
+        # timeout owns the deadline, so a healthy seen after it can never be accepted.
+        if timeout "$TIMEOUT" bash -c '
+          while :; do
+            case "$(docker inspect -f "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}" "$1")" in
+              "running healthy")   exit 0 ;;
+              "running unhealthy") echo "::error::the container reported unhealthy."; exit 1 ;;
+              "running starting"|"running none") sleep 2 ;;
+              *) echo "::error::the container is not running."; exit 1 ;;
+            esac
+          done' _ "$cid"; then
+          echo "healthy after $((SECONDS - started))s"
+        else
+          rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::not healthy within ${TIMEOUT}s (last state: $(docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid"))."
+          fi
+          exit 1
+        fi

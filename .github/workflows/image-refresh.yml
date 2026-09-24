@@ -1,0 +1,43 @@
+# Daily: when the published image's OS packages fall behind, dispatch the pipeline,
+# whose build, scan and smoke gates decide whether the refresh ships.
+
+name: Image refresh
+
+on:
+  schedule:
+    - cron: '23 4 * * *'   # daily, off the hour so it does not queue behind everyone's :00 jobs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    # The called workflow can only reduce what this job grants: the pull needs
+    # packages: read and the dispatch needs actions: write.
+    permissions:
+      packages: read
+      actions: write
+    # Pin to an immutable SHA, not @main: a commit to chodeus-ops main would
+    # otherwise run in every consumer repo with its GITHUB_TOKEN (actions: write).
+    uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@96cf0be225f5bd5fd4774ea539d9789dd316443e # main
+    with:
+      # Must accept workflow_dispatch. A cached build must also bust the upgrade layer
+      # with a per-build ARG it references, or the rebuild ships the same packages.
+      workflow: codeql-lint.yml
+      # Only the default branch publishes :latest, so a manual run from another branch still targets it.
+      ref: ${{ github.event.repository.default_branch }}
+
+  notify:
+    # Only a dispatch or a failure is worth a message; a clean daily check is not.
+    if: always() && (failure() || needs.refresh.outputs.stale == 'true')
+    needs: refresh
+    permissions: {}
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@96cf0be225f5bd5fd4774ea539d9789dd316443e # main
+    with:
+      event_type: workflow
+      status: ${{ needs.refresh.result == 'success' && 'info' || 'failure' }}
+      title: ${{ needs.refresh.result == 'success' && '♻️ Image refresh dispatched' || '❌ Image refresh failed' }}
+      description: ${{ needs.refresh.result == 'success' && format('{0} pending package upgrade(s); the publish workflow was dispatched.', needs.refresh.outputs.pending) || 'The package check or the dispatch failed; see the run.' }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
