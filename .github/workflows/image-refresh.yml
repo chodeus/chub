@@ -20,7 +20,7 @@ jobs:
       actions: write
     # Pin to an immutable SHA, not @main: a commit to chodeus-ops main would
     # otherwise run in every consumer repo with its GITHUB_TOKEN (actions: write).
-    uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@96cf0be225f5bd5fd4774ea539d9789dd316443e # main
+    uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@c36f1a3c7e8108f86b3be0e19c5e0d08502f681f # main
     with:
       # Must accept workflow_dispatch. A cached build must also bust the upgrade layer
       # with a per-build ARG it references, or the rebuild ships the same packages.
@@ -33,7 +33,7 @@ jobs:
     if: always() && (failure() || needs.refresh.outputs.stale == 'true')
     needs: refresh
     permissions: {}
-    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@96cf0be225f5bd5fd4774ea539d9789dd316443e # main
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@c36f1a3c7e8108f86b3be0e19c5e0d08502f681f # main
     with:
       event_type: workflow
       status: ${{ needs.refresh.result == 'success' && 'info' || 'failure' }}
