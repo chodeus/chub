@@ -8,11 +8,13 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # release-please.yml approves its release PR's CI runs.
+  actions: write
   packages: write
 
 jobs:
   release:
-    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@579feb04e3219248963bd27843298a8c2ea6b2fd # main
+    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@1fcf653ea7ccc8c3cc5b8897d38c4b3f640010c0 # main
 
   docker-version:
     needs: release
