@@ -1,6 +1,6 @@
 # CL2K poster-maker deps (:full-image only); kept out of requirements.txt so it matches main.
 # Not psd-tools[composite]: it adds scipy + scikit-image only for composite(), unused here.
-psd-tools==1.19.0
+psd-tools==1.20.0
 Wand==0.7.2
 # CPU ONNX runtime for the PP-OCRv4 text detector behind "tighten to letters" (fail-soft).
 onnxruntime==1.30.0
