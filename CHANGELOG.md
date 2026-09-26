@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.49.1](https://github.com/chodeus/chub/compare/v2.49.0...v2.49.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **ci:** tell Trivy which architecture a per-arch digest is ([#668](https://github.com/chodeus/chub/issues/668)) ([4ab49a0](https://github.com/chodeus/chub/commit/4ab49a0e1b69d8954a8c98ba65594ce171f62750))
+
 ## [2.49.0](https://github.com/chodeus/chub/compare/v2.48.1...v2.49.0) (2026-09-22)
 
 
