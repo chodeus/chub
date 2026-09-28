@@ -7,6 +7,7 @@ import { apiCore } from '../../utils/api/core.js';
 import { Modal } from '../../components/modals/Modal';
 import EditMediaModal from '../../components/modals/EditMediaModal.jsx';
 import { Button, LoadingButton, IconButton } from '../../components/ui/index.js';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
@@ -681,38 +682,34 @@ const MediaManagePage = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Manage
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                        Resolve duplicates, flag issues, and batch-import to your *arr instances.
-                    </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <LoadingButton
-                        loading={isRefreshing}
-                        loadingText="Refreshing..."
-                        variant="surface"
-                        icon="refresh"
-                        onClick={handleRefreshCache}
-                        title="Re-sync all media from your Radarr and Sonarr instances into the local cache"
-                    >
-                        Refresh cache
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isExporting}
-                        loadingText="Exporting..."
-                        variant="surface"
-                        icon="download"
-                        onClick={handleExport}
-                        title="Download your media library data as a JSON file"
-                    >
-                        Export
-                    </LoadingButton>
-                </div>
-            </div>
+            <PageHeader
+                title="Manage"
+                description="Resolve duplicates, flag issues, and batch-import to your *arr instances."
+                actions={
+                    <>
+                        <LoadingButton
+                            loading={isRefreshing}
+                            loadingText="Refreshing..."
+                            variant="surface"
+                            icon="refresh"
+                            onClick={handleRefreshCache}
+                            title="Re-sync all media from your Radarr and Sonarr instances into the local cache"
+                        >
+                            Refresh cache
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isExporting}
+                            loadingText="Exporting..."
+                            variant="surface"
+                            icon="download"
+                            onClick={handleExport}
+                            title="Download your media library data as a JSON file"
+                        >
+                            Export
+                        </LoadingButton>
+                    </>
+                }
+            />
 
             <DuplicatesSection
                 duplicates={duplicates}

@@ -288,9 +288,7 @@ export const InstanceCard = ({
                     {isPlex && (
                         <div>
                             <div className="flex items-center gap-2 mb-1.5">
-                                <span className="font-mono text-[10px] uppercase tracking-[0.5px] text-fg-faint">
-                                    Libraries
-                                </span>
+                                <span className="eyebrow">Libraries</span>
                                 {onFetchLibraries && (
                                     <button
                                         type="button"

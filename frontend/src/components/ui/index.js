@@ -26,5 +26,6 @@ export { default as Spinner } from './Spinner';
 export { Skeleton } from './Skeleton';
 export { StatCard } from './StatCard';
 export { default as SegmentedControl } from './SegmentedControl';
+export { default as ChipGroup } from './ChipGroup';
 export { default as StatusDot } from './StatusDot';
 export { default as Toggle } from './Toggle';

@@ -10,6 +10,7 @@ import { withExtensionConfigModuleKeys } from '../../../extensions/index.js';
 import { humanize } from '../../../utils/tools.js';
 import Toggle from '../../../components/ui/Toggle.jsx';
 import Spinner from '../../../components/ui/Spinner.jsx';
+import { PageHeader } from '../../../components/ui/PageHeader';
 
 // Modules in display order — drop the non-module config sections. Extension
 // modules (e.g. cl2k_maker, poster_self_heal) are spliced in at their anchors
@@ -133,17 +134,17 @@ export const ModulesHubPage = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            <div className="min-w-0">
-                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                    Modules
-                </h1>
-                <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                    Enable the chores you want and open each module&apos;s config ·{' '}
-                    <span className="text-success">
-                        {enabledCount} of {HUB_MODULES.length} enabled
-                    </span>
-                </p>
-            </div>
+            <PageHeader
+                title="Modules"
+                description={
+                    <>
+                        Enable the chores you want and open each module&apos;s config ·{' '}
+                        <span className="text-success">
+                            {enabledCount} of {HUB_MODULES.length} enabled
+                        </span>
+                    </>
+                }
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {HUB_MODULES.map((key, i) => {

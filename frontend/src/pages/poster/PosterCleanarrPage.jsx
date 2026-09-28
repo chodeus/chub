@@ -6,6 +6,7 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, LoadingButton } from '../../components/ui/index.js';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 const PAGE_SIZE = 500; // master-detail needs the full bundle list client-side
@@ -1063,37 +1064,44 @@ const PosterCleanarrPage = () => {
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar — title + mono summary stats + legend */}
-            <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="font-display text-[22px] font-bold tracking-[-0.3px] text-fg m-0 mr-1.5">
-                    Poster Cleanarr
-                </h1>
-                {hasScanned && stats ? (
-                    <>
-                        <span className="font-mono text-[12.5px] text-fg-muted">
-                            {stats.bundle_count} items
+            <PageHeader
+                title="Poster Cleanarr"
+                description={
+                    hasScanned && stats ? (
+                        <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                            <span className="font-mono text-[12.5px] text-fg-muted">
+                                {stats.bundle_count} items
+                            </span>
+                            <span className="text-fg-dim">·</span>
+                            <span className="font-mono text-[12.5px] text-fg-muted">
+                                {stats.variant_count} variants
+                            </span>
+                            <span className="text-fg-dim">·</span>
+                            <span className="font-mono text-[12.5px] text-error">
+                                {stats.bloat_count} bloat
+                            </span>
+                            <span className="text-fg-dim">·</span>
+                            <span className="font-mono text-[12.5px] text-success">
+                                {formatBytes(stats.bloat_size)} reclaimable
+                            </span>
+                            {staleItems.length > 0 && (
+                                <>
+                                    <span className="text-fg-dim">·</span>
+                                    <span className="font-mono text-[12.5px] text-warning">
+                                        {staleItems.length} stale duplicate
+                                        {staleItems.length === 1 ? '' : 's'}
+                                    </span>
+                                </>
+                            )}
                         </span>
-                        <span className="text-fg-dim">·</span>
-                        <span className="font-mono text-[12.5px] text-fg-muted">
-                            {stats.variant_count} variants
-                        </span>
-                        <span className="text-fg-dim">·</span>
-                        <span className="font-mono text-[12.5px] text-error">
-                            {stats.bloat_count} bloat
-                        </span>
-                        <span className="text-fg-dim">·</span>
-                        <span className="font-mono text-[12.5px] text-success">
-                            {formatBytes(stats.bloat_size)} reclaimable
-                        </span>
-                        {staleItems.length > 0 && (
-                            <>
-                                <span className="text-fg-dim">·</span>
-                                <span className="font-mono text-[12.5px] text-warning">
-                                    {staleItems.length} stale duplicate
-                                    {staleItems.length === 1 ? '' : 's'}
-                                </span>
-                            </>
-                        )}
-                        <span className="ml-auto flex items-center gap-3.5 font-mono text-[11px] text-fg-subtle">
+                    ) : (
+                        'Review Plex poster variants and clean up unused (bloat) images.'
+                    )
+                }
+                actions={
+                    hasScanned &&
+                    stats && (
+                        <span className="flex items-center gap-3.5 font-mono text-[11px] text-fg-subtle">
                             <span className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-error" />
                                 bloat
@@ -1103,13 +1111,9 @@ const PosterCleanarrPage = () => {
                                 stale duplicate
                             </span>
                         </span>
-                    </>
-                ) : (
-                    <span className="text-fg-subtle text-[13.5px]">
-                        Review Plex poster variants and clean up unused (bloat) images.
-                    </span>
-                )}
-            </div>
+                    )
+                }
+            />
 
             {/* Transcoder + extra notes */}
             {hasScanned && stats && (

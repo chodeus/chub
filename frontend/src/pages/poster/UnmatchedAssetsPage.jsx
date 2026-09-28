@@ -12,6 +12,7 @@ import { Button, IconButton, Modal } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { StyleStamp } from '../../components/ui/StyleStamp.jsx';
 import SegmentedControl from '../../components/ui/SegmentedControl.jsx';
+import { PageHeader } from '../../components/ui/PageHeader';
 
 // Optional extension hook: (item) => { to, title, ariaLabel, icon } | null.
 // Renders an extra per-row action link (e.g. a poster-maker shortcut) when an
@@ -224,9 +225,7 @@ const nextSort = (sort, key) =>
  *  `mono` switches to the dense mono-uppercase column-label styling. */
 const SortHeader = ({ label, sortKey, sort, onSort, align = 'left', mono = false }) => {
     const active = sort.key === sortKey;
-    const th = mono
-        ? 'px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-fg-dim'
-        : 'px-3 py-2 font-medium';
+    const th = mono ? 'px-4 py-2.5 eyebrow' : 'px-3 py-2 font-medium';
     return (
         <th className={`${th} ${align === 'right' ? 'text-right' : 'text-left'}`}>
             <button
@@ -566,12 +565,8 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                         onSort={onSort}
                                         mono
                                     />
-                                    <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
-                                        External ID
-                                    </th>
-                                    <th className="px-4 py-2.5 text-right font-mono text-[10px] uppercase tracking-wider text-fg-dim">
-                                        Action
-                                    </th>
+                                    <th className="px-4 py-2.5 text-left eyebrow">External ID</th>
+                                    <th className="px-4 py-2.5 text-right eyebrow">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1411,9 +1406,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                             mono
                                         />
                                         {isReviewTab && (
-                                            <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
-                                                Why
-                                            </th>
+                                            <th className="px-4 py-2.5 text-left eyebrow">Why</th>
                                         )}
                                         <SortHeader
                                             label="Instance"
@@ -1422,18 +1415,10 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                             onSort={onSort}
                                             mono
                                         />
-                                        <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
-                                            TMDB
-                                        </th>
-                                        <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
-                                            IMDB
-                                        </th>
-                                        <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
-                                            TVDB
-                                        </th>
-                                        <th className="px-4 py-2.5 text-right font-mono text-[10px] uppercase tracking-wider text-fg-dim">
-                                            Actions
-                                        </th>
+                                        <th className="px-4 py-2.5 text-left eyebrow">TMDB</th>
+                                        <th className="px-4 py-2.5 text-left eyebrow">IMDB</th>
+                                        <th className="px-4 py-2.5 text-left eyebrow">TVDB</th>
+                                        <th className="px-4 py-2.5 text-right eyebrow">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2109,23 +2094,18 @@ const UnmatchedAssetsPage = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Unmatched Assets
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                        Library items missing a poster or background — match a source or request the
-                        artwork.
-                    </p>
-                </div>
-                {grandTotal.total > 0 && (
-                    <span className="font-mono text-[12px] text-fg-subtle whitespace-nowrap">
-                        <span className="text-warning">{grandTotal.unmatched || 0}</span> unmatched
-                        · {(grandTotal.percent_complete || 0).toFixed(1)}% complete
-                    </span>
-                )}
-            </div>
+            <PageHeader
+                title="Unmatched Assets"
+                description="Library items missing a poster or background — match a source or request the artwork."
+                actions={
+                    grandTotal.total > 0 && (
+                        <span className="font-mono text-[12px] text-fg-subtle whitespace-nowrap">
+                            <span className="text-warning">{grandTotal.unmatched || 0}</span>{' '}
+                            unmatched · {(grandTotal.percent_complete || 0).toFixed(1)}% complete
+                        </span>
+                    )
+                }
+            />
 
             {recentPosters.length > 0 && (
                 <RecentPosterReel posters={recentPosters} onRefresh={refreshRecent} />

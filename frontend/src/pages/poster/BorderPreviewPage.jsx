@@ -9,6 +9,7 @@ import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { useConfirm } from '../../contexts/ConfirmContext.jsx';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { Button, LoadingButton } from '../../components/ui/index.js';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ColorListField } from '../../components/fields/color/ColorListField.jsx';
 
@@ -201,17 +202,11 @@ const BorderReplacerrPage = () => {
 
     return (
         <div className="max-w-6xl mx-auto pb-12">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Border Replacerr
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                        Apply brand or seasonal borders to your posters — scheduled by date range.
-                    </p>
-                </div>
-                {headerActions}
-            </div>
+            <PageHeader
+                title="Border Replacerr"
+                description="Apply brand or seasonal borders to your posters — scheduled by date range."
+                actions={headerActions}
+            />
 
             <DefaultColorsSection
                 value={config.border_colors}

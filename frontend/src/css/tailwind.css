@@ -203,6 +203,15 @@
     font-family: var(--font-display);
 }
 
+/* Mono uppercase label over a value, a column or a group. */
+@utility eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+}
+
 /* Named sizes + grid templates (utilities/sizing.css, utilities/layout.css). */
 
 /* Not h-screen: on iOS 100vh is the URL-bar-retracted viewport, and the shell locks

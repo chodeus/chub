@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useLogModules } from '../hooks/useLogModules.js';
 import { useLogFiles } from '../hooks/useLogFiles.js';
 import { useLogContent } from '../hooks/useLogContent.js';
@@ -104,22 +105,23 @@ export default function Logs() {
 
     return (
         <div className="flex flex-col gap-4 h-full">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Logs
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                        Tail module runs and diagnose failures.
-                    </p>
-                </div>
-                <span className="inline-flex items-center gap-2 h-[30px] px-3 rounded-full bg-accent/10 border border-accent/25">
-                    <span className="w-[7px] h-[7px] rounded-full bg-accent" aria-hidden="true" />
-                    <span className="font-mono text-[11px] text-accent">
-                        live tail · {LOG_POLL_INTERVAL_MS / 1000}s
-                    </span>
-                </span>
-            </div>
+            <PageHeader
+                title="Logs"
+                description="Tail module runs and diagnose failures."
+                actions={
+                    <>
+                        <span className="inline-flex items-center gap-2 h-[30px] px-3 rounded-full bg-accent/10 border border-accent/25">
+                            <span
+                                className="w-[7px] h-[7px] rounded-full bg-accent"
+                                aria-hidden="true"
+                            />
+                            <span className="font-mono text-[11px] text-accent">
+                                live tail · {LOG_POLL_INTERVAL_MS / 1000}s
+                            </span>
+                        </span>
+                    </>
+                }
+            />
 
             <div
                 className="flex flex-col flex-1 min-h-0 rounded-xl border border-border bg-surface overflow-hidden"
@@ -140,9 +142,7 @@ export default function Logs() {
 
                 {/* Filter pill bar */}
                 <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-t border-border bg-surface-inset">
-                    <span className="font-mono text-[10px] tracking-[1px] text-fg-faint mr-1">
-                        LEVELS
-                    </span>
+                    <span className="eyebrow mr-1">LEVELS</span>
                     {LOG_LEVELS.map(level => (
                         <button
                             key={level}

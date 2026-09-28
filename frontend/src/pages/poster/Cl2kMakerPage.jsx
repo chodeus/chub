@@ -2215,9 +2215,7 @@ const StudioAccordion = ({
                 >
                     chevron_right
                 </span>
-                <span className="flex-1 text-left font-mono text-[10px] tracking-wide uppercase text-fg-subtle">
-                    {title}
-                </span>
+                <span className="flex-1 text-left eyebrow">{title}</span>
                 {dot && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
                 {count != null && (
                     <span className="font-mono text-[10px] text-fg-dim">{count}</span>
@@ -2229,9 +2227,7 @@ const StudioAccordion = ({
 };
 
 // A labelled section header for the always-visible studio control groups.
-const StudioGroupLabel = ({ children }) => (
-    <span className="font-mono text-[10px] tracking-wide uppercase text-fg-subtle">{children}</span>
-);
+const StudioGroupLabel = ({ children }) => <span className="eyebrow">{children}</span>;
 
 const RenderPanel = ({
     artBySource,
@@ -5209,9 +5205,7 @@ const LogoSelector = ({
                 <>
                     <div className="flex items-center justify-between mb-2">
                         {variant ? (
-                            <span className="font-mono text-[10px] tracking-wide uppercase text-fg-subtle">
-                                Logo / wordmark
-                            </span>
+                            <span className="eyebrow">Logo / wordmark</span>
                         ) : (
                             <h3 className="text-sm font-medium text-fg">{label}</h3>
                         )}

@@ -1326,11 +1326,7 @@ export const InstancesField = React.memo(
 
                     {hasPlex && (
                         <div className="flex flex-col gap-3">
-                            {arrTypes.length > 0 && (
-                                <span className="font-mono text-[10px] tracking-[0.8px] text-fg-subtle">
-                                    PLEX
-                                </span>
-                            )}
+                            {arrTypes.length > 0 && <span className="eyebrow">PLEX</span>}
                             <PlexInstanceSelector
                                 instances={instances}
                                 selectedInstances={serviceSelections.plex || []}

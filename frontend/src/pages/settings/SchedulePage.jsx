@@ -231,7 +231,7 @@ export const SchedulePage = () => {
     }
 
     return (
-        <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
             {/* Page Header */}
             <PageHeader
                 title="Schedule"

@@ -7,6 +7,7 @@ import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { mediaAPI } from '../../utils/api/media.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, IconButton, Pagination, SegmentedControl } from '../../components/ui/index.js';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 import RecentQueries, { useRecentQueries } from '../../components/RecentQueries.jsx';
 import { formatDate } from '../../utils/datetime.js';
@@ -182,14 +183,10 @@ const MediaSearchPage = () => {
     return (
         <div className="flex flex-col gap-5">
             {/* Toolbar */}
-            <div>
-                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                    Library
-                </h1>
-                <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                    Search and discover content across your media instances.
-                </p>
-            </div>
+            <PageHeader
+                title="Library"
+                description="Search and discover content across your media instances."
+            />
 
             {/* Search + filters */}
             <div className="flex flex-wrap items-center gap-3">

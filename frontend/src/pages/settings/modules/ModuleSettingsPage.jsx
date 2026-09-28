@@ -13,6 +13,8 @@ import { useUnsavedChangesWarning } from '../../../hooks/useUnsavedChangesWarnin
 import Toggle from '../../../components/ui/Toggle.jsx';
 import SegmentedControl from '../../../components/ui/SegmentedControl.jsx';
 import InfoTooltip from '../../../components/ui/InfoTooltip.jsx';
+import { Button } from '../../../components/ui/button/Button';
+import { PageHeader } from '../../../components/ui/PageHeader';
 
 /**
  * Memoized field component — only re-renders when value/key/disabled change.
@@ -418,22 +420,12 @@ const ModuleSettingsContent = ({ moduleKey }) => {
     return (
         <div className="flex flex-col gap-5">
             {/* Header */}
-            <div className="flex flex-col gap-2.5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <h1 className="font-display text-[25px] font-bold tracking-[-0.3px] text-fg m-0">
-                            {activeModule ? activeModule.label : 'Module'}
-                        </h1>
-                        {activeModule && moduleDescriptions[activeModule.key] && (
-                            <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                                {moduleDescriptions[activeModule.key]}
-                            </p>
-                        )}
-                    </div>
-                    {/* gap-y-3 clears the Toggle's 44px coarse hit box (11px taller than
-                        the pill itself) once this header wraps. */}
-                    {activeModule && (
-                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-3 shrink-0 max-w-full">
+            <PageHeader
+                title={activeModule ? activeModule.label : 'Module'}
+                description={activeModule && moduleDescriptions[activeModule.key]}
+                actions={
+                    activeModule && (
+                        <>
                             {hasDryRun && isRunnable && (
                                 <label className="flex items-center gap-2 text-[13px] text-fg-muted cursor-pointer select-none">
                                     Dry run
@@ -447,40 +439,27 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                 </label>
                             )}
                             {isRunnable && (
-                                <button
-                                    type="button"
+                                <Button
+                                    variant="surface"
+                                    icon="play_arrow"
                                     onClick={runNow}
                                     disabled={running}
-                                    className="touch-expand inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-row-hover disabled:opacity-50 transition-colors"
                                 >
-                                    <span className="material-symbols-outlined text-[18px]">
-                                        play_arrow
-                                    </span>
                                     {running ? 'Queuing…' : 'Run now'}
-                                </button>
+                                </Button>
                             )}
                             {isDirty && (
-                                <button
-                                    type="button"
-                                    onClick={handleReset}
-                                    className="touch-expand h-[38px] px-3 rounded-lg text-[13px] text-fg-subtle hover:text-fg"
-                                >
+                                <Button variant="surface" icon="undo" onClick={handleReset}>
                                     Discard
-                                </button>
+                                </Button>
                             )}
-                            <button
-                                type="button"
-                                onClick={handleSave}
-                                disabled={!isDirty || isSaving}
-                                className="touch-expand inline-flex items-center h-[38px] px-[18px] rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 disabled:opacity-50 transition"
-                                style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
-                            >
+                            <Button onClick={handleSave} disabled={!isDirty || isSaving}>
                                 {isSaving ? 'Saving…' : 'Save'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
+                            </Button>
+                        </>
+                    )
+                }
+            />
 
             {saveError && (
                 <div className="p-3 bg-error-bg border border-error-border text-error rounded-lg max-w-[820px]">
@@ -547,9 +526,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                         <span className="material-symbols-outlined text-[17px] text-primary">
                                             {col.icon}
                                         </span>
-                                        <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-fg-faint">
-                                            {col.label}
-                                        </span>
+                                        <span className="eyebrow">{col.label}</span>
                                         <div className="flex-1 h-px bg-border-light" />
                                     </div>
                                     {layout

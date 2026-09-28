@@ -10,6 +10,7 @@ import { useSearch, SEARCH_TYPES } from '../../contexts/SearchCoordinatorContext
 import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, LoadingButton, IconButton, Pagination } from '../../components/ui/index.js';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { StyleStamp } from '../../components/ui/StyleStamp.jsx';
 import { useConfirm } from '../../contexts/ConfirmContext.jsx';
@@ -365,67 +366,67 @@ const PosterAssetsSearchPage = () => {
     return (
         <div className="flex flex-col gap-5">
             {/* Toolbar */}
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Assets
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+            <PageHeader
+                title="Assets"
+                description={
+                    <>
                         Local + Google Drive poster library ·{' '}
                         <span className="font-mono text-fg-muted">{total.toLocaleString()}</span>{' '}
                         cached.
-                    </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <LoadingButton
-                        loading={isRunning('poster_renamerr') || isAutoMatching}
-                        loadingText="Matching..."
-                        variant="surface"
-                        icon="auto_fix_high"
-                        onClick={handleAutoMatch}
-                        title="Run Poster Renamerr to automatically match poster files to media items"
-                    >
-                        Auto-Match
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isAnalyzing}
-                        loadingText="Analyzing..."
-                        variant="surface"
-                        icon="analytics"
-                        onClick={handleAnalyze}
-                        title="Scan the poster directory and report file count and total storage size"
-                    >
-                        Analyze
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isOptimizing}
-                        loadingText="Optimizing..."
-                        variant="surface"
-                        icon="tune"
-                        onClick={() => runOptimize()}
-                        title="Resize oversized posters and compress images to save disk space"
-                    >
-                        Optimize
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isUploading}
-                        loadingText="Uploading..."
-                        variant="primary"
-                        icon="upload"
-                        onClick={() => fileInputRef.current?.click()}
-                        title="Upload a poster image file"
-                    >
-                        Upload
-                    </LoadingButton>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleUpload}
-                    />
-                </div>
-            </div>
+                    </>
+                }
+                actions={
+                    <>
+                        <LoadingButton
+                            loading={isRunning('poster_renamerr') || isAutoMatching}
+                            loadingText="Matching..."
+                            variant="surface"
+                            icon="auto_fix_high"
+                            onClick={handleAutoMatch}
+                            title="Run Poster Renamerr to automatically match poster files to media items"
+                        >
+                            Auto-Match
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isAnalyzing}
+                            loadingText="Analyzing..."
+                            variant="surface"
+                            icon="analytics"
+                            onClick={handleAnalyze}
+                            title="Scan the poster directory and report file count and total storage size"
+                        >
+                            Analyze
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isOptimizing}
+                            loadingText="Optimizing..."
+                            variant="surface"
+                            icon="tune"
+                            onClick={() => runOptimize()}
+                            title="Resize oversized posters and compress images to save disk space"
+                        >
+                            Optimize
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isUploading}
+                            loadingText="Uploading..."
+                            variant="primary"
+                            icon="upload"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Upload a poster image file"
+                        >
+                            Upload
+                        </LoadingButton>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleUpload}
+                        />
+                    </>
+                }
+            />
 
             {/* Cache-coverage stats strip */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -450,9 +451,7 @@ const PosterAssetsSearchPage = () => {
                     },
                 ].map(c => (
                     <div key={c.label} className="rounded-xl bg-surface border border-border p-4">
-                        <div className="font-mono text-[10px] font-semibold uppercase tracking-[1.5px] text-fg-subtle">
-                            {c.label}
-                        </div>
+                        <div className="eyebrow">{c.label}</div>
                         <div className={`font-display text-2xl font-bold mt-1.5 ${c.tone}`}>
                             {c.value}
                         </div>

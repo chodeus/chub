@@ -605,7 +605,7 @@ export const InstancesPage = () => {
     // Loading state
     if (isLoading) {
         return (
-            <div className="p-3 sm:p-6 max-w-screen-xl mx-auto">
+            <div className="flex flex-col gap-5">
                 <PageHeader
                     title="Instances"
                     description="Radarr, Sonarr, Lidarr, and Plex connections."
@@ -620,7 +620,7 @@ export const InstancesPage = () => {
     // Error state
     if (error) {
         return (
-            <div className="p-3 sm:p-6 max-w-screen-xl mx-auto">
+            <div className="flex flex-col gap-5">
                 <PageHeader
                     title="Instances"
                     description="Radarr, Sonarr, Lidarr, and Plex connections."
@@ -636,7 +636,7 @@ export const InstancesPage = () => {
     }
 
     return (
-        <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
             {/* Page Header */}
             <PageHeader
                 title="Instances"
