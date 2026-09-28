@@ -4,22 +4,21 @@ import { mediaAPI } from '../../utils/api/media.js';
 import { instancesAPI } from '../../utils/api/instances.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ServiceIcon } from '../../components/ui/ServiceIcon.jsx';
+import { PageHeader, StatCard } from '../../components/ui/index.js';
+import { BarList, StatGrid } from '../../components/statistics/index.js';
 import { formatSecondsAgo } from '../../utils/schedule';
 
-/** Reusable stat card — always reserves the subtext row so sibling cards align */
-const StatCard = ({ label, value, subtext, color = 'text-fg' }) => (
-    <div className="p-5 rounded-xl bg-surface border border-border flex flex-col shadow-[0_2px_16px_-8px_rgba(0,0,0,0.6)]">
-        <p className="font-mono text-[10px] tracking-[1.2px] uppercase text-fg-subtle mb-2">
-            {label}
-        </p>
-        <p className={`font-mono text-[32px] leading-none font-bold ${color}`}>
-            {(value || 0).toLocaleString()}
-        </p>
-        <p className="text-xs text-fg-subtle mt-2" style={{ minHeight: '1rem' }}>
-            {subtext || ' '}
-        </p>
-    </div>
-);
+/** Breakdown rows → BarList items, largest first. A missing label reads as "Unknown". */
+const toBars = (rows, labelKey, countKey = 'count') =>
+    (rows || [])
+        .map(row => {
+            const raw = row[labelKey];
+            return {
+                label: raw == null || raw === '' ? 'Unknown' : String(raw),
+                count: row[countKey] ?? 0,
+            };
+        })
+        .sort((a, b) => b.count - a.count);
 
 /** Completeness %: of the acquirable units (have + still-missing), how many are
  *  present. Counted in content units (episodes/movies/albums); upcoming units
@@ -132,7 +131,7 @@ const InstanceRow = ({ inst }) => {
     }
 
     return (
-        <div className="rounded-xl bg-surface border border-warning/30 px-[18px] py-[15px]">
+        <div className="rounded-xl bg-surface border border-border px-[18px] py-[15px]">
             <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
                 <div className="w-full sm:w-[150px] shrink-0 min-w-0">
                     <span className="block font-display text-[15px] font-semibold text-fg truncate">
@@ -143,7 +142,10 @@ const InstanceRow = ({ inst }) => {
                 {isPlex ? (
                     <div className="flex-1 min-w-0 flex flex-col gap-2">
                         <Metric label="Items" value={inst.total || 0} />
-                        <BreakdownBars items={inst.libraries || []} labelKey="library_name" />
+                        <BarList
+                            items={toBars(inst.libraries, 'library_name')}
+                            labelClassName="capitalize"
+                        />
                     </div>
                 ) : (
                     <div className="flex-1 flex flex-wrap items-start gap-x-10 gap-y-3 min-w-0">
@@ -165,61 +167,6 @@ const InstanceRow = ({ inst }) => {
                     </span>
                 )}
             </div>
-        </div>
-    );
-};
-
-const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null }) => {
-    const [expanded, setExpanded] = React.useState(false);
-    if (!items || items.length === 0) return null;
-
-    const sortedItems = [...items].sort((a, b) => (b[countKey] ?? 0) - (a[countKey] ?? 0));
-    const displayItems = maxItems && !expanded ? sortedItems.slice(0, maxItems) : sortedItems;
-    const hasMore = maxItems && items.length > maxItems;
-    const maxCount = sortedItems.reduce((m, it) => Math.max(m, it[countKey] ?? 0), 0) || 1;
-
-    return (
-        <div>
-            <div className="flex flex-col gap-1.5">
-                {displayItems.map((item, idx) => {
-                    const count = item[countKey] ?? 0;
-                    const pct = Math.round((count / maxCount) * 100);
-                    return (
-                        <div
-                            key={item[labelKey] || idx}
-                            className="grid items-center gap-3 text-sm"
-                            style={{ gridTemplateColumns: 'minmax(6rem, 12rem) 1fr auto' }}
-                        >
-                            <span className="text-fg capitalize truncate">
-                                {item[labelKey] || 'Unknown'}
-                            </span>
-                            <div
-                                className="h-2 rounded-full bg-border overflow-hidden"
-                                role="presentation"
-                            >
-                                <div
-                                    className="h-full"
-                                    style={{
-                                        width: `${pct}%`,
-                                        background: 'var(--accent)',
-                                    }}
-                                />
-                            </div>
-                            <span className="font-mono text-fg-data font-medium">
-                                {count.toLocaleString()}
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
-            {hasMore && (
-                <button
-                    className="touch-expand mt-3 text-sm text-accent hover:underline"
-                    onClick={() => setExpanded(!expanded)}
-                >
-                    {expanded ? 'Show less' : `Show all ${items.length}`}
-                </button>
-            )}
         </div>
     );
 };
@@ -273,7 +220,7 @@ export const BreakdownTabs = ({ stats }) => {
 
     return (
         <section>
-            <h3 className="text-lg font-semibold text-fg mb-3">Breakdowns</h3>
+            <h2 className="font-display text-[15px] font-semibold text-fg mb-3">Breakdowns</h2>
             {/* radiogroup, not tablist: no segment owns a tabpanel, and this mirrors SegmentedControl. */}
             <div className="flex flex-wrap gap-2 mb-4" role="radiogroup" aria-label="Breakdown">
                 {availableTabs.map((tab, i) => {
@@ -293,9 +240,9 @@ export const BreakdownTabs = ({ stats }) => {
                             className="inline-flex items-center min-h-11 px-3 rounded-full text-sm transition-colors"
                             style={{
                                 background: isActive
-                                    ? 'color-mix(in srgb, var(--accent) 18%, transparent)'
+                                    ? 'color-mix(in srgb, var(--primary) 18%, transparent)'
                                     : 'var(--surface)',
-                                border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                                border: `1px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`,
                                 color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                             }}
                         >
@@ -306,7 +253,7 @@ export const BreakdownTabs = ({ stats }) => {
                                     paddingLeft: '0.5rem',
                                     borderLeft: `1px solid ${
                                         isActive
-                                            ? 'color-mix(in srgb, var(--accent) 40%, transparent)'
+                                            ? 'color-mix(in srgb, var(--primary) 40%, transparent)'
                                             : 'var(--border)'
                                     }`,
                                 }}
@@ -317,12 +264,14 @@ export const BreakdownTabs = ({ stats }) => {
                     );
                 })}
             </div>
-            <BreakdownBars
-                key={activeTab.key}
-                items={activeItems}
-                labelKey={activeTab.labelKey}
-                maxItems={activeTab.maxItems || null}
-            />
+            <div className="p-4 rounded-xl bg-surface border border-border">
+                <BarList
+                    key={activeTab.key}
+                    items={toBars(activeItems, activeTab.labelKey)}
+                    maxItems={activeTab.maxItems}
+                    labelClassName="capitalize"
+                />
+            </div>
         </section>
     );
 };
@@ -335,18 +284,18 @@ const RecentlyAdded = ({ data }) => {
     const last30 = data?.last_30d || 0;
     return (
         <section>
-            <h3 className="text-lg font-semibold text-fg mb-1">Recently Added</h3>
-            <p className="text-sm text-fg-muted mb-3">
+            <h2 className="font-display text-[15px] font-semibold text-fg mb-1">Recently Added</h2>
+            <p className="text-xs text-fg-subtle mb-3">
                 {last7.toLocaleString()} in the last 7 days · {last30.toLocaleString()} in the last
                 30 days
             </p>
             {items.length === 0 ? (
-                <div className="p-4 rounded-lg bg-surface border border-border text-sm text-fg-subtle">
+                <div className="p-4 rounded-xl bg-surface border border-border text-sm text-fg-subtle">
                     No additions tracked yet — newly added media will appear here as your instances
                     sync.
                 </div>
             ) : (
-                <div className="rounded-lg bg-surface border border-border overflow-hidden">
+                <div className="rounded-xl bg-surface border border-border overflow-hidden">
                     {items.map((item, idx) => (
                         <div
                             key={`${item.title}:${item.instance_name}:${idx}`}
@@ -463,46 +412,46 @@ const MediaStatsPage = () => {
         <div className="flex flex-col gap-5">
             {/* Header — the page reflects the cache, which the instance syncs
                 keep fresh; there's no manual refresh. */}
-            <div className="min-w-0">
-                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                    Library Statistics
-                </h1>
-                <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                    Library health across Radarr, Sonarr, Lidarr and Plex.
-                </p>
-            </div>
+            <PageHeader
+                title="Library Statistics"
+                description="Library health across Radarr, Sonarr, Lidarr and Plex."
+            />
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <StatGrid columns={5}>
                 <StatCard label="Total Media" value={stats.total || 0} />
                 <StatCard
                     label="In Library"
                     value={inLibrary}
                     subtext={`${completeness}% of released present`}
-                    color="text-success"
+                    valueColor="success"
                 />
                 <StatCard
                     label="Monitored"
                     value={monitoredCount}
-                    subtext={unmonitoredCount ? `${unmonitoredCount} unmonitored` : undefined}
+                    subtext={
+                        unmonitoredCount
+                            ? `${unmonitoredCount.toLocaleString()} unmonitored`
+                            : undefined
+                    }
                 />
                 <StatCard
                     label="Missing"
                     value={missing}
                     subtext="monitored, released, no file"
-                    color={missing > 0 ? 'text-warning' : 'text-fg'}
+                    valueColor={missing > 0 ? 'warning' : ''}
                 />
                 <StatCard label="Upcoming" value={upcoming} subtext="monitored, not released yet" />
-            </div>
+            </StatGrid>
 
             {/* By instance — grouped by service (Instances-page order), each a
                 vertical list of full-width rows. */}
             {instanceGroups.map(([type, insts]) => (
                 <section key={type}>
-                    <h3 className="font-display text-[17px] font-semibold text-fg mb-3 flex items-center gap-2">
-                        <ServiceIcon service={type} size="medium" />
+                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3 flex items-center gap-2.5">
+                        <ServiceIcon service={type} size="small" />
                         {TYPE_LABEL[type] || type}
-                    </h3>
+                    </h2>
                     <div className="flex flex-col gap-3">
                         {insts.map(inst => (
                             <InstanceRow key={`${inst.source}:${inst.instance_name}`} inst={inst} />

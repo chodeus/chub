@@ -20,8 +20,9 @@ export const StatGrid = React.memo(({ children, columns = 3, gap = '4', classNam
         2: 'lg:grid-cols-2',
         3: 'lg:grid-cols-3',
         4: 'lg:grid-cols-4',
-        5: 'lg:grid-cols-5',
-        6: 'lg:grid-cols-6',
+        // Five or six wait for xl: beside the sidebar at lg, a tile is narrower than a 7-digit value.
+        5: 'lg:grid-cols-3 xl:grid-cols-5',
+        6: 'lg:grid-cols-3 xl:grid-cols-6',
     };
 
     // Mobile auto-fits so 3- or 5-card grids leave no orphan row; tablet uses up
