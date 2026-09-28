@@ -20,7 +20,7 @@
     }
 
     .sidebar-nav-link--active:hover {
-        background: var(--primary-hover);
+        background: var(--color-primary-strong);
         color: var(--on-color-text);
     }
 

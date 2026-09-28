@@ -12,10 +12,7 @@ const DOT = {
     idle: ['var(--text-faint)', 0],
 };
 
-/**
- * Small status dot with an optional soft ring. `status` keys map to theme
- * tokens; pass a raw `color` to override.
- */
+/** Status dot with an optional soft ring, coloured by its theme token. */
 const StatusDot = ({ status = 'idle', size = 7, ring = true, color, className = '' }) => {
     const [token, ringPct] = DOT[status] || DOT.idle;
     const fill = color || token;

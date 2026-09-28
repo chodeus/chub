@@ -82,6 +82,9 @@
     --color-primary-hover: var(--primary-hover);
     --color-canvas: var(--bg); /* page canvas (.bg-canvas) */
 
+    /* Hover fill under on-colour text: darker than --primary, never lighter. */
+    --color-primary-strong: color-mix(in srgb, var(--primary) 85%, black);
+
     /* form controls */
     --color-input: var(--input-bg);
     --color-input-hover: var(--input-bg-hover);

@@ -298,7 +298,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     type="button"
                     onClick={handleCreateDir}
                     disabled={disabled || creating || !newDirName.trim()}
-                    className="px-3 py-1.5 text-xs font-medium bg-primary text-on-color border border-primary rounded cursor-pointer hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 text-xs font-medium bg-primary text-on-color border border-primary rounded cursor-pointer hover:bg-primary-strong disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     {creating ? '...' : 'Create'}
                 </button>
