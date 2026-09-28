@@ -8,7 +8,12 @@ const TEXT_TOKENS = [
     'text-primary',
     'text-secondary',
     'text-tertiary',
+    'service-radarr',
+    'service-sonarr',
+    'service-lidarr',
+    'service-plex',
 ];
+const SOLID_FILLS = ['success', 'warning', 'info', 'error', 'accent'];
 const RESTING_SURFACES = ['bg', 'surface', 'surface-alt'];
 
 // Theme block only: the prefers-contrast override further down redefines some tokens.
@@ -42,6 +47,10 @@ describe.each([
     ['light', './light.css'],
 ])('%s theme', (_, file) => {
     const tokens = readTokens(file);
+
+    it.each(SOLID_FILLS)('--on-%s clears 4.5:1 on its solid fill', fill => {
+        expect(contrast(tokens[`on-${fill}`], tokens[fill])).toBeGreaterThanOrEqual(4.5);
+    });
 
     it.each(TEXT_TOKENS)('--%s clears 4.5:1 as text on every resting surface', token => {
         for (const surface of RESTING_SURFACES) {

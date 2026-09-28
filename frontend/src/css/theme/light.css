@@ -63,6 +63,19 @@
     --on-color-text: #fff;
     --primary-text: #fff;
 
+    /* Text on solid semantic fills: white, the fills are dark here */
+    --on-success: #fff;
+    --on-warning: #fff;
+    --on-info: #fff;
+    --on-error: #fff;
+    --on-accent: #fff;
+
+    /* Service identity, darkened to read as text on light surfaces */
+    --service-radarr: #357a38;
+    --service-sonarr: #0e7490;
+    --service-lidarr: #7e5e8d;
+    --service-plex: #8f6400;
+
     /* Link state colors */
     --link-hover: #3a339e;
     --link-visited: #3a339e;

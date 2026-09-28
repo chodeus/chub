@@ -116,7 +116,7 @@ const LoginPage = () => {
                             <span className="material-symbols-outlined text-error text-[16px] shrink-0">
                                 error
                             </span>
-                            <span className="text-xs text-[#f5b7c2]">{errorMsg}</span>
+                            <span className="text-xs text-fg">{errorMsg}</span>
                         </div>
                     )}
 
@@ -209,7 +209,7 @@ const LoginPage = () => {
                     <span>{typeof window !== 'undefined' ? window.location.host : ''}</span>
                     {version && (
                         <>
-                            <span className="text-[#3a3566]">·</span>
+                            <span className="text-fg-dim">·</span>
                             <span>{version}</span>
                         </>
                     )}

@@ -32,11 +32,11 @@ function parseJsonList(value) {
 // Colour the instance dot by service so a row reads at a glance.
 function instanceDotColor(name) {
     const n = (name || '').toLowerCase();
-    if (n.includes('radarr')) return '#6cbc66';
-    if (n.includes('sonarr')) return '#53e8f0';
-    if (n.includes('lidarr')) return '#9a7ba9';
-    if (n.includes('plex')) return '#e28b2d';
-    return '#6582ca';
+    if (n.includes('radarr')) return 'var(--service-radarr)';
+    if (n.includes('sonarr')) return 'var(--service-sonarr)';
+    if (n.includes('lidarr')) return 'var(--service-lidarr)';
+    if (n.includes('plex')) return 'var(--service-plex)';
+    return 'var(--text-tertiary)';
 }
 
 function PosterThumb({ mediaId }) {

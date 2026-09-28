@@ -60,11 +60,11 @@ export const ButtonBase = React.memo(
         const variantTextClasses = {
             primary: 'text-on-color',
             secondary: 'text-fg',
-            success: 'text-on-color',
-            danger: 'text-on-color',
+            success: 'text-on-success',
+            danger: 'text-on-error',
             ghost: 'text-fg',
-            warning: 'text-on-color', // White text on warning bg
-            info: 'text-on-color', // White text on info bg
+            warning: 'text-on-warning',
+            info: 'text-on-info',
             muted: 'text-fg', // Primary text on muted bg
             surface: 'text-fg', // Primary text on surface bg
         };

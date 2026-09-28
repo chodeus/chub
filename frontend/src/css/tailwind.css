@@ -43,6 +43,10 @@
     --color-source-cl2k: var(--source-cl2k);
     --color-source-mm2k: var(--source-mm2k);
     --color-source-orphan: var(--source-orphan);
+    --color-service-radarr: var(--service-radarr);
+    --color-service-sonarr: var(--service-sonarr);
+    --color-service-lidarr: var(--service-lidarr);
+    --color-service-plex: var(--service-plex);
 
     /* borders */
     --color-border: var(--border);
@@ -59,6 +63,11 @@
     --color-fg-faint: var(--text-faint); /* section headings / idle #564f8a */
     --color-fg-data: var(--text-data); /* mono-data secondary #8ea3cc */
     --color-on-color: var(--on-color-text);
+    --color-on-success: var(--on-success);
+    --color-on-warning: var(--on-warning);
+    --color-on-info: var(--on-info);
+    --color-on-error: var(--on-error);
+    --color-on-accent: var(--on-accent);
     --color-primary-text: var(--primary-text);
     --color-link: var(--accent); /* legacy alias (.text-link) */
     --color-brand-primary: var(--primary); /* legacy alias (.*-brand-primary) */
