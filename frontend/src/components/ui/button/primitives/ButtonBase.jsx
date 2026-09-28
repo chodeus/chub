@@ -87,11 +87,11 @@ export const ButtonBase = React.memo(
             secondary: 'hover:opacity-90',
             success: 'hover:opacity-90',
             danger: 'hover:opacity-90',
-            ghost: 'hover:bg-surface-elevated',
+            ghost: 'hover:bg-row-hover',
             warning: 'hover:opacity-90',
             info: 'hover:opacity-90',
             muted: 'hover:opacity-90',
-            surface: 'hover:bg-surface-elevated',
+            surface: 'hover:bg-row-hover',
         };
 
         // State styles: active, disabled, focus

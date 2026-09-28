@@ -533,7 +533,7 @@ const DestinationCard = ({
                         type="button"
                         onClick={onTest}
                         disabled={testing}
-                        className="touch-expand h-9 px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-surface-elevated disabled:opacity-60"
+                        className="touch-expand h-9 px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-row-hover disabled:opacity-60"
                     >
                         {testing ? 'Testing…' : 'Test'}
                     </button>
@@ -622,7 +622,7 @@ const DestinationCard = ({
                         <button
                             type="button"
                             onClick={onOpenPicker}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] bg-transparent text-fg-data text-[12px] font-semibold transition-colors hover:bg-surface"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] bg-transparent text-fg-data text-[12px] font-semibold transition-colors hover:bg-row-hover"
                             style={{ border: '1px dashed var(--border-strong)' }}
                         >
                             <span className="material-symbols-outlined text-[14px]">add</span>
@@ -651,7 +651,7 @@ const IconBtn = ({ icon, label, onClick }) => (
         type="button"
         aria-label={label}
         onClick={onClick}
-        className="touch-expand w-9 h-9 rounded-[7px] bg-transparent text-fg-subtle flex items-center justify-center transition-colors hover:bg-surface-elevated hover:text-fg-muted"
+        className="touch-expand w-9 h-9 rounded-[7px] bg-transparent text-fg-subtle flex items-center justify-center transition-colors hover:bg-row-hover hover:text-fg-muted"
     >
         <span className="material-symbols-outlined text-[16px]">{icon}</span>
     </button>

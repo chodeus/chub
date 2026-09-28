@@ -701,7 +701,7 @@ const WizardStyles = () => (
         .sw-row3 { display:grid; grid-template-columns:1fr 1fr 130px; gap:.9rem; }
         .sw-fld-btn .sw-btn { width:100%; }
         .sw-btn { font-family:inherit; font-size:.9rem; font-weight:600; height:44px; padding:0 1.1rem; border-radius:var(--radius-md,12px); border:none; cursor:pointer; background:var(--primary); color:var(--on-color-text); }
-        .sw-btn:hover:not(:disabled) { background:var(--primary-hover); }
+        .sw-btn:hover:not(:disabled) { background:var(--color-primary-strong); }
         .sw-btn:disabled { opacity:.45; cursor:not-allowed; }
         .sw-btn.secondary { background:var(--surface-alt); color:var(--text-primary); }
         .sw-btn.ghost { background:transparent; color:var(--text-secondary); border:1px solid var(--border); }
