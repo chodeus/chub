@@ -1,51 +1,45 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Card } from './card/Card';
-import { StatIcon, StatLabel, StatValue, StatChange } from '../statistics/primitives';
+import { StatIcon, StatChange } from '../statistics/primitives';
 
-/** Stat card composing Card with the stat primitives.
- *  `change.inverse` flips the up/down colouring, for metrics where down is good. */
+const VALUE_TONES = {
+    success: 'text-success',
+    warning: 'text-warning',
+    error: 'text-error',
+    accent: 'text-accent',
+};
+
+/** Summary tile: mono label, large mono value, and a subtext row that is always
+ *  reserved so sibling tiles line up. `change.inverse` flips the trend colouring. */
 export const StatCard = React.memo(
-    ({
-        label,
-        value,
-        icon,
-        subtext,
-        change,
-        variant = 'standard',
-        valueColor = '',
-        valueFormat,
-        badgeColor,
-        className = '',
-    }) => {
+    ({ label, value, icon, subtext, change, valueColor = '', valueFormat, className = '' }) => {
+        const display = valueFormat
+            ? valueFormat(value)
+            : typeof value === 'number'
+              ? value.toLocaleString()
+              : value;
         return (
-            <Card variant={variant} className={className}>
-                <Card.Body>
-                    <div className="flex flex-col gap-2 min-w-0">
-                        {icon && badgeColor ? (
-                            <div
-                                className={`badge-bubble badge-bubble--${badgeColor} rounded-full w-14 h-14 text-3xl`}
-                            >
-                                <StatIcon icon={icon} size="2xl" />
-                            </div>
-                        ) : (
-                            icon && <StatIcon icon={icon} />
-                        )}
-                        <StatLabel>{label}</StatLabel>
-                        <StatValue color={valueColor} format={valueFormat}>
-                            {value}
-                        </StatValue>
-                        {subtext && <StatLabel size="xs">{subtext}</StatLabel>}
-                        {change && (
-                            <StatChange
-                                value={change.value}
-                                direction={change.direction}
-                                inverse={change.inverse}
-                            />
-                        )}
-                    </div>
-                </Card.Body>
-            </Card>
+            <div
+                className={`p-5 rounded-xl bg-surface border border-border flex flex-col min-w-0 shadow-[0_2px_16px_-8px_rgba(0,0,0,0.6)] ${className}`}
+            >
+                {icon && <StatIcon icon={icon} size="2xl" className="mb-2" />}
+                <p className="font-mono text-[10px] tracking-[1px] uppercase text-fg-subtle mt-0 mb-4">
+                    {label}
+                </p>
+                <p
+                    className={`font-mono text-[28px] leading-none font-semibold mt-2 mb-4 ${VALUE_TONES[valueColor] || 'text-fg'}`}
+                >
+                    {display}
+                </p>
+                <p className="text-[11.5px] text-fg-subtle mt-1.5 mb-4">{subtext || '\u00a0'}</p>
+                {change && (
+                    <StatChange
+                        value={change.value}
+                        direction={change.direction}
+                        inverse={change.inverse}
+                    />
+                )}
+            </div>
         );
     }
 );
@@ -62,9 +56,8 @@ StatCard.propTypes = {
         direction: PropTypes.oneOf(['up', 'down', 'neutral']),
         inverse: PropTypes.bool,
     }),
-    variant: PropTypes.oneOf(['standard', 'compact', 'bordered', 'minimal']),
-    valueColor: PropTypes.oneOf(['', 'primary', 'success', 'warning', 'error']),
+    // 'primary' is the default text colour, kept for existing callers.
+    valueColor: PropTypes.oneOf(['', 'primary', 'success', 'warning', 'error', 'accent']),
     valueFormat: PropTypes.func,
-    badgeColor: PropTypes.oneOf([1, 2, 3, 4, 5, '1', '2', '3', '4', '5']),
     className: PropTypes.string,
 };

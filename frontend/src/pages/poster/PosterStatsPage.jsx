@@ -4,7 +4,14 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { copyText } from '../../utils/clipboard.js';
 import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
-import { IconButton, LoadingButton } from '../../components/ui/index.js';
+import {
+    IconButton,
+    LoadingButton,
+    PageHeader,
+    SegmentedControl,
+    StatCard,
+} from '../../components/ui/index.js';
+import { BarList, StatGrid } from '../../components/statistics/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 const PERIOD_OPTIONS = [
@@ -35,84 +42,31 @@ const buildBars = (counts, { topN, labelMap } = {}) => {
         entries = entries.slice(0, topN);
     }
     const total = Object.values(counts || {}).reduce((sum, n) => sum + n, 0) || 1;
-    const max = Math.max(...entries.map(([, n]) => n), othersCount, 1);
-    const toBar = (label, count) => ({
-        label,
-        count,
-        pct: (count / total) * 100,
-        barPct: (count / max) * 100,
-    });
+    const toBar = (label, count) => ({ label, count, pct: (count / total) * 100 });
     const bars = entries.map(([label, count]) => toBar(labelMap?.[label] || label, count));
     if (othersCount > 0) bars.push(toBar('Others', othersCount));
     return bars;
 };
 
-/** Horizontal bar list for a single breakdown chart. When `onSelect` is
- * provided each row becomes a button (used to drill into a variant). */
-// Colour a "by source" bar by its source so Local/GDrive/CL2K/MM2K read
-// distinctly (matching the mock). Other charts pass no barColor → cyan.
+// Colour a "by source" bar by its provenance token; other charts use the accent.
 const sourceBarColor = label => {
     const l = (label || '').toLowerCase();
-    if (l.includes('local')) return '#6cbc66';
-    if (l.includes('drive') || l.includes('gdrive')) return '#53e8f0';
-    if (l.includes('cl2k')) return '#a99eff';
-    if (l.includes('mm2k')) return '#ffc944';
-    return '#53e8f0';
+    if (l.includes('local')) return 'var(--source-local)';
+    if (l.includes('drive')) return 'var(--source-gdrive)';
+    if (l.includes('cl2k')) return 'var(--source-cl2k)';
+    if (l.includes('mm2k')) return 'var(--source-mm2k)';
+    return 'var(--accent)';
 };
 
 // Avatar tints for the Top-contributors list (cycled by row index).
-const CONTRIB_COLORS = ['#8767f7', '#53e8f0', '#6cbc66', '#ffc944', '#9a7ba9', '#fd355c'];
-
-const BreakdownBars = ({ bars, onSelect, activeLabel, barColor }) => {
-    const interactive = typeof onSelect === 'function';
-    return (
-        <div className="flex flex-col gap-3">
-            {bars.map(({ label, count, pct, barPct }) => {
-                const inner = (
-                    <>
-                        <div className="flex justify-between text-sm mb-1">
-                            <span className={activeLabel === label ? 'text-accent' : 'text-fg'}>
-                                {label}
-                                {interactive && <span className="text-fg-subtle"> ›</span>}
-                            </span>
-                            <span className="font-mono text-xs text-fg-subtle">
-                                {count.toLocaleString()} · {pct.toFixed(1)}%
-                            </span>
-                        </div>
-                        <div className="h-2 bg-border rounded-full overflow-hidden">
-                            <div
-                                className="h-full rounded-full"
-                                style={{
-                                    width: `${barPct}%`,
-                                    background: barColor ? barColor(label) : 'var(--accent)',
-                                }}
-                            />
-                        </div>
-                    </>
-                );
-                return interactive ? (
-                    <button
-                        key={label}
-                        type="button"
-                        onClick={() => onSelect(label)}
-                        style={{
-                            width: '100%',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            background: 'none',
-                            border: 'none',
-                            padding: 0,
-                        }}
-                    >
-                        {inner}
-                    </button>
-                ) : (
-                    <div key={label}>{inner}</div>
-                );
-            })}
-        </div>
-    );
-};
+const CONTRIB_COLORS = [
+    'var(--source-cl2k)',
+    'var(--source-gdrive)',
+    'var(--source-local)',
+    'var(--source-mm2k)',
+    'var(--manual)',
+    'var(--error)',
+];
 
 const ASSET_TYPE_LABELS = {
     movie: 'Movies',
@@ -123,10 +77,10 @@ const ASSET_TYPE_LABELS = {
 };
 
 const APPLIED_TYPE_FILTERS = [
-    { key: 'all', label: 'All' },
-    { key: 'movie', label: 'Movies' },
-    { key: 'show', label: 'Shows' },
-    { key: 'season', label: 'Seasons' },
+    { value: 'all', label: 'All' },
+    { value: 'movie', label: 'Movies' },
+    { value: 'show', label: 'Shows' },
+    { value: 'season', label: 'Seasons' },
 ];
 const APPLIED_PAGE_SIZE = 50;
 
@@ -183,21 +137,13 @@ const AppliedVariantTable = ({ style }) => {
                     <span className="text-fg font-medium">{style}</span> posters —{' '}
                     {total.toLocaleString()} items
                 </p>
-                <div className="flex flex-wrap gap-1">
-                    {APPLIED_TYPE_FILTERS.map(f => (
-                        <button
-                            key={f.key}
-                            onClick={() => selectType(f.key)}
-                            className={`px-2 py-1 text-xs rounded-lg border ${
-                                typeKey === f.key
-                                    ? 'border-brand-primary/50 bg-surface-alt text-fg'
-                                    : 'border-border text-fg-muted hover:text-fg'
-                            }`}
-                        >
-                            {f.label}
-                        </button>
-                    ))}
-                </div>
+                <SegmentedControl
+                    size="sm"
+                    ariaLabel="Media type"
+                    options={APPLIED_TYPE_FILTERS}
+                    value={typeKey}
+                    onChange={selectType}
+                />
             </div>
             {items.length === 0 ? (
                 <p className="text-sm text-fg-subtle">No matched media for this variant/type.</p>
@@ -378,7 +324,14 @@ const PosterStatsPage = () => {
         () => buildBars(stats.applied_by_type, { labelMap: ASSET_TYPE_LABELS }),
         [stats]
     );
-    const sourceBars = useMemo(() => buildBars(stats.applied_by_source, { topN: 8 }), [stats]);
+    const sourceBars = useMemo(
+        () =>
+            buildBars(stats.applied_by_source, { topN: 8 }).map(bar => ({
+                ...bar,
+                color: sourceBarColor(bar.label),
+            })),
+        [stats]
+    );
 
     // Top contributors: owners ranked by how many library items their posters
     // are matched to (owner aggregation already returned by /api/posters/stats).
@@ -403,92 +356,65 @@ const PosterStatsPage = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            {/* Toolbar */}
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Poster Statistics
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                        Asset-cache coverage, sources, and storage.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2.5">
-                    <div className="flex items-center h-11 rounded-lg bg-surface border border-border">
-                        <select
-                            value={period}
-                            onChange={e => setPeriod(e.target.value)}
-                            className="h-full bg-transparent border-0 outline-none text-[13.5px] text-fg-muted px-3 cursor-pointer"
-                            aria-label="Time period"
-                        >
-                            {PERIOD_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <IconButton
-                        icon="refresh"
-                        aria-label="Refresh statistics"
-                        variant="ghost"
-                        onClick={handleRefresh}
-                    />
-                </div>
-            </div>
+            <PageHeader
+                title="Poster Statistics"
+                description="Asset-cache coverage, sources, and storage."
+                actions={
+                    <>
+                        <div className="flex items-center h-11 rounded-lg bg-surface border border-border">
+                            <select
+                                value={period}
+                                onChange={e => setPeriod(e.target.value)}
+                                className="h-full bg-transparent border-0 outline-none text-[13.5px] text-fg-muted px-3 cursor-pointer"
+                                aria-label="Time period"
+                            >
+                                {PERIOD_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <IconButton
+                            icon="refresh"
+                            aria-label="Refresh statistics"
+                            variant="ghost"
+                            onClick={handleRefresh}
+                        />
+                    </>
+                }
+            />
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                    {
-                        label: 'CACHED ASSETS',
-                        value: (stats.poster_cache_count || 0).toLocaleString(),
-                        color: 'text-fg',
-                        sub: 'posters + artwork',
-                    },
-                    {
-                        label: 'MATCHED',
-                        value: `${(grandTotal.percent_complete || 0).toFixed(1)}%`,
-                        color: 'text-success',
-                        sub:
-                            grandTotal.total > 0
-                                ? `${(grandTotal.total - (grandTotal.unmatched ?? 0)).toLocaleString()} linked to library`
-                                : null,
-                    },
-                    {
-                        label: 'UNMATCHED',
-                        value: (grandTotal.unmatched ?? 0).toLocaleString(),
-                        color: 'text-warning',
-                        sub: 'no library item',
-                    },
-                    {
-                        label: 'SYNCED SIZE',
-                        value: formatSize(totalSyncedBytes),
-                        color: 'text-accent',
-                        sub: `${gdriveStats.length} GDrive source${gdriveStats.length === 1 ? '' : 's'}`,
-                    },
-                ].map(card => (
-                    <div
-                        key={card.label}
-                        className="p-5 rounded-xl bg-surface border border-border flex flex-col shadow-[0_2px_16px_-8px_rgba(0,0,0,0.6)]"
-                    >
-                        <p className="font-mono text-[10px] tracking-[1px] text-fg-subtle">
-                            {card.label}
-                        </p>
-                        <p
-                            className={`font-mono text-[28px] leading-none font-semibold mt-2 ${card.color}`}
-                        >
-                            {card.value}
-                        </p>
-                        <p
-                            className="text-[11.5px] text-fg-subtle mt-1.5"
-                            style={{ minHeight: '1rem' }}
-                        >
-                            {card.sub || ' '}
-                        </p>
-                    </div>
-                ))}
-            </div>
+            <StatGrid columns={4}>
+                <StatCard
+                    label="Cached Assets"
+                    value={stats.poster_cache_count || 0}
+                    subtext="posters + artwork"
+                />
+                <StatCard
+                    label="Matched"
+                    value={`${(grandTotal.percent_complete || 0).toFixed(1)}%`}
+                    valueColor="success"
+                    subtext={
+                        grandTotal.total > 0
+                            ? `${(grandTotal.total - (grandTotal.unmatched ?? 0)).toLocaleString()} linked to library`
+                            : undefined
+                    }
+                />
+                <StatCard
+                    label="Unmatched"
+                    value={grandTotal.unmatched ?? 0}
+                    valueColor={(grandTotal.unmatched ?? 0) > 0 ? 'warning' : ''}
+                    subtext="no library item"
+                />
+                <StatCard
+                    label="Synced Size"
+                    value={formatSize(totalSyncedBytes)}
+                    valueColor="accent"
+                    subtext={`${gdriveStats.length} GDrive source${gdriveStats.length === 1 ? '' : 's'}`}
+                />
+            </StatGrid>
 
             {/* By source + By type (left), Top contributors (right) — mock layout */}
             {(sourceBars.length > 0 || typeBars.length > 0 || contributors.length > 0) && (
@@ -500,7 +426,7 @@ const PosterStatsPage = () => {
                                     By source
                                 </h2>
                                 <div className="p-4 rounded-xl bg-surface border border-border">
-                                    <BreakdownBars bars={sourceBars} barColor={sourceBarColor} />
+                                    <BarList items={sourceBars} />
                                 </div>
                             </section>
                         )}
@@ -510,7 +436,7 @@ const PosterStatsPage = () => {
                                     By type
                                 </h2>
                                 <div className="p-4 rounded-xl bg-surface border border-border">
-                                    <BreakdownBars bars={typeBars} />
+                                    <BarList items={typeBars} />
                                 </div>
                             </section>
                         )}
@@ -529,7 +455,7 @@ const PosterStatsPage = () => {
                                         <span
                                             className="shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center font-display text-[13px] font-bold"
                                             style={{
-                                                background: `${CONTRIB_COLORS[i % CONTRIB_COLORS.length]}22`,
+                                                background: `color-mix(in srgb, ${CONTRIB_COLORS[i % CONTRIB_COLORS.length]} 13%, transparent)`,
                                                 color: CONTRIB_COLORS[i % CONTRIB_COLORS.length],
                                             }}
                                             aria-hidden="true"
@@ -553,22 +479,25 @@ const PosterStatsPage = () => {
             {/* Poster Breakdown — applied variant mix (interactive: click to request) */}
             {variantBars.length > 0 && (
                 <section>
-                    <h3 className="font-display text-lg font-semibold text-fg mb-1 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-primary">
+                    <h2 className="font-display text-[15px] font-semibold text-fg mb-1 flex items-center gap-2.5">
+                        <span
+                            className="material-symbols-outlined text-[18px] text-primary"
+                            aria-hidden="true"
+                        >
                             donut_small
                         </span>
                         Poster Breakdown
-                    </h3>
+                    </h2>
                     <p className="text-xs text-fg-subtle mb-3">
                         Posters applied to your library — not the full GDrive catalog
                     </p>
-                    <div className="p-5 rounded-xl bg-surface border border-border">
+                    <div className="p-4 rounded-xl bg-surface border border-border">
                         <p className="text-sm text-fg-muted mb-3">
                             By variant{' '}
                             <span className="text-fg-subtle">— click to list &amp; request</span>
                         </p>
-                        <BreakdownBars
-                            bars={variantBars}
+                        <BarList
+                            items={variantBars}
                             activeLabel={activeVariant}
                             onSelect={label =>
                                 setActiveVariant(prev => (prev === label ? null : label))
@@ -591,24 +520,18 @@ const PosterStatsPage = () => {
                             <AppliedVariantTable key={activeVariant} style={activeVariant} />
                         </div>
                     )}
-                    {sourceBars.length > 0 && (
-                        <div className="p-5 rounded-xl bg-surface border border-border mt-4">
-                            <p className="text-sm text-fg-muted mb-3">Top sources used</p>
-                            <BreakdownBars bars={sourceBars} barColor={sourceBarColor} />
-                        </div>
-                    )}
                 </section>
             )}
 
             {/* Matched Poster Stats */}
             {Array.isArray(matchedStats) && matchedStats.length > 0 && (
                 <section>
-                    <h3 className="font-display text-lg font-semibold text-fg mb-3">
+                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
                         Matched Poster Stats
-                    </h3>
+                    </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {matchedStats.map((stat, i) => (
-                            <div key={i} className="p-4 rounded-lg bg-surface border border-border">
+                            <div key={i} className="p-4 rounded-xl bg-surface border border-border">
                                 <p className="font-medium text-fg mb-2">
                                     {stat.owner || `Source ${i + 1}`}
                                 </p>
@@ -659,12 +582,15 @@ const PosterStatsPage = () => {
 
             {/* Low-resolution Posters */}
             <section>
-                <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-warning">
+                <h2 className="font-display text-[15px] font-semibold text-fg mb-3 flex items-center gap-2.5">
+                    <span
+                        className="material-symbols-outlined text-[18px] text-warning"
+                        aria-hidden="true"
+                    >
                         photo_size_select_small
                     </span>
                     Low-resolution posters
-                </h3>
+                </h2>
                 <div className="flex flex-wrap items-center gap-3 mb-3">
                     <label className="flex items-center gap-2 text-sm text-fg-muted">
                         Below
@@ -725,9 +651,9 @@ const PosterStatsPage = () => {
             {/* GDrive Sync Status */}
             {gdriveStats.length > 0 && (
                 <section>
-                    <h3 className="font-display text-lg font-semibold text-fg mb-3">
+                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
                         GDrive Sync Status
-                    </h3>
+                    </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                         {gdriveStats.map((stat, i) => (
                             <div

@@ -219,13 +219,9 @@ export const InstancesPage = () => {
         ).length;
 
         return [
-            {
-                label: 'Total Instances',
-                value: allInstanceKeys.length,
-                colorClass: 'text-fg',
-            },
-            { label: 'Connected', value: connectedCount, colorClass: 'text-success' },
-            { label: 'Failed', value: failedCount, colorClass: 'text-error' },
+            { label: 'Total Instances', value: allInstanceKeys.length, valueColor: '' },
+            { label: 'Connected', value: connectedCount, valueColor: 'success' },
+            { label: 'Failed', value: failedCount, valueColor: failedCount > 0 ? 'error' : '' },
         ];
     }, [instances, connectionStatus]);
 
@@ -654,7 +650,7 @@ export const InstancesPage = () => {
                         key={stat.label}
                         label={stat.label}
                         value={stat.value}
-                        colorClass={stat.colorClass}
+                        valueColor={stat.valueColor}
                     />
                 ))}
             </StatGrid>
