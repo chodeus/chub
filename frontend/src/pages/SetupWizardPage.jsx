@@ -681,7 +681,7 @@ const WizardStyles = () => (
         .sw-step.active { background:color-mix(in srgb, var(--primary) 22%, transparent); border-color:color-mix(in srgb, var(--primary) 45%, transparent); }
         .sw-dot { width:26px; height:26px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:.78rem; font-weight:600; background:var(--surface-alt); color:var(--text-secondary); border:1px solid var(--border); }
         .sw-step.active .sw-dot { background:var(--primary); color:var(--on-color-text); border-color:var(--primary); }
-        .sw-step.done .sw-dot { background:var(--success); color:#07210a; border-color:var(--success); }
+        .sw-step.done .sw-dot { background:var(--success); color:var(--on-success); border-color:var(--success); }
         .sw-labels { display:flex; flex-direction:column; min-width:0; }
         .sw-t { font-size:.86rem; font-weight:600; color:var(--text-primary); }
         .sw-badge { font-size:.62rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-tertiary); }
