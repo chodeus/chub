@@ -32,7 +32,7 @@ const AccordionTestPage = () => {
 
                     <AccordionItem
                         defaultExpanded={true}
-                        className="border border-border-subtle rounded-lg overflow-hidden"
+                        className="border border-border-light rounded-lg overflow-hidden"
                     >
                         <AccordionItem.Header className="list-none">
                             <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
@@ -45,7 +45,7 @@ const AccordionTestPage = () => {
                             </div>
                         </AccordionItem.Header>
                         <AccordionItem.Body>
-                            <div className="bg-surface-elevated border-t border-border-subtle">
+                            <div className="bg-surface-elevated border-t border-border-light">
                                 <div className="px-4 py-4 md:px-6">
                                     <div className="text-fg">
                                         Test Body Content - This accordion starts expanded and
@@ -80,7 +80,7 @@ const AccordionTestPage = () => {
                             console.log('onToggle callback:', newExpanded);
                             setControlledExpanded(newExpanded);
                         }}
-                        className="border border-border-subtle rounded-lg overflow-hidden"
+                        className="border border-border-light rounded-lg overflow-hidden"
                     >
                         <AccordionItem.Header className="list-none">
                             <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
@@ -93,7 +93,7 @@ const AccordionTestPage = () => {
                             </div>
                         </AccordionItem.Header>
                         <AccordionItem.Body>
-                            <div className="bg-surface-elevated border-t border-border-subtle">
+                            <div className="bg-surface-elevated border-t border-border-light">
                                 <div className="px-4 py-4 md:px-6">
                                     <div className="text-fg">
                                         Controlled Body - State managed by parent component.
@@ -134,7 +134,7 @@ const AccordionTestPage = () => {
                             )}
                         </AccordionItem.Header>
                         <AccordionItem.Body>
-                            <div className="bg-surface-elevated border-t border-border-subtle">
+                            <div className="bg-surface-elevated border-t border-border-light">
                                 <div className="px-4 py-4 md:px-6">
                                     <div className="text-fg">
                                         Dynamic content with rotating chevron icon.
@@ -166,7 +166,7 @@ const AccordionTestPage = () => {
                             </div>
                         </AccordionItem.Header>
                         <AccordionItem.Body>
-                            <div className="bg-surface-elevated border-t border-border-subtle">
+                            <div className="bg-surface-elevated border-t border-border-light">
                                 <div className="px-4 py-4 md:px-6">
                                     <div className="text-fg">
                                         Content accessible via keyboard navigation.
@@ -189,7 +189,7 @@ const AccordionTestPage = () => {
                     <div className="space-y-4">
                         <AccordionItem
                             defaultExpanded={true}
-                            className="border border-border-subtle rounded-lg overflow-hidden"
+                            className="border border-border-light rounded-lg overflow-hidden"
                         >
                             <AccordionItem.Header className="list-none">
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
@@ -202,7 +202,7 @@ const AccordionTestPage = () => {
                                 </div>
                             </AccordionItem.Header>
                             <AccordionItem.Body>
-                                <div className="bg-surface-elevated border-t border-border-subtle">
+                                <div className="bg-surface-elevated border-t border-border-light">
                                     <div className="px-4 py-4 md:px-6">
                                         <div className="text-fg">
                                             First content - starts expanded.
@@ -214,7 +214,7 @@ const AccordionTestPage = () => {
 
                         <AccordionItem
                             defaultExpanded={false}
-                            className="border border-border-subtle rounded-lg overflow-hidden"
+                            className="border border-border-light rounded-lg overflow-hidden"
                         >
                             <AccordionItem.Header className="list-none">
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
@@ -227,7 +227,7 @@ const AccordionTestPage = () => {
                                 </div>
                             </AccordionItem.Header>
                             <AccordionItem.Body>
-                                <div className="bg-surface-elevated border-t border-border-subtle">
+                                <div className="bg-surface-elevated border-t border-border-light">
                                     <div className="px-4 py-4 md:px-6">
                                         <div className="text-fg">
                                             Second content - starts collapsed.
@@ -239,7 +239,7 @@ const AccordionTestPage = () => {
 
                         <AccordionItem
                             defaultExpanded={false}
-                            className="border border-border-subtle rounded-lg overflow-hidden"
+                            className="border border-border-light rounded-lg overflow-hidden"
                         >
                             <AccordionItem.Header className="list-none">
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
@@ -252,7 +252,7 @@ const AccordionTestPage = () => {
                                 </div>
                             </AccordionItem.Header>
                             <AccordionItem.Body>
-                                <div className="bg-surface-elevated border-t border-border-subtle">
+                                <div className="bg-surface-elevated border-t border-border-light">
                                     <div className="px-4 py-4 md:px-6">
                                         <div className="text-fg">
                                             Third content - starts collapsed.
@@ -288,7 +288,7 @@ const AccordionTestPage = () => {
                                 </div>
                             </AccordionItem.Header>
                             <AccordionItem.Body>
-                                <div className="bg-surface-elevated border-t border-border-subtle">
+                                <div className="bg-surface-elevated border-t border-border-light">
                                     <div className="px-4 py-4 md:px-6">
                                         <div className="text-fg">
                                             This accordion header shows the default pointer cursor
@@ -313,7 +313,7 @@ const AccordionTestPage = () => {
                                 </div>
                             </AccordionItem.Header>
                             <AccordionItem.Body>
-                                <div className="bg-surface-elevated border-t border-border-subtle">
+                                <div className="bg-surface-elevated border-t border-border-light">
                                     <div className="px-4 py-4 md:px-6">
                                         <div className="text-fg">
                                             This accordion header uses the
@@ -380,7 +380,7 @@ const AccordionTestPage = () => {
                                         </div>
                                     </AccordionItem.Header>
                                     <AccordionItem.Body>
-                                        <div className="bg-surface-elevated border-t border-border-subtle">
+                                        <div className="bg-surface-elevated border-t border-border-light">
                                             <div className="px-4 py-4 md:px-6">
                                                 <div className="text-fg">
                                                     Content within Accordion container
@@ -401,7 +401,7 @@ const AccordionTestPage = () => {
                                         </div>
                                     </AccordionItem.Header>
                                     <AccordionItem.Body>
-                                        <div className="bg-surface-elevated border-t border-border-subtle">
+                                        <div className="bg-surface-elevated border-t border-border-light">
                                             <div className="px-4 py-4 md:px-6">
                                                 <div className="text-fg">
                                                     Second content with proper spacing
@@ -424,7 +424,7 @@ const AccordionTestPage = () => {
                             <Accordion className="space-y-4">
                                 <AccordionItem
                                     defaultExpanded={true}
-                                    className="border border-border-subtle rounded-lg overflow-hidden"
+                                    className="border border-border-light rounded-lg overflow-hidden"
                                 >
                                     <AccordionItem.Header className="list-none">
                                         <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
@@ -437,7 +437,7 @@ const AccordionTestPage = () => {
                                         </div>
                                     </AccordionItem.Header>
                                     <AccordionItem.Body>
-                                        <div className="bg-surface-elevated border-t border-border-subtle">
+                                        <div className="bg-surface-elevated border-t border-border-light">
                                             <div className="px-4 py-4 md:px-6">
                                                 <div className="text-fg">
                                                     First item with increased spacing below
@@ -458,7 +458,7 @@ const AccordionTestPage = () => {
                                         </div>
                                     </AccordionItem.Header>
                                     <AccordionItem.Body>
-                                        <div className="bg-surface-elevated border-t border-border-subtle">
+                                        <div className="bg-surface-elevated border-t border-border-light">
                                             <div className="px-4 py-4 md:px-6">
                                                 <div className="text-fg">
                                                     Spacing preserved during expansion/collapse
@@ -479,7 +479,7 @@ const AccordionTestPage = () => {
                             <Accordion>
                                 <AccordionItem
                                     defaultExpanded={true}
-                                    className="border border-border-subtle rounded-lg overflow-hidden"
+                                    className="border border-border-light rounded-lg overflow-hidden"
                                 >
                                     <AccordionItem.Header className="list-none">
                                         <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
@@ -492,7 +492,7 @@ const AccordionTestPage = () => {
                                         </div>
                                     </AccordionItem.Header>
                                     <AccordionItem.Body>
-                                        <div className="bg-surface-elevated border-t border-border-subtle">
+                                        <div className="bg-surface-elevated border-t border-border-light">
                                             <div className="px-4 py-4 md:px-6">
                                                 <div className="text-fg">
                                                     Single item within container works perfectly

@@ -48,3 +48,39 @@ describe('ChipGroup', () => {
         expect(onToggle).not.toHaveBeenCalled();
     });
 });
+
+describe('ChipGroup single', () => {
+    const renderSingle = (props = {}) =>
+        render(
+            <ChipGroup
+                single
+                options={[
+                    { value: 'status', label: 'Status', count: 3 },
+                    { value: 'genre', label: 'Genre', count: 12 },
+                ]}
+                isSelected={v => v === 'status'}
+                onToggle={() => {}}
+                ariaLabel="Breakdown"
+                {...props}
+            />
+        );
+
+    it('is a radiogroup with only the selected chip in the tab order', () => {
+        renderSingle();
+
+        expect(screen.getByRole('radiogroup', { name: 'Breakdown' })).toBeInTheDocument();
+        const [status, genre] = screen.getAllByRole('radio');
+        expect(status).toHaveAttribute('aria-checked', 'true');
+        expect(status).toHaveAttribute('tabindex', '0');
+        expect(genre).toHaveAttribute('tabindex', '-1');
+        expect(genre).toHaveTextContent('12');
+    });
+
+    it('selects the next chip on ArrowRight', () => {
+        const onToggle = vi.fn();
+        renderSingle({ onToggle });
+
+        fireEvent.keyDown(screen.getAllByRole('radio')[0], { key: 'ArrowRight' });
+        expect(onToggle).toHaveBeenCalledWith('genre');
+    });
+});

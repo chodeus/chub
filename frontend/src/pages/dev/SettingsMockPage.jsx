@@ -65,7 +65,7 @@ const SettingsMockPage = () => {
                 </p>
 
                 {/* Note about header search integration */}
-                <div className="p-4 bg-surface-alt border border-border-subtle rounded-md mb-6">
+                <div className="p-4 bg-surface-alt border border-border-light rounded-md mb-6">
                     <p className="text-sm text-fg mb-2">
                         <span
                             className="material-symbols-outlined text-fg mr-2"
@@ -92,7 +92,7 @@ const SettingsMockPage = () => {
                             key={module.key}
                             isExpanded={expandedModules.includes(module.key)}
                             onToggle={() => toggleModule(module.key)}
-                            className="bg-surface border border-border-subtle rounded-lg overflow-hidden"
+                            className="bg-surface border border-border-light rounded-lg overflow-hidden"
                         >
                             <AccordionItem.Header>
                                 {({ isExpanded }) => (
@@ -121,7 +121,7 @@ const SettingsMockPage = () => {
                                 )}
                             </AccordionItem.Header>
 
-                            <AccordionItem.Body className="border-t border-border-subtle bg-surface-alt/30">
+                            <AccordionItem.Body className="border-t border-border-light bg-surface-alt/30">
                                 {module.fields && module.fields.length > 0 ? (
                                     <div className="p-6 bg-surface-elevated">
                                         <div className="space-y-4">
@@ -135,7 +135,7 @@ const SettingsMockPage = () => {
                                                 {module.fields.map(field => (
                                                     <div
                                                         key={`${module.key}-${field.key}`}
-                                                        className="flex flex-col gap-2 p-4 bg-surface-elevated border border-border-subtle rounded-md"
+                                                        className="flex flex-col gap-2 p-4 bg-surface-elevated border border-border-light rounded-md"
                                                     >
                                                         {/* Field Header */}
                                                         <div className="flex items-start justify-between gap-4">
@@ -174,7 +174,7 @@ const SettingsMockPage = () => {
                                                             field.required) && (
                                                             <div className="flex flex-wrap gap-2 mt-2">
                                                                 {field.options && (
-                                                                    <span className="px-2 py-1 bg-surface border border-border-subtle text-xs rounded">
+                                                                    <span className="px-2 py-1 bg-surface border border-border-light text-xs rounded">
                                                                         Options:{' '}
                                                                         {Array.isArray(
                                                                             field.options
@@ -186,7 +186,7 @@ const SettingsMockPage = () => {
                                                                     </span>
                                                                 )}
                                                                 {field.placeholder && (
-                                                                    <span className="px-2 py-1 bg-surface border border-border-subtle text-xs rounded">
+                                                                    <span className="px-2 py-1 bg-surface border border-border-light text-xs rounded">
                                                                         Placeholder:{' '}
                                                                         {field.placeholder.substring(
                                                                             0,
@@ -202,7 +202,7 @@ const SettingsMockPage = () => {
                                                         {/* Nested Fields (for custom types) */}
                                                         {field.fields &&
                                                             field.fields.length > 0 && (
-                                                                <div className="mt-3 pl-4 border-l-2 border-border-subtle">
+                                                                <div className="mt-3 pl-4 border-l-2 border-border-light">
                                                                     <p className="text-xs font-medium text-fg-muted mb-2">
                                                                         Nested fields (
                                                                         {field.fields.length}):
@@ -257,7 +257,7 @@ const SettingsMockPage = () => {
                                         </p>
                                         <p className="text-sm text-fg-subtle mt-2">
                                             Module key:{' '}
-                                            <code className="px-2 py-1 bg-surface border border-border-subtle rounded text-xs">
+                                            <code className="px-2 py-1 bg-surface border border-border-light rounded text-xs">
                                                 {module.key}
                                             </code>
                                         </p>
@@ -288,7 +288,7 @@ const SettingsMockPage = () => {
             )}
 
             {/* Footer Info */}
-            <div className="mt-12 p-6 bg-surface border border-border-subtle rounded-lg">
+            <div className="mt-12 p-6 bg-surface border border-border-light rounded-lg">
                 <h3 className="font-medium text-fg mb-2">Mock Layout Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>

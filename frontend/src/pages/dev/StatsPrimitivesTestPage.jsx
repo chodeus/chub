@@ -38,7 +38,7 @@ export const StatsPrimitivesTestPage = () => {
                             <select
                                 value={columns}
                                 onChange={e => setColumns(Number(e.target.value))}
-                                className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                className="min-h-11 px-3 rounded-md border border-border bg-surface"
                             >
                                 <option value={2}>2 columns</option>
                                 <option value={3}>3 columns</option>
@@ -51,7 +51,7 @@ export const StatsPrimitivesTestPage = () => {
                             <select
                                 value={gap}
                                 onChange={e => setGap(e.target.value)}
-                                className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                className="min-h-11 px-3 rounded-md border border-border bg-surface"
                             >
                                 <option value="2">Small (gap-2)</option>
                                 <option value="3">Medium (gap-3)</option>
@@ -65,7 +65,7 @@ export const StatsPrimitivesTestPage = () => {
                             <select
                                 value={variant}
                                 onChange={e => setVariant(e.target.value)}
-                                className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                className="min-h-11 px-3 rounded-md border border-border bg-surface"
                             >
                                 <option value="standard">Standard</option>
                                 <option value="compact">Compact</option>

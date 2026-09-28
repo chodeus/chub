@@ -299,9 +299,14 @@ const IncompleteMetadataCard = () => {
 
 export const LibraryMaintenance = () => (
     <section className="mt-9">
-        <div className="flex items-center gap-3 mb-3.5">
-            <span className="material-symbols-outlined text-[22px] text-source-cl2k">handyman</span>
-            <h2 className="font-display text-xl font-bold text-fg">Library Maintenance</h2>
+        <div className="flex items-center gap-2.5 mb-3">
+            <span
+                className="material-symbols-outlined text-[18px] text-source-cl2k"
+                aria-hidden="true"
+            >
+                handyman
+            </span>
+            <h2 className="font-display text-[15px] font-semibold text-fg">Library Maintenance</h2>
         </div>
         <div className="flex flex-col gap-3">
             <OrphanedCacheCard />

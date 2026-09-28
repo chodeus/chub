@@ -669,7 +669,9 @@ export const JobsPage = () => {
             {/* Module Execution History */}
             {Array.isArray(executionHistory) && executionHistory.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-fg mb-3">Recent Module Executions</h3>
+                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                        Recent Module Executions
+                    </h2>
                     <div className="space-y-1">
                         {executionHistory.map((entry, i) => (
                             <div

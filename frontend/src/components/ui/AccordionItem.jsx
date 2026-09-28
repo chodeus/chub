@@ -30,7 +30,7 @@ export const AccordionItem = ({
     return (
         <AccordionItemContext.Provider value={{ isExpanded, handleToggle }}>
             <details
-                className={`accordion-item border border-border-subtle rounded-lg overflow-hidden ${className}`}
+                className={`accordion-item border border-border-light rounded-lg overflow-hidden ${className}`}
                 open={isExpanded}
             >
                 {children}

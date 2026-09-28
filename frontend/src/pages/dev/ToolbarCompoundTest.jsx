@@ -38,7 +38,7 @@ const ToolbarCompoundTest = () => {
 
             <div className="flex flex-col gap-8">
                 {/* Test 1: Basic Toolbar with Compound Pattern */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 1: Basic Compound Toolbar</h2>
                     <p className="text-fg-muted text-sm">
                         Simple toolbar using compound pattern with ToolBar.Section, ToolBar.Button,
@@ -68,7 +68,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-surface-alt rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-border">
                         <strong>Expected behavior:</strong>
                         <ul>
                             <li>Sections align left and right</li>
@@ -80,7 +80,7 @@ const ToolbarCompoundTest = () => {
                 </section>
 
                 {/* Test 2: Multi-Section Toolbar */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 2: Multi-Section Layout</h2>
                     <p className="text-fg-muted text-sm">
                         Toolbar with left, center, and right sections demonstrating flexible layout.
@@ -126,7 +126,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-surface-alt rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-border">
                         <strong>Test instructions:</strong>
                         <ol>
                             <li>Resize browser window to test responsive behavior</li>
@@ -137,7 +137,7 @@ const ToolbarCompoundTest = () => {
                 </section>
 
                 {/* Test 3: Overflow Menu Behavior */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 3: Overflow Menu</h2>
                     <p className="text-fg-muted text-sm">
                         Toolbar with many buttons demonstrating overflow menu behavior (Section
@@ -179,7 +179,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-surface-alt rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-border">
                         <strong>Expected behavior:</strong>
                         <ul>
                             <li>
@@ -193,7 +193,7 @@ const ToolbarCompoundTest = () => {
                 </section>
 
                 {/* Test 4: Disabled Buttons */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 4: Disabled State</h2>
                     <p className="text-fg-muted text-sm">
                         Testing disabled button behavior and accessibility.
@@ -220,7 +220,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-surface-alt rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-border">
                         <strong>Test validation:</strong>
                         <ul>
                             <li>Disabled button should have reduced opacity</li>
@@ -231,7 +231,7 @@ const ToolbarCompoundTest = () => {
                 </section>
 
                 {/* Test 5: Loading State */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 5: Loading/Spinning State</h2>
                     <p className="text-fg-muted text-sm">
                         Testing button loading spinner integration.
@@ -260,7 +260,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-surface-alt rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-border">
                         <strong>Expected behavior:</strong>
                         <ul>
                             <li>Loading button shows spinner instead of icon</li>
@@ -271,7 +271,7 @@ const ToolbarCompoundTest = () => {
                 </section>
 
                 {/* Test 6: Context Integration */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 6: Context-Aware Separator</h2>
                     <p className="text-fg-muted text-sm">
                         Testing Separator component&apos;s context-aware responsive behavior.
@@ -305,7 +305,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-surface-alt rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-border">
                         <strong>Test instructions:</strong>
                         <ol>
                             <li>At desktop width, separator should be visible between sections</li>
@@ -316,7 +316,7 @@ const ToolbarCompoundTest = () => {
                 </section>
 
                 {/* Test 7: ToolBar.Overflow Component */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 7: ToolBar.Overflow Component</h2>
                     <p className="text-fg-muted text-sm">
                         Testing dedicated Overflow component with manual overflow buttons.
@@ -364,7 +364,7 @@ const ToolbarCompoundTest = () => {
                             </ToolBar.Section>
                         </ToolBar>
                     </div>
-                    <div className="p-3 bg-surface-alt rounded border border-default">
+                    <div className="p-3 bg-surface-alt rounded border border-border">
                         <strong>Expected behavior:</strong>
                         <ul>
                             <li>Overflow button shows &quot;More (3)&quot; at desktop</li>
@@ -379,9 +379,9 @@ const ToolbarCompoundTest = () => {
                 </section>
 
                 {/* Action Log */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Action Log</h2>
-                    <div className="p-4 bg-surface-alt rounded-lg border border-default">
+                    <div className="p-4 bg-surface-alt rounded-lg border border-border">
                         {actionLog.length === 0 ? (
                             <p className="text-fg-muted text-center py-4">
                                 No actions yet. Click buttons above to see logs.
@@ -391,7 +391,7 @@ const ToolbarCompoundTest = () => {
                                 {actionLog.map((log, index) => (
                                     <li
                                         key={index}
-                                        className="text-sm font-mono p-2 bg-surface rounded border border-default"
+                                        className="text-sm font-mono p-2 bg-surface rounded border border-border"
                                     >
                                         {log}
                                     </li>
@@ -402,7 +402,7 @@ const ToolbarCompoundTest = () => {
                 </section>
 
                 {/* Architecture Notes */}
-                <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
+                <section className="flex flex-col gap-3 p-4 border border-border rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Architecture Notes</h2>
                     <div className="flex flex-col gap-4">
                         <h3 className="text-lg font-semibold mb-2">Compound Pattern Benefits</h3>

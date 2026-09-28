@@ -91,8 +91,7 @@ const A_SERIES = {
     ],
 };
 
-// Matches only the row Ignore control — /^Ignore/ alone also catches the
-// "Ignored" view tab.
+// Matches only the row Ignore control, in both of its label forms.
 const IGNORE_BTN = /^Ignore (this item|— choose what to hide)$/;
 const ignoreButtonsIn = () => screen.queryAllByRole('button', { name: IGNORE_BTN });
 
@@ -262,7 +261,7 @@ describe('Ignored tab — grouped rows', () => {
     };
 
     const openIgnoredTab = async user => {
-        await user.click(screen.getByRole('button', { name: /^Ignored/ }));
+        await user.click(screen.getByRole('radio', { name: /^Ignored/ }));
     };
 
     it('shows one row with a chip per ignored season', async () => {

@@ -13,7 +13,7 @@ export const CardFooter = React.memo(({ children, align = 'right', className = '
 
     return (
         <div
-            className={`flex flex-wrap items-center gap-3 p-3 sm:p-4 sm:px-5 border-t border-default ${alignClasses[align]} ${className}`}
+            className={`flex flex-wrap items-center gap-3 p-3 sm:p-4 sm:px-5 border-t border-border ${alignClasses[align]} ${className}`}
         >
             {children}
         </div>

@@ -23,9 +23,7 @@ export const StatCard = React.memo(
                 className={`p-5 rounded-xl bg-surface border border-border flex flex-col min-w-0 shadow-[0_2px_16px_-8px_rgba(0,0,0,0.6)] ${className}`}
             >
                 {icon && <StatIcon icon={icon} size="2xl" className="mb-2" />}
-                <p className="font-mono text-[10px] tracking-[1px] uppercase text-fg-subtle mt-0 mb-4">
-                    {label}
-                </p>
+                <p className="eyebrow mt-0 mb-4">{label}</p>
                 <p
                     className={`font-mono text-[28px] leading-none font-semibold mt-2 mb-4 ${VALUE_TONES[valueColor] || 'text-fg'}`}
                 >

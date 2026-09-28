@@ -8,7 +8,7 @@ import { systemAPI } from '../../utils/api/system.js';
 import { copyText } from '../../utils/clipboard.js';
 import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
 import { extensionCapability } from '../../extensions/index.js';
-import { Button, IconButton, Modal } from '../../components/ui/index.js';
+import { Button, ChipGroup, IconButton, Modal } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { StyleStamp } from '../../components/ui/StyleStamp.jsx';
 import SegmentedControl from '../../components/ui/SegmentedControl.jsx';
@@ -1891,27 +1891,20 @@ const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
             </Modal.Header>
             <Modal.Body>
                 {types.length > 1 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                        {types.map(t => (
-                            <button
-                                key={t}
-                                type="button"
-                                onClick={() => {
-                                    // Same-tab click must no-op — see PosterPickerModal.
-                                    if (t === imageType) return;
-                                    setImageType(t);
-                                    setResult({ type: null, list: null });
-                                }}
-                                className={`px-3 py-1 text-sm rounded-lg border ${
-                                    imageType === t
-                                        ? 'border-brand-primary/50 bg-surface-alt text-fg'
-                                        : 'border-border text-fg-muted hover:text-fg'
-                                }`}
-                            >
-                                {ARTWORK_TYPE_LABELS[t] || t}
-                            </button>
-                        ))}
-                    </div>
+                    <ChipGroup
+                        single
+                        size="sm"
+                        className="mb-3"
+                        ariaLabel="Artwork type"
+                        options={types.map(t => ({ value: t, label: ARTWORK_TYPE_LABELS[t] || t }))}
+                        isSelected={t => t === imageType}
+                        onToggle={t => {
+                            // Same-tab click must no-op — see PosterPickerModal.
+                            if (t === imageType) return;
+                            setImageType(t);
+                            setResult({ type: null, list: null });
+                        }}
+                    />
                 )}
                 <p className="text-xs text-fg-subtle mb-3">
                     Applying follows Asset Renamerr&apos;s <strong>Apply Method</strong>: with{' '}
@@ -2114,50 +2107,36 @@ const UnmatchedAssetsPage = () => {
             {/* Primary segregation: Posters (default) vs Additional artwork.
                 Posters is what most users care about; artwork is one click away. */}
             <div className="flex items-center gap-3 flex-wrap">
-                <div className="inline-flex flex-wrap p-1 gap-1 bg-surface-alt border border-border rounded-xl">
-                    {[
-                        {
-                            key: 'poster',
-                            label: '🖼️ Posters',
-                            count: posterViewCounts.unmatched,
-                        },
+                <SegmentedControl
+                    ariaLabel="Artwork type"
+                    options={[
+                        { key: 'poster', label: 'Posters', count: posterViewCounts.unmatched },
                         {
                             key: 'art',
-                            label: '🎨 Additional artwork',
+                            label: 'Additional artwork',
                             count: artworkLoaded ? artworkCounts.unmatched : null,
                         },
-                    ].map(c => (
-                        <button
-                            key={c.key}
-                            type="button"
-                            onClick={() => {
-                                // Reset to the default status tab when switching
-                                // class so a stale "review/locked" view doesn't
-                                // carry over between posters and artwork.
-                                setViewMode('unmatched');
-                                setAssetClass(c.key);
-                            }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                assetClass === c.key
-                                    ? 'bg-primary text-on-color shadow-sm'
-                                    : 'text-fg-muted hover:text-fg'
-                            }`}
-                        >
-                            {c.label}
-                            {c.count != null && (
-                                <span
-                                    className={`text-xs px-1.5 py-0.5 rounded-full ${
-                                        assetClass === c.key
-                                            ? 'bg-white/25 text-on-color'
-                                            : 'bg-surface text-fg-muted'
-                                    }`}
-                                >
-                                    {c.count}
-                                </span>
-                            )}
-                        </button>
-                    ))}
-                </div>
+                    ].map(c => ({
+                        value: c.key,
+                        label: (
+                            <>
+                                {c.label}
+                                {c.count != null && (
+                                    <span className="ml-1.5 font-mono text-xs opacity-80">
+                                        {c.count}
+                                    </span>
+                                )}
+                            </>
+                        ),
+                    }))}
+                    value={assetClass}
+                    onChange={key => {
+                        // Reset to the default status tab when switching class so a
+                        // stale "review/locked" view doesn't carry over.
+                        setViewMode('unmatched');
+                        setAssetClass(key);
+                    }}
+                />
                 <span className="text-xs text-fg-subtle">
                     {assetClass === 'art'
                         ? 'Asset renamer for logos, backgrounds and square art'
@@ -2178,22 +2157,17 @@ const UnmatchedAssetsPage = () => {
             </div>
 
             {/* View switch: Unmatched / Needs Review / Ignored */}
-            <div className="flex flex-wrap gap-1">
-                {STATUS_VIEWS.map(v => (
-                    <button
-                        key={v.key}
-                        onClick={() => setViewMode(v.key)}
-                        className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-2 ${
-                            viewMode === v.key
-                                ? 'border-brand-primary/50 bg-surface-alt text-fg'
-                                : 'border-border text-fg-muted hover:text-fg'
-                        }`}
-                    >
-                        {v.label}
-                        <span className="text-xs text-fg-subtle">{viewCounts[v.key]}</span>
-                    </button>
-                ))}
-            </div>
+            <ChipGroup
+                single
+                ariaLabel="Match status"
+                options={STATUS_VIEWS.map(v => ({
+                    value: v.key,
+                    label: v.label,
+                    count: viewCounts[v.key],
+                }))}
+                isSelected={key => key === viewMode}
+                onToggle={setViewMode}
+            />
 
             {assetClass === 'art' && (
                 <ArtworkView

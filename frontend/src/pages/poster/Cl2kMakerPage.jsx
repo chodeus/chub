@@ -907,7 +907,7 @@ const SaveTargets = ({ targets }) => {
     const gdriveConfigured = !!uploadStatus?.gdrive_configured;
     const tokenOk = uploadStatus?.token_ok !== false;
     return (
-        <div className="border-t border-border-subtle pt-2 mt-1 flex flex-col gap-1">
+        <div className="border-t border-border-light pt-2 mt-1 flex flex-col gap-1">
             <span className="text-xs font-medium text-fg-muted">Save to</span>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
                 <label
@@ -1080,7 +1080,7 @@ const TitlePicker = ({ onPick, toast }) => {
             className="mt-6 mx-auto w-full max-w-[640px] bg-surface border border-border rounded-xl p-5"
             style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
         >
-            <h2 className="font-display text-[17px] font-semibold text-fg mb-3.5">Pick a title</h2>
+            <h2 className="font-display text-[15px] font-semibold text-fg mb-3.5">Pick a title</h2>
 
             <div className="mb-3.5">
                 <SegmentedControl
@@ -1178,7 +1178,7 @@ const IdEditor = ({ item, onItemChange }) => {
         </label>
     );
     return (
-        <div className="mt-3 pt-3 border-t border-border-subtle flex flex-col gap-2">
+        <div className="mt-3 pt-3 border-t border-border-light flex flex-col gap-2">
             <p className="text-xs text-fg-subtle">
                 Set the ids that match your library — only the ids you fill get written to the
                 filename. For a TVDB-only title (no TMDB entry), clear TMDB and add TVDB/IMDB.
@@ -1988,7 +1988,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     return (
         <>
             {/* Selected title bar */}
-            <section className="mt-6 px-4 py-3 bg-surface border border-border rounded-[12px]">
+            <section className="mt-6 px-4 py-3 bg-surface border border-border rounded-lg">
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex items-baseline gap-2.5 flex-wrap min-w-0">
                         <span className="font-display text-lg font-semibold text-fg truncate">
@@ -2831,7 +2831,7 @@ const RenderPanel = ({
 
             {isAsis ? (
                 /* FILE-AS-IS single-column panel (mock cl2k-12). */
-                <div className="grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start bg-surface border border-border rounded-[12px] p-5 max-w-[820px]">
+                <div className="grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start bg-surface border border-border rounded-lg p-5 max-w-[820px]">
                     <div className="flex flex-col gap-2">
                         <StudioGroupLabel>Preview</StudioGroupLabel>
                         <div className="relative aspect-[2/3] bg-black rounded-lg overflow-hidden flex items-center justify-center border border-border">
@@ -2861,7 +2861,7 @@ const RenderPanel = ({
                     </div>
                     <div className="flex flex-col gap-4">
                         <div>
-                            <h2 className="font-display text-base font-semibold text-fg">
+                            <h2 className="font-display text-[15px] font-semibold text-fg">
                                 Re-file an existing poster
                             </h2>
                             <p className="text-xs text-fg-subtle mt-1">
@@ -3003,7 +3003,7 @@ const RenderPanel = ({
                 /* FULL CL2K STUDIO — 3-column grid (mock cl2k-02). */
                 <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_300px] gap-4 items-start">
                     {/* LEFT: source pickers */}
-                    <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-[18px]">
+                    <section className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-[18px]">
                         {!isAsis && seasonPosters.length > 0 && (
                             <Picker
                                 label="Season poster (tmdb)"
@@ -3205,7 +3205,7 @@ const RenderPanel = ({
                     </section>
 
                     {/* RIGHT: framing + logo controls + accordions */}
-                    <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+                    <section className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-3.5">
                         {/* FRAMING — always visible (Zoom / Vertical position +
                             guides). The sliders only call setZoom/setVPos/onFocusChange
                             — all RenderPanel props — so no CropFramer drag math moves. */}
@@ -5902,7 +5902,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     return (
         <section className="mt-4 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_300px] gap-4 items-start">
             {/* LEFT: source pickers */}
-            <div className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-[18px]">
+            <div className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-[18px]">
                 {bgSource === 'upload' ? (
                     <UploadArtCard
                         label="Source art (backdrop)"
@@ -6015,7 +6015,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             </section>
 
             {/* RIGHT: framing + history accordion */}
-            <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+            <section className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-3.5">
                 <div className="flex flex-col gap-3">
                     <StudioGroupLabel>Framing</StudioGroupLabel>
                     <FramingSliders
@@ -6185,7 +6185,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     return (
         <section className="mt-4 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_300px] gap-4 items-start">
             {/* LEFT: source pickers */}
-            <div className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-[18px]">
+            <div className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-[18px]">
                 {bgSource === 'upload' ? (
                     <UploadArtCard
                         label="Source art (backdrop)"
@@ -6301,7 +6301,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
             </section>
 
             {/* RIGHT: FRAMING (resolution) + history accordion */}
-            <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+            <section className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-3.5">
                 <div className="flex flex-col gap-3">
                     <StudioGroupLabel>Framing</StudioGroupLabel>
                     <div className="flex items-center justify-between">
@@ -6690,7 +6690,7 @@ const LogoAssetPanel = ({
     return (
         <section className="mt-4 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_300px] gap-4 items-start">
             {/* LEFT: logo source picker */}
-            <div className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-[18px]">
+            <div className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-[18px]">
                 <LogoSelector
                     variant="picker"
                     label="Logo"
@@ -6759,7 +6759,7 @@ const LogoAssetPanel = ({
             </section>
 
             {/* RIGHT: colour controls + extract / touch-up / history accordions */}
-            <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+            <section className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-3.5">
                 <div className="flex flex-col gap-3">
                     <StudioGroupLabel>Colour</StudioGroupLabel>
                     <div className="flex items-center gap-2">

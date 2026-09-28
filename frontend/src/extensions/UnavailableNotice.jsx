@@ -5,7 +5,7 @@ export function makeUnavailableNotice(pageName) {
     const Notice = () => (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
             <span
-                className="material-symbols-rounded text-fg-subtle"
+                className="material-symbols-outlined text-fg-subtle"
                 style={{ fontSize: '44px' }}
                 aria-hidden="true"
             >

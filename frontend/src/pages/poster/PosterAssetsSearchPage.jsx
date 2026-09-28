@@ -547,8 +547,11 @@ const PosterAssetsSearchPage = () => {
             {/* Collections */}
             {Array.isArray(collections) && collections.length > 0 && (
                 <section>
-                    <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-primary">
+                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3 flex items-center gap-2.5">
+                        <span
+                            className="material-symbols-outlined text-[18px] text-primary"
+                            aria-hidden="true"
+                        >
                             collections_bookmark
                         </span>
                         Collections ({collections.length})
@@ -559,7 +562,7 @@ const PosterAssetsSearchPage = () => {
                         >
                             Create
                         </Button>
-                    </h3>
+                    </h2>
                     <div className="grid gap-2">
                         {collections.map((col, i) => (
                             <div key={col.id || i}>
@@ -671,9 +674,9 @@ const PosterAssetsSearchPage = () => {
             ) : items.length > 0 ? (
                 <section>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                        <h3 className="font-display text-lg font-semibold text-fg">
+                        <h2 className="font-display text-[15px] font-semibold text-fg">
                             Posters ({total})
-                        </h3>
+                        </h2>
                         <Pagination
                             currentPage={currentPage}
                             totalPages={totalPages}

@@ -213,7 +213,7 @@ const PlexLibrarySelector = React.memo(
 
         if (librariesLoading) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
+                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
                     <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
                     <span>Loading libraries...</span>
                 </div>
@@ -233,7 +233,7 @@ const PlexLibrarySelector = React.memo(
             movieLibraries.length + tvLibraries.length + uncategorizedLibraries.length;
         if (totalLibraries === 0) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
+                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
                     <span className="text-base">ℹ️</span>
                     <span>No libraries found for this Plex instance</span>
                 </div>
@@ -242,7 +242,7 @@ const PlexLibrarySelector = React.memo(
 
         return (
             <div>
-                <div className="text-base font-semibold text-fg mb-3 pb-2 border-b border-border-subtle">
+                <div className="text-base font-semibold text-fg mb-3 pb-2 border-b border-border-light">
                     Select Libraries
                 </div>
 
@@ -682,7 +682,7 @@ const PlexInstanceSelector = React.memo(
                             </label>
 
                             {isSelected && !emitAsString && (
-                                <div className="flex flex-col gap-4 border-l-2 border-border-subtle">
+                                <div className="flex flex-col gap-4 border-l-2 border-border-light">
                                     {/* Poster upload option */}
                                     {showPosterOption && (
                                         <div>
@@ -789,7 +789,7 @@ const PlexScopeLibrarySelector = React.memo(
 
         if (!hasCatalogData && perInstanceLoading) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
+                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
                     <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
                     <span>Loading libraries...</span>
                 </div>
@@ -807,7 +807,7 @@ const PlexScopeLibrarySelector = React.memo(
 
         if (allLibraries.length === 0) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
+                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
                     <span className="text-base">ℹ️</span>
                     <span>No enabled libraries — opt some in on Settings → Instances</span>
                 </div>
@@ -816,7 +816,7 @@ const PlexScopeLibrarySelector = React.memo(
 
         return (
             <div>
-                <div className="text-sm font-semibold text-fg mb-2 pb-1 border-b border-border-subtle">
+                <div className="text-sm font-semibold text-fg mb-2 pb-1 border-b border-border-light">
                     Libraries{' '}
                     <span className="text-xs font-normal text-fg-subtle">
                         (empty = all enabled)
@@ -1023,7 +1023,7 @@ const PlexScopeSelector = React.memo(
                             </label>
 
                             {isSelected && (
-                                <div className="flex flex-col gap-4 border-l-2 border-border-subtle pl-4 mt-2 mb-2">
+                                <div className="flex flex-col gap-4 border-l-2 border-border-light pl-4 mt-2 mb-2">
                                     {showAddPosters && (
                                         <ToggleRow
                                             label="Upload posters to this Plex instance"

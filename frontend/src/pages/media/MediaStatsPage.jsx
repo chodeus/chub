@@ -4,7 +4,7 @@ import { mediaAPI } from '../../utils/api/media.js';
 import { instancesAPI } from '../../utils/api/instances.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ServiceIcon } from '../../components/ui/ServiceIcon.jsx';
-import { PageHeader, StatCard } from '../../components/ui/index.js';
+import { ChipGroup, PageHeader, StatCard } from '../../components/ui/index.js';
 import { BarList, StatGrid } from '../../components/statistics/index.js';
 import { formatSecondsAgo } from '../../utils/schedule';
 
@@ -33,9 +33,7 @@ const completenessPct = row => {
  *  ``bar`` adds a completeness bar under the value for content metrics. */
 const Metric = ({ label, value, sub, bar }) => (
     <div className="min-w-0">
-        <p className="font-mono text-[10px] tracking-[1px] uppercase text-fg-subtle mb-1">
-            {label}
-        </p>
+        <p className="eyebrow mb-1">{label}</p>
         <div className="flex items-baseline gap-2 flex-wrap">
             <span className="font-mono text-xl font-bold text-fg leading-none">
                 {(value || 0).toLocaleString()}
@@ -186,7 +184,6 @@ const BREAKDOWN_TABS = [
 export const BreakdownTabs = ({ stats }) => {
     const availableTabs = BREAKDOWN_TABS.filter(tab => (stats[tab.key] || []).length > 0);
     const [activeKey, setActiveKey] = React.useState(null);
-    const tabRefs = React.useRef([]);
 
     const resolvedActive =
         activeKey && availableTabs.some(t => t.key === activeKey)
@@ -197,73 +194,22 @@ export const BreakdownTabs = ({ stats }) => {
 
     const activeTab = availableTabs.find(t => t.key === resolvedActive);
     const activeItems = stats[activeTab.key] || [];
-    const activeIndex = availableTabs.findIndex(t => t.key === resolvedActive);
-
-    // Roving tabindex plus arrow/Home/End: the keyboard contract role="radio" owes.
-    const handleKeyDown = (event, index) => {
-        const last = availableTabs.length - 1;
-        let next = null;
-        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-            next = index === last ? 0 : index + 1;
-        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-            next = index === 0 ? last : index - 1;
-        } else if (event.key === 'Home') {
-            next = 0;
-        } else if (event.key === 'End') {
-            next = last;
-        }
-        if (next === null) return;
-        event.preventDefault();
-        setActiveKey(availableTabs[next].key);
-        tabRefs.current[next]?.focus();
-    };
 
     return (
         <section>
             <h2 className="font-display text-[15px] font-semibold text-fg mb-3">Breakdowns</h2>
-            {/* radiogroup, not tablist: no segment owns a tabpanel, and this mirrors SegmentedControl. */}
-            <div className="flex flex-wrap gap-2 mb-4" role="radiogroup" aria-label="Breakdown">
-                {availableTabs.map((tab, i) => {
-                    const isActive = tab.key === resolvedActive;
-                    const count = (stats[tab.key] || []).length;
-                    return (
-                        <button
-                            key={tab.key}
-                            ref={el => {
-                                tabRefs.current[i] = el;
-                            }}
-                            role="radio"
-                            aria-checked={isActive}
-                            tabIndex={i === activeIndex ? 0 : -1}
-                            onKeyDown={e => handleKeyDown(e, i)}
-                            onClick={() => setActiveKey(tab.key)}
-                            className="inline-flex items-center min-h-11 px-3 rounded-full text-sm transition-colors"
-                            style={{
-                                background: isActive
-                                    ? 'color-mix(in srgb, var(--primary) 18%, transparent)'
-                                    : 'var(--surface)',
-                                border: `1px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`,
-                                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                            }}
-                        >
-                            <span>{tab.label}</span>
-                            <span
-                                className="ml-2 text-fg-subtle font-medium tabular-nums"
-                                style={{
-                                    paddingLeft: '0.5rem',
-                                    borderLeft: `1px solid ${
-                                        isActive
-                                            ? 'color-mix(in srgb, var(--primary) 40%, transparent)'
-                                            : 'var(--border)'
-                                    }`,
-                                }}
-                            >
-                                {count}
-                            </span>
-                        </button>
-                    );
-                })}
-            </div>
+            <ChipGroup
+                single
+                className="mb-4"
+                ariaLabel="Breakdown"
+                options={availableTabs.map(tab => ({
+                    value: tab.key,
+                    label: tab.label,
+                    count: (stats[tab.key] || []).length,
+                }))}
+                isSelected={key => key === resolvedActive}
+                onToggle={setActiveKey}
+            />
             <div className="p-4 rounded-xl bg-surface border border-border">
                 <BarList
                     key={activeTab.key}

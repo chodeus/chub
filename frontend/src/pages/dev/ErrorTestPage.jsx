@@ -77,7 +77,7 @@ const ErrorTestPage = () => {
             </div>
 
             {/* Toast Notifications */}
-            <section className="mb-6 md:mb-8 p-3 md:p-4 border border-default rounded-md bg-surface">
+            <section className="mb-6 md:mb-8 p-3 md:p-4 border border-border rounded-md bg-surface">
                 <h2 className="text-lg font-semibold text-fg mb-2">🍞 Toast Notifications</h2>
                 <p className="text-fg-muted mb-2">
                     <strong className="text-fg font-medium">What it is:</strong> Small popup
@@ -116,7 +116,7 @@ const ErrorTestPage = () => {
             </section>
 
             {/* Global Error Handling */}
-            <section className="mb-6 md:mb-8 p-3 md:p-4 border border-default rounded-md bg-surface">
+            <section className="mb-6 md:mb-8 p-3 md:p-4 border border-border rounded-md bg-surface">
                 <h2 className="text-lg font-semibold text-fg mb-2">🌐 Global Error Handling</h2>
                 <p className="text-fg-muted mb-2">
                     <strong className="text-fg font-medium">What it is:</strong> Centralized error

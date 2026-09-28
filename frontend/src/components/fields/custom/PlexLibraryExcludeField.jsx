@@ -106,7 +106,7 @@ export const PlexLibraryExcludeField = React.memo(
         const body = () => {
             if (isLoading) {
                 return (
-                    <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
+                    <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
                         <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
                         <span>Loading libraries…</span>
                     </div>
@@ -122,7 +122,7 @@ export const PlexLibraryExcludeField = React.memo(
             }
             if (libraries.length === 0 && orphanedExcluded.length === 0) {
                 return (
-                    <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
+                    <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
                         <span className="text-base">ℹ️</span>
                         <span>
                             No Plex libraries found — select a Plex instance above, or check the

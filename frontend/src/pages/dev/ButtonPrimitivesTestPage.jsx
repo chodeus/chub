@@ -51,7 +51,7 @@ export const ButtonPrimitivesTestPage = () => {
                             <select
                                 value={variant}
                                 onChange={e => setVariant(e.target.value)}
-                                className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                className="min-h-11 px-3 rounded-md border border-border bg-surface"
                             >
                                 <option value="primary">Primary</option>
                                 <option value="secondary">Secondary</option>
@@ -66,7 +66,7 @@ export const ButtonPrimitivesTestPage = () => {
                             <select
                                 value={size}
                                 onChange={e => setSize(e.target.value)}
-                                className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                className="min-h-11 px-3 rounded-md border border-border bg-surface"
                             >
                                 <option value="small">Small (36px)</option>
                                 <option value="medium">Medium (44px - WCAG)</option>

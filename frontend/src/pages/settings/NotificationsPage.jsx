@@ -311,7 +311,7 @@ report on."
                     return (
                         <div
                             key={method}
-                            className="bg-surface border border-border rounded-[14px] p-[16px_18px] flex flex-col gap-3"
+                            className="bg-surface border border-border rounded-xl p-[16px_18px] flex flex-col gap-3"
                         >
                             <div className="flex items-start gap-3">
                                 <div
@@ -496,7 +496,7 @@ const DestinationCard = ({
 
     return (
         <div
-            className="relative rounded-[13px] bg-surface border border-border transition-colors hover:border-border-strong"
+            className="relative rounded-xl bg-surface border border-border transition-colors hover:border-border-strong"
             style={{ opacity: d.enabled ? 1 : 0.62 }}
         >
             {/* header band */}
@@ -684,7 +684,7 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
     const isChecked = key => all || selected.includes(key);
     return (
         <div
-            className="absolute z-30 right-[17px] bottom-[14px] w-[340px] max-w-[calc(100vw-34px)] rounded-[12px] overflow-hidden"
+            className="absolute z-30 right-[17px] bottom-[14px] w-[340px] max-w-[calc(100vw-34px)] rounded-lg overflow-hidden"
             style={{
                 background: 'var(--surface-inset)',
                 border: '1px solid var(--border-strong)',

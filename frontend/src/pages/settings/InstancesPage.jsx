@@ -689,8 +689,8 @@ export const InstancesPage = () => {
                 <div key={service.type}>
                     {/* Service Header */}
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <h2 className="font-display text-[18px] font-semibold text-fg flex items-center gap-2">
-                            <ServiceIcon service={service.type} size="large" />
+                        <h2 className="font-display text-[15px] font-semibold text-fg flex items-center gap-2.5">
+                            <ServiceIcon service={service.type} size="small" />
                             {service.label} Instances
                         </h2>
                         <Button variant="primary" onClick={() => handleAdd(service.type)}>
