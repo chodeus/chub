@@ -47,6 +47,7 @@
     /* borders */
     --color-border: var(--border);
     --color-border-light: var(--border-light);
+    --color-border-strong: var(--border-strong);
     --color-border-subtle: var(--border-light); /* legacy alias */
 
     /* body text — renamed from text-primary/secondary/tertiary so `primary`
@@ -69,7 +70,7 @@
     --color-warning-bg: color-mix(in srgb, var(--warning) 10%, transparent);
     --color-error-border: var(--error);
     --color-sidebar-secondary: var(--sidebar-text-secondary);
-    --color-primary-hover: var(--focus);
+    --color-primary-hover: var(--primary-hover);
     --color-canvas: var(--bg); /* page canvas (.bg-canvas) */
 
     /* form controls */

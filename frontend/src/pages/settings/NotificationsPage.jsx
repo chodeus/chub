@@ -30,8 +30,8 @@ const METHOD = {
         tintBg: 'rgba(135,103,247,.14)',
         tintBorder: 'rgba(135,103,247,.32)',
         status: 'Direct',
-        statusColor: '#6cbc66',
-        statusRing: 'rgba(108,188,102,.16)',
+        statusColor: 'var(--success)',
+        statusRing: 'color-mix(in srgb, var(--success) 16%, transparent)',
         blurb: 'Post rich embeds straight into a channel with an incoming webhook URL. No account needed.',
         addLabel: 'Add webhook',
         noun: 'webhook',
@@ -42,8 +42,8 @@ const METHOD = {
         tintBg: 'rgba(255,157,117,.14)',
         tintBorder: 'rgba(255,157,117,.32)',
         status: 'Connected',
-        statusColor: '#53e8f0',
-        statusRing: 'rgba(83,232,240,.16)',
+        statusColor: 'var(--accent)',
+        statusRing: 'color-mix(in srgb, var(--accent) 16%, transparent)',
         blurb: 'Route alerts through your Notifiarr account — fan out to Discord, mobile push, Telegram & more.',
         addLabel: 'Add alert',
         noun: 'alert',
@@ -501,7 +501,7 @@ const DestinationCard = ({
 
     return (
         <div
-            className="relative rounded-[13px] bg-surface border border-border transition-colors hover:border-[#3b3d72]"
+            className="relative rounded-[13px] bg-surface border border-border transition-colors hover:border-border-strong"
             style={{ opacity: d.enabled ? 1 : 0.62 }}
         >
             {/* header band */}
@@ -533,7 +533,7 @@ const DestinationCard = ({
                         type="button"
                         onClick={onTest}
                         disabled={testing}
-                        className="touch-expand h-9 px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#221c45] disabled:opacity-60"
+                        className="touch-expand h-9 px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-surface-elevated disabled:opacity-60"
                     >
                         {testing ? 'Testing…' : 'Test'}
                     </button>
@@ -581,9 +581,10 @@ const DestinationCard = ({
                             <span
                                 className="flex items-center gap-1.5 px-[11px] py-1 rounded-[7px] text-[12px] font-semibold"
                                 style={{
-                                    background: 'rgba(135,103,247,.13)',
-                                    border: '1px solid rgba(135,103,247,.3)',
-                                    color: '#a99eff',
+                                    background:
+                                        'color-mix(in srgb, var(--primary) 13%, transparent)',
+                                    border: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
+                                    color: 'var(--primary-hover)',
                                 }}
                             >
                                 <span className="material-symbols-outlined text-[14px]">check</span>
@@ -621,8 +622,8 @@ const DestinationCard = ({
                         <button
                             type="button"
                             onClick={onOpenPicker}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] bg-transparent text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#191636]"
-                            style={{ border: '1px dashed #3b3d72' }}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] bg-transparent text-fg-data text-[12px] font-semibold transition-colors hover:bg-surface"
+                            style={{ border: '1px dashed var(--border-strong)' }}
                         >
                             <span className="material-symbols-outlined text-[14px]">add</span>
                             Select modules
@@ -650,7 +651,7 @@ const IconBtn = ({ icon, label, onClick }) => (
         type="button"
         aria-label={label}
         onClick={onClick}
-        className="touch-expand w-9 h-9 rounded-[7px] bg-transparent text-fg-subtle flex items-center justify-center transition-colors hover:bg-[#221c45] hover:text-fg-muted"
+        className="touch-expand w-9 h-9 rounded-[7px] bg-transparent text-fg-subtle flex items-center justify-center transition-colors hover:bg-surface-elevated hover:text-fg-muted"
     >
         <span className="material-symbols-outlined text-[16px]">{icon}</span>
     </button>
@@ -659,8 +660,16 @@ const IconBtn = ({ icon, label, onClick }) => (
 const TriggerPill = ({ active, label, tone, onClick }) => {
     const colors =
         tone === 'success'
-            ? { c: '#6cbc66', bg: 'rgba(108,188,102,.12)', b: 'rgba(108,188,102,.4)' }
-            : { c: '#fd355c', bg: 'rgba(253,53,92,.12)', b: 'rgba(253,53,92,.4)' };
+            ? {
+                  c: 'var(--success)',
+                  bg: 'color-mix(in srgb, var(--success) 12%, transparent)',
+                  b: 'color-mix(in srgb, var(--success) 40%, transparent)',
+              }
+            : {
+                  c: 'var(--error)',
+                  bg: 'color-mix(in srgb, var(--error) 12%, transparent)',
+                  b: 'color-mix(in srgb, var(--error) 40%, transparent)',
+              };
     return (
         <button
             type="button"
@@ -668,9 +677,9 @@ const TriggerPill = ({ active, label, tone, onClick }) => {
             onClick={onClick}
             className="touch-expand flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-[12px] font-semibold transition-colors"
             style={{
-                color: active ? colors.c : '#6582ca',
+                color: active ? colors.c : 'var(--text-tertiary)',
                 background: active ? colors.bg : 'transparent',
-                border: `1px solid ${active ? colors.b : '#2a3052'}`,
+                border: `1px solid ${active ? colors.b : 'var(--border)'}`,
             }}
         >
             {active && <span className="material-symbols-outlined text-[14px]">check</span>}
@@ -686,8 +695,8 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
         <div
             className="absolute z-30 right-[17px] bottom-[14px] w-[340px] max-w-[calc(100vw-34px)] rounded-[12px] overflow-hidden"
             style={{
-                background: '#15112e',
-                border: '1px solid #3b3d72',
+                background: 'var(--surface-inset)',
+                border: '1px solid var(--border-strong)',
                 boxShadow: '0 18px 48px -12px rgba(0,0,0,.7)',
             }}
         >
@@ -728,7 +737,7 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
                             <span
                                 className="shrink-0 w-[17px] h-[17px] rounded-[5px] flex items-center justify-center"
                                 style={{
-                                    border: `1.5px solid ${checked ? 'var(--primary)' : '#3b3d72'}`,
+                                    border: `1.5px solid ${checked ? 'var(--primary)' : 'var(--border-strong)'}`,
                                     background: checked ? 'var(--primary)' : 'transparent',
                                 }}
                             >
@@ -778,7 +787,7 @@ const CredentialModal = ({ modal, busy, onName, onField, onClose, onSave }) => {
                             value={modal.name}
                             onChange={e => onName(e.target.value)}
                             placeholder={modal.method === 'discord' ? 'My CHUB' : 'Homelab'}
-                            className="h-10 px-3 rounded-lg bg-surface-inset border border-border text-fg text-[14px] outline-none focus:border-[#3b3d72]"
+                            className="h-10 px-3 rounded-lg bg-surface-inset border border-border text-fg text-[14px] outline-none focus:border-border-strong"
                         />
                     </div>
                     {schema?.fields.map(field => {

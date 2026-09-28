@@ -59,7 +59,7 @@ export const AddButton = React.memo(
             'border-transparent',
             'select-none',
             'bg-primary',
-            'text-white',
+            'text-on-color',
             'inline-flex',
             'items-center',
             'justify-center',

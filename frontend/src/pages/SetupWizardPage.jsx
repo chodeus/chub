@@ -680,7 +680,7 @@ const WizardStyles = () => (
         .sw-step:hover { background:var(--surface-alt); }
         .sw-step.active { background:color-mix(in srgb, var(--primary) 22%, transparent); border-color:color-mix(in srgb, var(--primary) 45%, transparent); }
         .sw-dot { width:26px; height:26px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:.78rem; font-weight:600; background:var(--surface-alt); color:var(--text-secondary); border:1px solid var(--border); }
-        .sw-step.active .sw-dot { background:var(--primary); color:#fff; border-color:var(--primary); }
+        .sw-step.active .sw-dot { background:var(--primary); color:var(--on-color-text); border-color:var(--primary); }
         .sw-step.done .sw-dot { background:var(--success); color:#07210a; border-color:var(--success); }
         .sw-labels { display:flex; flex-direction:column; min-width:0; }
         .sw-t { font-size:.86rem; font-weight:600; color:var(--text-primary); }
@@ -700,7 +700,7 @@ const WizardStyles = () => (
         .sw-row { display:grid; grid-template-columns:1fr 1fr; gap:.9rem; }
         .sw-row3 { display:grid; grid-template-columns:1fr 1fr 130px; gap:.9rem; }
         .sw-fld-btn .sw-btn { width:100%; }
-        .sw-btn { font-family:inherit; font-size:.9rem; font-weight:600; height:44px; padding:0 1.1rem; border-radius:var(--radius-md,12px); border:none; cursor:pointer; background:var(--primary); color:#fff; }
+        .sw-btn { font-family:inherit; font-size:.9rem; font-weight:600; height:44px; padding:0 1.1rem; border-radius:var(--radius-md,12px); border:none; cursor:pointer; background:var(--primary); color:var(--on-color-text); }
         .sw-btn:hover:not(:disabled) { background:var(--primary-hover); }
         .sw-btn:disabled { opacity:.45; cursor:not-allowed; }
         .sw-btn.secondary { background:var(--surface-alt); color:var(--text-primary); }

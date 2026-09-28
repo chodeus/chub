@@ -34,6 +34,7 @@
     /* Border & Separation Colors */
     --border: #2a3052; /* Cards, strong dividers */
     --border-light: #211c46; /* Subtle row separators */
+    --border-strong: #3b3d72; /* Card hover, idle checkbox outlines */
 
     /* Text & Content Colors */
     --text-primary: #fff;

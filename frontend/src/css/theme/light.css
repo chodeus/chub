@@ -6,11 +6,13 @@
     --primary-hover: #3a339e;
     --accent: #0d6ab8; /* Link text: 4.9:1 on --bg. Brand hue lives in --azure. */
     --accent-2: #53e8f0; /* Cyan secondary accent */
-    --success: #6cbc66;
-    --warning: #ffc944;
-    --error: #fd355c;
-    --info: #53e8f0;
     --focus: #463fbc; /* Focus indicator matches primary */
+
+    /* Darker than the dark theme's hues: each clears 4.5:1 as text on every light surface. */
+    --success: #357a38;
+    --warning: #8f6400;
+    --error: #c81e44;
+    --info: #0e7490;
 
     /* Extended accent roles — darkened where needed for contrast on white */
     --azure: #1992f3;
@@ -33,6 +35,7 @@
     /* Border & Separation Colors */
     --border: #e2e4f1;
     --border-light: #eef0fb;
+    --border-strong: #b9bdd8;
 
     /* Text & Content Colors */
     --text-primary: #110b28;

@@ -153,7 +153,7 @@ export const InstanceCard = ({
         'touch-expand w-9 h-9 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
 
     return (
-        <div className="rounded-xl bg-surface border border-border hover:border-[#3b3d72] transition-colors overflow-hidden">
+        <div className="rounded-xl bg-surface border border-border hover:border-border-strong transition-colors overflow-hidden">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[18px] py-[15px]">
                 <span
                     className="shrink-0 w-11 h-11 rounded-[10px] flex items-center justify-center font-display text-[17px] font-bold"

@@ -346,7 +346,7 @@ const MediaSearchPage = () => {
                             return (
                                 <div
                                     key={item.id}
-                                    className="group flex gap-4 p-3.5 rounded-xl bg-surface border border-border hover:border-[#3b3d72] transition-colors"
+                                    className="group flex gap-4 p-3.5 rounded-xl bg-surface border border-border hover:border-border-strong transition-colors"
                                 >
                                     <PosterThumb mediaId={item.id} />
                                     <div className="flex-1 min-w-0">

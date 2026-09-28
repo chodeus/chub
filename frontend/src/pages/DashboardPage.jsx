@@ -9,7 +9,7 @@ import { scheduleAPI } from '../utils/api/schedule';
 import { instancesAPI } from '../utils/api/instances';
 import { postersAPI } from '../utils/api/posters';
 import { configAPI } from '../utils/api/config';
-import { Button } from '../components/ui';
+import { Button, StatusDot } from '../components/ui';
 import { Modal } from '../components/modals/Modal';
 import { Skeleton } from '../components/ui';
 import Dropdown from '../components/ui/Dropdown.jsx';
@@ -24,29 +24,6 @@ import {
 } from '../utils/schedule.js';
 
 const UPCOMING_LIMIT = 5;
-
-// Status-dot colour + soft ring glow per run state. rgba glows aren't
-// expressible as theme tokens, so the presentational hexes are inlined here
-// (they mirror the redesign palette).
-const DOT = {
-    success: ['#6cbc66', 'rgba(108,188,102,.16)'],
-    running: ['#53e8f0', 'rgba(83,232,240,.18)'],
-    error: ['#fd355c', 'rgba(253,53,92,.18)'],
-    pending: ['#ffc944', 'rgba(255,201,68,.16)'],
-    idle: ['#564f8a', 'rgba(86,79,138,0)'],
-};
-
-// 7px status dot with a soft ring (box-shadow). status keys match DOT.
-const StatusDot = ({ status = 'idle', size = 7 }) => {
-    const [color, glow] = DOT[status] || DOT.idle;
-    return (
-        <span
-            className="shrink-0 rounded-full"
-            style={{ width: size, height: size, background: color, boxShadow: `0 0 0 3px ${glow}` }}
-            aria-hidden="true"
-        />
-    );
-};
 
 const DashboardPage = () => {
     const toast = useToast();
@@ -789,8 +766,8 @@ const DashboardPage = () => {
                                                     ? 'var(--source-gdrive)'
                                                     : 'var(--warning)';
                                                 const pillBg = isProfile
-                                                    ? 'rgba(83,232,240,.12)'
-                                                    : 'rgba(255,201,68,.12)';
+                                                    ? 'color-mix(in srgb, var(--source-gdrive) 12%, transparent)'
+                                                    : 'color-mix(in srgb, var(--warning) 12%, transparent)';
                                                 const nf = en
                                                     ? scheduleToNextFire(
                                                           sub.schedule,
@@ -895,7 +872,7 @@ const DashboardPage = () => {
                                                         className="shrink-0 w-[9px] h-[9px] rounded-full bg-accent mt-1"
                                                         style={{
                                                             boxShadow:
-                                                                '0 0 0 3px rgba(83,232,240,.18)',
+                                                                '0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)',
                                                             animation:
                                                                 'chub-pulse 1.4s ease-in-out infinite',
                                                         }}
@@ -907,12 +884,13 @@ const DashboardPage = () => {
                                                         style={
                                                             i === firstUpcoming
                                                                 ? {
-                                                                      background: '#110b28',
-                                                                      border: '2px solid #ffc944',
+                                                                      background: 'var(--bg)',
+                                                                      border: '2px solid var(--warning)',
                                                                   }
                                                                 : {
-                                                                      background: '#1d1942',
-                                                                      border: '2px solid #3b3d72',
+                                                                      background:
+                                                                          'var(--surface-elevated)',
+                                                                      border: '2px solid var(--border-strong)',
                                                                   }
                                                         }
                                                         aria-hidden="true"
@@ -927,10 +905,10 @@ const DashboardPage = () => {
                                                             className="font-mono text-[11.5px] shrink-0"
                                                             style={{
                                                                 color: entry.running
-                                                                    ? '#53e8f0'
+                                                                    ? 'var(--accent)'
                                                                     : i === firstUpcoming
-                                                                      ? '#ffc944'
-                                                                      : '#b2d1e8',
+                                                                      ? 'var(--warning)'
+                                                                      : 'var(--text-secondary)',
                                                             }}
                                                         >
                                                             {entry.running
@@ -994,15 +972,15 @@ const DashboardPage = () => {
                                     const high = pct >= 90;
                                     const warn = pct >= 75;
                                     const pctColor = high
-                                        ? '#fd355c'
+                                        ? 'var(--error)'
                                         : warn
-                                          ? '#ffc944'
-                                          : '#6cbc66';
+                                          ? 'var(--warning)'
+                                          : 'var(--success)';
                                     const barBg = high
-                                        ? '#fd355c'
+                                        ? 'var(--error)'
                                         : warn
-                                          ? 'linear-gradient(90deg,#e28b2d,#ffc944)'
-                                          : '#6cbc66';
+                                          ? 'linear-gradient(90deg, var(--gold-deep), var(--warning))'
+                                          : 'var(--success)';
                                     const fmt = v =>
                                         v >= 1024
                                             ? `${(v / 1024).toFixed(2)} TB`

@@ -1662,7 +1662,7 @@ const PickerThumb = ({ cand, busy, onApply }) => {
                 )}
             </div>
             <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-primary/80 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="material-symbols-outlined text-white">check</span>
+                <span className="material-symbols-outlined text-on-color">check</span>
             </span>
         </button>
     );
@@ -1838,7 +1838,7 @@ const ArtworkPickerThumb = ({ cand, busy, onApply }) => {
                 )}
             </div>
             <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-primary/80 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="material-symbols-outlined text-white">check</span>
+                <span className="material-symbols-outlined text-on-color">check</span>
             </span>
         </button>
     );
