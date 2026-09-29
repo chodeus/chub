@@ -43,7 +43,7 @@ const TypePills = ({ types, muted }) =>
                 <span
                     key={t}
                     className={`inline-flex items-center h-[22px] px-2 rounded-full text-[11px] font-medium ${
-                        muted ? 'bg-surface text-fg-subtle' : 'bg-primary/15 text-primary'
+                        muted ? 'bg-surface text-fg-subtle' : 'bg-primary/15 text-primary-hover'
                     }`}
                 >
                     {TYPE_LABEL[t] || t}
@@ -188,7 +188,7 @@ const ReviewRow = ({ review, busy, onApply, onDismiss }) => {
                                 ? 'bg-error/15 text-error'
                                 : pending
                                   ? 'bg-warning/15 text-warning'
-                                  : 'bg-primary/15 text-primary'
+                                  : 'bg-primary/15 text-primary-hover'
                         }`}
                     >
                         {failed ? 'Auto-apply failed' : driftLabel(review.drift_type)}

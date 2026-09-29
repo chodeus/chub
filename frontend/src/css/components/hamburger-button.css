@@ -1,10 +1,11 @@
 @layer components {
+    /* The menu button lives in the header, which stays dark in both themes. */
     .hamburger:hover {
-        background: var(--surface-alt);
+        background: var(--sidebar-hover);
     }
 
     .hamburger:active {
-        background: var(--surface-active);
+        background: var(--sidebar-surface);
     }
 
     .hamburger:disabled {
@@ -24,7 +25,7 @@
     /* Hamburger animation lines - core animation logic */
     .line {
         fill: none;
-        stroke: var(--primary);
+        stroke: var(--sidebar-accent);
         stroke-width: 6;
         transition:
             stroke-dasharray 500ms cubic-bezier(0.4, 0, 0.2, 1),

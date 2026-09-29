@@ -1038,7 +1038,7 @@ const MediaManagePage = () => {
                         iconClass="text-primary"
                         title="Collections"
                         count={`${collections.length}`}
-                        countClass="bg-primary/15 text-primary"
+                        countClass="bg-primary/15 text-primary-hover"
                     >
                         <Button
                             variant="ghost"

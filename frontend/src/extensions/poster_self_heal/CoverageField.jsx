@@ -28,7 +28,7 @@ const Pills = ({ types, muted }) =>
                 <span
                     key={t}
                     className={`inline-flex items-center h-[22px] px-2 rounded-full text-[11px] font-medium ${
-                        muted ? 'bg-surface text-fg-subtle' : 'bg-primary/15 text-primary'
+                        muted ? 'bg-surface text-fg-subtle' : 'bg-primary/15 text-primary-hover'
                     }`}
                 >
                     {TYPE_LABEL[t] || t}
