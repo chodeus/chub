@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
@@ -47,7 +47,6 @@ const formatLastSynced = ms => (ms == null ? 'Never synced' : formatDate(ms));
 
 const PosterGDriveSearchPage = () => {
     const toast = useToast();
-    const navigate = useNavigate();
     const [syncingFolders, setSyncingFolders] = useState(new Set());
     const [pickerSelection, setPickerSelection] = useState('');
     const [sortBy, setSortBy] = useState('name');
@@ -153,7 +152,7 @@ const PosterGDriveSearchPage = () => {
                                 Sync all
                             </LoadingButton>
                         )}
-                        <Button icon="add" onClick={() => navigate('/settings/modules')}>
+                        <Button as={Link} to="/settings/modules" icon="add">
                             Add source
                         </Button>
                     </>

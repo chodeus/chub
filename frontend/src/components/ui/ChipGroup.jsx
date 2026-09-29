@@ -7,10 +7,7 @@ const SIZES = {
     sm: 'touch-expand min-h-9 min-w-11 px-2.5 text-xs',
 };
 
-/**
- * Wrapping row of chips. By default each chip toggles its own value; with `single`
- * the row is a radiogroup where onToggle selects one value and arrow keys move it.
- */
+/** Chip row that toggles values; with `single`, a radiogroup whose arrow keys move the choice. */
 const ChipGroup = ({
     options,
     isSelected,

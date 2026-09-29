@@ -285,6 +285,7 @@ const LabelarrPage = () => {
                             icon="sync"
                             onClick={() => runSync()}
                             loading={isSyncing}
+                            loadingText="Syncing…"
                         >
                             Sync now
                         </LoadingButton>
@@ -293,6 +294,7 @@ const LabelarrPage = () => {
                             icon="save"
                             onClick={handleSave}
                             loading={isSaving}
+                            loadingText="Saving..."
                             disabled={!isDirty}
                         >
                             Save

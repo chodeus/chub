@@ -16,16 +16,19 @@ export const ButtonBase = React.memo(
         hoverClass = '',
         fullWidth = false,
         type = 'button',
+        as: Component = 'button',
         className = '',
         'aria-label': ariaLabel,
         ...htmlButtonProps
     }) => {
-        // Handle click with disabled check
+        // Handle click with disabled check; preventDefault stops a disabled link navigating.
         const handleClick = useCallback(
             event => {
-                if (!disabled && onClick) {
-                    onClick(event);
+                if (disabled) {
+                    event.preventDefault();
+                    return;
                 }
+                onClick?.(event);
             },
             [disabled, onClick]
         );
@@ -37,6 +40,7 @@ export const ButtonBase = React.memo(
             'items-center',
             'justify-center',
             'border-0',
+            'no-underline',
             'font-medium',
             'cursor-pointer',
             'transition-all',
@@ -99,6 +103,8 @@ export const ButtonBase = React.memo(
             'active:translate-y-0',
             'disabled:opacity-50',
             'disabled:cursor-not-allowed',
+            'aria-disabled:opacity-50',
+            'aria-disabled:cursor-not-allowed',
             'focus-visible:outline',
             'focus-visible:outline-2',
             'focus-visible:outline-offset-2',
@@ -132,17 +138,22 @@ export const ButtonBase = React.memo(
             .filter(Boolean)
             .join(' ');
 
+        // A link (as={Link}) takes neither type nor disabled, so it announces aria-disabled.
+        const stateProps =
+            Component === 'button'
+                ? { type, disabled }
+                : { 'aria-disabled': disabled || undefined };
+
         return (
-            <button
+            <Component
                 className={buttonClasses}
                 onClick={handleClick}
-                disabled={disabled}
-                type={type}
+                {...stateProps}
                 aria-label={ariaLabel}
                 {...htmlButtonProps}
             >
                 {children}
-            </button>
+            </Component>
         );
     }
 );
@@ -171,6 +182,7 @@ ButtonBase.propTypes = {
     hoverClass: PropTypes.string,
     fullWidth: PropTypes.bool,
     type: PropTypes.oneOf(['button', 'submit', 'reset']),
+    as: PropTypes.elementType,
     className: PropTypes.string,
     'aria-label': PropTypes.string,
 };
