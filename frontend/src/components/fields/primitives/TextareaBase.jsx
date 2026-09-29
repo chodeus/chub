@@ -64,14 +64,15 @@ export const TextareaBase = ({
                 'overflow-y-auto', // Handle content overflow with scrolling
                 'transition-colors duration-200',
 
-                // Focus state — primary ring
-                'focus:ring-primary',
-
                 // Hover states (atomic utilities)
                 !disabled && 'hover:border-primary hover:bg-input-hover',
 
                 // One border colour: Tailwind orders rival border-* utilities by name, not class order
-                invalid ? 'border-error' : disabled ? 'border-input-disabled' : 'border-border',
+                invalid
+                    ? 'border-error focus-visible:outline-error'
+                    : disabled
+                      ? 'border-input-disabled'
+                      : 'border-border',
                 invalid && 'focus:border-error',
 
                 // Disabled states (atomic utilities)
