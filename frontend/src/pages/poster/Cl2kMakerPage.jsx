@@ -4611,7 +4611,9 @@ const Picker = ({
     return (
         <ArtCard label={label} headerRight={headerRight}>
             {loading ? (
-                <div className="text-xs text-fg-subtle py-4">Loading…</div>
+                <div className="text-xs py-4">
+                    <Spinner size="small" text="Loading…" />
+                </div>
             ) : items.length === 0 ? (
                 <div className="text-xs text-fg-subtle py-2">{emptyText}</div>
             ) : (
@@ -5271,7 +5273,9 @@ const LogoSelector = ({
                             </Button>
                         </div>
                     ) : loading ? (
-                        <div className="text-xs text-fg-subtle py-4">Loading…</div>
+                        <div className="text-xs py-4">
+                            <Spinner size="small" text="Loading…" />
+                        </div>
                     ) : logos.length === 0 ? (
                         <div className="text-xs text-fg-subtle py-2">{emptyText}</div>
                     ) : (
@@ -7049,7 +7053,7 @@ const HistorySection = ({ toast }) => {
         };
     }, [toast]);
 
-    if (loading) return <Spinner size="small" text="Loading…" />;
+    if (loading) return <Spinner size="small" text="Loading…" className="text-sm" />;
     if (!items || items.length === 0)
         return <div className="text-xs text-fg-subtle">Nothing generated yet.</div>;
     return (
