@@ -32,7 +32,7 @@ export const SearchInput = () => {
                 onChange={handleChange}
                 placeholder="Filter lines…"
                 aria-label="Search logs"
-                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-fg placeholder:text-fg-dim"
+                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-fg placeholder:text-fg-subtle"
             />
             {searchValue ? (
                 <button
@@ -44,7 +44,7 @@ export const SearchInput = () => {
                     <span className="material-symbols-outlined text-[18px]">cancel</span>
                 </button>
             ) : (
-                <span className="shrink-0 font-mono text-[11px] text-fg-faint pointer-events-none">
+                <span className="shrink-0 font-mono text-[11px] text-fg-subtle pointer-events-none">
                     ⌘F
                 </span>
             )}

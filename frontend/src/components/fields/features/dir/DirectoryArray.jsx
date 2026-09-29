@@ -70,7 +70,7 @@ const SortableDirectoryItem = React.memo(
                     onChange={e => onPathChange(index, e.target.value)}
                     aria-label={`${label} ${index + 1}`}
                     aria-invalid={invalid || undefined}
-                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-[12.5px] text-fg-muted placeholder:text-fg-dim disabled:opacity-60 ${
+                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-[12.5px] text-fg-muted placeholder:text-fg-subtle disabled:opacity-60 ${
                         modeOptions ? 'md:min-w-30' : ''
                     }`}
                 />
@@ -177,7 +177,7 @@ const SortableDirectoryItem = React.memo(
                 {/* Drag handle (left) — muted dots like the mock */}
                 {enableReordering && (
                     <div
-                        className="flex items-center justify-center shrink-0 text-fg-faint cursor-grab hover:text-fg-muted transition-colors"
+                        className="flex items-center justify-center shrink-0 text-fg-subtle cursor-grab hover:text-fg-muted transition-colors"
                         {...attributes}
                         {...listeners}
                     >
@@ -249,7 +249,7 @@ const DirectoryItem = React.memo(
                     onChange={e => onPathChange(index, e.target.value)}
                     aria-label={`${label} ${index + 1}`}
                     aria-invalid={invalid || undefined}
-                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-[12.5px] text-fg-muted placeholder:text-fg-dim disabled:opacity-60 ${
+                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-[12.5px] text-fg-muted placeholder:text-fg-subtle disabled:opacity-60 ${
                         modeOptions ? 'md:min-w-30' : ''
                     }`}
                 />

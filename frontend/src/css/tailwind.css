@@ -58,8 +58,8 @@
     --color-fg: var(--text-primary);
     --color-fg-muted: var(--text-secondary);
     --color-fg-subtle: var(--text-tertiary);
-    --color-fg-dim: var(--text-muted); /* faint #4f4a7a */
-    --color-fg-faint: var(--text-faint); /* section headings / idle #564f8a */
+    --color-fg-dim: var(--text-muted); /* decorative separators and icons, never text */
+    --color-fg-faint: var(--text-faint); /* idle dots and markers, never text */
     --color-fg-data: var(--text-data); /* mono-data secondary #8ea3cc */
     --color-on-color: var(--on-color-text);
     --color-on-success: var(--on-success);
@@ -98,6 +98,7 @@
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-text: var(--sidebar-text);
     --color-sidebar-text-secondary: var(--sidebar-text-secondary);
+    --color-sidebar-heading: var(--sidebar-heading);
     --color-sidebar-accent: var(--sidebar-accent);
     --color-sidebar-on-accent: var(--sidebar-on-accent);
     --color-header-bg: var(--header-bg);

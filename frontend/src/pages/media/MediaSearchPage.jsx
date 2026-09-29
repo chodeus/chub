@@ -202,7 +202,7 @@ const MediaSearchPage = () => {
                         aria-label="Search library"
                     />
                     {hasResults && (
-                        <span className="font-mono text-[11px] text-fg-faint shrink-0">
+                        <span className="font-mono text-[11px] text-fg-subtle shrink-0">
                             {total} results
                         </span>
                     )}
@@ -434,12 +434,12 @@ const MediaSearchPage = () => {
                                         )}
 
                                         {item.media_file && (
-                                            <div className="font-mono text-[11px] text-fg-dim mt-2 truncate">
+                                            <div className="font-mono text-[11px] text-fg-subtle mt-2 truncate">
                                                 {item.media_file}
                                             </div>
                                         )}
                                         {item.folder && !item.media_file && (
-                                            <div className="font-mono text-[11px] text-fg-dim mt-2 truncate">
+                                            <div className="font-mono text-[11px] text-fg-subtle mt-2 truncate">
                                                 {item.folder}
                                             </div>
                                         )}
