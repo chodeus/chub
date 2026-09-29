@@ -22,7 +22,7 @@ const MODULE_KEYS = withExtensionConfigModuleKeys(moduleOrder).filter(
     m => m !== 'general' && m !== 'main' && !CONFIG_ONLY_MODULE_KEYS.has(m)
 );
 
-// Method identity — tints/status are independent of the accent theme.
+// Method identity: tints are fixed; status colours follow the light/dark theme, not the accent picker.
 const METHOD = {
     discord: {
         label: 'Discord',
