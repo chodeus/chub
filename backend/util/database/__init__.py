@@ -10,6 +10,7 @@ from backend.util.logger import Logger
 from .border_state import BorderState
 from .collection_cache import CollectionCache
 from .db_base import DatabaseBase, escape_like
+from .gdrive_preset_notice import GdrivePresetNotice
 from .holiday import HolidayStatus
 from .maintenance import DbMaintenance
 from .media_asset_matches import MediaAssetMatches
@@ -219,6 +220,11 @@ class ChubDB:
     def sync_state(self) -> SyncState:
         """Access to per-instance last-completed-sync timestamps."""
         return self._get_interface("sync_state", SyncState)
+
+    @property
+    def gdrive_preset_notice(self) -> GdrivePresetNotice:
+        """Access to the preset ids the new-GDrive-preset notice no longer shows."""
+        return self._get_interface("gdrive_preset_notice", GdrivePresetNotice)
 
     @property
     def system_health(self) -> SystemHealth:
@@ -433,6 +439,7 @@ __all__ = [
     "RunState",
     "Stats",
     "SyncState",
+    "GdrivePresetNotice",
     "SystemHealth",
     "ChubDB",
     "DBWorker",

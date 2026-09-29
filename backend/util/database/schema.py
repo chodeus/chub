@@ -849,6 +849,16 @@ class SchemaManager:
         )
         self._add_table(sync_state)
 
+        # Preset ids the new-GDrive-preset notice no longer shows (baseline + dismissals).
+        gdrive_preset_notice = TableDefinition(
+            name="gdrive_preset_notice",
+            columns=[
+                ColumnDefinition("preset_id", "TEXT", primary_key=True, nullable=False),
+                ColumnDefinition("seen_at", "TEXT", default="CURRENT_TIMESTAMP"),
+            ],
+        )
+        self._add_table(gdrive_preset_notice)
+
         schema_migrations = TableDefinition(
             name="schema_migrations",
             columns=[
