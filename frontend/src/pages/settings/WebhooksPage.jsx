@@ -413,7 +413,7 @@ const AutoSetupBoard = () => {
 
             <div className="mt-3 overflow-x-auto">
                 {loading && !status ? (
-                    <div className="flex items-center gap-2 px-5 pb-5">
+                    <div className="px-5 pb-5 text-sm">
                         <Spinner size="small" text="Loading…" />
                     </div>
                 ) : instances.length === 0 ? (

@@ -43,6 +43,12 @@ it('keeps bare text-primary on icons', () => {
     expect(offenders(/(?<![\w-])text-primary(?![\w-])/g)).toEqual([]);
 });
 
+// Loading rings come from Spinner; five hand-built copies had drifted from it.
+it('builds no loading ring outside Spinner', () => {
+    const rings = offenders(/rounded-full[^"'`]*animate-spin|animate-spin[^"'`]*rounded-full/g);
+    expect(rings.filter(at => !at.startsWith('components/ui/Spinner.jsx:'))).toEqual([]);
+});
+
 describe('the icon exemption', () => {
     const exempt = source => inIcon(source, source.indexOf('text-primary'));
 

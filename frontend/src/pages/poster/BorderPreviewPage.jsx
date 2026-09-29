@@ -471,7 +471,11 @@ const BordersPicker = ({ holidayName, selected, onChange, disabled }) => {
                 </span>
             </div>
 
-            {isLoading && <div className="text-xs text-fg-subtle">Loading variants…</div>}
+            {isLoading && (
+                <div className="text-xs">
+                    <Spinner size="small" text="Loading variants…" />
+                </div>
+            )}
             {error && (
                 <div className="text-xs text-error">
                     {error.message || 'Failed to load border variants'}

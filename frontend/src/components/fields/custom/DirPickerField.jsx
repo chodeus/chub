@@ -8,6 +8,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { systemAPI } from '../../../utils/api/system.js';
 import { FieldWrapper, FieldLabel, FieldDescription } from '../primitives';
+import Spinner from '../../ui/Spinner.jsx';
 
 /**
  * Pick the allowed root that contains the given path (longest prefix wins).
@@ -256,7 +257,9 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     </button>
                 )}
                 {loading ? (
-                    <div className="px-3 py-3 text-xs text-fg-subtle">Loading...</div>
+                    <div className="px-3 py-3 text-xs">
+                        <Spinner size="small" text="Loading..." />
+                    </div>
                 ) : error ? (
                     <div className="px-3 py-3 text-xs text-error">{error}</div>
                 ) : entries.length === 0 ? (
