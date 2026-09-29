@@ -12,9 +12,24 @@ const TEXT_TOKENS = [
     'service-sonarr',
     'service-lidarr',
     'service-plex',
+    'source-gdrive',
+    'source-local',
+    'source-cl2k',
+    'source-orphan',
+    'accent',
 ];
 const SOLID_FILLS = ['success', 'warning', 'info', 'error', 'accent'];
-const TINTED_TEXT = ['success', 'warning', 'error', 'info'];
+const TINTED_TEXT = [
+    'success',
+    'warning',
+    'error',
+    'info',
+    'accent',
+    'source-gdrive',
+    'source-local',
+    'source-cl2k',
+    'source-orphan',
+];
 const RESTING_SURFACES = ['bg', 'surface', 'surface-alt'];
 
 const rgb = hex => {
@@ -70,7 +85,7 @@ describe.each([
     });
 });
 
-// Pills set semantic text on a 20% tint of itself. Light only: dark --error falls to 3.9:1 there.
+// Pills and badges set a colour's text on a 20% tint of itself. Light only: dark --error falls to 3.9:1 there.
 describe('light theme tints', () => {
     const tokens = readTokens('./light.css');
 
