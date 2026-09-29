@@ -407,7 +407,11 @@ const LabelarrLibraryPicker = ({ instanceName, value, onChange, disabled }) => {
         return <span className={hint}>Select a Plex instance first</span>;
     }
     if (isLoading) {
-        return <span className={hint}>Loading libraries…</span>;
+        return (
+            <span className={hint}>
+                <Spinner size="small" text="Loading libraries…" />
+            </span>
+        );
     }
     if (libraries.length === 0) {
         return (

@@ -29,6 +29,7 @@ import { useApiData } from '../../../hooks/useApiData.js';
 import { instancesAPI } from '../../../utils/api';
 import { humanize } from '../../../utils/tools';
 import Toggle from '../../ui/Toggle.jsx';
+import Spinner from '../../ui/Spinner.jsx';
 
 /** A boolean as the mock's label-left / toggle-right row (used for the
  *  plex_scope add-posters / match-collections options). */
@@ -213,9 +214,8 @@ const PlexLibrarySelector = React.memo(
 
         if (librariesLoading) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
-                    <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
-                    <span>Loading libraries...</span>
+                <div className="p-4 text-sm bg-surface-alt border border-border-light rounded-lg">
+                    <Spinner size="small" text="Loading libraries..." />
                 </div>
             );
         }
@@ -789,9 +789,8 @@ const PlexScopeLibrarySelector = React.memo(
 
         if (!hasCatalogData && perInstanceLoading) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
-                    <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
-                    <span>Loading libraries...</span>
+                <div className="p-4 text-sm bg-surface-alt border border-border-light rounded-lg">
+                    <Spinner size="small" text="Loading libraries..." />
                 </div>
             );
         }
@@ -1238,7 +1237,7 @@ export const InstancesField = React.memo(
                         helpText={field.helpText}
                     />
                     <div className="flex flex-col items-center justify-center gap-3 text-center bg-surface border-2 text-fg-muted">
-                        <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+                        <Spinner size="large" />
                         <span>Loading instances...</span>
                     </div>
                     {field.description && (

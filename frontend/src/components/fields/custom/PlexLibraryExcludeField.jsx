@@ -23,6 +23,7 @@ import {
 } from '../primitives';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { instancesAPI } from '../../../utils/api';
+import Spinner from '../../ui/Spinner.jsx';
 
 /** Plex instance names this module targets (poster_cleanarr stores List[str]). */
 const selectedPlexNames = moduleConfig => {
@@ -106,9 +107,8 @@ export const PlexLibraryExcludeField = React.memo(
         const body = () => {
             if (isLoading) {
                 return (
-                    <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-light rounded-lg">
-                        <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
-                        <span>Loading libraries…</span>
+                    <div className="p-4 text-sm bg-surface-alt border border-border-light rounded-lg">
+                        <Spinner size="small" text="Loading libraries…" />
                     </div>
                 );
             }
