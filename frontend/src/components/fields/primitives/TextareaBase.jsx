@@ -58,7 +58,7 @@ export const TextareaBase = ({
                 'w-full',
                 'px-3 py-2', // Standard padding
                 'bg-input border border-border rounded-lg',
-                'text-fg placeholder:text-fg-muted',
+                'text-fg placeholder:text-fg-subtle',
                 'resize-y', // Allow vertical resize only
                 'max-h-dropdown', // Prevent infinite expansion (300px max height)
                 'overflow-y-auto', // Handle content overflow with scrolling
