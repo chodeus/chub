@@ -319,6 +319,50 @@ def test_gdrive_presets_missing_file_returns_500(monkeypatch, app_with_router):
     assert resp.json()["success"] is False
 
 
+def test_new_gdrive_presets_list_and_dismiss(monkeypatch, tmp_path, app_with_router):
+    """The web notice lists presets not yet seen or synced; dismissing clears them for good."""
+    import json
+
+    import yaml
+
+    from backend.util import gdrive_presets
+    from backend.util.config import clear_config_cache
+    from backend.util.database import ChubDB
+
+    seen = {"name": "Seencurator", "id": "1ApiSeenAAAAAAAAAAAAAAAAAAAAAAAAA", "style": "MM2K"}
+    synced = {"name": "Syncedcurator", "id": "1ApiSyncedCCCCCCCCCCCCCCCCCCCCCCC", "style": "MM2K"}
+    fresh = {"name": "Freshcurator", "id": "1ApiFreshBBBBBBBBBBBBBBBBBBBBBBBB", "style": "CL2K"}
+    (tmp_path / "presets.json").write_text(json.dumps([seen, synced, fresh]))
+    (tmp_path / "moves.json").write_text("[]")
+    (tmp_path / "config.yml").write_text(yaml.safe_dump({"sync_gdrive": {"gdrive_list": [
+        {"name": "MM2K Syncedcurator", "id": synced["id"], "location": "/data/MM2K/Synced"}]}}))
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(gdrive_presets, "PRESETS_PATH", tmp_path / "presets.json")
+    monkeypatch.setattr(gdrive_presets, "MOVES_PATH", tmp_path / "moves.json")
+    monkeypatch.setattr(gdrive_presets, "_presets_cache", None)
+    monkeypatch.setattr(gdrive_presets, "_moves_cache", None)
+    clear_config_cache()
+
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db"), quiet=True) as db:
+        db.gdrive_preset_notice.mark_seen([seen["id"]])
+        app = app_with_router(system_router.router)
+        app.state.db = db
+        client = TestClient(app)
+
+        listed = client.get("/api/gdrive-presets/new")
+        assert listed.status_code == 200, listed.text
+        assert listed.json()["data"] == [fresh]
+
+        dismissed = client.post("/api/gdrive-presets/new/dismiss", json={"ids": [fresh["id"]]})
+        assert dismissed.status_code == 200, dismissed.text
+        assert dismissed.json()["data"] == []
+        relisted = client.get("/api/gdrive-presets/new")
+        assert relisted.json()["data"] == []
+
+        bad = client.post("/api/gdrive-presets/new/dismiss", json={"ids": "not-a-list"})
+        assert bad.status_code == 422
+
+
 # --- System: allowed roots ---
 
 

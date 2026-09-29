@@ -4,6 +4,7 @@ import PropTypes from 'prop-types';
 import { FeatureErrorBoundary } from './error';
 import LayoutHeader from './LayoutHeader.jsx';
 import LayoutSidebar from './LayoutSidebar.jsx';
+import NewPresetNotice from './NewPresetNotice.jsx';
 import PageToolbar from './ToolBar/PageToolbar.jsx';
 import { ToolbarProvider } from '../contexts/ToolbarContext.jsx';
 import { useUIState } from '../contexts/UIStateContext.jsx';
@@ -76,6 +77,7 @@ const Layout = ({ children }) => {
                         </main>
                     </div>
                 </div>
+                <NewPresetNotice />
             </div>
         </ToolbarProvider>
     );

@@ -321,6 +321,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 log.error(f"Failed to create shared database: {e}")
             raise
 
+        try:
+            from backend.util.gdrive_presets import announce_new_presets
+
+            announce_new_presets(app.state.db, load_config().sync_gdrive, log)
+        except Exception as exc:
+            if log:
+                log.warning(f"New GDrive preset check skipped: {exc}")
+
         if log:
             log.debug("Creating database workers...")
 
