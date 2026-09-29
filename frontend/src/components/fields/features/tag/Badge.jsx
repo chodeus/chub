@@ -96,11 +96,11 @@ export const Badge = React.memo(
         const variantClasses = {
             default: 'bg-surface-elevated text-fg-muted border-border',
             interactive: 'bg-primary text-on-color hover:opacity-80 cursor-pointer',
-            accent: 'bg-accent text-white hover:opacity-80 cursor-pointer',
-            success: 'bg-success text-white',
-            warning: 'bg-warning text-black',
-            error: 'bg-error text-white',
-            info: 'bg-info text-white',
+            accent: 'bg-accent text-on-accent hover:opacity-80 cursor-pointer',
+            success: 'bg-success text-on-success',
+            warning: 'bg-warning text-on-warning',
+            error: 'bg-error text-on-error',
+            info: 'bg-info text-on-info',
         };
         const badgeClasses = [
             'inline-flex',

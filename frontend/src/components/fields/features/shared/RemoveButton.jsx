@@ -72,7 +72,7 @@ export const RemoveButton = React.memo(
             'bg-transparent',
             'text-error',
             'hover:bg-error',
-            'hover:text-white',
+            'hover:text-on-error',
             'inline-flex',
             'items-center',
             'justify-center',

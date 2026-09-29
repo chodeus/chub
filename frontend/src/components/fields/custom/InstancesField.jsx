@@ -43,12 +43,12 @@ const ToggleRow = ({ label, checked, disabled, onChange }) => (
 // Radarr green, Sonarr cyan, Lidarr/other lilac, Plex gold. The dot shows the
 // service regardless of selection; selection is encoded by the pill's fill.
 const SERVICE_DOT = {
-    radarr: '#6cbc66',
-    sonarr: '#53e8f0',
-    lidarr: '#9a7ba9',
-    readarr: '#9a7ba9',
-    whisparr: '#9a7ba9',
-    plex: '#ffc944',
+    radarr: 'var(--service-radarr)',
+    sonarr: 'var(--service-sonarr)',
+    lidarr: 'var(--service-lidarr)',
+    readarr: 'var(--manual)',
+    whisparr: 'var(--manual)',
+    plex: 'var(--service-plex)',
 };
 
 /**
@@ -96,7 +96,9 @@ const ArrInstancePills = React.memo(
                         >
                             <span
                                 className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{ background: SERVICE_DOT[instance.type] || '#8ea3cc' }}
+                                style={{
+                                    background: SERVICE_DOT[instance.type] || 'var(--text-data)',
+                                }}
                             />
                             {humanize(instance.name)}
                         </button>

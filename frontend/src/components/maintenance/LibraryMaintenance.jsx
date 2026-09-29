@@ -241,9 +241,9 @@ const IncompleteMetadataCard = () => {
         <MaintenanceCard
             title="Incomplete metadata"
             icon="rule"
-            iconClass="text-[#ff9d75]"
+            iconClass="text-source-orphan"
             count={data ? `${items.length} items` : undefined}
-            countClass="bg-[#ff9d75]/15 text-[#ff9d75]"
+            countClass="bg-source-orphan/15 text-source-orphan"
             description="Items missing key fields. External IDs (TMDB/TVDB/IMDB) missing → Poster Renamerr and Border Replacerr can't match them. Fix in the origin ARR."
         >
             <div className="flex flex-wrap gap-2 mb-3">
@@ -316,7 +316,7 @@ const IncompleteMetadataCard = () => {
 export const LibraryMaintenance = () => (
     <section className="mt-9">
         <div className="flex items-center gap-3 mb-3.5">
-            <span className="material-symbols-outlined text-[22px] text-[#a99eff]">handyman</span>
+            <span className="material-symbols-outlined text-[22px] text-source-cl2k">handyman</span>
             <h2 className="font-display text-xl font-bold text-fg">Library Maintenance</h2>
         </div>
         <div className="flex flex-col gap-3">

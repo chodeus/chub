@@ -4,23 +4,25 @@
     /* Brand & Semantic Colors */
     --primary: #463fbc; /* Indigo primary */
     --primary-hover: #3a339e;
-    --accent: #0d6ab8; /* Link text: 4.9:1 on --bg. Brand hue lives in --azure. */
+    --accent: #0b5b9f; /* Link text: 6.1:1 on --bg, 4.5:1 on its own 20% tint. Brand hue lives in --azure. */
     --accent-2: #53e8f0; /* Cyan secondary accent */
-    --success: #6cbc66;
-    --warning: #ffc944;
-    --error: #fd355c;
-    --info: #53e8f0;
     --focus: #463fbc; /* Focus indicator matches primary */
 
-    /* Extended accent roles — darkened where needed for contrast on white */
+    /* Darker than the dark theme's hues: each clears 4.5:1 as text on every light surface, even on its own 20% tint. */
+    --success: #2d662f;
+    --warning: #785400;
+    --error: #aa1a3a;
+    --info: #0c627a;
+
+    /* Extended accent roles. gdrive, local, cl2k and orphan also label things, so they clear 4.5:1 like the hues above. */
     --azure: #1992f3;
     --gold-deep: #e28b2d;
     --manual: #7e5e8d;
-    --source-gdrive: #1277cc;
-    --source-local: #4f9e49;
-    --source-cl2k: #6a5acd;
+    --source-gdrive: #0e5c9e;
+    --source-local: #33652f;
+    --source-cl2k: #5a4cad;
     --source-mm2k: #b9831f;
-    --source-orphan: #d9763f;
+    --source-orphan: #884a28;
 
     /* Surface & Background Colors */
     --bg: #eef0fb; /* Pale indigo tint — panel surround */
@@ -33,6 +35,7 @@
     /* Border & Separation Colors */
     --border: #e2e4f1;
     --border-light: #eef0fb;
+    --border-strong: #b9bdd8;
 
     /* Text & Content Colors */
     --text-primary: #110b28;
@@ -60,11 +63,24 @@
     --on-color-text: #fff;
     --primary-text: #fff;
 
+    /* Text on solid semantic fills: white, the fills are dark here */
+    --on-success: #fff;
+    --on-warning: #fff;
+    --on-info: #fff;
+    --on-error: #fff;
+    --on-accent: #fff;
+
+    /* Service identity, darkened to read as text on light surfaces */
+    --service-radarr: #2d662f;
+    --service-sonarr: #0c627a;
+    --service-lidarr: #7e5e8d;
+    --service-plex: #785400;
+
     /* Link state colors */
     --link-hover: #3a339e;
     --link-visited: #3a339e;
-    --accent-hover: #0a5a9e;
-    --accent-visited: #0a5a9e;
+    --accent-hover: #094d87;
+    --accent-visited: #094d87;
 
     /* Form Control Colors */
     --input-bg: #fff;

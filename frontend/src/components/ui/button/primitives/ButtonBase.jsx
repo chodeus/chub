@@ -60,11 +60,11 @@ export const ButtonBase = React.memo(
         const variantTextClasses = {
             primary: 'text-on-color',
             secondary: 'text-fg',
-            success: 'text-on-color',
-            danger: 'text-on-color',
+            success: 'text-on-success',
+            danger: 'text-on-error',
             ghost: 'text-fg',
-            warning: 'text-on-color', // White text on warning bg
-            info: 'text-on-color', // White text on info bg
+            warning: 'text-on-warning',
+            info: 'text-on-info',
             muted: 'text-fg', // Primary text on muted bg
             surface: 'text-fg', // Primary text on surface bg
         };
@@ -87,11 +87,11 @@ export const ButtonBase = React.memo(
             secondary: 'hover:opacity-90',
             success: 'hover:opacity-90',
             danger: 'hover:opacity-90',
-            ghost: 'hover:bg-surface-elevated',
+            ghost: 'hover:bg-row-hover',
             warning: 'hover:opacity-90',
             info: 'hover:opacity-90',
             muted: 'hover:opacity-90',
-            surface: 'hover:bg-surface-elevated',
+            surface: 'hover:bg-row-hover',
         };
 
         // State styles: active, disabled, focus

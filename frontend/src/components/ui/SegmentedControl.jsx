@@ -56,7 +56,7 @@ const SegmentedControl = ({
                 // brand-violet active state of normal options.
                 const stateCls = active
                     ? opt.danger
-                        ? 'bg-error text-white font-semibold'
+                        ? 'bg-error text-on-error font-semibold'
                         : 'bg-primary text-on-color font-semibold'
                     : opt.danger
                       ? 'text-error font-medium hover:brightness-110'

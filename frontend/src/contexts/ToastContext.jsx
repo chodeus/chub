@@ -24,15 +24,15 @@ function getToastStyles(type) {
 
     switch (type) {
         case 'success':
-            return `${baseStyles} bg-success border-l-success text-white`;
+            return `${baseStyles} bg-success border-l-success text-on-success`;
         case 'error':
-            return `${baseStyles} bg-error border-l-error text-white`;
+            return `${baseStyles} bg-error border-l-error text-on-error`;
         case 'warning':
-            return `${baseStyles} bg-warning border-l-warning text-white`;
+            return `${baseStyles} bg-warning border-l-warning text-on-warning`;
         case 'info':
-            return `${baseStyles} bg-info border-l-info text-white`;
+            return `${baseStyles} bg-info border-l-info text-on-info`;
         default:
-            return `${baseStyles} bg-info border-l-info text-white`;
+            return `${baseStyles} bg-info border-l-info text-on-info`;
     }
 }
 

@@ -43,10 +43,15 @@
     --color-source-cl2k: var(--source-cl2k);
     --color-source-mm2k: var(--source-mm2k);
     --color-source-orphan: var(--source-orphan);
+    --color-service-radarr: var(--service-radarr);
+    --color-service-sonarr: var(--service-sonarr);
+    --color-service-lidarr: var(--service-lidarr);
+    --color-service-plex: var(--service-plex);
 
     /* borders */
     --color-border: var(--border);
     --color-border-light: var(--border-light);
+    --color-border-strong: var(--border-strong);
     --color-border-subtle: var(--border-light); /* legacy alias */
 
     /* body text — renamed from text-primary/secondary/tertiary so `primary`
@@ -58,6 +63,11 @@
     --color-fg-faint: var(--text-faint); /* section headings / idle #564f8a */
     --color-fg-data: var(--text-data); /* mono-data secondary #8ea3cc */
     --color-on-color: var(--on-color-text);
+    --color-on-success: var(--on-success);
+    --color-on-warning: var(--on-warning);
+    --color-on-info: var(--on-info);
+    --color-on-error: var(--on-error);
+    --color-on-accent: var(--on-accent);
     --color-primary-text: var(--primary-text);
     --color-link: var(--accent); /* legacy alias (.text-link) */
     --color-brand-primary: var(--primary); /* legacy alias (.*-brand-primary) */
@@ -69,8 +79,11 @@
     --color-warning-bg: color-mix(in srgb, var(--warning) 10%, transparent);
     --color-error-border: var(--error);
     --color-sidebar-secondary: var(--sidebar-text-secondary);
-    --color-primary-hover: var(--focus);
+    --color-primary-hover: var(--primary-hover);
     --color-canvas: var(--bg); /* page canvas (.bg-canvas) */
+
+    /* Hover fill under on-colour text: darker than --primary, never lighter. */
+    --color-primary-strong: color-mix(in srgb, var(--primary) 85%, black);
 
     /* form controls */
     --color-input: var(--input-bg);

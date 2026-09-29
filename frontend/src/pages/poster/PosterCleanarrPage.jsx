@@ -244,11 +244,14 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
         borderWidth: '3px',
         borderStyle: 'solid',
         borderColor: isPlex
-            ? '#3b3d72'
+            ? 'var(--border-strong)'
             : isActive
-              ? 'var(--color-success, #6cbc66)'
-              : 'rgba(253,53,92,0.85)',
-        boxShadow: isActive && !isPlex ? '0 0 0 2px rgba(50,213,131,0.4)' : 'none',
+              ? 'var(--success)'
+              : 'color-mix(in srgb, var(--error) 85%, transparent)',
+        boxShadow:
+            isActive && !isPlex
+                ? '0 0 0 2px color-mix(in srgb, var(--success) 40%, transparent)'
+                : 'none',
         // Poster aspect ratio — lets the full image show without cropping the
         // top/bottom. Non-poster variants (art/banners/episode thumbs) render
         // letterboxed via object-contain on the <img>, which is fine because
@@ -304,7 +307,7 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
                     style={{ background: selected ? undefined : 'rgba(12,8,32,0.55)' }}
                 >
                     {selected && (
-                        <span className="material-symbols-outlined text-white text-[13px] leading-none">
+                        <span className="material-symbols-outlined text-on-color text-[13px] leading-none">
                             check
                         </span>
                     )}
@@ -339,11 +342,11 @@ const ModeCheck = ({ label, checked, disabled, onChange, title }) => (
     >
         <span
             className={`flex items-center justify-center w-[17px] h-[17px] rounded-[4px] border transition-colors ${
-                checked ? 'bg-primary border-primary' : 'bg-transparent border-[#3b3d72]'
+                checked ? 'bg-primary border-primary' : 'bg-transparent border-border-strong'
             }`}
         >
             {checked && (
-                <span className="material-symbols-outlined text-white text-[13px] leading-none">
+                <span className="material-symbols-outlined text-on-color text-[13px] leading-none">
                     check
                 </span>
             )}
@@ -1395,7 +1398,9 @@ const PosterCleanarrPage = () => {
                                                         <>
                                                             {' '}
                                                             ·{' '}
-                                                            <span style={{ color: '#f59e0b' }}>
+                                                            <span
+                                                                style={{ color: 'var(--warning)' }}
+                                                            >
                                                                 {staleInDetail} stale duplicate
                                                                 {staleInDetail === 1 ? '' : 's'}
                                                             </span>
@@ -1726,9 +1731,11 @@ const Chevron = ({ open, visible, onClick }) => {
             }}
             className="w-6 h-6 shrink-0 inline-flex items-center justify-center rounded-md cursor-pointer"
             style={{
-                background: open ? 'var(--primary)' : 'rgba(135,103,247,0.15)',
+                background: open
+                    ? 'var(--primary)'
+                    : 'color-mix(in srgb, var(--primary) 15%, transparent)',
                 color: open ? 'var(--on-color-text, #fff)' : 'var(--primary)',
-                border: `1px solid ${open ? 'var(--primary)' : 'rgba(135,103,247,0.4)'}`,
+                border: `1px solid ${open ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 40%, transparent)'}`,
                 transition: 'background 100ms',
             }}
         >
@@ -1748,19 +1755,20 @@ const Chevron = ({ open, visible, onClick }) => {
 
 // Row-style helpers — selected rows get a left accent bar + faint primary
 // tint. Tree depth is encoded in the baseLeftPad argument.
-const rowBorder = { borderBottom: '1px solid rgba(var(--border-rgb, 42,48,82), 0.4)' };
+const rowBorder = { borderBottom: '1px solid color-mix(in srgb, var(--border) 40%, transparent)' };
 const rowStyle = (selected, baseLeftPad) => ({
     ...rowBorder,
     cursor: 'pointer',
-    background: selected ? 'rgba(135,103,247,0.15)' : 'transparent',
+    background: selected ? 'color-mix(in srgb, var(--primary) 15%, transparent)' : 'transparent',
     borderLeft: selected ? '3px solid var(--primary)' : '3px solid transparent',
     paddingLeft: selected ? `${baseLeftPad - 3}px` : `${baseLeftPad}px`,
     transition: 'background 100ms',
 });
+// Pills mix with --surface, not transparent, so a selected row's tint can't dim their text.
 const bloatPill = {
     padding: '1px 6px',
     borderRadius: '9999px',
-    background: 'rgba(253,53,92,0.2)',
+    background: 'color-mix(in srgb, var(--error) 20%, var(--surface))',
     color: 'var(--error)',
     fontWeight: 600,
     fontSize: '10px',
@@ -1768,8 +1776,8 @@ const bloatPill = {
 const stalePill = {
     padding: '1px 6px',
     borderRadius: '9999px',
-    background: 'rgba(245,158,11,0.2)',
-    color: '#f59e0b',
+    background: 'color-mix(in srgb, var(--warning) 20%, var(--surface))',
+    color: 'var(--warning)',
     fontWeight: 600,
     fontSize: '10px',
 };

@@ -59,7 +59,7 @@ function toConfigMapping(m) {
     };
 }
 
-const arrDotColor = type => (type === 'sonarr' ? '#53e8f0' : '#6cbc66');
+const arrDotColor = type => (type === 'sonarr' ? 'var(--service-sonarr)' : 'var(--service-radarr)');
 
 const LabelarrPage = () => {
     const toast = useToast();

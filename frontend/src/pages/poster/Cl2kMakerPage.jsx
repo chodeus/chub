@@ -232,7 +232,7 @@ const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
                 onClick={() => onChange(s.key)}
                 className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border ${
                     value === s.key
-                        ? 'bg-primary text-white border-primary'
+                        ? 'bg-primary text-on-color border-primary'
                         : 'bg-surface text-fg-muted border-border hover:border-primary'
                 }`}
                 title={s.label}
@@ -2047,7 +2047,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                                 onClick={() => setTab(t.key)}
                                 className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 sm:px-4 py-2 rounded-md text-[13px] transition-colors ${
                                     on
-                                        ? 'bg-primary text-white font-semibold'
+                                        ? 'bg-primary text-on-color font-semibold'
                                         : 'text-fg-muted hover:text-fg'
                                 }`}
                             >
@@ -2804,7 +2804,7 @@ const RenderPanel = ({
                         onClick={() => setOutputMode('cl2k')}
                         className={`px-3.5 py-2 rounded-md text-[13px] transition-colors ${
                             outputMode === 'cl2k'
-                                ? 'bg-primary text-white font-semibold'
+                                ? 'bg-primary text-on-color font-semibold'
                                 : 'text-fg-muted hover:text-fg'
                         }`}
                     >
@@ -2821,7 +2821,7 @@ const RenderPanel = ({
                         }}
                         className={`px-3.5 py-2 rounded-md text-[13px] transition-colors ${
                             outputMode === 'asis'
-                                ? 'bg-primary text-white font-semibold'
+                                ? 'bg-primary text-on-color font-semibold'
                                 : 'text-fg-muted hover:text-fg'
                         }`}
                     >
@@ -4118,7 +4118,7 @@ const BrushMask = ({
                             }
                             className={`px-2.5 h-[26px] rounded-[5px] text-xs capitalize ${
                                 brushMode === m
-                                    ? 'bg-primary text-white font-semibold'
+                                    ? 'bg-primary text-on-color font-semibold'
                                     : 'text-fg-muted hover:text-fg'
                             }`}
                         >
@@ -4135,7 +4135,7 @@ const BrushMask = ({
                             onClick={() => setBrushShape(shape)}
                             className={`px-2.5 h-[26px] rounded-[5px] text-xs capitalize ${
                                 brushShape === shape
-                                    ? 'bg-primary text-white font-semibold'
+                                    ? 'bg-primary text-on-color font-semibold'
                                     : 'text-fg-muted hover:text-fg'
                             }`}
                         >
@@ -4652,7 +4652,7 @@ const Picker = ({
                                     className="absolute inset-0 w-full h-full object-contain"
                                 />
                                 {isSel && (
-                                    <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white">
+                                    <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-on-color">
                                         <span className="material-symbols-outlined text-sm">
                                             check
                                         </span>
@@ -5139,7 +5139,7 @@ const LogoSelector = ({
     };
     const tabCls = active =>
         `flex-1 text-center px-3 py-1.5 rounded-md text-xs ${
-            active ? 'bg-primary text-white font-semibold' : 'text-fg-muted hover:text-fg'
+            active ? 'bg-primary text-on-color font-semibold' : 'text-fg-muted hover:text-fg'
         }`;
     const colorTabs = onWhiten && (
         <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
@@ -5306,7 +5306,7 @@ const LogoSelector = ({
                                             className="absolute inset-0 w-full h-full object-contain"
                                         />
                                         {isSel && (
-                                            <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white">
+                                            <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-on-color">
                                                 <span className="material-symbols-outlined text-sm">
                                                     check
                                                 </span>
@@ -5592,7 +5592,7 @@ const SquareFramer = ({
     const segCls = on =>
         `px-2.5 py-1 text-sm rounded-md border ${
             on
-                ? 'bg-primary text-white border-primary'
+                ? 'bg-primary text-on-color border-primary'
                 : 'bg-surface text-fg-muted border-border hover:border-primary'
         }`;
     const point = useCallback(e => {
@@ -6323,7 +6323,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                                 onClick={() => setResolution('1080p')}
                                 className={`px-3 py-1.5 rounded-md font-mono text-xs ${
                                     resolution !== '4k'
-                                        ? 'bg-primary text-white font-semibold'
+                                        ? 'bg-primary text-on-color font-semibold'
                                         : 'text-fg-muted hover:text-fg'
                                 }`}
                             >
@@ -6334,7 +6334,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                                 onClick={() => setResolution('4k')}
                                 className={`px-3 py-1.5 rounded-md font-mono text-xs ${
                                     resolution === '4k'
-                                        ? 'bg-primary text-white font-semibold'
+                                        ? 'bg-primary text-on-color font-semibold'
                                         : 'text-fg-muted hover:text-fg'
                                 }`}
                             >
@@ -6689,7 +6689,7 @@ const LogoAssetPanel = ({
     const seg = on =>
         `px-3 py-1 text-sm rounded-md border ${
             on
-                ? 'bg-primary text-white border-primary'
+                ? 'bg-primary text-on-color border-primary'
                 : 'bg-surface text-fg-muted border-border hover:border-primary'
         }`;
 

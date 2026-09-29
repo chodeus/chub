@@ -268,7 +268,7 @@ export const FormRenderer = React.memo(
                     <div className="border-t border-border pt-4 mt-6 flex items-center gap-3">
                         <button
                             type="submit"
-                            className="touch-target bg-primary text-white px-3 py-2 border-none rounded-md cursor-pointer transition-colors inline-flex items-center justify-center"
+                            className="touch-target bg-primary text-on-color px-3 py-2 border-none rounded-md cursor-pointer transition-colors inline-flex items-center justify-center"
                             disabled={disabled || loading}
                         >
                             {loading ? 'Saving...' : submitText}

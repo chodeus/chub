@@ -9,7 +9,7 @@ export const CollapseButton = () => {
         <button
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-text hover:bg-primary-hover transition-colors min-h-11 font-medium"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-text hover:bg-primary-strong transition-colors min-h-11 font-medium"
             aria-expanded={!isCollapsed}
             aria-controls="log-controls-content"
         >

@@ -1,33 +1,32 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-// Status colour + soft ring glow per state. rgba glows aren't expressible as
-// theme tokens, so the presentational hexes (mirroring the redesign palette)
-// are inlined here.
+// Theme token and ring opacity per state; the ring is the dot's own colour.
 const DOT = {
-    success: ['#6cbc66', 'rgba(108,188,102,.16)'],
-    running: ['#53e8f0', 'rgba(83,232,240,.18)'],
-    error: ['#fd355c', 'rgba(253,53,92,.18)'],
-    warning: ['#ffc944', 'rgba(255,201,68,.16)'],
-    pending: ['#ffc944', 'rgba(255,201,68,.16)'],
-    info: ['#53e8f0', 'rgba(83,232,240,.18)'],
-    idle: ['#564f8a', 'rgba(86,79,138,0)'],
+    success: ['var(--success)', 16],
+    running: ['var(--accent)', 18],
+    error: ['var(--error)', 18],
+    warning: ['var(--warning)', 16],
+    pending: ['var(--warning)', 16],
+    info: ['var(--info)', 18],
+    idle: ['var(--text-faint)', 0],
 };
 
-/**
- * Small status dot with an optional soft ring. `status` keys map to the
- * redesign palette; pass a raw `color` to override.
- */
+/** Status dot with an optional soft ring, coloured by its theme token. */
 const StatusDot = ({ status = 'idle', size = 7, ring = true, color, className = '' }) => {
-    const [c, glow] = DOT[status] || DOT.idle;
+    const [token, ringPct] = DOT[status] || DOT.idle;
+    const fill = color || token;
     return (
         <span
             className={`shrink-0 rounded-full ${className}`}
             style={{
                 width: size,
                 height: size,
-                background: color || c,
-                boxShadow: ring ? `0 0 0 3px ${glow}` : undefined,
+                background: fill,
+                boxShadow:
+                    ring && ringPct
+                        ? `0 0 0 3px color-mix(in srgb, ${fill} ${ringPct}%, transparent)`
+                        : undefined,
             }}
             aria-hidden="true"
         />

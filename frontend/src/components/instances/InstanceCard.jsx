@@ -8,10 +8,10 @@ import { formatSecondsAgo } from '../../utils/schedule';
 
 // Service identity colour + tint for the avatar / type pill.
 const SERVICE_STYLE = {
-    radarr: ['#6cbc66', 'rgba(108,188,102,.14)'],
-    sonarr: ['#53e8f0', 'rgba(83,232,240,.14)'],
-    lidarr: ['#9a7ba9', 'rgba(154,123,169,.16)'],
-    plex: ['#ffc944', 'rgba(255,201,68,.14)'],
+    radarr: ['var(--service-radarr)', 'color-mix(in srgb, var(--service-radarr) 14%, transparent)'],
+    sonarr: ['var(--service-sonarr)', 'color-mix(in srgb, var(--service-sonarr) 14%, transparent)'],
+    lidarr: ['var(--service-lidarr)', 'color-mix(in srgb, var(--service-lidarr) 16%, transparent)'],
+    plex: ['var(--service-plex)', 'color-mix(in srgb, var(--service-plex) 14%, transparent)'],
 };
 
 // Render an API key masked — dots plus the last few real chars (the config GET
@@ -59,7 +59,10 @@ export const InstanceCard = ({
     isSavingLibraries,
 }) => {
     const [expanded, setExpanded] = useState(false);
-    const [color, tint] = SERVICE_STYLE[serviceType] || ['#6582ca', 'rgba(101,130,202,.14)'];
+    const [color, tint] = SERVICE_STYLE[serviceType] || [
+        'var(--text-tertiary)',
+        'color-mix(in srgb, var(--text-tertiary) 14%, transparent)',
+    ];
     const name = humanize(instance.name);
     const initial = (instance.name || '?').charAt(0).toUpperCase();
     const enabled = instance.enabled !== false;
@@ -153,7 +156,7 @@ export const InstanceCard = ({
         'touch-expand w-9 h-9 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
 
     return (
-        <div className="rounded-xl bg-surface border border-border hover:border-[#3b3d72] transition-colors overflow-hidden">
+        <div className="rounded-xl bg-surface border border-border hover:border-border-strong transition-colors overflow-hidden">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[18px] py-[15px]">
                 <span
                     className="shrink-0 w-11 h-11 rounded-[10px] flex items-center justify-center font-display text-[17px] font-bold"

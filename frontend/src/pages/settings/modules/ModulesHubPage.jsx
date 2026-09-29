@@ -43,11 +43,11 @@ const MODULE_ICONS = {
 
 // Rotating icon tints (mock palette: cyan / green / lilac / gold / peach).
 const TINTS = [
-    ['#53e8f0', 'rgba(83,232,240,.12)'],
-    ['#6cbc66', 'rgba(108,188,102,.12)'],
-    ['#a99eff', 'rgba(169,158,255,.14)'],
-    ['#ffc944', 'rgba(255,201,68,.12)'],
-    ['#ff9d75', 'rgba(255,157,117,.12)'],
+    ['var(--source-gdrive)', 'color-mix(in srgb, var(--source-gdrive) 12%, transparent)'],
+    ['var(--source-local)', 'color-mix(in srgb, var(--source-local) 12%, transparent)'],
+    ['var(--source-cl2k)', 'color-mix(in srgb, var(--source-cl2k) 14%, transparent)'],
+    ['var(--source-mm2k)', 'color-mix(in srgb, var(--source-mm2k) 12%, transparent)'],
+    ['var(--source-orphan)', 'color-mix(in srgb, var(--source-orphan) 12%, transparent)'],
 ];
 
 /** Friendly schedule pill label derived from the schedule DSL. */

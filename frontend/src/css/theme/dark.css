@@ -34,6 +34,7 @@
     /* Border & Separation Colors */
     --border: #2a3052; /* Cards, strong dividers */
     --border-light: #211c46; /* Subtle row separators */
+    --border-strong: #3b3d72; /* Card hover, idle checkbox outlines */
 
     /* Text & Content Colors */
     --text-primary: #fff;
@@ -60,6 +61,19 @@
     /* Text-on-Color Utilities */
     --on-color-text: #fff;
     --primary-text: #fff;
+
+    /* Text on solid semantic fills: dark ink, the fills are bright here */
+    --on-success: #110b28;
+    --on-warning: #110b28;
+    --on-info: #110b28;
+    --on-error: #110b28;
+    --on-accent: #110b28;
+
+    /* Service identity (dots, avatars, pills) */
+    --service-radarr: #6cbc66;
+    --service-sonarr: #53e8f0;
+    --service-lidarr: #9a7ba9;
+    --service-plex: #ffc944;
 
     /* Link state colors */
     --link-hover: #a99eff;
