@@ -76,3 +76,40 @@ def reconcile_gdrive_list(entries: Iterable[Any], logger: Any = None) -> Optiona
             "save Settings to persist it."
         )
     return healed
+
+
+def new_presets(sync_cfg: Any, db: Any) -> List[dict]:
+    """Presets the new-preset notice shows: neither seen nor already in gdrive_list."""
+    seen = db.gdrive_preset_notice.seen_ids()
+    if not seen:
+        return []
+    # A drive already seen under its old id is not news after a move
+    seen |= {new for old, new in load_moves().items() if new and old in seen}
+    skip = seen | {getattr(e, "id", "") for e in getattr(sync_cfg, "gdrive_list", None) or []}
+    return [p for p in load_presets() if p.get("id") and p["id"] not in skip]
+
+
+def mark_presets_seen(db: Any, ids: Optional[Iterable[str]] = None) -> None:
+    """Stop showing ``ids``; all presets when None or when nothing is recorded yet."""
+    catalogue = [p["id"] for p in load_presets() if p.get("id")]
+    table = db.gdrive_preset_notice
+    wanted = set(catalogue) if ids is None or not table.seen_ids() else set(ids)
+    # Only catalogue ids are stored, so the table stays bounded by the catalogue
+    table.mark_seen([i for i in catalogue if i in wanted])
+
+
+def announce_new_presets(db: Any, sync_cfg: Any, logger: Any = None) -> List[dict]:
+    """Startup: baseline the notice on first run, otherwise log presets still new."""
+    log = logger or _log
+    if not db.gdrive_preset_notice.seen_ids():
+        # First start with the notice: the catalogue as shipped today is not news
+        mark_presets_seen(db)
+        return []
+    fresh = new_presets(sync_cfg, db)
+    if fresh:
+        names = ", ".join(f"{p['name']} ({p['style']})" for p in fresh)
+        log.info(
+            f"New GDrive presets available: {names}. Add them in Settings → Sync GDrive, "
+            "or dismiss the notice in the web UI."
+        )
+    return fresh

@@ -49,6 +49,15 @@ const tryFetch = async (url, internal) => {
     return normalizeGdrivePayload(payload, false);
 };
 
+/** Presets for the new-preset notice: shipped in an update, not added, not dismissed. */
+export const fetchNewGdrivePresets = async () => {
+    const payload = await apiCore.get('/gdrive-presets/new', { useCache: false });
+    return prefixGdriveNames(Array.isArray(payload?.data) ? payload.data : []);
+};
+
+/** Stop the new-preset notice showing these preset ids, for good. */
+export const dismissNewGdrivePresets = ids => apiCore.post('/gdrive-presets/new/dismiss', { ids });
+
 /**
  * Fetch GDrive presets from the given URL, falling back to the upstream
  * Drazzilb08 JSON if the primary URL fails or returns an empty list (e.g. the

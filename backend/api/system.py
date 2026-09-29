@@ -507,6 +507,65 @@ def list_gdrive_presets(logger: Any = Depends(get_logger)) -> JSONResponse:
         )
 
 
+@router.get(
+    "/gdrive-presets/new",
+    summary="List new GDrive presets",
+    description=(
+        "Bundled presets that arrived in a CHUB update and are neither in "
+        "sync_gdrive.gdrive_list nor dismissed from the web UI notice."
+    ),
+)
+def list_new_gdrive_presets(
+    logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
+) -> JSONResponse:
+    """Presets for the web UI's new-preset notice."""
+    from backend.util.gdrive_presets import new_presets
+
+    try:
+        presets = new_presets(load_config().sync_gdrive, db)
+        return ok(f"{len(presets)} new presets", presets)
+    except Exception as e:
+        logger.error(f"Error listing new gdrive presets: {e}")
+        return error(
+            "Error listing new gdrive presets",
+            code="GDRIVE_PRESETS_ERROR",
+            status_code=500,
+        )
+
+
+class DismissGdrivePresetsRequest(BaseModel):
+    ids: List[str]
+
+
+@router.post(
+    "/gdrive-presets/new/dismiss",
+    summary="Dismiss new GDrive presets",
+    description=(
+        "Stops the new-preset notice showing these preset ids, for good. "
+        "Ids not in the bundled catalogue are ignored."
+    ),
+)
+def dismiss_new_gdrive_presets(
+    body: DismissGdrivePresetsRequest,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    """Clear presets from the new-preset notice; returns the ones still new."""
+    from backend.util.gdrive_presets import mark_presets_seen, new_presets
+
+    try:
+        mark_presets_seen(db, body.ids)
+        remaining = new_presets(load_config().sync_gdrive, db)
+        return ok(f"{len(remaining)} new presets remain", remaining)
+    except Exception as e:
+        logger.error(f"Error dismissing new gdrive presets: {e}")
+        return error(
+            "Error dismissing new gdrive presets",
+            code="GDRIVE_PRESETS_ERROR",
+            status_code=500,
+        )
+
+
 @router.post(
     "/test",
     summary="Test endpoint",

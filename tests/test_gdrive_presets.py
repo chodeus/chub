@@ -120,3 +120,118 @@ def test_transient_failure_is_not_cached(monkeypatch, tmp_path):
     gdrive_presets._moves_cache = None
     second = load_config(str(cfg))
     assert second.sync_gdrive.gdrive_list[0].id == "19_kDCSHFdeZypxOxmODWmEt6jtBBtOYw"
+
+
+
+# --- New-preset notice ---
+
+OLD = {"name": "Oldcurator", "id": "1NoticeOldAAAAAAAAAAAAAAAAAAAAAAA", "style": "MM2K"}
+LATER = {"name": "Latecurator", "id": "1NoticeNewBBBBBBBBBBBBBBBBBBBBBBB", "style": "CL2K"}
+MOVED = {"name": "Oldcurator", "id": "1NoticeMovedCCCCCCCCCCCCCCCCCCCCC", "style": "MM2K"}
+
+
+class _Log:
+    def __init__(self):
+        self.lines = []
+
+    def info(self, msg, *a, **kw):
+        self.lines.append(msg)
+
+    warning = error = debug = info
+
+    def get_adapter(self, *_a, **_kw):
+        return self
+
+
+@pytest.fixture
+def notice_db(tmp_path):
+    from backend.util.database import ChubDB
+
+    with ChubDB(_Log(), db_path=str(tmp_path / "chub.db"), quiet=True) as db:
+        yield db
+
+
+def _catalogue(monkeypatch, tmp_path, presets, moves=()):
+    """Point the module at a synthetic catalogue so no test depends on the shipped drives."""
+    (tmp_path / "presets.json").write_text(json.dumps(presets))
+    (tmp_path / "moves.json").write_text(json.dumps(list(moves)))
+    monkeypatch.setattr(gdrive_presets, "PRESETS_PATH", tmp_path / "presets.json")
+    monkeypatch.setattr(gdrive_presets, "MOVES_PATH", tmp_path / "moves.json")
+    gdrive_presets._presets_cache = None
+    gdrive_presets._moves_cache = None
+
+
+def _sync(gdrive_list=()):
+    from backend.util.config import SyncGDriveConfig
+
+    return SyncGDriveConfig(gdrive_list=list(gdrive_list))
+
+
+def test_first_start_baselines_without_announcing(monkeypatch, tmp_path, notice_db):
+    _catalogue(monkeypatch, tmp_path, [OLD, LATER])
+    log = _Log()
+
+    assert gdrive_presets.announce_new_presets(notice_db, _sync(), log) == []
+    assert notice_db.gdrive_preset_notice.seen_ids() == {OLD["id"], LATER["id"]}
+    assert log.lines == []
+
+
+def test_preset_added_after_baseline_is_announced(monkeypatch, tmp_path, notice_db):
+    _catalogue(monkeypatch, tmp_path, [OLD, LATER])
+    notice_db.gdrive_preset_notice.mark_seen([OLD["id"]])
+    log = _Log()
+
+    assert gdrive_presets.announce_new_presets(notice_db, _sync(), log) == [LATER]
+    assert "Latecurator (CL2K)" in log.lines[0]
+
+
+def test_dismissed_preset_stays_dismissed(monkeypatch, tmp_path, notice_db):
+    from backend.util.database import ChubDB
+
+    _catalogue(monkeypatch, tmp_path, [OLD, LATER])
+    notice_db.gdrive_preset_notice.mark_seen([OLD["id"]])
+    assert gdrive_presets.new_presets(_sync(), notice_db) == [LATER]
+    gdrive_presets.mark_presets_seen(notice_db, [LATER["id"]])
+
+    # A fresh connection, as after a restart
+    with ChubDB(_Log(), db_path=notice_db.db_path, quiet=True) as reopened:
+        assert reopened.gdrive_preset_notice.seen_ids() == {OLD["id"], LATER["id"]}
+        assert gdrive_presets.new_presets(_sync(), reopened) == []
+
+
+def test_preset_already_synced_is_not_new(monkeypatch, tmp_path, notice_db):
+    from backend.util.config import GDriveListEntry as Entry
+
+    _catalogue(monkeypatch, tmp_path, [OLD, LATER])
+    notice_db.gdrive_preset_notice.mark_seen([OLD["id"]])
+    assert gdrive_presets.new_presets(_sync(), notice_db) == [LATER]
+    synced = _sync([Entry(name="CL2K Latecurator", id=LATER["id"], location="/data/CL2K/Latecurator")])
+    assert gdrive_presets.new_presets(synced, notice_db) == []
+
+
+def test_moved_preset_is_not_new(monkeypatch, tmp_path, notice_db):
+    _catalogue(monkeypatch, tmp_path, [MOVED],
+               moves=[{"from": OLD["id"], "to": MOVED["id"], "note": "synthetic move"}])
+    notice_db.gdrive_preset_notice.mark_seen([OLD["id"]])
+    assert gdrive_presets.new_presets(_sync(), notice_db) == []
+
+
+def test_unknown_ids_are_never_stored(monkeypatch, tmp_path, notice_db):
+    _catalogue(monkeypatch, tmp_path, [OLD, LATER])
+    notice_db.gdrive_preset_notice.mark_seen([OLD["id"]])
+
+    gdrive_presets.mark_presets_seen(notice_db, ["1NotInTheCatalogueDDDDDDDDDDDDDDD"])
+    assert notice_db.gdrive_preset_notice.seen_ids() == {OLD["id"]}
+
+
+def test_dismiss_before_baseline_baselines_everything(monkeypatch, tmp_path, notice_db):
+    _catalogue(monkeypatch, tmp_path, [OLD, LATER])
+
+    gdrive_presets.mark_presets_seen(notice_db, [])
+    assert notice_db.gdrive_preset_notice.seen_ids() == {OLD["id"], LATER["id"]}
+
+
+def test_nothing_is_new_before_the_baseline(monkeypatch, tmp_path, notice_db):
+    """If the startup baseline never ran, the notice must stay empty, not list every preset."""
+    _catalogue(monkeypatch, tmp_path, [OLD, LATER])
+    assert gdrive_presets.new_presets(_sync(), notice_db) == []
