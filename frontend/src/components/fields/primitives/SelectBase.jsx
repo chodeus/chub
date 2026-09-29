@@ -57,7 +57,7 @@ export const SelectBase = React.memo(
             'pr-11',
             'focus:ring-primary',
             !disabled && 'hover:border-primary hover:bg-input-hover',
-            invalid && 'border-input-error',
+            invalid && 'border-error',
             disabled && 'opacity-60 cursor-not-allowed bg-input-disabled border-input-disabled',
             disabled ? 'cursor-not-allowed' : 'cursor-pointer',
             className,
@@ -98,7 +98,7 @@ export const SelectBase = React.memo(
                         : children}
                 </select>
                 <span
-                    className={`material-symbols-outlined absolute top-1/2 right-3 pointer-events-none transition-colors -translate-y-1/2 text-brand-primary leading-none ${disabled ? 'text-fg-subtle' : 'text-fg-muted'}`}
+                    className={`material-symbols-outlined absolute top-1/2 right-3 pointer-events-none transition-colors -translate-y-1/2 text-primary leading-none ${disabled ? 'text-fg-subtle' : 'text-fg-muted'}`}
                     aria-hidden="true"
                 >
                     keyboard_arrow_down

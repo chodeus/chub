@@ -86,7 +86,7 @@ export const BulkSelectList = React.memo(
             <div className="border border-border rounded-lg bg-surface-alt overflow-hidden">
                 <button
                     type="button"
-                    className="w-full flex items-center justify-between p-3 min-h-11 cursor-pointer text-sm font-medium text-fg hover:bg-surface-hover transition-colors"
+                    className="w-full flex items-center justify-between p-3 min-h-11 cursor-pointer text-sm font-medium text-fg hover:bg-surface-alt transition-colors"
                     onClick={() => setOpen(o => !o)}
                     aria-expanded={open}
                 >
@@ -132,7 +132,7 @@ export const BulkSelectList = React.memo(
                                                         className={`flex items-center gap-3 p-2 rounded-lg ${
                                                             item.disabled
                                                                 ? 'opacity-60'
-                                                                : 'cursor-pointer hover:bg-surface-hover'
+                                                                : 'cursor-pointer hover:bg-surface-alt'
                                                         }`}
                                                     >
                                                         <CheckboxBase

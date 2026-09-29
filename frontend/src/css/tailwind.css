@@ -21,7 +21,6 @@
     --color-success: var(--success);
     --color-warning: var(--warning);
     --color-error: var(--error);
-    --color-danger: var(--error); /* legacy alias (.bg-danger) */
     --color-info: var(--info);
     --color-focus: var(--focus);
 
@@ -31,7 +30,6 @@
     --color-surface-inset: var(--surface-inset);
     --color-surface-alt: var(--surface-alt);
     --color-surface-elevated: var(--surface-elevated);
-    --color-surface-hover: var(--surface-alt); /* legacy alias */
     --color-row-hover: var(--row-hover);
 
     /* extended accent roles (redesign — each colour does one job) */
@@ -68,17 +66,7 @@
     --color-on-error: var(--on-error);
     --color-on-accent: var(--on-accent);
     --color-primary-text: var(--primary-text);
-    --color-link: var(--accent); /* legacy alias (.text-link) */
-    --color-brand-primary: var(--primary); /* legacy alias (.*-brand-primary) */
-    --color-input-error: var(--error); /* legacy alias (.border-input-error) */
-
-    /* Legacy aliases mirroring the old colors.css, for classes the migration dropped. */
-    --color-error-bg: color-mix(in srgb, var(--error) 10%, transparent);
-    --color-warning-bg: color-mix(in srgb, var(--warning) 10%, transparent);
-    --color-error-border: var(--error);
-    --color-sidebar-secondary: var(--sidebar-text-secondary);
     --color-primary-hover: var(--primary-hover);
-    --color-canvas: var(--bg); /* page canvas (.bg-canvas) */
 
     /* Hover fill under on-colour text: darker than --primary, never lighter. */
     --color-primary-strong: color-mix(in srgb, var(--primary) 85%, black);
@@ -106,8 +94,6 @@
     --color-overlay-strong: var(--overlay-strong);
 
     /* link / accent states */
-    --color-link-hover: var(--link-hover);
-    --color-link-visited: var(--link-visited);
     --color-accent-hover: var(--accent-hover);
     --color-accent-visited: var(--accent-visited);
 
@@ -129,8 +115,8 @@
     --font-serif: georgia, 'Times New Roman', serif;
     --font-mono: 'JetBrains Mono', 'SF Mono', monaco, 'Cascadia Code', consolas, monospace;
 
-    /* Cleared: tokens.css owns --radius-* (8/12/16/24px) and the legacy rounded-*
-       utilities use different literals. Both are ported as @utility below. */
+    /* Cleared: tokens.css owns --radius-* for plain CSS, and the rounded-* utilities
+       below use the same steps as literals, so a name means one size in both. */
     --radius-*: initial;
 }
 

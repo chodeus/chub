@@ -423,7 +423,7 @@ export const Cl2kLocalFoldersField = ({ value, onChange, disabled = false }) => 
                 <Modal.Footer>
                     <button
                         onClick={() => setBrowseIndex(null)}
-                        className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-hover transition-colors min-h-11"
+                        className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-alt transition-colors min-h-11"
                     >
                         Close
                     </button>
@@ -703,7 +703,7 @@ export const Cl2kCoverageField = ({ rootConfig }) => {
                             className={`flex-1 rounded-lg px-3 py-[9px] ${
                                 covered
                                     ? 'bg-surface-inset'
-                                    : 'bg-warning-bg border border-warning/25'
+                                    : 'bg-warning/10 border border-warning/25'
                             }`}
                         >
                             <div

@@ -52,7 +52,7 @@ export const ButtonBase = React.memo(
             primary: 'bg-primary',
             secondary: 'bg-surface-alt',
             success: 'bg-success',
-            danger: 'bg-danger',
+            danger: 'bg-error',
             ghost: 'bg-transparent',
             warning: 'bg-warning',
             info: 'bg-info',

@@ -261,7 +261,7 @@ const PlexLibrarySelector = React.memo(
                                             className={`relative flex items-center justify-center text-center py-2 px-3 min-h-11 rounded-lg border-2 text-sm font-medium cursor-pointer transition-all duration-200 truncate ${
                                                 isSelected
                                                     ? 'bg-surface border-primary text-fg shadow-md scale-105'
-                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-hover hover:border-primary hover:-translate-y-0.5 hover:shadow-sm'
+                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-alt hover:border-primary hover:-translate-y-0.5 hover:shadow-sm'
                                             }`}
                                             onClick={() =>
                                                 handleLibraryToggle(library, !isSelected)
@@ -295,7 +295,7 @@ const PlexLibrarySelector = React.memo(
                                             className={`relative flex items-center justify-center text-center py-2 px-3 min-h-11 rounded-lg border-2 text-sm font-medium cursor-pointer transition-all duration-200 truncate ${
                                                 isSelected
                                                     ? 'bg-surface border-primary text-fg shadow-md scale-105'
-                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-hover hover:border-primary hover:-translate-y-0.5 hover:shadow-sm'
+                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-alt hover:border-primary hover:-translate-y-0.5 hover:shadow-sm'
                                             }`}
                                             onClick={() =>
                                                 handleLibraryToggle(library, !isSelected)
@@ -329,7 +329,7 @@ const PlexLibrarySelector = React.memo(
                                             className={`relative flex items-center justify-center text-center py-2 px-3 min-h-11 rounded-lg border-2 text-sm font-medium cursor-pointer transition-all duration-200 truncate ${
                                                 isSelected
                                                     ? 'bg-surface border-primary text-fg shadow-md scale-105'
-                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-hover hover:border-primary hover:-translate-y-0.5 hover:shadow-sm'
+                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-alt hover:border-primary hover:-translate-y-0.5 hover:shadow-sm'
                                             }`}
                                             onClick={() =>
                                                 handleLibraryToggle(library, !isSelected)
@@ -365,7 +365,7 @@ const PlexLibrarySelector = React.memo(
 
                                     return (
                                         <div key={library}>
-                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
+                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-alt hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                                 <CheckboxBase
                                                     id={libraryId}
                                                     name={`${instanceName}-libraries`}
@@ -404,7 +404,7 @@ const PlexLibrarySelector = React.memo(
 
                                     return (
                                         <div key={library}>
-                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
+                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-alt hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                                 <CheckboxBase
                                                     id={libraryId}
                                                     name={`${instanceName}-libraries`}
@@ -443,7 +443,7 @@ const PlexLibrarySelector = React.memo(
 
                                     return (
                                         <div key={library}>
-                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
+                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-alt hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                                 <CheckboxBase
                                                     id={libraryId}
                                                     name={`${instanceName}-libraries`}
@@ -659,7 +659,7 @@ const PlexInstanceSelector = React.memo(
 
                     return (
                         <div key={instance.name}>
-                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
+                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-alt hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                 <CheckboxBase
                                     id={instanceId}
                                     name="plex-instances"
@@ -686,7 +686,7 @@ const PlexInstanceSelector = React.memo(
                                     {/* Poster upload option */}
                                     {showPosterOption && (
                                         <div>
-                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
+                                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-alt hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                                 <CheckboxBase
                                                     id={uploadId}
                                                     name={`upload-${instance.name}`}
@@ -828,7 +828,7 @@ const PlexScopeLibrarySelector = React.memo(
                         const libraryId = `${scopeId}scope-lib-${instanceName}-${library}`;
                         return (
                             <div key={library}>
-                                <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
+                                <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-alt hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                     <CheckboxBase
                                         id={libraryId}
                                         name={`${instanceName}-scope-libraries`}
@@ -1000,7 +1000,7 @@ const PlexScopeSelector = React.memo(
 
                     return (
                         <div key={instance.name}>
-                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
+                            <label className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-alt hover:border-primary hover:shadow-sm focus-within:border-primary cursor-pointer transition-all duration-200 ease-in-out">
                                 <CheckboxBase
                                     id={instanceId}
                                     name="plex-scope-instances"

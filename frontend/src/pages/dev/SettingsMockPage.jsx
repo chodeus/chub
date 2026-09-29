@@ -96,7 +96,7 @@ const SettingsMockPage = () => {
                         >
                             <AccordionItem.Header>
                                 {({ isExpanded }) => (
-                                    <div className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-surface-hover transition-colors min-h-11">
+                                    <div className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-surface-alt transition-colors min-h-11">
                                         <div className="flex items-center gap-4 flex-1 min-w-0">
                                             {/* Expand/Collapse Icon */}
                                             <span
@@ -280,7 +280,7 @@ const SettingsMockPage = () => {
                     </p>
                     <button
                         onClick={() => setFilteredModules(SETTINGS_SCHEMA)}
-                        className="mt-4 px-4 py-2 bg-primary text-brand-primary rounded-md hover:bg-primary-hover transition-colors"
+                        className="mt-4 px-4 py-2 bg-primary text-primary rounded-md hover:bg-primary-hover transition-colors"
                     >
                         Clear search
                     </button>

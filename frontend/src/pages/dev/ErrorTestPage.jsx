@@ -171,7 +171,7 @@ const ErrorTestPage = () => {
                 {crashes.critical && (
                     <button
                         onClick={() => resetCrash('critical')}
-                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
+                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-alt inline-flex items-center justify-center mt-2"
                     >
                         Reset
                     </button>
@@ -211,7 +211,7 @@ const ErrorTestPage = () => {
                 {crashes.page && (
                     <button
                         onClick={() => resetCrash('page')}
-                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
+                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-alt inline-flex items-center justify-center mt-2"
                     >
                         Reset
                     </button>
@@ -256,7 +256,7 @@ const ErrorTestPage = () => {
                 {crashes.feature && (
                     <button
                         onClick={() => resetCrash('feature')}
-                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
+                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-alt inline-flex items-center justify-center mt-2"
                     >
                         Reset
                     </button>

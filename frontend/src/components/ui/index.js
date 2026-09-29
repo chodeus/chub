@@ -11,7 +11,6 @@ export * from './button';
 
 // Card primitive system (new composition API)
 export { Card, CardContainer, CardHeader, CardBody, CardFooter, CardImage } from './card';
-export { MediaCard, ActionCard } from './card';
 
 // Other UI components
 export { default as Dropdown } from './Dropdown';

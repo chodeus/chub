@@ -1,4 +1,4 @@
-/** Re-exports stat primitives and Grid/List/Inline layouts. */
+/** Re-exports the stat primitives, StatGrid and BarList. */
 
 // Re-export primitives
 export * from './primitives';

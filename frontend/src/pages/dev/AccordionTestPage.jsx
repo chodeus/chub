@@ -35,7 +35,7 @@ const AccordionTestPage = () => {
                         className="border border-border-light rounded-lg overflow-hidden"
                     >
                         <AccordionItem.Header className="list-none">
-                            <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                            <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                 <span className="font-medium text-sm md:text-base text-fg pr-2">
                                     Test Header (Uncontrolled)
                                 </span>
@@ -83,7 +83,7 @@ const AccordionTestPage = () => {
                         className="border border-border-light rounded-lg overflow-hidden"
                     >
                         <AccordionItem.Header className="list-none">
-                            <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                            <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                 <span className="font-medium text-sm md:text-base text-fg pr-2">
                                     Controlled Header
                                 </span>
@@ -116,7 +116,7 @@ const AccordionTestPage = () => {
                     <AccordionItem>
                         <AccordionItem.Header className="list-none">
                             {({ isExpanded }) => (
-                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                     <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Dynamic Header (Render Prop)
                                     </span>
@@ -156,7 +156,7 @@ const AccordionTestPage = () => {
 
                     <AccordionItem>
                         <AccordionItem.Header className="list-none focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
-                            <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                            <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                 <span className="font-medium text-sm md:text-base text-fg pr-2">
                                     Keyboard Test Header
                                 </span>
@@ -192,7 +192,7 @@ const AccordionTestPage = () => {
                             className="border border-border-light rounded-lg overflow-hidden"
                         >
                             <AccordionItem.Header className="list-none">
-                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                     <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         First Accordion (Default Expanded)
                                     </span>
@@ -217,7 +217,7 @@ const AccordionTestPage = () => {
                             className="border border-border-light rounded-lg overflow-hidden"
                         >
                             <AccordionItem.Header className="list-none">
-                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                     <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Second Accordion (Default Collapsed)
                                     </span>
@@ -242,7 +242,7 @@ const AccordionTestPage = () => {
                             className="border border-border-light rounded-lg overflow-hidden"
                         >
                             <AccordionItem.Header className="list-none">
-                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                     <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Third Accordion (Default Collapsed)
                                     </span>
@@ -278,7 +278,7 @@ const AccordionTestPage = () => {
                         {/* Default pointer cursor */}
                         <AccordionItem>
                             <AccordionItem.Header className="list-none">
-                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                     <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Default Cursor Test - Should show pointer cursor on hover
                                     </span>
@@ -302,7 +302,7 @@ const AccordionTestPage = () => {
                         {/* Override with default cursor */}
                         <AccordionItem>
                             <AccordionItem.Header className="list-none cursor-default">
-                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                     <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Default Cursor Override Test - Should show default cursor on
                                         hover
@@ -335,7 +335,7 @@ const AccordionTestPage = () => {
                         console).
                     </p>
 
-                    <div className="bg-error-bg border border-error rounded-lg p-4">
+                    <div className="bg-error/10 border border-error rounded-lg p-4">
                         <p className="text-error text-sm">
                             The following components are commented out as they would throw errors.
                             Uncomment in dev tools to test error handling:
@@ -370,7 +370,7 @@ const AccordionTestPage = () => {
                             <Accordion>
                                 <AccordionItem>
                                     <AccordionItem.Header className="list-none">
-                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                             <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Container Item 1
                                             </span>
@@ -391,7 +391,7 @@ const AccordionTestPage = () => {
                                 </AccordionItem>
                                 <AccordionItem>
                                     <AccordionItem.Header className="list-none">
-                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                             <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Container Item 2
                                             </span>
@@ -427,7 +427,7 @@ const AccordionTestPage = () => {
                                     className="border border-border-light rounded-lg overflow-hidden"
                                 >
                                     <AccordionItem.Header className="list-none">
-                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                             <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Spaced Item 1 (Expanded)
                                             </span>
@@ -448,7 +448,7 @@ const AccordionTestPage = () => {
                                 </AccordionItem>
                                 <AccordionItem>
                                     <AccordionItem.Header className="list-none">
-                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                             <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Spaced Item 2
                                             </span>
@@ -482,7 +482,7 @@ const AccordionTestPage = () => {
                                     className="border border-border-light rounded-lg overflow-hidden"
                                 >
                                     <AccordionItem.Header className="list-none">
-                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
+                                        <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11 touch-manipulation">
                                             <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Single Item (Expanded)
                                             </span>

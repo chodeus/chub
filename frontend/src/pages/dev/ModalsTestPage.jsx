@@ -580,7 +580,7 @@ const ModalsTestPage = () => {
                                     <div className="space-y-3">
                                         <AccordionItem defaultExpanded={true}>
                                             <AccordionItem.Header className="list-none">
-                                                <div className="w-full px-4 py-3 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11">
+                                                <div className="w-full px-4 py-3 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11">
                                                     <span className="font-medium text-fg">
                                                         General Settings
                                                     </span>
@@ -600,7 +600,7 @@ const ModalsTestPage = () => {
 
                                         <AccordionItem>
                                             <AccordionItem.Header className="list-none">
-                                                <div className="w-full px-4 py-3 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11">
+                                                <div className="w-full px-4 py-3 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11">
                                                     <span className="font-medium text-fg">
                                                         Advanced Settings
                                                     </span>
@@ -620,7 +620,7 @@ const ModalsTestPage = () => {
 
                                         <AccordionItem>
                                             <AccordionItem.Header className="list-none">
-                                                <div className="w-full px-4 py-3 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11">
+                                                <div className="w-full px-4 py-3 bg-surface hover:bg-surface-alt flex items-center justify-between min-h-11">
                                                     <span className="font-medium text-fg">
                                                         Notifications
                                                     </span>

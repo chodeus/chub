@@ -30,7 +30,7 @@ const MemoizedFieldComponent = React.memo(
 
         if (!fieldComponent) {
             return (
-                <div className="p-2 bg-warning-bg text-warning rounded">
+                <div className="p-2 bg-warning/10 text-warning rounded">
                     Unknown field type: {field.type}
                 </div>
             );
@@ -277,7 +277,7 @@ export const GeneralSettingsPage = () => {
 
             {/* Error display */}
             {saveError && (
-                <div className="p-3 bg-error-bg border border-error-border text-error rounded-lg">
+                <div className="p-3 bg-error/10 border border-error text-error rounded-lg">
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm">error</span>
                         {saveError}
@@ -442,7 +442,7 @@ export const GeneralSettingsPage = () => {
                                         return (
                                             <div
                                                 key={`error-${module.key}-${field.key}-${fieldIndex}`}
-                                                className="p-2 bg-warning-bg text-warning rounded"
+                                                className="p-2 bg-warning/10 text-warning rounded"
                                             >
                                                 Field type &apos;{field.type}&apos; error:{' '}
                                                 {error.message}

@@ -71,8 +71,8 @@ export const TextareaBase = ({
                 !disabled && 'hover:border-primary hover:bg-input-hover',
 
                 // Error states (atomic utilities)
-                invalid && 'border-input-error',
-                invalid && 'focus:border-input-error',
+                invalid && 'border-error',
+                invalid && 'focus:border-error',
 
                 // Disabled states (atomic utilities)
                 disabled && 'opacity-60 cursor-not-allowed bg-input-disabled border-input-disabled',

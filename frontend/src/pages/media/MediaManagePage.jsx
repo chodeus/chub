@@ -861,7 +861,7 @@ const MediaManagePage = () => {
                             info
                         </span>
                         Unmatched ARR ↔ Plex detection is off. Add{' '}
-                        <a className="text-brand-primary hover:underline" href="/settings/modules">
+                        <a className="text-primary hover:underline" href="/settings/modules">
                             library mappings in Nestarr settings
                         </a>{' '}
                         to enable it. Nested and stray-file detection still run.

@@ -3,8 +3,8 @@ export const NoticeField = ({ field }) => {
     const variant = field.variant === 'error' ? 'error' : 'warning';
     const tone =
         variant === 'error'
-            ? 'bg-error-bg border-error/25 text-error'
-            : 'bg-warning-bg border-warning/25 text-warning';
+            ? 'bg-error/10 border-error/25 text-error'
+            : 'bg-warning/10 border-warning/25 text-warning';
 
     return (
         <div role="status" className={`rounded-md border px-3 py-2 text-[12.5px] ${tone}`}>

@@ -71,7 +71,7 @@ const LoginPage = () => {
         'h-input px-3 rounded-lg bg-surface-inset border text-fg text-sm outline-none focus:border-primary transition-colors';
 
     return (
-        <div className="relative min-h-app flex items-center justify-center p-4 bg-canvas overflow-hidden">
+        <div className="relative min-h-app flex items-center justify-center p-4 bg-bg overflow-hidden">
             <div className="absolute inset-0" style={DOT_GRID} aria-hidden="true" />
 
             <div className="relative w-full max-w-[408px] flex flex-col gap-[22px]">
