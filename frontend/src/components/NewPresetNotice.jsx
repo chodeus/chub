@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Button } from './ui';
+import { Button, LoadingButton } from './ui';
 import { dismissNewGdrivePresets, fetchNewGdrivePresets } from '../utils/gdrivePresets.js';
 
 const SYNC_GDRIVE_SETTINGS = '/settings/modules/sync_gdrive';
@@ -53,7 +53,7 @@ const NewPresetNotice = () => {
             aria-label={title}
             className="fixed bottom-4 right-4 z-fixed w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface-elevated p-4 shadow-lg"
         >
-            <div className="mb-1 text-sm font-semibold text-fg">{title}</div>
+            <h2 className="mb-1 font-display text-heading font-semibold text-fg">{title}</h2>
             <div className="mb-2 text-xs text-fg-subtle">
                 Added in a CHUB update. Add the ones you want in Sync GDrive.
             </div>
@@ -68,9 +68,15 @@ const NewPresetNotice = () => {
                 <Button size="small" onClick={open}>
                     Open Sync GDrive
                 </Button>
-                <Button size="small" variant="ghost" onClick={dismiss} disabled={busy}>
+                <LoadingButton
+                    size="small"
+                    variant="ghost"
+                    onClick={dismiss}
+                    loading={busy}
+                    loadingText="Dismissing…"
+                >
                     Dismiss
-                </Button>
+                </LoadingButton>
             </div>
         </section>
     );

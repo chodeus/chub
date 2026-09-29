@@ -63,6 +63,19 @@ describe('NewPresetNotice', () => {
         expect(screen.getByRole('button', { name: 'Dismiss' })).toBeEnabled();
     });
 
+    it('shows the dismiss in progress', async () => {
+        fetchNewGdrivePresets.mockResolvedValue(PRESETS.slice(0, 1));
+        let finish;
+        dismissNewGdrivePresets.mockReturnValue(new Promise(resolve => (finish = resolve)));
+        renderApp();
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
+
+        expect(screen.getByRole('button', { name: /Dismissing/ })).toBeDisabled();
+        finish();
+        await waitFor(() => expect(screen.queryByRole('region')).not.toBeInTheDocument());
+    });
+
     it('opens Sync GDrive and hides without dismissing', async () => {
         fetchNewGdrivePresets.mockResolvedValue(PRESETS);
         renderApp();
