@@ -61,18 +61,22 @@ export const ScheduleCard = React.memo(
                                 {moduleLabel}
                             </div>
                         </div>
-                        <div className="font-mono text-[10.5px] mt-0.5 truncate text-fg-subtle">
+                        <div
+                            className={`font-mono text-[10.5px] mt-0.5 truncate ${
+                                hasSchedule ? 'text-fg-subtle' : 'text-fg-faint'
+                            }`}
+                        >
                             {hasSchedule ? scheduleToHuman(schedule) : 'manual only'}
                         </div>
                     </div>
 
                     <div className="flex-1 min-w-0">
                         {hasSchedule ? (
-                            <span className="font-mono text-[11px] text-fg-subtle truncate">
+                            <span className="font-mono text-[11px] text-fg-faint truncate">
                                 {schedule}
                             </span>
                         ) : (
-                            <span className="font-mono text-[12px] text-fg-subtle">—</span>
+                            <span className="font-mono text-[12px] text-fg-dim">—</span>
                         )}
                     </div>
 

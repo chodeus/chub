@@ -42,8 +42,8 @@
     --text-primary: #fff;
     --text-secondary: #b2d1e8;
     --text-tertiary: #6a86cc;
-    --text-muted: #4f4a7a; /* Decorative separators and icons, never text */
-    --text-faint: #564f8a; /* Idle dots and markers, never text */
+    --text-muted: #4f4a7a; /* Faint */
+    --text-faint: #564f8a; /* Section headings / idle */
     --text-data: #8ea3cc; /* On-mono-data secondary */
 
     /* Layout Specific Colors */
@@ -53,7 +53,7 @@
     --sidebar-border: #211c46;
     --sidebar-text: #fff;
     --sidebar-text-secondary: #b2d1e8;
-    --sidebar-heading: #7d78a5;
+    --sidebar-heading: #564f8a;
     --sidebar-accent: #8767f7; /* Accent on the always-dark chrome; ThemeContext sets it */
     --sidebar-on-accent: #fff;
     --header-bg: #0c0820;

@@ -659,7 +659,7 @@ export const ArrayObjectField = ({
         // Flat borderless field — reads as a table cell; the row border
         // highlights on focus-within (mock style), not per-input boxes.
         const cell =
-            'bg-transparent border-0 outline-none px-0 py-1 text-sm text-fg placeholder:text-fg-subtle w-full disabled:opacity-60';
+            'bg-transparent border-0 outline-none px-0 py-1 text-sm text-fg placeholder:text-fg-dim w-full disabled:opacity-60';
         return (
             <>
                 {value.length > 0 ? (

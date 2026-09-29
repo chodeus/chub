@@ -262,12 +262,12 @@ export const InstanceCard = ({
                 <div className="px-[18px] pb-4 pt-1 border-t border-border-light flex flex-col gap-3 text-[12.5px]">
                     <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-[11.5px] text-fg-subtle pt-3">
                         <span>
-                            <span className="text-fg-subtle">last tested</span>{' '}
+                            <span className="text-fg-dim">last tested</span>{' '}
                             <span className="text-fg-muted">{lastTested}</span>
                         </span>
                         {synced && (
                             <span>
-                                <span className="text-fg-subtle">synced</span>{' '}
+                                <span className="text-fg-dim">synced</span>{' '}
                                 <span className="text-fg-muted">{synced}</span>
                             </span>
                         )}
@@ -335,7 +335,7 @@ export const InstanceCard = ({
                                                     <span
                                                         aria-hidden="true"
                                                         className={`material-symbols-outlined text-[14px] leading-none ${
-                                                            on ? 'text-primary' : 'text-fg-subtle'
+                                                            on ? 'text-primary' : 'text-fg-faint'
                                                         }`}
                                                     >
                                                         {on

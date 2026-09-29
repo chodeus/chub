@@ -132,7 +132,7 @@ const LoginPage = () => {
                             }}
                             disabled={submitting}
                             placeholder="admin"
-                            className={`${inputCls} ${fieldError(!!errorMsg, username)} placeholder:text-fg-subtle`}
+                            className={`${inputCls} ${fieldError(!!errorMsg, username)} placeholder:text-fg-dim`}
                         />
                     </label>
 
@@ -151,7 +151,7 @@ const LoginPage = () => {
                                 }}
                                 disabled={submitting}
                                 placeholder="••••••••"
-                                className={`${inputCls} flex-1 pr-11 ${fieldError(!!errorMsg, password)} placeholder:text-fg-subtle`}
+                                className={`${inputCls} flex-1 pr-11 ${fieldError(!!errorMsg, password)} placeholder:text-fg-dim`}
                             />
                             <button
                                 type="button"
@@ -179,7 +179,7 @@ const LoginPage = () => {
                                 onChange={e => setConfirmPassword(e.target.value)}
                                 disabled={submitting}
                                 placeholder="••••••••"
-                                className={`${inputCls} ${fieldError(false, confirmPassword)} placeholder:text-fg-subtle`}
+                                className={`${inputCls} ${fieldError(false, confirmPassword)} placeholder:text-fg-dim`}
                             />
                         </label>
                     )}
@@ -201,7 +201,7 @@ const LoginPage = () => {
                 </form>
 
                 {/* Connection footer */}
-                <div className="flex items-center justify-center gap-2.5 font-mono text-[11px] text-fg-subtle">
+                <div className="flex items-center justify-center gap-2.5 font-mono text-[11px] text-fg-faint">
                     <span
                         className="w-[7px] h-[7px] rounded-full bg-success"
                         style={{ boxShadow: '0 0 0 3px rgba(108,188,102,.16)' }}

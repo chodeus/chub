@@ -522,7 +522,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                         }}
                         placeholder="Search unmatched…"
                         aria-label="Search unmatched titles"
-                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-subtle"
+                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-dim"
                     />
                 </div>
             </div>
@@ -1354,7 +1354,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                         }}
                         placeholder="Search title…"
                         aria-label="Search titles"
-                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-subtle"
+                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-dim"
                     />
                 </div>
             </div>

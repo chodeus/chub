@@ -546,7 +546,7 @@ const DashboardPage = () => {
                         {
                             label: 'FAILED',
                             value: jobStats.failed,
-                            tone: jobStats.failed > 0 ? 'text-error' : 'text-fg-subtle',
+                            tone: jobStats.failed > 0 ? 'text-error' : 'text-fg-dim',
                         },
                         { label: 'INSTANCES', value: instValue, tone: instTone },
                         {
@@ -654,7 +654,7 @@ const DashboardPage = () => {
                                 const nextTone = isRunning
                                     ? 'text-accent'
                                     : nextText === '—'
-                                      ? 'text-fg-subtle'
+                                      ? 'text-fg-dim'
                                       : 'text-fg-muted';
                                 return (
                                     <React.Fragment key={mod.name}>
@@ -803,7 +803,7 @@ const DashboardPage = () => {
                                                             {overrideKeys.join(', ')}
                                                         </div>
                                                         <div
-                                                            className={`font-mono text-[11.5px] truncate ${en ? 'text-fg-muted' : 'text-fg-subtle'}`}
+                                                            className={`font-mono text-[11.5px] truncate ${en ? 'text-fg-muted' : 'text-fg-dim'}`}
                                                         >
                                                             {subNext}
                                                         </div>
