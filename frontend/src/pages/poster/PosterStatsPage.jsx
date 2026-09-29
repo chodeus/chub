@@ -361,7 +361,7 @@ const PosterStatsPage = () => {
                 description="Asset-cache coverage, sources, and storage."
                 actions={
                     <>
-                        <div className="flex items-center h-11 rounded-lg bg-surface border border-border">
+                        <div className="flex items-center h-11 rounded-lg bg-surface border border-border focus-within:border-primary">
                             <select
                                 value={period}
                                 onChange={e => setPeriod(e.target.value)}
