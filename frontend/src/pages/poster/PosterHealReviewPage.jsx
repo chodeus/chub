@@ -36,7 +36,7 @@ const TYPE_LABEL = {
 
 const TypePills = ({ types, muted }) =>
     types.length === 0 ? (
-        <span className="text-[11px] text-fg-dim italic">nothing routed here</span>
+        <span className="text-[11px] text-fg-subtle italic">nothing routed here</span>
     ) : (
         <span className="flex items-center gap-[5px] flex-wrap">
             {types.map(t => (
