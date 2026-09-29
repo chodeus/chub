@@ -113,10 +113,10 @@ const LayoutSidebar = React.memo(() => {
                 >
                     <BrandMark />
                     <div className="leading-tight min-w-0">
-                        <div className="font-display font-bold text-[18px] tracking-[.5px] text-sidebar-text">
+                        <div className="font-display font-bold text-lg tracking-[.5px] text-sidebar-text">
                             CHUB
                         </div>
-                        <div className="text-[11px] font-medium text-sidebar-text-secondary">
+                        <div className="text-meta font-medium text-sidebar-text-secondary">
                             Media Manager
                         </div>
                     </div>
@@ -126,7 +126,7 @@ const LayoutSidebar = React.memo(() => {
                     {NAV_SECTIONS.map(section => (
                         <div key={section.id} className="mb-2">
                             {section.heading && (
-                                <div className="px-3 pt-4 pb-2 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-sidebar-heading">
+                                <div className="px-3 pt-4 pb-2 font-mono text-micro font-medium uppercase tracking-[0.15em] text-sidebar-heading">
                                     {section.heading}
                                 </div>
                             )}
@@ -213,12 +213,12 @@ const LayoutSidebar = React.memo(() => {
                                 className="w-2 h-2 rounded-full bg-success shrink-0"
                                 aria-hidden="true"
                             />
-                            <span className="font-mono text-[11px] text-sidebar-text-secondary truncate">
+                            <span className="font-mono text-meta text-sidebar-text-secondary truncate">
                                 {versionLine}
                             </span>
                         </>
                     ) : (
-                        <span className="font-mono text-[11px] text-sidebar-text-secondary truncate">
+                        <span className="font-mono text-meta text-sidebar-text-secondary truncate">
                             CHUB
                         </span>
                     )}

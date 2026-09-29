@@ -31,13 +31,13 @@ const MaintenanceCard = ({
                         </span>
                         {count != null && (
                             <span
-                                className={`font-mono text-[10px] font-semibold px-2 py-0.5 rounded-full ${countClass}`}
+                                className={`font-mono text-micro font-semibold px-2 py-0.5 rounded-full ${countClass}`}
                             >
                                 {count}
                             </span>
                         )}
                     </div>
-                    <div className="text-[12.5px] text-fg-subtle mt-0.5">{description}</div>
+                    <div className="text-dense text-fg-subtle mt-0.5">{description}</div>
                 </div>
                 <span
                     className="material-symbols-outlined text-fg-subtle transition-transform"
@@ -306,7 +306,7 @@ export const LibraryMaintenance = () => (
             >
                 handyman
             </span>
-            <h2 className="font-display text-[15px] font-semibold text-fg">Library Maintenance</h2>
+            <h2 className="font-display text-heading font-semibold text-fg">Library Maintenance</h2>
         </div>
         <div className="flex flex-col gap-3">
             <OrphanedCacheCard />

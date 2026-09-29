@@ -657,13 +657,13 @@ export const InstancesPage = () => {
             {/* Auto-sync cadence — small, secondary control. Reconciles the
                 media cache from these instances (a safety-net behind webhooks);
                 full library stats live on the Statistics page. */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-fg-subtle">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-dense text-fg-subtle">
                 <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
                     sync
                 </span>
                 <span>Auto-sync library from instances</span>
                 <select
-                    className="h-11 bg-surface border border-border rounded-md px-2 text-fg text-[13px] disabled:opacity-50"
+                    className="h-11 bg-surface border border-border rounded-md px-2 text-fg text-dense disabled:opacity-50"
                     value={(SYNC_PRESETS.find(p => p.value === syncSchedule) || {}).key ?? 'custom'}
                     disabled={!syncScheduleLoaded || syncScheduleSaving}
                     onChange={e => {
@@ -688,7 +688,7 @@ export const InstancesPage = () => {
                 <div key={service.type}>
                     {/* Service Header */}
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <h2 className="font-display text-[15px] font-semibold text-fg flex items-center gap-2.5">
+                        <h2 className="font-display text-heading font-semibold text-fg flex items-center gap-2.5">
                             <ServiceIcon service={service.type} size="small" />
                             {service.label} Instances
                         </h2>

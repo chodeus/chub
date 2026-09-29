@@ -315,7 +315,7 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
                 </button>
             )}
             <span
-                className={`absolute bottom-0 left-0 right-0 px-1.5 py-1 font-mono text-[8.5px] font-semibold tracking-[0.3px] ${
+                className={`absolute bottom-0 left-0 right-0 px-1.5 py-1 font-mono text-micro font-semibold tracking-[0.3px] ${
                     isActive ? 'text-success' : isPlex ? 'text-fg-subtle' : 'text-error'
                 }`}
                 style={{
@@ -337,7 +337,7 @@ const ModeCheck = ({ label, checked, disabled, onChange, title }) => (
         disabled={disabled}
         onClick={() => onChange(!checked)}
         title={title}
-        className={`flex items-center gap-2 text-[13px] text-fg ${
+        className={`flex items-center gap-2 text-dense text-fg ${
             disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
         }`}
     >
@@ -1069,25 +1069,25 @@ const PosterCleanarrPage = () => {
                 description={
                     hasScanned && stats ? (
                         <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                            <span className="font-mono text-[12.5px] text-fg-muted">
+                            <span className="font-mono text-dense text-fg-muted">
                                 {stats.bundle_count} items
                             </span>
                             <span className="text-fg-dim">·</span>
-                            <span className="font-mono text-[12.5px] text-fg-muted">
+                            <span className="font-mono text-dense text-fg-muted">
                                 {stats.variant_count} variants
                             </span>
                             <span className="text-fg-dim">·</span>
-                            <span className="font-mono text-[12.5px] text-error">
+                            <span className="font-mono text-dense text-error">
                                 {stats.bloat_count} bloat
                             </span>
                             <span className="text-fg-dim">·</span>
-                            <span className="font-mono text-[12.5px] text-success">
+                            <span className="font-mono text-dense text-success">
                                 {formatBytes(stats.bloat_size)} reclaimable
                             </span>
                             {staleItems.length > 0 && (
                                 <>
                                     <span className="text-fg-dim">·</span>
-                                    <span className="font-mono text-[12.5px] text-warning">
+                                    <span className="font-mono text-dense text-warning">
                                         {staleItems.length} stale duplicate
                                         {staleItems.length === 1 ? '' : 's'}
                                     </span>
@@ -1101,7 +1101,7 @@ const PosterCleanarrPage = () => {
                 actions={
                     hasScanned &&
                     stats && (
-                        <span className="flex items-center gap-3.5 font-mono text-[11px] text-fg-subtle">
+                        <span className="flex items-center gap-3.5 font-mono text-meta text-fg-subtle">
                             <span className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-error" />
                                 bloat
@@ -1147,12 +1147,12 @@ const PosterCleanarrPage = () => {
                 className="rounded-xl bg-surface border border-border px-4 py-3.5 flex flex-wrap items-center gap-4"
                 style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
             >
-                <label className="flex items-center gap-2 text-[13px] font-semibold text-fg-muted">
+                <label className="flex items-center gap-2 text-dense font-semibold text-fg-muted">
                     Mode
                     <select
                         value={mode}
                         onChange={e => setMode(e.target.value)}
-                        className="h-11 bg-surface-inset border border-border rounded-lg px-3 text-[13px] font-semibold text-fg outline-none focus:border-primary cursor-pointer"
+                        className="h-11 bg-surface-inset border border-border rounded-lg px-3 text-dense font-semibold text-fg outline-none focus:border-primary cursor-pointer"
                     >
                         {Object.entries(MODE_META).map(([k, m]) => (
                             <option key={k} value={k}>
@@ -1161,7 +1161,7 @@ const PosterCleanarrPage = () => {
                         ))}
                     </select>
                 </label>
-                <span className="text-[12.5px] text-fg-subtle" style={{ maxWidth: '420px' }}>
+                <span className="text-dense text-fg-subtle" style={{ maxWidth: '420px' }}>
                     {MODE_META[mode]?.description}
                 </span>
                 <div className="flex flex-wrap items-center gap-4">
@@ -1290,7 +1290,7 @@ const PosterCleanarrPage = () => {
                                             value={search}
                                             onChange={e => setSearch(e.target.value)}
                                             placeholder="Search titles…"
-                                            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[12.5px] text-fg placeholder:text-fg-subtle"
+                                            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-dense text-fg placeholder:text-fg-subtle"
                                         />
                                     </div>
                                     {/* Tree list */}
@@ -1382,14 +1382,14 @@ const PosterCleanarrPage = () => {
                                                         </React.Fragment>
                                                     ))}
                                                 </div>
-                                                <h3 className="font-display text-[19px] font-semibold text-fg m-0">
+                                                <h3 className="font-display text-lg font-semibold text-fg m-0">
                                                     {
                                                         detail.breadcrumb[
                                                             detail.breadcrumb.length - 1
                                                         ]
                                                     }
                                                 </h3>
-                                                <div className="font-mono text-[12px] text-fg-muted mt-1.5">
+                                                <div className="font-mono text-xs text-fg-muted mt-1.5">
                                                     {detail.variants.length} variants ·{' '}
                                                     <span className="text-success">
                                                         {activeInDetail} active

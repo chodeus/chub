@@ -258,7 +258,7 @@ const LabelarrPage = () => {
                         Mirror Radarr / Sonarr tags onto Plex labels · managed by{' '}
                         <span className="font-mono text-fg-muted">labelarr</span>
                         {fullConfig?.labelarr?.dry_run && (
-                            <span className="ml-2 font-mono text-[10px] px-2 py-0.5 rounded-full bg-warning/15 text-warning align-middle">
+                            <span className="ml-2 font-mono text-micro px-2 py-0.5 rounded-full bg-warning/15 text-warning align-middle">
                                 DRY RUN
                             </span>
                         )}
@@ -267,7 +267,7 @@ const LabelarrPage = () => {
                 actions={
                     <>
                         {isDirty && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[11px] px-2.5 py-1 rounded-full bg-warning/15 text-warning">
+                            <span className="inline-flex items-center gap-1 font-mono text-meta px-2.5 py-1 rounded-full bg-warning/15 text-warning">
                                 <span className="material-symbols-outlined text-[14px]">edit</span>
                                 Unsaved
                             </span>
@@ -316,7 +316,7 @@ const LabelarrPage = () => {
                         <div className="px-4 sm:px-[22px] py-3.5 flex flex-col gap-1.5 min-w-[116px] flex-1">
                             <span className="eyebrow">{s.label}</span>
                             <span
-                                className={`font-mono font-semibold text-[18px] ${s.tone} ${s.capitalize ? 'capitalize' : ''}`}
+                                className={`font-mono font-semibold text-lg ${s.tone} ${s.capitalize ? 'capitalize' : ''}`}
                                 title={s.title}
                             >
                                 {s.value}
@@ -327,14 +327,14 @@ const LabelarrPage = () => {
             </div>
 
             {labelarrState?.message && (
-                <div className="text-[12.5px] text-fg-muted bg-surface border border-border rounded-lg px-4 py-3">
+                <div className="text-dense text-fg-muted bg-surface border border-border rounded-lg px-4 py-3">
                     {labelarrState.message}
                 </div>
             )}
 
             {/* Mappings editor */}
             <div className="flex items-center justify-between">
-                <h2 className="font-display text-[15px] font-semibold text-fg m-0">Mappings</h2>
+                <h2 className="font-display text-heading font-semibold text-fg m-0">Mappings</h2>
                 <Button variant="surface" size="small" icon="add" onClick={addMapping}>
                     Add mapping
                 </Button>
@@ -435,7 +435,7 @@ const LabelarrLibraryPicker = ({ instanceName, value, onChange, disabled }) => {
                 disabled={disabled}
             />
             {selected.size === 0 && (
-                <span className="self-center text-[11px] text-fg-subtle">
+                <span className="self-center text-meta text-fg-subtle">
                     none ticked = all enabled
                 </span>
             )}
@@ -454,7 +454,7 @@ const MappingCard = ({
 }) => {
     const [expanded, setExpanded] = useState(!mapping.app_instance);
     const inputCls =
-        'h-11 rounded-[8px] bg-surface-inset border border-border text-fg text-[13px] px-3 outline-none focus:border-primary disabled:opacity-50';
+        'h-11 rounded-[8px] bg-surface-inset border border-border text-fg text-dense px-3 outline-none focus:border-primary disabled:opacity-50';
 
     const setLabels = useCallback(
         v =>
@@ -506,7 +506,7 @@ const MappingCard = ({
                         ring={false}
                         size={7}
                     />
-                    <span className="font-mono text-[13px] font-semibold text-fg truncate">
+                    <span className="font-mono text-dense font-semibold text-fg truncate">
                         {mapping.app_instance || '(no instance)'}
                     </span>
                     <span className="material-symbols-outlined text-[16px] text-fg-dim">
@@ -519,19 +519,19 @@ const MappingCard = ({
                             mapping.labels.slice(0, 4).map(l => (
                                 <span
                                     key={l}
-                                    className="font-mono text-[10.5px] px-2 py-0.5 rounded-[5px] bg-warning/15 text-warning"
+                                    className="font-mono text-meta px-2 py-0.5 rounded-[5px] bg-warning/15 text-warning"
                                 >
                                     {l}
                                 </span>
                             ))
                         )}
                         {mapping.labels.length > 4 && (
-                            <span className="font-mono text-[10.5px] text-fg-subtle">
+                            <span className="font-mono text-meta text-fg-subtle">
                                 +{mapping.labels.length - 4}
                             </span>
                         )}
                     </span>
-                    <span className="ml-auto font-mono text-[11px] text-fg-subtle truncate hidden md:inline">
+                    <span className="ml-auto font-mono text-meta text-fg-subtle truncate hidden md:inline">
                         {mapping.plex_instances.length
                             ? mapping.plex_instances
                                   .map(p => p.instance)

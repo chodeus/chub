@@ -7,7 +7,7 @@ export const NoticeField = ({ field }) => {
             : 'bg-warning/10 border-warning/25 text-warning';
 
     return (
-        <div role="status" className={`rounded-md border px-3 py-2 text-[12.5px] ${tone}`}>
+        <div role="status" className={`rounded-md border px-3 py-2 text-dense ${tone}`}>
             {field.label && <p className="font-semibold m-0 mb-1">{field.label}</p>}
             <p className="m-0 text-fg-muted">{field.description}</p>
             {field.link && (

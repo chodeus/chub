@@ -266,7 +266,7 @@ export const SchedulePage = () => {
             {availableModules.length > 0 && (
                 <div className="flex items-center gap-3 rounded-xl border border-dashed border-border px-[18px] py-3.5">
                     <span className="material-symbols-outlined text-fg-subtle text-lg">info</span>
-                    <span className="text-[12.5px] text-fg-subtle">
+                    <span className="text-dense text-fg-subtle">
                         The base schedule runs the module across all instances.{' '}
                         <span className="text-accent">Profiles</span> fire independently per
                         instance; <span className="text-warning">blocks</span> fire on their own

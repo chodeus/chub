@@ -115,6 +115,14 @@
     --font-serif: georgia, 'Times New Roman', serif;
     --font-mono: 'JetBrains Mono', 'SF Mono', monaco, 'Cascadia Code', consolas, monospace;
 
+    /* Type-scale steps between Tailwind's text-xs/sm/base/lg. No --line-height pair, so text keeps the body's 1.5. */
+    --text-micro: 10px;
+    --text-meta: 11px;
+    --text-dense: 13px;
+    --text-heading: 15px;
+    --text-title: 26px;
+    --text-stat: 28px;
+
     /* Cleared: tokens.css owns --radius-* for plain CSS, and the rounded-* utilities
        below use the same steps as literals, so a name means one size in both. */
     --radius-*: initial;
@@ -193,7 +201,7 @@
 /* Mono uppercase label over a value, a column or a group. */
 @utility eyebrow {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-micro);
     letter-spacing: 1px;
     text-transform: uppercase;
     color: var(--text-tertiary);

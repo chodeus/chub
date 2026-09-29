@@ -285,7 +285,7 @@ export const GeneralSettingsPage = () => {
             {/* Appearance — theme + accent (mock's Appearance section). Replaces
                 the schema's plain theme dropdown (filtered out of the map below). */}
             <div className="bg-surface border border-border rounded-xl p-5">
-                <h2 className="font-display text-[15px] font-semibold mb-4 text-fg">Appearance</h2>
+                <h2 className="font-display text-heading font-semibold mb-4 text-fg">Appearance</h2>
                 <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between gap-4 flex-wrap">
                         <div>
@@ -308,7 +308,7 @@ export const GeneralSettingsPage = () => {
                                         onClick={() =>
                                             handleFieldChange('user_interface', 'theme', val)
                                         }
-                                        className={`touch-expand px-3.5 py-1.5 rounded-md text-[13px] transition-colors ${
+                                        className={`touch-expand px-3.5 py-1.5 rounded-md text-dense transition-colors ${
                                             active
                                                 ? 'bg-primary text-on-color font-semibold'
                                                 : 'text-fg-muted hover:text-fg'
@@ -360,7 +360,7 @@ export const GeneralSettingsPage = () => {
                         key={`module-${module.key}-${moduleIndex}`}
                         className="bg-surface border border-border rounded-xl p-5"
                     >
-                        <h2 className="font-display text-[15px] font-semibold mb-4 text-fg">
+                        <h2 className="font-display text-heading font-semibold mb-4 text-fg">
                             {module.label}
                         </h2>
 
@@ -464,16 +464,16 @@ export const GeneralSettingsPage = () => {
                 wizard also auto-launches on a fresh install; this is the
                 re-entry point now that the Settings hub page is gone. */}
             <div className="bg-surface border border-border rounded-xl p-5">
-                <h2 className="font-display text-[15px] font-semibold mb-1 text-fg">
+                <h2 className="font-display text-heading font-semibold mb-1 text-fg">
                     First-run setup
                 </h2>
-                <p className="text-[13px] text-fg-subtle mb-4">
+                <p className="text-dense text-fg-subtle mb-4">
                     Re-run the guided setup wizard to reconfigure instances, paths, and modules.
                 </p>
                 <button
                     type="button"
                     onClick={() => navigate('/setup')}
-                    className="touch-expand inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-surface-inset border border-border text-fg-muted text-[13px] font-semibold transition-colors hover:border-border-light hover:text-fg"
+                    className="touch-expand inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-surface-inset border border-border text-fg-muted text-dense font-semibold transition-colors hover:border-border-light hover:text-fg"
                 >
                     <span className="material-symbols-outlined text-base">auto_fix_high</span>
                     Launch wizard

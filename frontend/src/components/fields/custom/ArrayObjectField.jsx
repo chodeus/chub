@@ -447,7 +447,7 @@ export const ArrayObjectField = ({
                         <div className="font-semibold text-sm text-fg truncate">{primary}</div>
                     </div>
                     {badge && (
-                        <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-surface text-fg-muted border border-border whitespace-nowrap">
+                        <span className="font-mono text-micro px-2 py-0.5 rounded-full bg-surface text-fg-muted border border-border whitespace-nowrap">
                             {badge}
                         </span>
                     )}
@@ -502,11 +502,11 @@ export const ArrayObjectField = ({
                         className="font-display font-semibold text-sm text-fg bg-transparent border-0 outline-none min-w-[140px] max-w-[240px] flex-1"
                     />
                     <span
-                        className={`font-mono text-[11px] shrink-0 ${enabled ? 'text-accent' : 'text-fg-subtle'}`}
+                        className={`font-mono text-meta shrink-0 ${enabled ? 'text-accent' : 'text-fg-subtle'}`}
                     >
                         {schedHuman}
                     </span>
-                    <label className="ml-auto flex items-center gap-2 text-[12.5px] text-fg-muted shrink-0">
+                    <label className="ml-auto flex items-center gap-2 text-dense text-fg-muted shrink-0">
                         Enabled
                         <Toggle
                             label="Enabled"
@@ -639,7 +639,7 @@ export const ArrayObjectField = ({
                         disabled={disabled}
                         onChange={v => set('unattended', v)}
                     />
-                    <span className="text-[12.5px] text-fg-muted">
+                    <span className="text-dense text-fg-muted">
                         Unattended — when every eligible item is tagged, clear the tag and start the
                         rotation again.
                     </span>
@@ -887,7 +887,7 @@ export const ArrayObjectField = ({
                             </option>
                         ))}
                     </select>
-                    <label className="ml-auto flex items-center gap-2 text-[12.5px] text-fg-muted shrink-0">
+                    <label className="ml-auto flex items-center gap-2 text-dense text-fg-muted shrink-0">
                         Enabled
                         <Toggle
                             label="Enabled"

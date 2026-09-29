@@ -323,11 +323,11 @@ report on."
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <span className="font-display text-[15px] font-semibold text-fg">
+                                        <span className="font-display text-heading font-semibold text-fg">
                                             {m.label}
                                         </span>
                                         <span
-                                            className="flex items-center gap-1.5 font-mono text-[10px]"
+                                            className="flex items-center gap-1.5 font-mono text-micro"
                                             style={{ color: m.statusColor }}
                                         >
                                             <span
@@ -340,21 +340,21 @@ report on."
                                             {m.status}
                                         </span>
                                     </div>
-                                    <div className="text-[12.5px] text-fg-data leading-[1.45] mt-1">
+                                    <div className="text-dense text-fg-data leading-[1.45] mt-1">
                                         {m.blurb}
                                     </div>
                                 </div>
                             </div>
                             <div className="h-px bg-border-light" />
                             <div className="flex items-center justify-between">
-                                <span className="font-mono text-[11.5px] text-fg-subtle">
+                                <span className="font-mono text-meta text-fg-subtle">
                                     {n} {m.noun}
                                     {n === 1 ? '' : 's'}
                                 </span>
                                 <button
                                     type="button"
                                     onClick={() => openAdd(method)}
-                                    className="touch-expand flex items-center gap-1.5 h-8 px-[13px] rounded-lg font-display text-[12.5px] font-semibold transition hover:brightness-110"
+                                    className="touch-expand flex items-center gap-1.5 h-8 px-[13px] rounded-lg font-display text-dense font-semibold transition hover:brightness-110"
                                     style={{
                                         background: m.tintBg,
                                         border: `1px solid ${m.tintBorder}`,
@@ -382,10 +382,10 @@ report on."
                             <span style={{ color: m.tint }} className="flex">
                                 <ServiceIcon service={method} size="small" />
                             </span>
-                            <span className="font-display text-[14px] font-semibold tracking-[.2px] text-fg">
+                            <span className="font-display text-sm font-semibold tracking-[.2px] text-fg">
                                 {m.label}
                             </span>
-                            <span className="font-mono text-[10px] text-fg-subtle px-[7px] py-0.5 rounded-full bg-surface-inset border border-border">
+                            <span className="font-mono text-micro text-fg-subtle px-[7px] py-0.5 rounded-full bg-surface-inset border border-border">
                                 {group.length}
                             </span>
                             <span className="flex-1 h-px bg-border-light" />
@@ -393,7 +393,7 @@ report on."
 
                         <div className="flex flex-col gap-3">
                             {group.length === 0 ? (
-                                <div className="border border-dashed border-border rounded-xl p-[18px] text-center text-[12.5px] text-fg-subtle">
+                                <div className="border border-dashed border-border rounded-xl p-[18px] text-center text-dense text-fg-subtle">
                                     No {m.label} destinations yet.
                                 </div>
                             ) : (
@@ -510,17 +510,17 @@ const DestinationCard = ({
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2.5">
-                        <span className="font-display text-[15px] font-semibold text-fg truncate">
+                        <span className="font-display text-heading font-semibold text-fg truncate">
                             {d.name || meta.label}
                         </span>
                         <span
-                            className="font-mono text-[9px] uppercase tracking-[.5px] px-1.5 py-0.5 rounded-[5px]"
+                            className="font-mono text-micro uppercase tracking-[.5px] px-1.5 py-0.5 rounded-[5px]"
                             style={{ background: meta.tintBg, color: meta.tint }}
                         >
                             {meta.label}
                         </span>
                     </div>
-                    <div className="font-mono text-[11.5px] text-fg-subtle mt-1 truncate">
+                    <div className="font-mono text-meta text-fg-subtle mt-1 truncate">
                         {targetLine(d)}
                     </div>
                 </div>
@@ -529,7 +529,7 @@ const DestinationCard = ({
                         type="button"
                         onClick={onTest}
                         disabled={testing}
-                        className="touch-expand h-9 px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-row-hover disabled:opacity-60"
+                        className="touch-expand h-9 px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-xs font-semibold transition-colors hover:bg-row-hover disabled:opacity-60"
                     >
                         {testing ? 'Testing…' : 'Test'}
                     </button>
@@ -571,7 +571,7 @@ const DestinationCard = ({
                     <div className="flex-1 min-w-0 flex flex-wrap items-center gap-[7px]">
                         {all && (
                             <span
-                                className="flex items-center gap-1.5 px-[11px] py-1 rounded-[7px] text-[12px] font-semibold"
+                                className="flex items-center gap-1.5 px-[11px] py-1 rounded-[7px] text-xs font-semibold"
                                 style={{
                                     background:
                                         'color-mix(in srgb, var(--primary) 13%, transparent)',
@@ -584,14 +584,14 @@ const DestinationCard = ({
                             </span>
                         )}
                         {!all && selected.length === 0 && (
-                            <span className="text-[12.5px] text-fg-subtle italic py-1">
+                            <span className="text-dense text-fg-subtle italic py-1">
                                 No modules yet — pick which runs report here.
                             </span>
                         )}
                         {chips.map(key => (
                             <span
                                 key={key}
-                                className="group flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-[12px] font-medium"
+                                className="group flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-medium"
                             >
                                 {humanize(key)}
                                 <button
@@ -607,14 +607,14 @@ const DestinationCard = ({
                             </span>
                         ))}
                         {more > 0 && (
-                            <span className="font-mono text-[11px] text-fg-subtle px-1 py-1">
+                            <span className="font-mono text-meta text-fg-subtle px-1 py-1">
                                 +{more} more
                             </span>
                         )}
                         <button
                             type="button"
                             onClick={onOpenPicker}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] bg-transparent text-fg-data text-[12px] font-semibold transition-colors hover:bg-row-hover"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] bg-transparent text-fg-data text-xs font-semibold transition-colors hover:bg-row-hover"
                             style={{ border: '1px dashed var(--border-strong)' }}
                         >
                             <span className="material-symbols-outlined text-[14px]">add</span>
@@ -667,7 +667,7 @@ const TriggerPill = ({ active, label, tone, onClick }) => {
             type="button"
             aria-pressed={active}
             onClick={onClick}
-            className="touch-expand flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-[12px] font-semibold transition-colors"
+            className="touch-expand flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-xs font-semibold transition-colors"
             style={{
                 color: active ? colors.c : 'var(--text-tertiary)',
                 background: active ? colors.bg : 'transparent',
@@ -693,10 +693,10 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
             }}
         >
             <div className="flex items-center justify-between p-[12px_14px] border-b border-border-light">
-                <span className="font-display text-[13px] font-semibold text-fg">
+                <span className="font-display text-dense font-semibold text-fg">
                     Report to this destination
                 </span>
-                <span className="font-mono text-[10.5px] text-fg-subtle">
+                <span className="font-mono text-meta text-fg-subtle">
                     {all ? MODULE_KEYS.length : selected.length} of {MODULE_KEYS.length}
                 </span>
             </div>
@@ -704,14 +704,14 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
                 <button
                     type="button"
                     onClick={onSelectAll}
-                    className="touch-expand flex-1 min-w-11 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-[11.5px] font-semibold"
+                    className="touch-expand flex-1 min-w-11 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-meta font-semibold"
                 >
                     Select all
                 </button>
                 <button
                     type="button"
                     onClick={onClearAll}
-                    className="touch-expand flex-1 min-w-11 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-data text-[11.5px] font-semibold"
+                    className="touch-expand flex-1 min-w-11 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-data text-meta font-semibold"
                 >
                     Clear
                 </button>
@@ -740,7 +740,7 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
                                 )}
                             </span>
                             <span
-                                className={`text-[13px] ${checked ? 'text-fg font-semibold' : 'text-fg-muted font-medium'}`}
+                                className={`text-dense ${checked ? 'text-fg font-semibold' : 'text-fg-muted font-medium'}`}
                             >
                                 {humanize(key)}
                             </span>
@@ -752,7 +752,7 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
                 <button
                     type="button"
                     onClick={onDone}
-                    className="touch-expand h-[30px] px-4 rounded-lg bg-primary text-on-color font-display text-[12.5px] font-semibold"
+                    className="touch-expand h-[30px] px-4 rounded-lg bg-primary text-on-color font-display text-dense font-semibold"
                 >
                     Done
                 </button>
@@ -771,15 +771,13 @@ const CredentialModal = ({ modal, busy, onName, onField, onClose, onSave }) => {
             <Modal.Body>
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] font-medium text-fg-muted">
-                            Display name
-                        </label>
+                        <label className="text-dense font-medium text-fg-muted">Display name</label>
                         <input
                             type="text"
                             value={modal.name}
                             onChange={e => onName(e.target.value)}
                             placeholder={modal.method === 'discord' ? 'My CHUB' : 'Homelab'}
-                            className="h-10 px-3 rounded-lg bg-surface-inset border border-border text-fg text-[14px] outline-none focus:border-border-strong"
+                            className="h-10 px-3 rounded-lg bg-surface-inset border border-border text-fg text-sm outline-none focus:border-border-strong"
                         />
                     </div>
                     {schema?.fields.map(field => {

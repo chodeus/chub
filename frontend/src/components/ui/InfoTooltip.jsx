@@ -22,7 +22,7 @@ const InfoTooltip = ({ text, label = 'More info' }) => {
             <span
                 id={tooltipId}
                 role="tooltip"
-                className={`pointer-events-none absolute left-0 top-[calc(100%+6px)] w-[240px] max-w-[70vw] rounded-lg border border-border bg-surface-elevated p-2.5 text-[12px] font-normal leading-relaxed text-fg-muted group-hover/tip:block group-focus-within/tip:block ${
+                className={`pointer-events-none absolute left-0 top-[calc(100%+6px)] w-[240px] max-w-[70vw] rounded-lg border border-border bg-surface-elevated p-2.5 text-xs font-normal leading-relaxed text-fg-muted group-hover/tip:block group-focus-within/tip:block ${
                     open ? 'block' : 'hidden'
                 }`}
                 style={{ zIndex: 60, boxShadow: '0 8px 24px -8px rgba(0,0,0,.7)' }}

@@ -90,7 +90,7 @@ export default function Logs() {
     // 36px real pill; touch-expand tops the coarse hit box to 44px, and min-w-11
     // keeps that box inside the pill so the bar's gap-2 stays clear.
     const pillBase =
-        'touch-expand inline-flex items-center justify-center min-h-9 min-w-11 px-3 rounded-full font-mono text-[11px] font-semibold capitalize cursor-pointer border transition-colors select-none';
+        'touch-expand inline-flex items-center justify-center min-h-9 min-w-11 px-3 rounded-full font-mono text-meta font-semibold capitalize cursor-pointer border transition-colors select-none';
     const pillOff = 'bg-transparent text-fg-subtle border-border hover:text-fg';
     const levelOnClass = level => {
         if (level === 'critical') return 'bg-error/20 text-error border-error/40';
@@ -115,7 +115,7 @@ export default function Logs() {
                                 className="w-[7px] h-[7px] rounded-full bg-accent"
                                 aria-hidden="true"
                             />
-                            <span className="font-mono text-[11px] text-accent">
+                            <span className="font-mono text-meta text-accent">
                                 live tail · {LOG_POLL_INTERVAL_MS / 1000}s
                             </span>
                         </span>

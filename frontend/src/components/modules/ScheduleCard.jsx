@@ -57,22 +57,22 @@ export const ScheduleCard = React.memo(
                     <div className="w-full sm:w-[200px] shrink-0 min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
                             {isRunning && <StatusDot status="running" size={7} />}
-                            <div className="font-display text-[15px] font-semibold text-fg truncate">
+                            <div className="font-display text-heading font-semibold text-fg truncate">
                                 {moduleLabel}
                             </div>
                         </div>
-                        <div className="font-mono text-[10.5px] mt-0.5 truncate text-fg-subtle">
+                        <div className="font-mono text-meta mt-0.5 truncate text-fg-subtle">
                             {hasSchedule ? scheduleToHuman(schedule) : 'manual only'}
                         </div>
                     </div>
 
                     <div className="flex-1 min-w-0">
                         {hasSchedule ? (
-                            <span className="font-mono text-[11px] text-fg-subtle truncate">
+                            <span className="font-mono text-meta text-fg-subtle truncate">
                                 {schedule}
                             </span>
                         ) : (
-                            <span className="font-mono text-[12px] text-fg-subtle">—</span>
+                            <span className="font-mono text-xs text-fg-subtle">—</span>
                         )}
                     </div>
 
@@ -119,11 +119,11 @@ export const ScheduleCard = React.memo(
                                     style={{ background: 'var(--source-gdrive)' }}
                                     aria-hidden="true"
                                 />
-                                <span className="text-[12.5px] font-medium text-fg-muted truncate flex-1 min-w-0">
+                                <span className="text-dense font-medium text-fg-muted truncate flex-1 min-w-0">
                                     {sub.label}
                                 </span>
                                 <span
-                                    className="shrink-0 font-mono text-[8px] uppercase tracking-[0.4px] px-1.5 py-px rounded-[4px]"
+                                    className="shrink-0 font-mono text-micro uppercase tracking-[0.4px] px-1.5 py-px rounded-[4px]"
                                     style={{
                                         color: 'var(--source-gdrive)',
                                         background: 'rgba(83,232,240,.14)',
@@ -131,7 +131,7 @@ export const ScheduleCard = React.memo(
                                 >
                                     profile
                                 </span>
-                                <span className="font-mono text-[11.5px] text-fg-data shrink-0">
+                                <span className="font-mono text-meta text-fg-data shrink-0">
                                     {sub.enabled ? scheduleToHuman(sub.schedule) : 'paused'}
                                 </span>
                             </div>

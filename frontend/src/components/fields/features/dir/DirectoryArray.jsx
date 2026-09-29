@@ -70,7 +70,7 @@ const SortableDirectoryItem = React.memo(
                     onChange={e => onPathChange(index, e.target.value)}
                     aria-label={`${label} ${index + 1}`}
                     aria-invalid={invalid || undefined}
-                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-[12.5px] text-fg-muted placeholder:text-fg-subtle disabled:opacity-60 ${
+                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-dense text-fg-muted placeholder:text-fg-subtle disabled:opacity-60 ${
                         modeOptions ? 'md:min-w-30' : ''
                     }`}
                 />
@@ -187,7 +187,7 @@ const SortableDirectoryItem = React.memo(
 
                 {showPriority && priorityLabel && (
                     <span
-                        className={`flex-none self-center font-mono text-[10px] font-semibold px-2 py-0.5 rounded-[5px] whitespace-nowrap ${
+                        className={`flex-none self-center font-mono text-micro font-semibold px-2 py-0.5 rounded-[5px] whitespace-nowrap ${
                             priorityHighest
                                 ? 'bg-success/15 text-success'
                                 : 'bg-surface-elevated text-fg-muted'
@@ -249,7 +249,7 @@ const DirectoryItem = React.memo(
                     onChange={e => onPathChange(index, e.target.value)}
                     aria-label={`${label} ${index + 1}`}
                     aria-invalid={invalid || undefined}
-                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-[12.5px] text-fg-muted placeholder:text-fg-subtle disabled:opacity-60 ${
+                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-dense text-fg-muted placeholder:text-fg-subtle disabled:opacity-60 ${
                         modeOptions ? 'md:min-w-30' : ''
                     }`}
                 />

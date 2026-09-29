@@ -414,7 +414,7 @@ export const JobsPage = () => {
                         )}
                         <div className="px-4 sm:px-[22px] py-3.5 flex flex-col gap-1.5 min-w-[116px] flex-1">
                             <span className="eyebrow">{s.label}</span>
-                            <span className={`font-mono font-semibold text-[18px] ${s.tone}`}>
+                            <span className={`font-mono font-semibold text-lg ${s.tone}`}>
                                 {s.value}
                             </span>
                         </div>
@@ -429,7 +429,7 @@ export const JobsPage = () => {
                         key={filter.key}
                         type="button"
                         onClick={() => setActiveFilter(filter.key)}
-                        className={`touch-expand inline-flex items-center justify-center min-h-9 min-w-11 px-3 rounded-full font-mono text-[12.5px] font-medium cursor-pointer border transition-colors ${
+                        className={`touch-expand inline-flex items-center justify-center min-h-9 min-w-11 px-3 rounded-full font-mono text-dense font-medium cursor-pointer border transition-colors ${
                             activeFilter === filter.key
                                 ? 'bg-primary/15 text-fg border-primary/40'
                                 : 'bg-surface text-fg-muted border-border hover:text-fg'
@@ -580,7 +580,7 @@ export const JobsPage = () => {
                                         </td>
                                         <td className="hidden sm:table-cell px-4 py-3">
                                             <span
-                                                className={`font-mono text-[11px] px-2 py-[3px] rounded-md ${TRIGGER_STYLE[triggerOf(job)] || TRIGGER_STYLE.manual}`}
+                                                className={`font-mono text-meta px-2 py-[3px] rounded-md ${TRIGGER_STYLE[triggerOf(job)] || TRIGGER_STYLE.manual}`}
                                             >
                                                 {triggerOf(job)}
                                             </span>
@@ -608,7 +608,7 @@ export const JobsPage = () => {
                                                         e.stopPropagation();
                                                         handleRetry(job.id);
                                                     }}
-                                                    className="touch-expand font-mono text-[11px] text-accent hover:underline disabled:opacity-50 cursor-pointer"
+                                                    className="touch-expand font-mono text-meta text-accent hover:underline disabled:opacity-50 cursor-pointer"
                                                 >
                                                     {isRetrying ? '…' : 'Retry'}
                                                 </button>
@@ -669,7 +669,7 @@ export const JobsPage = () => {
             {/* Module Execution History */}
             {Array.isArray(executionHistory) && executionHistory.length > 0 && (
                 <section>
-                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                    <h2 className="font-display text-heading font-semibold text-fg mb-3">
                         Recent Module Executions
                     </h2>
                     <div className="space-y-1">
