@@ -49,7 +49,7 @@ const SpinnerTextDemo = React.memo(() => {
                 {configurations.map(({ size, text }) => (
                     <div
                         key={`${size}-${text}`}
-                        className="flex items-center gap-3 p-3 bg-surface rounded border"
+                        className="flex items-center gap-3 p-3 bg-surface rounded border text-sm"
                     >
                         <Spinner size={size} text={text} />
                     </div>
@@ -286,7 +286,7 @@ const AccessibilityTest = React.memo(() => {
                         <label className="text-sm font-medium text-fg-muted">
                             Spinner with Motion:
                         </label>
-                        <div className="flex justify-center p-4 bg-surface rounded border">
+                        <div className="flex justify-center p-4 bg-surface rounded border text-sm">
                             <Spinner size="medium" text="Testing accessibility..." />
                         </div>
                     </div>
