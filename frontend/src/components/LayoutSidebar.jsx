@@ -116,7 +116,7 @@ const LayoutSidebar = React.memo(() => {
                         <div className="font-display font-bold text-[18px] tracking-[.5px] text-sidebar-text">
                             CHUB
                         </div>
-                        <div className="text-[11px] font-medium text-sidebar-secondary">
+                        <div className="text-[11px] font-medium text-sidebar-text-secondary">
                             Media Manager
                         </div>
                     </div>
@@ -213,19 +213,19 @@ const LayoutSidebar = React.memo(() => {
                                 className="w-2 h-2 rounded-full bg-success shrink-0"
                                 aria-hidden="true"
                             />
-                            <span className="font-mono text-[11px] text-sidebar-secondary truncate">
+                            <span className="font-mono text-[11px] text-sidebar-text-secondary truncate">
                                 {versionLine}
                             </span>
                         </>
                     ) : (
-                        <span className="font-mono text-[11px] text-sidebar-secondary truncate">
+                        <span className="font-mono text-[11px] text-sidebar-text-secondary truncate">
                             CHUB
                         </span>
                     )}
                     <button
                         type="button"
                         onClick={toggleTheme}
-                        className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-sidebar-text hover:bg-sidebar-hover focus-visible:outline-sidebar-accent transition-colors touch-target shrink-0"
+                        className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-text-secondary hover:text-sidebar-text hover:bg-sidebar-hover focus-visible:outline-sidebar-accent transition-colors touch-target shrink-0"
                         aria-label="Toggle theme"
                         title={`Theme: ${actualTheme}`}
                     >
@@ -248,12 +248,14 @@ const LayoutSidebar = React.memo(() => {
                             <div className="text-sm font-medium text-sidebar-text truncate">
                                 {user}
                             </div>
-                            <div className="text-xs text-sidebar-secondary truncate">Signed in</div>
+                            <div className="text-xs text-sidebar-text-secondary truncate">
+                                Signed in
+                            </div>
                         </div>
                         <button
                             type="button"
                             onClick={logout}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-sidebar-text hover:bg-sidebar-bg focus-visible:outline-sidebar-accent transition-colors touch-target"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-text-secondary hover:text-sidebar-text hover:bg-sidebar-bg focus-visible:outline-sidebar-accent transition-colors touch-target"
                             aria-label="Log out"
                             title="Log out"
                         >

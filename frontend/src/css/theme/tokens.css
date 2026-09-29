@@ -1,11 +1,11 @@
 /* Theme-agnostic tokens (radius, typography), imported before the theme colour files. */
 
 :root {
-    /* Radius scale */
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 24px;
+    /* Radius scale, named like the rounded-* utilities in tailwind.css */
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-3xl: 24px;
     --radius-full: 9999px;
 
     /* mono is for ALL machine-derived data — counts, paths, cron, IDs, timestamps,

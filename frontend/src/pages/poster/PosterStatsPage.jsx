@@ -661,7 +661,7 @@ const PosterStatsPage = () => {
                                 className="flex items-center gap-2 p-2 rounded-lg bg-surface border border-border text-sm"
                                 title={stat.folder_name || stat.owner || stat.location}
                             >
-                                <span className="material-symbols-outlined text-brand-primary text-base">
+                                <span className="material-symbols-outlined text-primary text-base">
                                     cloud_done
                                 </span>
                                 <span className="flex-1 min-w-0 truncate text-fg">

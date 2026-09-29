@@ -36,7 +36,7 @@ describe('check-tailwind-classes', () => {
     it('fails on a clsx object key missing from the built CSS', () => {
         fixture(
             `export const A = (on) => <div className={clsx({ 'bg-missing': on })} />;`,
-            `.bg-canvas{background:#000}`
+            `.bg-bg{background:#000}`
         );
         const r = run();
         expect(r.code).toBe(1);
@@ -45,8 +45,8 @@ describe('check-tailwind-classes', () => {
 
     it('passes when the clsx object key is emitted', () => {
         fixture(
-            `export const A = (on) => <div className={clsx({ 'bg-canvas': on })} />;`,
-            `.bg-canvas{background:#000}`
+            `export const A = (on) => <div className={clsx({ 'bg-bg': on })} />;`,
+            `.bg-bg{background:#000}`
         );
         expect(run().code).toBe(0);
     });

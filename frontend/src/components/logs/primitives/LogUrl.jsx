@@ -13,7 +13,7 @@ export const LogUrl = React.memo(({ children }) => {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-link hover:text-link-hover underline cursor-pointer"
+            className="text-accent hover:text-accent-hover underline cursor-pointer"
         >
             {children}
         </a>

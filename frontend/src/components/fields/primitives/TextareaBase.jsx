@@ -57,7 +57,7 @@ export const TextareaBase = ({
                 // Base textarea styling - atomic utilities with proper form control tokens
                 'w-full',
                 'px-3 py-2', // Standard padding
-                'bg-input border border-border rounded-lg',
+                'bg-input border rounded-lg',
                 'text-fg placeholder:text-fg-subtle',
                 'resize-y', // Allow vertical resize only
                 'max-h-dropdown', // Prevent infinite expansion (300px max height)
@@ -70,12 +70,12 @@ export const TextareaBase = ({
                 // Hover states (atomic utilities)
                 !disabled && 'hover:border-primary hover:bg-input-hover',
 
-                // Error states (atomic utilities)
-                invalid && 'border-input-error',
-                invalid && 'focus:border-input-error',
+                // One border colour: Tailwind orders rival border-* utilities by name, not class order
+                invalid ? 'border-error' : disabled ? 'border-input-disabled' : 'border-border',
+                invalid && 'focus:border-error',
 
                 // Disabled states (atomic utilities)
-                disabled && 'opacity-60 cursor-not-allowed bg-input-disabled border-input-disabled',
+                disabled && 'opacity-60 cursor-not-allowed bg-input-disabled',
 
                 className,
             ]

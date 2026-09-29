@@ -205,7 +205,7 @@ export const ArrayObjectField = ({
 
         return (
             <div key={rowKey(index)} className="border-b border-border last:border-b-0">
-                <div className="flex items-center justify-between min-h-11 transition-colors hover:bg-surface-hover focus-within:bg-surface-hover">
+                <div className="flex items-center justify-between min-h-11 transition-colors hover:bg-surface-alt focus-within:bg-surface-alt">
                     {/* RemoveButton stays a sibling: a control nested in this button is invalid. */}
                     <button
                         type="button"
@@ -234,7 +234,7 @@ export const ArrayObjectField = ({
                                 <span className="text-xs text-fg-muted truncate">{secondary}</span>
                             ))}
                         {badge && (
-                            <span className="inline-flex items-center px-2 py-0.5 bg-primary/15 text-brand-primary rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
+                            <span className="inline-flex items-center px-2 py-0.5 bg-primary/15 text-primary rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
                                 {/* Show color swatches for items with colors array */}
                                 {item.colors && Array.isArray(item.colors) ? (
                                     <ColorSwatches colors={item.colors} size="sm" maxDisplay={3} />
@@ -347,7 +347,7 @@ export const ArrayObjectField = ({
                 <div className="flex gap-3 p-4 border-t border-border bg-surface justify-end flex-col-reverse md:flex-row">
                     <button
                         type="button"
-                        className="min-h-11 min-w-11 inline-flex items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer border bg-surface text-fg border-border hover:bg-surface-hover focus:outline-2 focus:outline-primary focus:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto md:min-w-25"
+                        className="min-h-11 min-w-11 inline-flex items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer border bg-surface text-fg border-border hover:bg-surface-alt focus:outline-2 focus:outline-primary focus:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto md:min-w-25"
                         onClick={handleCancel}
                         disabled={disabled}
                     >
@@ -787,7 +787,7 @@ export const ArrayObjectField = ({
                     <Modal.Footer>
                         <button
                             onClick={() => setGdrivePickerRow(null)}
-                            className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-hover transition-colors min-h-11"
+                            className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-elevated transition-colors min-h-11"
                         >
                             Close
                         </button>

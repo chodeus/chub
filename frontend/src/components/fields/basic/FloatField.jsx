@@ -93,7 +93,6 @@ export const FloatField = React.memo(
                         onClick={handleDecrement}
                         disabled={decrementDisabled}
                         ariaLabel={`Decrease ${field.label}`}
-                        className="text-brand-primary"
                     >
                         <span className="material-symbols-outlined text-lg">remove</span>
                     </FieldButton>
@@ -120,7 +119,6 @@ export const FloatField = React.memo(
                         onClick={handleIncrement}
                         disabled={incrementDisabled}
                         ariaLabel={`Increase ${field.label}`}
-                        className="text-brand-primary"
                     >
                         <span className="material-symbols-outlined text-lg">add</span>
                     </FieldButton>

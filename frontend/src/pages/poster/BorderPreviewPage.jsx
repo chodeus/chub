@@ -151,7 +151,7 @@ const BorderReplacerrPage = () => {
     const headerActions = useMemo(() => {
         const dirtyBadge = isDirty ? (
             <span
-                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-warning-bg text-warning"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-warning/10 text-warning"
                 aria-live="polite"
             >
                 <span className="material-symbols-outlined text-xs">edit</span>
@@ -193,7 +193,7 @@ const BorderReplacerrPage = () => {
     if (loadError) {
         return (
             <div className="flex flex-col gap-5">
-                <div className="p-3 bg-error-bg border border-error-border text-error rounded">
+                <div className="p-3 bg-error/10 border border-error text-error rounded">
                     {loadError}
                 </div>
             </div>
@@ -325,7 +325,7 @@ const HolidayCard = ({ holiday, onChange, disabled }) => {
     return (
         <article className="bg-surface border border-border rounded-xl overflow-hidden">
             <header
-                className="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-hover"
+                className="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-alt"
                 onClick={() => setExpanded(v => !v)}
                 role="button"
                 tabIndex={0}
@@ -658,7 +658,7 @@ const PreviewSection = ({ isDirty }) => {
             />
 
             {isDirty && (
-                <div className="mb-3 p-2 rounded text-xs text-warning bg-warning-bg/30 border border-warning/40 flex items-start gap-2">
+                <div className="mb-3 p-2 rounded text-xs text-warning bg-warning/3 border border-warning/40 flex items-start gap-2">
                     <span className="material-symbols-outlined text-sm shrink-0">info</span>
                     <span>
                         Unsaved changes won&apos;t appear in the preview until you save. The preview
@@ -668,7 +668,7 @@ const PreviewSection = ({ isDirty }) => {
             )}
 
             {errorMessage && (
-                <div className="mb-3 p-3 bg-error-bg border border-error-border text-error rounded">
+                <div className="mb-3 p-3 bg-error/10 border border-error text-error rounded">
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm">error</span>
                         {errorMessage}

@@ -24,7 +24,7 @@ const MemoizedFieldComponent = React.memo(
         const fieldComponent = FieldRegistry.getField(field.type);
         if (!fieldComponent) {
             return (
-                <div className="p-2 bg-warning-bg text-warning rounded">
+                <div className="p-2 bg-warning/10 text-warning rounded">
                     Unknown field type: {field.type}
                 </div>
             );
@@ -256,7 +256,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
             return (
                 <div
                     key={`error-${field.key}-${fieldIndex}`}
-                    className="p-2 bg-warning-bg text-warning rounded"
+                    className="p-2 bg-warning/10 text-warning rounded"
                 >
                     Field type &apos;{field.type}&apos; error: {error.message}
                 </div>
@@ -462,7 +462,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
             />
 
             {saveError && (
-                <div className="p-3 bg-error-bg border border-error-border text-error rounded-lg max-w-[820px]">
+                <div className="p-3 bg-error/10 border border-error text-error rounded-lg max-w-[820px]">
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm">error</span>
                         {saveError}
@@ -473,7 +473,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
             {unmetRequirements.map((req, i) => (
                 <div
                     key={`req-${i}`}
-                    className="p-3 bg-warning-bg border border-warning text-warning rounded-lg max-w-[820px]"
+                    className="p-3 bg-warning/10 border border-warning text-warning rounded-lg max-w-[820px]"
                 >
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm">warning</span>

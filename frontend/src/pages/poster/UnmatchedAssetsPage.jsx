@@ -1620,7 +1620,7 @@ const PickerThumb = ({ cand, busy, onApply }) => {
             title={cand.would_match ? 'Would match' : cand.reason}
             className={`group relative rounded-lg overflow-hidden border text-left ${
                 cand.would_match ? 'border-success/60' : 'border-border'
-            } hover:border-brand-primary disabled:opacity-50`}
+            } hover:border-primary disabled:opacity-50`}
         >
             <div
                 className="bg-input flex items-center justify-center"
@@ -1796,7 +1796,7 @@ const ArtworkPickerThumb = ({ cand, busy, onApply }) => {
             title={cand.would_match ? 'Would match' : cand.reason}
             className={`group relative rounded-lg overflow-hidden border text-left ${
                 cand.would_match ? 'border-success/60' : 'border-border'
-            } hover:border-brand-primary disabled:opacity-50`}
+            } hover:border-primary disabled:opacity-50`}
         >
             <div
                 className="flex items-center justify-center"

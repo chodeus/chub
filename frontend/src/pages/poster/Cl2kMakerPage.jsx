@@ -3678,7 +3678,7 @@ const AiPanel = ({
                 >
                     <div
                         onClick={e => e.stopPropagation()}
-                        className="w-[min(1080px,94vw)] max-h-[90vh] bg-canvas border border-border rounded-[16px] shadow-2xl flex flex-col overflow-hidden"
+                        className="w-[min(1080px,94vw)] max-h-[90vh] bg-bg border border-border rounded-[16px] shadow-2xl flex flex-col overflow-hidden"
                     >
                         <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
                             <span className="font-display text-base font-semibold text-fg">
@@ -4205,7 +4205,7 @@ const MaskBrushEditor = ({
                 >
                     <div
                         onClick={e => e.stopPropagation()}
-                        className="w-[min(1080px,94vw)] max-h-[90vh] bg-canvas border border-border rounded-[16px] shadow-2xl flex flex-col overflow-hidden"
+                        className="w-[min(1080px,94vw)] max-h-[90vh] bg-bg border border-border rounded-[16px] shadow-2xl flex flex-col overflow-hidden"
                     >
                         <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
                             <span className="font-display text-base font-semibold text-fg">

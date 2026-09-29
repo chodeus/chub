@@ -144,7 +144,7 @@ export const PlexLibraryExcludeField = React.memo(
                                 className={`flex items-center gap-3 py-3 px-4 border rounded-lg cursor-pointer transition-all duration-200 ease-in-out focus-within:border-primary ${
                                     isExcluded
                                         ? 'bg-primary/10 border-primary'
-                                        : 'bg-surface border-border hover:bg-surface-hover hover:border-primary'
+                                        : 'bg-surface border-border hover:bg-surface-alt hover:border-primary'
                                 }`}
                             >
                                 <CheckboxBase

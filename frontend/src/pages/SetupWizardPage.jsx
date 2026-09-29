@@ -658,13 +658,13 @@ const ReviewStep = ({ account, username, plex, arr, tmdb, gdrive, notify }) => {
 const WizardStyles = () => (
     <style>{`
         .sw-page { display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:100dvh; background:var(--bg); padding:1.5rem; }
-        .sw-card { width:100%; max-width:1000px; display:grid; grid-template-columns:270px 1fr; background:var(--surface); border:1px solid var(--border-light); border-radius:var(--radius-xl,24px); overflow:hidden; min-height:600px; }
+        .sw-card { width:100%; max-width:1000px; display:grid; grid-template-columns:270px 1fr; background:var(--surface); border:1px solid var(--border-light); border-radius:var(--radius-3xl,24px); overflow:hidden; min-height:600px; }
         .sw-rail { background:var(--bg); padding:1.5rem 1.25rem; display:flex; flex-direction:column; gap:.2rem; border-right:1px solid var(--border-light); }
         .sw-brand { display:flex; align-items:center; gap:.65rem; margin-bottom:1.3rem; }
         .sw-logo { width:40px; height:40px; border-radius:10px; }
         .sw-name { font-family:var(--font-display); font-weight:800; font-size:1.18rem; color:var(--text-primary); }
         .sw-sub { font-size:.7rem; color:var(--text-tertiary); }
-        .sw-step { display:flex; align-items:center; gap:.7rem; padding:.55rem .7rem; border-radius:var(--radius-md,12px); cursor:pointer; border:1px solid transparent; background:transparent; text-align:left; font-family:inherit; }
+        .sw-step { display:flex; align-items:center; gap:.7rem; padding:.55rem .7rem; border-radius:var(--radius-lg,12px); cursor:pointer; border:1px solid transparent; background:transparent; text-align:left; font-family:inherit; }
         .sw-step:hover { background:var(--row-hover); }
         .sw-step.active { background:color-mix(in srgb, var(--primary) 22%, transparent); border-color:color-mix(in srgb, var(--primary) 45%, transparent); }
         .sw-dot { width:26px; height:26px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:.78rem; font-weight:600; background:var(--surface-alt); color:var(--text-secondary); border:1px solid var(--border); }
@@ -685,11 +685,11 @@ const WizardStyles = () => (
         .sw-fld > span { display:block; font-size:.8125rem; font-weight:500; color:var(--text-secondary); margin-bottom:.375rem; }
         .sw-row { display:grid; grid-template-columns:1fr 1fr; gap:.9rem; }
         .sw-row3 { display:grid; grid-template-columns:1fr 1fr 130px; gap:.9rem; }
-        .sw-callout { padding:.85rem 1rem; border-radius:var(--radius-md,12px); font-size:.83rem; color:var(--text-secondary); margin-bottom:1.2rem; }
+        .sw-callout { padding:.85rem 1rem; border-radius:var(--radius-lg,12px); font-size:.83rem; color:var(--text-secondary); margin-bottom:1.2rem; }
         .sw-callout.info { background:color-mix(in srgb, var(--accent) 10%, transparent); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
         .sw-callout.ok { background:color-mix(in srgb, var(--success) 12%, transparent); border:1px solid color-mix(in srgb, var(--success) 32%, transparent); }
         .sw-list { display:flex; flex-direction:column; gap:.5rem; margin-top:1rem; }
-        .sw-inst { display:flex; align-items:center; gap:.7rem; padding:.7rem .9rem; border-radius:var(--radius-md,12px); background:var(--input-bg); border:1px solid var(--border-light); }
+        .sw-inst { display:flex; align-items:center; gap:.7rem; padding:.7rem .9rem; border-radius:var(--radius-lg,12px); background:var(--input-bg); border:1px solid var(--border-light); }
         .sw-tag { font-size:.65rem; text-transform:uppercase; letter-spacing:.05em; padding:.15rem .5rem; border-radius:999px; background:color-mix(in srgb, var(--accent) 22%, transparent); color:var(--accent); font-weight:700; }
         .sw-meta { flex:1; min-width:0; }
         .sw-meta b { font-size:.9rem; color:var(--text-primary); }
@@ -697,7 +697,7 @@ const WizardStyles = () => (
         .sw-rm { background:transparent; border:none; color:var(--text-tertiary); cursor:pointer; font-size:1.1rem; min-width:44px; min-height:44px; touch-action:manipulation; }
         .sw-rm:hover { color:var(--error); }
         .sw-review { display:flex; flex-direction:column; gap:.55rem; }
-        .sw-rev { display:flex; align-items:center; gap:.7rem; padding:.7rem .9rem; border-radius:var(--radius-md,12px); background:var(--input-bg); border:1px solid var(--border-light); }
+        .sw-rev { display:flex; align-items:center; gap:.7rem; padding:.7rem .9rem; border-radius:var(--radius-lg,12px); background:var(--input-bg); border:1px solid var(--border-light); }
         .sw-ic { width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:.8rem; flex:none; background:var(--surface-alt); color:var(--text-tertiary); }
         .sw-rev.ok .sw-ic { background:color-mix(in srgb, var(--success) 25%, transparent); color:var(--success); }
         .sw-nav { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border); }

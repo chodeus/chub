@@ -180,7 +180,7 @@ const SearchInterface = React.memo(
                                 <li key={suggestion.id || idx}>
                                     <button
                                         type="button"
-                                        className="touch-target w-full text-left px-3 py-2 text-sm text-fg hover:bg-surface-hover cursor-pointer border-none bg-transparent flex items-center gap-2"
+                                        className="touch-target w-full text-left px-3 py-2 text-sm text-fg hover:bg-surface-alt cursor-pointer border-none bg-transparent flex items-center gap-2"
                                         // Keeps input focus so its blur can't hide the list before the click lands.
                                         onMouseDown={e => e.preventDefault()}
                                         onClick={() =>

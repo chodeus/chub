@@ -1,10 +1,3 @@
-/**
- * Statistics Layout Composers
- *
- * Layout components for arranging StatCard components in
- * different patterns: grid, list, and inline.
- */
+/** Layout for arranging StatCard components in a grid. */
 
 export { StatGrid } from './StatGrid';
-export { StatList } from './StatList';
-export { StatInline } from './StatInline';

@@ -7,6 +7,4 @@
  */
 
 export { StatIcon } from './StatIcon';
-export { StatLabel } from './StatLabel';
-export { StatValue } from './StatValue';
 export { StatChange } from './StatChange';

@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/ui';
 import { Card } from '../../components/ui/card/Card';
-import { MediaCard } from '../../components/ui/card/patterns/MediaCard';
-import { ActionCard } from '../../components/ui/card/patterns/ActionCard';
 import { Button } from '../../components/ui/button/Button';
 import { IconButton } from '../../components/ui/button/IconButton';
 
@@ -17,7 +15,6 @@ import { IconButton } from '../../components/ui/button/IconButton';
  * - CardBody with various content
  * - CardFooter with all alignment options
  * - CardImage with aspect ratios and states
- * - Preset patterns (MediaCard, ActionCard)
  * - Interactive examples
  * - Architecture explanation
  */
@@ -102,10 +99,6 @@ export const CardPrimitivesTestPage = () => {
                             <p className="pt-2">
                                 <strong>Compound Component Pattern:</strong> Card.Header, Card.Body,
                                 Card.Footer, Card.Image
-                            </p>
-                            <p>
-                                <strong>Preset Patterns:</strong> MediaCard (image + metadata),
-                                ActionCard (title + description + actions)
                             </p>
                         </div>
                     </Card.Body>
@@ -513,93 +506,6 @@ export const CardPrimitivesTestPage = () => {
                 </div>
             </section>
 
-            {/* Preset Pattern: MediaCard */}
-            <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-fg">MediaCard Preset Pattern</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <MediaCard
-                        image="https://picsum.photos/800/533?random=3"
-                        title="Breaking Bad"
-                        subtitle="TV Series"
-                        metadata="2008-2013 • Drama • 5 Seasons"
-                        onClick={() => alert('Media card clicked!')}
-                        onMoreClick={() => alert('More options clicked!')}
-                        selected={selectedCard === 'media1'}
-                    />
-
-                    <MediaCard
-                        image="https://picsum.photos/800/533?random=4"
-                        title="The Godfather"
-                        subtitle="Movie"
-                        metadata="1972 • Crime, Drama • 2h 55m"
-                        onClick={() => setSelectedCard('media2')}
-                        onMoreClick={() => alert('More options clicked!')}
-                        selected={selectedCard === 'media2'}
-                    />
-
-                    <MediaCard
-                        image="https://picsum.photos/800/533?random=5"
-                        title="Inception"
-                        subtitle="Movie"
-                        metadata="2010 • Sci-Fi, Thriller • 2h 28m"
-                        onClick={() => setSelectedCard('media3')}
-                        selected={selectedCard === 'media3'}
-                    />
-                </div>
-            </section>
-
-            {/* Preset Pattern: ActionCard */}
-            <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-fg">ActionCard Preset Pattern</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ActionCard
-                        title="Start Your Free Trial"
-                        description="Get unlimited access to all premium features for 30 days. No credit card required."
-                        actionLabel="Start Trial"
-                        onAction={() => alert('Trial started!')}
-                        actionVariant="success"
-                        actionIcon="play_arrow"
-                    />
-
-                    <ActionCard
-                        title="Upgrade to Pro"
-                        description="Unlock advanced features and remove all limitations with our Pro plan."
-                        actionLabel="Upgrade Now"
-                        onAction={() => alert('Upgrade initiated!')}
-                        actionVariant="primary"
-                        actionIcon="upgrade"
-                        secondaryAction={
-                            <Button variant="ghost" size="medium">
-                                Learn More
-                            </Button>
-                        }
-                    />
-
-                    <ActionCard
-                        title="Delete Account"
-                        description="This action cannot be undone. All your data will be permanently deleted."
-                        actionLabel="Delete"
-                        onAction={() => alert('Delete confirmed!')}
-                        actionVariant="danger"
-                        actionIcon="delete"
-                        secondaryAction={
-                            <Button variant="secondary" size="medium">
-                                Cancel
-                            </Button>
-                        }
-                    />
-
-                    <ActionCard
-                        title="Export Data"
-                        description="Download all your data in JSON format. This may take a few minutes."
-                        actionLabel="Export"
-                        onAction={() => alert('Export started!')}
-                        actionVariant="secondary"
-                        actionIcon="download"
-                    />
-                </div>
-            </section>
-
             {/* Interactive States Demo */}
             <section className="flex flex-col gap-3">
                 <h2 className="text-xl font-semibold text-fg">Interactive States Demonstration</h2>
@@ -650,10 +556,6 @@ export const CardPrimitivesTestPage = () => {
                         <p>
                             <strong>Zero Duplication:</strong> All card logic exists only in
                             primitives
-                        </p>
-                        <p>
-                            <strong>Preset Patterns:</strong> MediaCard (image + metadata +
-                            actions), ActionCard (title + description + primary action)
                         </p>
                         <p>
                             <strong>Fully Reusable:</strong> Primitives can be used anywhere, not

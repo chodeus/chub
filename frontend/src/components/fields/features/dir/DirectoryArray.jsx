@@ -580,7 +580,7 @@ export const DirectoryArray = React.memo(
                     <Modal.Footer>
                         <button
                             onClick={() => setModalOpen(false)}
-                            className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-hover transition-colors min-h-11"
+                            className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-elevated transition-colors min-h-11"
                         >
                             Close
                         </button>

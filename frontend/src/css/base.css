@@ -191,7 +191,7 @@
     }
 
     code {
-        font-family: 'SF Mono', monaco, 'Cascadia Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.875em;
         color: var(--text-primary);
         background-color: var(--surface-elevated);
@@ -200,7 +200,7 @@
     }
 
     pre {
-        font-family: 'SF Mono', monaco, 'Cascadia Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.875rem;
         line-height: 1.5;
         color: var(--text-primary);

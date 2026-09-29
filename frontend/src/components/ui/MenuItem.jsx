@@ -33,7 +33,7 @@ const MenuItem = ({
         'transition-colors focus:outline-none active:text-fg md:text-base',
         isDisabled
             ? 'text-fg-subtle cursor-not-allowed hover:text-fg-subtle focus:text-fg-subtle active:text-fg-subtle'
-            : 'hover:bg-surface-hover focus:bg-surface-hover menu-item-focus',
+            : 'hover:bg-surface-alt focus:bg-surface-alt menu-item-focus',
         className,
     ]
         .filter(Boolean)

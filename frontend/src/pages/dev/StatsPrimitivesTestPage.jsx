@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/ui';
 import { StatCard } from '../../components/ui';
-import { StatGrid, StatList, StatInline } from '../../components/statistics';
+import { StatGrid } from '../../components/statistics';
 import { Card } from '../../components/ui/card/Card';
 
 /**
@@ -9,7 +9,7 @@ import { Card } from '../../components/ui/card/Card';
  *
  * Demonstrates:
  * - All primitive compositions
- * - All layout variants (Grid, List, Inline)
+ * - The StatGrid layout
  * - All Card variants
  * - All value color variants
  * - Change indicators (positive, negative, inverse)
@@ -134,49 +134,6 @@ export const StatsPrimitivesTestPage = () => {
                 </StatGrid>
             </section>
 
-            {/* StatList Layout */}
-            <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-fg">StatList Layout (Vertical)</h2>
-                <StatList gap="3">
-                    <StatCard
-                        label="Total Revenue"
-                        value={125000}
-                        icon="💵"
-                        variant="compact"
-                        valueColor="success"
-                        valueFormat={v => `$${v.toLocaleString()}`}
-                        change={{ value: 8.2, direction: 'up' }}
-                    />
-                    <StatCard
-                        label="New Customers"
-                        value={89}
-                        icon="🆕"
-                        variant="compact"
-                        valueColor="primary"
-                        change={{ value: 5, direction: 'up' }}
-                    />
-                    <StatCard
-                        label="Churn Rate"
-                        value="2.1%"
-                        icon="📉"
-                        variant="compact"
-                        valueColor="warning"
-                        change={{ value: -0.3, direction: 'down', inverse: true }}
-                    />
-                </StatList>
-            </section>
-
-            {/* StatInline Layout */}
-            <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-fg">StatInline Layout (Horizontal)</h2>
-                <StatInline gap="4" wrap={true}>
-                    <StatCard label="Views" value={15234} variant="minimal" valueColor="primary" />
-                    <StatCard label="Clicks" value={2341} variant="minimal" valueColor="success" />
-                    <StatCard label="CTR" value="15.4%" variant="minimal" />
-                    <StatCard label="Bounce" value="32%" variant="minimal" valueColor="warning" />
-                </StatInline>
-            </section>
-
             {/* All Card Variants Side-by-Side */}
             <section className="flex flex-col gap-3">
                 <h2 className="text-xl font-semibold text-fg">All Card Variants</h2>
@@ -283,8 +240,6 @@ export const StatsPrimitivesTestPage = () => {
                         <ul className="list-disc pl-6 space-y-1">
                             <li>Card primitive (base structure)</li>
                             <li>StatIcon primitive (icon display)</li>
-                            <li>StatLabel primitive (label text)</li>
-                            <li>StatValue primitive (value display)</li>
                             <li>StatChange primitive (trend indicator)</li>
                         </ul>
                         <p className="pt-2">
@@ -292,7 +247,7 @@ export const StatsPrimitivesTestPage = () => {
                             reimplemented
                         </p>
                         <p>
-                            <strong>Three Layout Variants:</strong> StatGrid, StatList, StatInline
+                            <strong>Layout:</strong> StatGrid
                         </p>
                         <p>
                             <strong>Fully Reusable:</strong> StatCard can be used anywhere, not just

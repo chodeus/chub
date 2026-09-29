@@ -394,7 +394,7 @@ export const TagInput = React.memo(
                                         'touch-target flex items-center px-3 py-2 cursor-pointer text-sm',
                                         index === focusedSuggestionIndex
                                             ? 'bg-primary text-on-color'
-                                            : 'hover:bg-surface-hover text-fg',
+                                            : 'hover:bg-surface-alt text-fg',
                                     ]
                                         .filter(Boolean)
                                         .join(' ')}
