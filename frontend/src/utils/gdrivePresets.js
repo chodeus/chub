@@ -50,8 +50,8 @@ const tryFetch = async (url, internal) => {
 };
 
 /** Presets for the new-preset notice: shipped in an update, not added, not dismissed. */
-export const fetchNewGdrivePresets = async () => {
-    const payload = await apiCore.get('/gdrive-presets/new', { useCache: false });
+export const fetchNewGdrivePresets = async ({ signal } = {}) => {
+    const payload = await apiCore.get('/gdrive-presets/new', { useCache: false, signal });
     return prefixGdriveNames(Array.isArray(payload?.data) ? payload.data : []);
 };
 

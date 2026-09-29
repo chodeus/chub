@@ -356,7 +356,8 @@ def test_new_gdrive_presets_list_and_dismiss(monkeypatch, tmp_path, app_with_rou
         dismissed = client.post("/api/gdrive-presets/new/dismiss", json={"ids": [fresh["id"]]})
         assert dismissed.status_code == 200, dismissed.text
         assert dismissed.json()["data"] == []
-        assert client.get("/api/gdrive-presets/new").json()["data"] == []
+        relisted = client.get("/api/gdrive-presets/new")
+        assert relisted.json()["data"] == []
 
         bad = client.post("/api/gdrive-presets/new/dismiss", json={"ids": "not-a-list"})
         assert bad.status_code == 422

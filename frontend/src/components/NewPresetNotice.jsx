@@ -17,12 +17,14 @@ const NewPresetNotice = () => {
 
     useEffect(() => {
         let mounted = true;
-        fetchNewGdrivePresets()
+        const ctrl = new AbortController();
+        fetchNewGdrivePresets({ signal: ctrl.signal })
             .then(list => mounted && setPresets(list))
             // Optional hint: a failed check just shows nothing
-            .catch(err => console.warn('[NewPresetNotice] check failed:', err));
+            .catch(err => mounted && console.warn('[NewPresetNotice] check failed:', err));
         return () => {
             mounted = false;
+            ctrl.abort();
         };
     }, []);
 

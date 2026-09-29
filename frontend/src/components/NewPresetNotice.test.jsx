@@ -76,6 +76,26 @@ describe('NewPresetNotice', () => {
         await waitFor(() => expect(screen.queryByRole('region')).not.toBeInTheDocument());
     });
 
+    it('aborts the check when it unmounts, without logging a failure', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        fetchNewGdrivePresets.mockImplementation(
+            ({ signal }) =>
+                new Promise((_, reject) =>
+                    signal.addEventListener('abort', () =>
+                        reject(new DOMException('Aborted', 'AbortError'))
+                    )
+                )
+        );
+        const { unmount } = renderApp();
+        await waitFor(() => expect(fetchNewGdrivePresets).toHaveBeenCalled());
+
+        unmount();
+
+        expect(fetchNewGdrivePresets.mock.calls[0][0].signal.aborted).toBe(true);
+        await Promise.resolve();
+        expect(warn).not.toHaveBeenCalled();
+    });
+
     it('opens Sync GDrive and hides without dismissing', async () => {
         fetchNewGdrivePresets.mockResolvedValue(PRESETS);
         renderApp();
