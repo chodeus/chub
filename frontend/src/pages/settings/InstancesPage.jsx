@@ -13,6 +13,7 @@ import { instancesAPI } from '../../utils/api/instances';
 import { configAPI } from '../../utils/api/config';
 import { INSTANCE_SCHEMA } from '../../utils/constants/instance_schema';
 import { humanize } from '../../utils/tools';
+import Spinner from '../../components/ui/Spinner.jsx';
 
 // Friendly presets for the background media-cache reconciliation cadence
 // (config.instances.sync_schedule). Cron form so the scheduler's per-name
@@ -610,9 +611,7 @@ export const InstancesPage = () => {
                     title="Instances"
                     description="Radarr, Sonarr, Lidarr, and Plex connections."
                 />
-                <div className="text-center py-12">
-                    <p className="text-fg-muted">Loading instances...</p>
-                </div>
+                <Spinner size="large" text="Loading instances..." center />
             </div>
         );
     }
