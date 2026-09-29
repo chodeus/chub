@@ -6,6 +6,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { api } from '../../utils/api/index.js';
+import Spinner from '../../components/ui/Spinner.jsx';
 
 /**
  * Test section component for organized testing
@@ -27,12 +28,8 @@ const ApiResponseDisplay = React.memo(({ data, isLoading, error, title }) => (
     <div className="bg-surface-elevated border border-border p-3 rounded-sm">
         <h4 className="text-sm font-medium text-fg mb-2">{title}</h4>
         {isLoading && (
-            <div className="p-3 text-fg-muted flex items-center gap-2">
-                <div
-                    className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin"
-                    aria-label="Loading..."
-                />
-                <span>Loading...</span>
+            <div className="p-3 text-sm">
+                <Spinner size="small" text="Loading..." />
             </div>
         )}
         {error && (
