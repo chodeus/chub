@@ -9,6 +9,7 @@ import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { useConfirm } from '../../contexts/ConfirmContext.jsx';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { Button, LoadingButton } from '../../components/ui/index.js';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ColorListField } from '../../components/fields/color/ColorListField.jsx';
 
@@ -191,7 +192,7 @@ const BorderReplacerrPage = () => {
 
     if (loadError) {
         return (
-            <div className="p-4 md:p-6 max-w-6xl mx-auto">
+            <div className="flex flex-col gap-5">
                 <div className="p-3 bg-error-bg border border-error-border text-error rounded">
                     {loadError}
                 </div>
@@ -200,18 +201,12 @@ const BorderReplacerrPage = () => {
     }
 
     return (
-        <div className="max-w-6xl mx-auto pb-12">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Border Replacerr
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                        Apply brand or seasonal borders to your posters — scheduled by date range.
-                    </p>
-                </div>
-                {headerActions}
-            </div>
+        <div className="flex flex-col gap-5">
+            <PageHeader
+                title="Border Replacerr"
+                description="Apply brand or seasonal borders to your posters — scheduled by date range."
+                actions={headerActions}
+            />
 
             <DefaultColorsSection
                 value={config.border_colors}
@@ -252,7 +247,7 @@ const DEFAULT_COLOR_FIELD = {
 };
 
 const DefaultColorsSection = ({ value, onChange, disabled }) => (
-    <section className="mt-6 p-4 bg-surface border border-border rounded-xl">
+    <section className="p-4 bg-surface border border-border rounded-xl">
         <SectionHeader
             title="Default border colors"
             description="Active outside any configured holiday window."
@@ -269,7 +264,7 @@ const DefaultColorsSection = ({ value, onChange, disabled }) => (
 const HolidaysSection = ({ holidays, onChange, disabled }) => {
     if (!holidays.length) {
         return (
-            <section className="mt-6 p-8 bg-surface border border-dashed border-border rounded-xl text-center">
+            <section className="p-8 bg-surface border border-dashed border-border rounded-xl text-center">
                 <span className="material-symbols-outlined text-3xl text-fg-subtle block mb-2">
                     event
                 </span>
@@ -288,7 +283,7 @@ const HolidaysSection = ({ holidays, onChange, disabled }) => {
     }
 
     return (
-        <section className="mt-6">
+        <section>
             <SectionHeader
                 title="Holidays"
                 description="Per-holiday colors and themed border art. Holiday names and date windows are edited in Module Settings."
@@ -367,7 +362,7 @@ const HolidayCard = ({ holiday, onChange, disabled }) => {
             </header>
 
             {expanded && (
-                <div className="p-4 border-t border-border-subtle flex flex-col gap-5">
+                <div className="p-4 border-t border-border-light flex flex-col gap-5">
                     <div className="text-xs text-fg-subtle">
                         Name and date window edited in{' '}
                         <Link
@@ -417,7 +412,7 @@ const ColorSwatchRow = ({ colors }) => {
             {shown.map((c, i) => (
                 <span
                     key={`${c}-${i}`}
-                    className="inline-block w-4 h-4 rounded-full border border-border-subtle"
+                    className="inline-block w-4 h-4 rounded-full border border-border-light"
                     style={{ backgroundColor: c }}
                     title={c}
                     aria-hidden="true"
@@ -628,7 +623,7 @@ const PreviewSection = ({ isDirty }) => {
     }, []);
 
     return (
-        <section className="mt-8">
+        <section>
             <SectionHeader
                 title="Preview"
                 description="Side-by-side composites for a small mix of your matched media. The preview reads saved configuration."
@@ -790,7 +785,7 @@ const PreviewCard = ({ preview }) => {
                     preview.color && (
                         <div className="flex items-center gap-1 text-xs text-fg-muted">
                             <span
-                                className="inline-block w-4 h-4 rounded border border-border-subtle"
+                                className="inline-block w-4 h-4 rounded border border-border-light"
                                 style={{ backgroundColor: preview.color }}
                                 aria-hidden="true"
                             />

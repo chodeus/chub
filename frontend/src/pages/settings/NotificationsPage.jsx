@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ServiceIcon } from '../../components/ui';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Toggle from '../../components/ui/Toggle';
 import { Button } from '../../components/ui/button/Button';
 import { Modal } from '../../components/modals/Modal';
@@ -266,15 +267,11 @@ export const NotificationsPage = () => {
 
     // ── header ───────────────────────────────────────────────────────────
     const header = (
-        <div className="min-w-0">
-            <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                Notifications
-            </h1>
-            <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                Choose how CHUB reaches you, then point each destination at the modules it should
-                report on.
-            </p>
-        </div>
+        <PageHeader
+            title="Notifications"
+            description="Choose how CHUB reaches you, then point each destination at the modules it should
+report on."
+        />
     );
 
     if (isLoading) {
@@ -302,13 +299,11 @@ export const NotificationsPage = () => {
     const countFor = method => dests.filter(d => d.method === method).length;
 
     return (
-        <div className="w-full max-w-[920px] mx-auto flex flex-col">
+        <div className="w-full max-w-[920px] flex flex-col">
             {header}
 
             {/* NOTIFICATION METHODS */}
-            <div className="font-mono text-[10px] tracking-[1.5px] text-fg-faint mt-[22px] mb-[11px]">
-                NOTIFICATION METHODS
-            </div>
+            <div className="eyebrow mt-[22px] mb-[11px]">NOTIFICATION METHODS</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-[14px] mb-[30px]">
                 {['discord', 'notifiarr'].map(method => {
                     const m = METHOD[method];
@@ -316,7 +311,7 @@ export const NotificationsPage = () => {
                     return (
                         <div
                             key={method}
-                            className="bg-surface border border-border rounded-[14px] p-[16px_18px] flex flex-col gap-3"
+                            className="bg-surface border border-border rounded-xl p-[16px_18px] flex flex-col gap-3"
                         >
                             <div className="flex items-start gap-3">
                                 <div
@@ -501,7 +496,7 @@ const DestinationCard = ({
 
     return (
         <div
-            className="relative rounded-[13px] bg-surface border border-border transition-colors hover:border-border-strong"
+            className="relative rounded-xl bg-surface border border-border transition-colors hover:border-border-strong"
             style={{ opacity: d.enabled ? 1 : 0.62 }}
         >
             {/* header band */}
@@ -553,9 +548,7 @@ const DestinationCard = ({
             {/* triggers + modules */}
             <div className="flex flex-col gap-[13px] p-[14px_17px_16px]">
                 <div className="flex items-center gap-[14px]">
-                    <span className="font-mono text-[9.5px] tracking-[1px] text-fg-faint w-16 shrink-0">
-                        TRIGGER
-                    </span>
+                    <span className="eyebrow w-16 shrink-0">TRIGGER</span>
                     <div className="flex gap-2">
                         <TriggerPill
                             active={!!d.events?.success}
@@ -573,9 +566,7 @@ const DestinationCard = ({
                 </div>
 
                 <div className="flex items-start gap-[14px]">
-                    <span className="font-mono text-[9.5px] tracking-[1px] text-fg-faint w-16 shrink-0 pt-1.5">
-                        MODULES
-                    </span>
+                    <span className="eyebrow w-16 shrink-0 pt-1.5">MODULES</span>
                     <div className="flex-1 min-w-0 flex flex-wrap items-center gap-[7px]">
                         {all && (
                             <span
@@ -693,7 +684,7 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
     const isChecked = key => all || selected.includes(key);
     return (
         <div
-            className="absolute z-30 right-[17px] bottom-[14px] w-[340px] max-w-[calc(100vw-34px)] rounded-[12px] overflow-hidden"
+            className="absolute z-30 right-[17px] bottom-[14px] w-[340px] max-w-[calc(100vw-34px)] rounded-lg overflow-hidden"
             style={{
                 background: 'var(--surface-inset)',
                 border: '1px solid var(--border-strong)',

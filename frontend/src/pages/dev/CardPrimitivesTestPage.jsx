@@ -43,7 +43,7 @@ export const CardPrimitivesTestPage = () => {
                             <select
                                 value={aspectRatio}
                                 onChange={e => setAspectRatio(e.target.value)}
-                                className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                className="min-h-11 px-3 rounded-md border border-border bg-surface"
                             >
                                 <option value="16/9">16:9 (Video)</option>
                                 <option value="4/3">4:3 (Classic)</option>
@@ -57,7 +57,7 @@ export const CardPrimitivesTestPage = () => {
                             <select
                                 value={objectFit}
                                 onChange={e => setObjectFit(e.target.value)}
-                                className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                className="min-h-11 px-3 rounded-md border border-border bg-surface"
                             >
                                 <option value="cover">Cover</option>
                                 <option value="contain">Contain</option>
@@ -270,12 +270,12 @@ export const CardPrimitivesTestPage = () => {
                                 <input
                                     type="text"
                                     placeholder="Enter name"
-                                    className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                    className="min-h-11 px-3 rounded-md border border-border bg-surface"
                                 />
                                 <input
                                     type="email"
                                     placeholder="Enter email"
-                                    className="min-h-11 px-3 rounded-md border border-default bg-surface"
+                                    className="min-h-11 px-3 rounded-md border border-border bg-surface"
                                 />
                             </div>
                         </Card.Body>

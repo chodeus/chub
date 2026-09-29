@@ -7,7 +7,7 @@ import { LogPerformanceTest } from '../../components/logs/test-performance';
 export default function LogPerformance() {
     return (
         <div className="flex flex-col" style={{ height: '100%' }}>
-            <div className="p-4 border-b border-default">
+            <div className="p-4 border-b border-border">
                 <h1 className="text-2xl font-bold">Log Output Performance Test</h1>
                 <p className="text-fg-muted">
                     Test Phase 2 LogOutput component rendering performance

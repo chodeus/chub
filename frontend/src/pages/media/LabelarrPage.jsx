@@ -6,7 +6,15 @@ import { labelarrAPI } from '../../utils/api/labelarr.js';
 import { modulesAPI } from '../../utils/api/modules.js';
 import { configAPI } from '../../utils/api/config.js';
 import { instancesAPI } from '../../utils/api';
-import { Button, IconButton, LoadingButton, StatusDot, Toggle } from '../../components/ui/index.js';
+import {
+    Button,
+    ChipGroup,
+    IconButton,
+    LoadingButton,
+    StatusDot,
+    Toggle,
+} from '../../components/ui/index.js';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { formatDateTime } from '../../utils/datetime.js';
 import { formatTimeAgo } from '../../utils/schedule.js';
@@ -243,12 +251,10 @@ const LabelarrPage = () => {
     return (
         <div className="flex flex-col gap-5">
             {/* Toolbar */}
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Label Sync
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+            <PageHeader
+                title="Label Sync"
+                description={
+                    <>
                         Mirror Radarr / Sonarr tags onto Plex labels · managed by{' '}
                         <span className="font-mono text-fg-muted">labelarr</span>
                         {fullConfig?.labelarr?.dry_run && (
@@ -256,42 +262,46 @@ const LabelarrPage = () => {
                                 DRY RUN
                             </span>
                         )}
-                    </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2.5">
-                    {isDirty && (
-                        <span className="inline-flex items-center gap-1 font-mono text-[11px] px-2.5 py-1 rounded-full bg-warning/15 text-warning">
-                            <span className="material-symbols-outlined text-[14px]">edit</span>
-                            Unsaved
-                        </span>
-                    )}
-                    <Button
-                        variant="surface"
-                        icon="undo"
-                        onClick={handleDiscard}
-                        disabled={!isDirty || isSaving}
-                    >
-                        Discard
-                    </Button>
-                    <LoadingButton
-                        variant="surface"
-                        icon="sync"
-                        onClick={() => runSync()}
-                        isLoading={isSyncing}
-                    >
-                        Sync now
-                    </LoadingButton>
-                    <LoadingButton
-                        variant="primary"
-                        icon="save"
-                        onClick={handleSave}
-                        loading={isSaving}
-                        disabled={!isDirty}
-                    >
-                        Save
-                    </LoadingButton>
-                </div>
-            </div>
+                    </>
+                }
+                actions={
+                    <>
+                        {isDirty && (
+                            <span className="inline-flex items-center gap-1 font-mono text-[11px] px-2.5 py-1 rounded-full bg-warning/15 text-warning">
+                                <span className="material-symbols-outlined text-[14px]">edit</span>
+                                Unsaved
+                            </span>
+                        )}
+                        <Button
+                            variant="surface"
+                            icon="undo"
+                            onClick={handleDiscard}
+                            disabled={!isDirty || isSaving}
+                        >
+                            Discard
+                        </Button>
+                        <LoadingButton
+                            variant="surface"
+                            icon="sync"
+                            onClick={() => runSync()}
+                            loading={isSyncing}
+                            loadingText="Syncing…"
+                        >
+                            Sync now
+                        </LoadingButton>
+                        <LoadingButton
+                            variant="primary"
+                            icon="save"
+                            onClick={handleSave}
+                            loading={isSaving}
+                            loadingText="Saving..."
+                            disabled={!isDirty}
+                        >
+                            Save
+                        </LoadingButton>
+                    </>
+                }
+            />
 
             {/* Stats strip */}
             <div
@@ -304,9 +314,7 @@ const LabelarrPage = () => {
                             <div className="hidden sm:block w-px self-stretch bg-border my-3" />
                         )}
                         <div className="px-4 sm:px-[22px] py-3.5 flex flex-col gap-1.5 min-w-[116px] flex-1">
-                            <span className="font-mono text-[10px] tracking-[1.2px] text-fg-subtle">
-                                {s.label}
-                            </span>
+                            <span className="eyebrow">{s.label}</span>
                             <span
                                 className={`font-mono font-semibold text-[18px] ${s.tone} ${s.capitalize ? 'capitalize' : ''}`}
                                 title={s.title}
@@ -417,26 +425,15 @@ const LabelarrLibraryPicker = ({ instanceName, value, onChange, disabled }) => {
     };
 
     return (
-        <div className="flex flex-wrap gap-2 py-1">
-            {libraries.map(title => {
-                const on = selected.has(libNorm(title));
-                return (
-                    <button
-                        key={title}
-                        type="button"
-                        disabled={disabled}
-                        aria-pressed={on}
-                        onClick={() => toggle(title)}
-                        className={`touch-expand inline-flex items-center justify-center gap-1 min-h-9 min-w-11 px-2 rounded-[5px] text-xs border transition-colors disabled:opacity-50 ${
-                            on
-                                ? 'bg-primary/15 border-primary text-fg'
-                                : 'bg-surface-inset border-border text-fg-muted hover:border-primary'
-                        }`}
-                    >
-                        {title}
-                    </button>
-                );
-            })}
+        <div className="flex flex-wrap items-center gap-2 py-1">
+            <ChipGroup
+                size="sm"
+                ariaLabel="Plex targets"
+                options={libraries.map(title => ({ value: title, label: title }))}
+                isSelected={title => selected.has(libNorm(title))}
+                onToggle={toggle}
+                disabled={disabled}
+            />
             {selected.size === 0 && (
                 <span className="self-center text-[11px] text-fg-subtle">
                     none ticked = all enabled
@@ -564,9 +561,7 @@ const MappingCard = ({
                 <div className="px-4 pb-4 pt-1 border-t border-border-light flex flex-col gap-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <label className="flex flex-col gap-1.5">
-                            <span className="font-mono text-[10px] tracking-[0.5px] text-fg-faint uppercase">
-                                ARR instance
-                            </span>
+                            <span className="eyebrow">ARR instance</span>
                             <select
                                 value={mapping.app_instance}
                                 onChange={e => onChange({ app_instance: e.target.value })}
@@ -582,9 +577,7 @@ const MappingCard = ({
                             </select>
                         </label>
                         <label className="flex flex-col gap-1.5">
-                            <span className="font-mono text-[10px] tracking-[0.5px] text-fg-faint uppercase">
-                                Tags / labels (comma-separated)
-                            </span>
+                            <span className="eyebrow">Tags / labels (comma-separated)</span>
                             <input
                                 type="text"
                                 value={mapping.labels.join(', ')}
@@ -599,9 +592,7 @@ const MappingCard = ({
                     {/* Plex targets */}
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between">
-                            <span className="font-mono text-[10px] tracking-[0.5px] text-fg-faint uppercase">
-                                Plex targets
-                            </span>
+                            <span className="eyebrow">Plex targets</span>
                             <Button
                                 variant="ghost"
                                 size="small"

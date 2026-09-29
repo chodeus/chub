@@ -52,7 +52,6 @@
     --color-border: var(--border);
     --color-border-light: var(--border-light);
     --color-border-strong: var(--border-strong);
-    --color-border-subtle: var(--border-light); /* legacy alias */
 
     /* body text — renamed from text-primary/secondary/tertiary so `primary`
        can mean the brand colour in Tailwind's shared color namespace */
@@ -71,7 +70,6 @@
     --color-primary-text: var(--primary-text);
     --color-link: var(--accent); /* legacy alias (.text-link) */
     --color-brand-primary: var(--primary); /* legacy alias (.*-brand-primary) */
-    --color-default: var(--border); /* legacy alias (.border-default) */
     --color-input-error: var(--error); /* legacy alias (.border-input-error) */
 
     /* Legacy aliases mirroring the old colors.css, for classes the migration dropped. */
@@ -201,6 +199,15 @@
 }
 @utility font-display {
     font-family: var(--font-display);
+}
+
+/* Mono uppercase label over a value, a column or a group. */
+@utility eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
 }
 
 /* Named sizes + grid templates (utilities/sizing.css, utilities/layout.css). */

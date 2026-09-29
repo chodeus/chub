@@ -485,7 +485,7 @@ export const ArrayObjectField = ({
             value: o.value,
             label: o.labelByType?.[instanceType] || o.labelByType?.default || o.value,
         }));
-        const lbl = 'font-mono text-[10px] tracking-[0.8px] text-fg-subtle';
+        const lbl = 'eyebrow';
         const ctrl =
             'h-11 px-2.5 rounded-md bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary w-full';
         return (
@@ -655,7 +655,7 @@ export const ArrayObjectField = ({
     const renderGdriveTable = () => {
         const DirPickerField = FieldRegistry.getField('dir_picker');
         const cols = '1fr 1.3fr 1.2fr auto 28px';
-        const head = 'font-mono text-[10px] tracking-[0.8px] text-fg-subtle';
+        const head = 'eyebrow';
         // Flat borderless field — reads as a table cell; the row border
         // highlights on focus-within (mock style), not per-input boxes.
         const cell =
@@ -873,9 +873,7 @@ export const ArrayObjectField = ({
                 className={`bg-surface border border-border rounded-xl overflow-hidden ${enabled ? '' : 'opacity-60'}`}
             >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border bg-surface-inset">
-                    <span className="font-mono text-[10px] tracking-[0.8px] text-fg-subtle shrink-0">
-                        ARR
-                    </span>
+                    <span className="eyebrow shrink-0">ARR</span>
                     <select
                         value={item.app_instance || ''}
                         onChange={e => set('app_instance', e.target.value)}

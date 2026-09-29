@@ -7,6 +7,7 @@ import { apiCore } from '../../utils/api/core.js';
 import { Modal } from '../../components/modals/Modal';
 import EditMediaModal from '../../components/modals/EditMediaModal.jsx';
 import { Button, LoadingButton, IconButton } from '../../components/ui/index.js';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
@@ -33,11 +34,11 @@ const dupIds = dup => (dup.ids || '').split(',').map(Number).filter(Boolean);
 /** Mock-styled section header: a coloured glyph, a Space-Grotesk h2, an
  *  optional mono count pill, and a right-aligned slot for filters/actions. */
 const ManageSectionHeader = ({ icon, iconClass, title, count, countClass, children }) => (
-    <div className="flex items-center flex-wrap gap-3 mb-3.5">
-        <span className={`material-symbols-outlined text-[22px] ${iconClass}`} aria-hidden="true">
+    <div className="flex items-center flex-wrap gap-2.5 mb-3">
+        <span className={`material-symbols-outlined text-[18px] ${iconClass}`} aria-hidden="true">
             {icon}
         </span>
-        <h2 className="font-display text-xl font-bold text-fg">{title}</h2>
+        <h2 className="font-display text-[15px] font-semibold text-fg">{title}</h2>
         {count != null && (
             <span
                 className={`font-mono text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${countClass}`}
@@ -681,38 +682,34 @@ const MediaManagePage = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Manage
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                        Resolve duplicates, flag issues, and batch-import to your *arr instances.
-                    </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <LoadingButton
-                        loading={isRefreshing}
-                        loadingText="Refreshing..."
-                        variant="surface"
-                        icon="refresh"
-                        onClick={handleRefreshCache}
-                        title="Re-sync all media from your Radarr and Sonarr instances into the local cache"
-                    >
-                        Refresh cache
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isExporting}
-                        loadingText="Exporting..."
-                        variant="surface"
-                        icon="download"
-                        onClick={handleExport}
-                        title="Download your media library data as a JSON file"
-                    >
-                        Export
-                    </LoadingButton>
-                </div>
-            </div>
+            <PageHeader
+                title="Manage"
+                description="Resolve duplicates, flag issues, and batch-import to your *arr instances."
+                actions={
+                    <>
+                        <LoadingButton
+                            loading={isRefreshing}
+                            loadingText="Refreshing..."
+                            variant="surface"
+                            icon="refresh"
+                            onClick={handleRefreshCache}
+                            title="Re-sync all media from your Radarr and Sonarr instances into the local cache"
+                        >
+                            Refresh cache
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isExporting}
+                            loadingText="Exporting..."
+                            variant="surface"
+                            icon="download"
+                            onClick={handleExport}
+                            title="Download your media library data as a JSON file"
+                        >
+                            Export
+                        </LoadingButton>
+                    </>
+                }
+            />
 
             <DuplicatesSection
                 duplicates={duplicates}

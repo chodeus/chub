@@ -2,8 +2,6 @@
    .material-symbols-outlined{font-size:24px} beat every layered size utility. */
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block')
 layer(vendor);
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block')
-layer(vendor);
 @import url('./base.css');
 @import url('./theme/tokens.css');
 @import url('./theme/dark.css');

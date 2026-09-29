@@ -4,6 +4,7 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { systemAPI } from '../../utils/api/system.js';
 import { configAPI } from '../../utils/api/config.js';
 import { Button, LoadingButton } from '../../components/ui';
+import { PageHeader } from '../../components/ui/PageHeader';
 import Toggle from '../../components/ui/Toggle.jsx';
 import { Modal } from '../../components/modals/Modal';
 import Spinner from '../../components/ui/Spinner.jsx';
@@ -285,16 +286,9 @@ export const SystemSettingsPage = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            <div className="min-w-0">
-                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                    System
-                </h1>
-                <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                    Logging, backups, database, and updates.
-                </p>
-            </div>
+            <PageHeader title="System" description="Logging, backups, database, and updates." />
 
-            <div className="flex flex-col gap-4 w-full max-w-[760px]">
+            <div className="flex flex-col gap-4 w-full max-w-[820px]">
                 {/* VERSION */}
                 <Section title="Version">
                     <div className="flex items-center gap-3 flex-wrap">
@@ -476,7 +470,7 @@ export const SystemSettingsPage = () => {
                             <div className="overflow-x-auto rounded-lg border border-border">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="bg-surface-inset text-fg-faint text-left font-mono text-[10px] uppercase tracking-[1px]">
+                                        <tr className="bg-surface-inset text-left eyebrow">
                                             <th className="px-3 py-2 font-medium">Table</th>
                                             <th className="px-3 py-2 font-medium text-right">
                                                 Rows
@@ -501,7 +495,7 @@ export const SystemSettingsPage = () => {
                                 <div className="overflow-x-auto rounded-lg border border-border">
                                     <table className="w-full text-sm">
                                         <thead>
-                                            <tr className="bg-surface-inset text-fg-faint text-left font-mono text-[10px] uppercase tracking-[1px]">
+                                            <tr className="bg-surface-inset text-left eyebrow">
                                                 <th className="px-3 py-2 font-medium">Migration</th>
                                                 <th className="px-3 py-2 font-medium">Applied</th>
                                             </tr>

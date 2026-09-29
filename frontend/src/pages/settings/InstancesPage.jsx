@@ -605,7 +605,7 @@ export const InstancesPage = () => {
     // Loading state
     if (isLoading) {
         return (
-            <div className="p-3 sm:p-6 max-w-screen-xl mx-auto">
+            <div className="flex flex-col gap-5">
                 <PageHeader
                     title="Instances"
                     description="Radarr, Sonarr, Lidarr, and Plex connections."
@@ -620,7 +620,7 @@ export const InstancesPage = () => {
     // Error state
     if (error) {
         return (
-            <div className="p-3 sm:p-6 max-w-screen-xl mx-auto">
+            <div className="flex flex-col gap-5">
                 <PageHeader
                     title="Instances"
                     description="Radarr, Sonarr, Lidarr, and Plex connections."
@@ -636,7 +636,7 @@ export const InstancesPage = () => {
     }
 
     return (
-        <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
             {/* Page Header */}
             <PageHeader
                 title="Instances"
@@ -689,8 +689,8 @@ export const InstancesPage = () => {
                 <div key={service.type}>
                     {/* Service Header */}
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <h2 className="font-display text-[18px] font-semibold text-fg flex items-center gap-2">
-                            <ServiceIcon service={service.type} size="large" />
+                        <h2 className="font-display text-[15px] font-semibold text-fg flex items-center gap-2.5">
+                            <ServiceIcon service={service.type} size="small" />
                             {service.label} Instances
                         </h2>
                         <Button variant="primary" onClick={() => handleAdd(service.type)}>

@@ -111,7 +111,7 @@ export const FloatField = React.memo(
                         required={field.required}
                         placeholder={field.placeholder}
                         invalid={highlightInvalid}
-                        className="flex-1 border-t border-b border-default bg-input text-center"
+                        className="flex-1 border-t border-b border-border bg-input text-center"
                         aria-describedby={`${field.descId || `${inputId}-desc`} ${field.errorId || `${inputId}-error`}`.trim()}
                         aria-invalid={highlightInvalid}
                     />

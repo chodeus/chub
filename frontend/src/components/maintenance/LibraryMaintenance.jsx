@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApiMutation } from '../../hooks/useApiData.js';
 import { mediaAPI } from '../../utils/api/media.js';
 import { Modal } from '../modals/Modal';
-import { Button, LoadingButton } from '../ui/index.js';
+import { Button, ChipGroup, LoadingButton } from '../ui/index.js';
 
 const MaintenanceCard = ({
     title,
@@ -246,29 +246,13 @@ const IncompleteMetadataCard = () => {
             countClass="bg-source-orphan/15 text-source-orphan"
             description="Items missing key fields. External IDs (TMDB/TVDB/IMDB) missing → Poster Renamerr and Border Replacerr can't match them. Fix in the origin ARR."
         >
-            <div className="flex flex-wrap gap-2 mb-3">
-                {INCOMPLETE_FIELDS.map(f => {
-                    const active = fields.has(f.key);
-                    return (
-                        <button
-                            key={f.key}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => toggleField(f.key)}
-                            className="inline-flex items-center min-h-11 px-3 rounded-full text-sm cursor-pointer"
-                            style={{
-                                background: active
-                                    ? 'color-mix(in srgb, var(--accent) 18%, transparent)'
-                                    : 'var(--surface-alt)',
-                                border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                                color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                            }}
-                        >
-                            {f.label}
-                        </button>
-                    );
-                })}
-            </div>
+            <ChipGroup
+                className="mb-3"
+                ariaLabel="Fields to check"
+                options={INCOMPLETE_FIELDS.map(f => ({ value: f.key, label: f.label }))}
+                isSelected={key => fields.has(key)}
+                onToggle={toggleField}
+            />
             <div className="flex flex-wrap items-center gap-2 mb-3">
                 <LoadingButton
                     loading={isChecking}
@@ -315,9 +299,14 @@ const IncompleteMetadataCard = () => {
 
 export const LibraryMaintenance = () => (
     <section className="mt-9">
-        <div className="flex items-center gap-3 mb-3.5">
-            <span className="material-symbols-outlined text-[22px] text-source-cl2k">handyman</span>
-            <h2 className="font-display text-xl font-bold text-fg">Library Maintenance</h2>
+        <div className="flex items-center gap-2.5 mb-3">
+            <span
+                className="material-symbols-outlined text-[18px] text-source-cl2k"
+                aria-hidden="true"
+            >
+                handyman
+            </span>
+            <h2 className="font-display text-[15px] font-semibold text-fg">Library Maintenance</h2>
         </div>
         <div className="flex flex-col gap-3">
             <OrphanedCacheCard />

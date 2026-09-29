@@ -6,7 +6,7 @@ export const CardHeader = React.memo(
     ({ title, subtitle = null, action = null, className = '' }) => {
         return (
             <div
-                className={`flex items-start justify-between gap-4 p-4 px-5 border-b border-default ${className}`}
+                className={`flex items-start justify-between gap-4 p-4 px-5 border-b border-border ${className}`}
             >
                 <div className="flex-1 min-w-0">
                     {title && (

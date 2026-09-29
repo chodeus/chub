@@ -271,7 +271,7 @@ export const GeneralSettingsPage = () => {
     }
 
     return (
-        <div className="max-w-4xl mx-auto flex flex-col gap-4">
+        <div className="w-full max-w-[820px] flex flex-col gap-5">
             {/* Header */}
             <PageHeader title="General" description="Appearance, dashboard, and access." />
 

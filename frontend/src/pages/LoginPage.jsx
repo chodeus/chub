@@ -66,7 +66,7 @@ const LoginPage = () => {
     };
 
     const fieldError = (cond, val) => (cond && !val ? 'border-error' : 'border-border');
-    const labelCls = 'font-mono text-[10px] tracking-wider text-fg-subtle';
+    const labelCls = 'eyebrow';
     const inputCls =
         'h-input px-3 rounded-lg bg-surface-inset border text-fg text-sm outline-none focus:border-primary transition-colors';
 

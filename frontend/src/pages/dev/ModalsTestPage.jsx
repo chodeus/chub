@@ -185,7 +185,7 @@ const ModalsTestPage = () => {
 
                     <div className="grid md:grid-cols-2 gap-6">
                         {/* Controlled Example */}
-                        <div className="border border-border-subtle rounded p-4">
+                        <div className="border border-border-light rounded p-4">
                             <h3 className="text-lg font-medium mb-3 text-fg">Controlled Mode</h3>
                             <p className="text-sm text-fg-muted mb-3">
                                 Parent component controls state. Modal opens/closes based on parent
@@ -208,7 +208,7 @@ const ModalsTestPage = () => {
                                     <p className="text-fg">
                                         This modal&apos;s state is managed by the parent component.
                                     </p>
-                                    <div className="mt-4 p-3 bg-surface-elevated rounded border border-border-subtle">
+                                    <div className="mt-4 p-3 bg-surface-elevated rounded border border-border-light">
                                         <code className="text-xs text-fg-muted">
                                             {`const [open, setOpen] = useState(false);`}
                                             <br />
@@ -228,7 +228,7 @@ const ModalsTestPage = () => {
                         </div>
 
                         {/* Uncontrolled Example */}
-                        <div className="border border-border-subtle rounded p-4">
+                        <div className="border border-border-light rounded p-4">
                             <h3 className="text-lg font-medium mb-3 text-fg">Uncontrolled Mode</h3>
                             <p className="text-sm text-fg-muted mb-3">
                                 Modal manages its own state internally. Use <code>defaultOpen</code>{' '}
@@ -339,7 +339,7 @@ const ModalsTestPage = () => {
 
                     <div className="space-y-6">
                         {/* D1: Simple Confirmation */}
-                        <div className="border border-border-subtle rounded p-4">
+                        <div className="border border-border-light rounded p-4">
                             <h3 className="text-lg font-medium mb-2 text-fg">
                                 D1: Simple Confirmation
                             </h3>
@@ -379,7 +379,7 @@ const ModalsTestPage = () => {
                         </div>
 
                         {/* D2: Form Modal */}
-                        <div className="border border-border-subtle rounded p-4">
+                        <div className="border border-border-light rounded p-4">
                             <h3 className="text-lg font-medium mb-2 text-fg">
                                 D2: Form Modal with Field Registry
                             </h3>
@@ -426,7 +426,7 @@ const ModalsTestPage = () => {
                         </div>
 
                         {/* D3: Long Content Scrolling */}
-                        <div className="border border-border-subtle rounded p-4">
+                        <div className="border border-border-light rounded p-4">
                             <h3 className="text-lg font-medium mb-2 text-fg">
                                 D3: Long Content Scrolling
                             </h3>
@@ -469,7 +469,7 @@ const ModalsTestPage = () => {
                         </div>
 
                         {/* D4: Footer Alignment Variations */}
-                        <div className="border border-border-subtle rounded p-4">
+                        <div className="border border-border-light rounded p-4">
                             <h3 className="text-lg font-medium mb-2 text-fg">
                                 D4: Footer Alignment Variations
                             </h3>
@@ -522,7 +522,7 @@ const ModalsTestPage = () => {
                         </div>
 
                         {/* D5: No Footer Modal */}
-                        <div className="border border-border-subtle rounded p-4">
+                        <div className="border border-border-light rounded p-4">
                             <h3 className="text-lg font-medium mb-2 text-fg">
                                 D5: No Footer Modal
                             </h3>
@@ -560,7 +560,7 @@ const ModalsTestPage = () => {
                         </div>
 
                         {/* D6: Complex Content */}
-                        <div className="border border-border-subtle rounded p-4">
+                        <div className="border border-border-light rounded p-4">
                             <h3 className="text-lg font-medium mb-2 text-fg">
                                 D6: Complex Content (Accordion Inside)
                             </h3>
@@ -590,7 +590,7 @@ const ModalsTestPage = () => {
                                                 </div>
                                             </AccordionItem.Header>
                                             <AccordionItem.Body>
-                                                <div className="bg-surface-elevated border-t border-border-subtle p-4">
+                                                <div className="bg-surface-elevated border-t border-border-light p-4">
                                                     <p className="text-fg-muted">
                                                         General configuration options go here.
                                                     </p>
@@ -610,7 +610,7 @@ const ModalsTestPage = () => {
                                                 </div>
                                             </AccordionItem.Header>
                                             <AccordionItem.Body>
-                                                <div className="bg-surface-elevated border-t border-border-subtle p-4">
+                                                <div className="bg-surface-elevated border-t border-border-light p-4">
                                                     <p className="text-fg-muted">
                                                         Advanced configuration options go here.
                                                     </p>
@@ -630,7 +630,7 @@ const ModalsTestPage = () => {
                                                 </div>
                                             </AccordionItem.Header>
                                             <AccordionItem.Body>
-                                                <div className="bg-surface-elevated border-t border-border-subtle p-4">
+                                                <div className="bg-surface-elevated border-t border-border-light p-4">
                                                     <p className="text-fg-muted">
                                                         Notification preferences go here.
                                                     </p>
@@ -720,7 +720,7 @@ const ModalsTestPage = () => {
 
                         <div className="bg-surface-elevated p-4 rounded border border-border">
                             <h3 className="text-lg font-medium mb-3 text-fg">ARIA Attributes</h3>
-                            <div className="text-xs font-mono bg-bg/50 p-3 rounded border border-border-subtle">
+                            <div className="text-xs font-mono bg-bg/50 p-3 rounded border border-border-light">
                                 <code className="text-fg-muted">
                                     {`<div role="dialog" aria-modal="true" aria-labelledby="modal-title">`}
                                     <br />

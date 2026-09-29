@@ -6,6 +6,8 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 import { instancesAPI } from '../utils/api/instances.js';
 import { configAPI } from '../utils/api/config.js';
 import { SECRET_INPUT_PROPS } from '../utils/forms/secretInput.js';
+import { Button } from '../components/ui';
+import { InputBase, SelectBase } from '../components/fields/primitives';
 
 // Wizard steps. `optional` steps can be skipped; required steps gate Finish.
 const STEPS = [
@@ -365,14 +367,13 @@ const SetupWizardPage = () => {
                     </div>
 
                     <div className="sw-nav">
-                        <button
-                            type="button"
-                            className="sw-btn ghost"
+                        <Button
+                            variant="ghost"
                             onClick={() => go(step - 1)}
                             disabled={step === 0 || finishing}
                         >
                             Back
-                        </button>
+                        </Button>
                         <div className="sw-grow">
                             {cur.id === 'review' && (
                                 <span className={`sw-gate${requirementsMet ? ' met' : ''}`}>
@@ -383,33 +384,22 @@ const SetupWizardPage = () => {
                             )}
                         </div>
                         {cur.optional && (
-                            <button
-                                type="button"
-                                className="sw-btn ghost"
+                            <Button
+                                variant="ghost"
                                 onClick={() => go(step + 1)}
                                 disabled={finishing}
                             >
                                 Skip
-                            </button>
+                            </Button>
                         )}
                         {cur.id === 'review' ? (
-                            <button
-                                type="button"
-                                className="sw-btn"
-                                onClick={finish}
-                                disabled={!requirementsMet || finishing}
-                            >
+                            <Button onClick={finish} disabled={!requirementsMet || finishing}>
                                 {finishing ? 'Finishing…' : 'Finish setup →'}
-                            </button>
+                            </Button>
                         ) : (
-                            <button
-                                type="button"
-                                className="sw-btn"
-                                onClick={() => go(step + 1)}
-                                disabled={finishing}
-                            >
+                            <Button onClick={() => go(step + 1)} disabled={finishing}>
                                 Next →
-                            </button>
+                            </Button>
                         )}
                     </div>
                 </section>
@@ -458,7 +448,7 @@ const AccountStep = ({
             <>
                 <label className="sw-fld">
                     <span>Username</span>
-                    <input
+                    <InputBase
                         type="text"
                         value={username}
                         onChange={e => setUsername(e.target.value)}
@@ -468,7 +458,7 @@ const AccountStep = ({
                 <div className="sw-row">
                     <label className="sw-fld">
                         <span>Password</span>
-                        <input
+                        <InputBase
                             type="password"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
@@ -477,7 +467,7 @@ const AccountStep = ({
                     </label>
                     <label className="sw-fld">
                         <span>Confirm password</span>
-                        <input
+                        <InputBase
                             type="password"
                             value={confirm}
                             onChange={e => setConfirm(e.target.value)}
@@ -485,14 +475,9 @@ const AccountStep = ({
                         />
                     </label>
                 </div>
-                <button
-                    type="button"
-                    className="sw-btn secondary"
-                    onClick={onCreate}
-                    disabled={busy}
-                >
+                <Button variant="secondary" onClick={onCreate} disabled={busy}>
                     {busy ? 'Creating…' : 'Create account'}
-                </button>
+                </Button>
             </>
         )}
     </>
@@ -516,29 +501,33 @@ const InstanceStep = ({ title, lead, services, list, onAdd, onRemove, busy, toke
                 <div className="sw-row">
                     <label className="sw-fld">
                         <span>Type</span>
-                        <select value={service} onChange={e => setService(e.target.value)}>
+                        <SelectBase value={service} onChange={e => setService(e.target.value)}>
                             {services.map(s => (
                                 <option key={s} value={s}>
                                     {s.charAt(0).toUpperCase() + s.slice(1)}
                                 </option>
                             ))}
-                        </select>
+                        </SelectBase>
                     </label>
                     <label className="sw-fld">
                         <span>Name</span>
-                        <input type="text" value={name} onChange={e => setName(e.target.value)} />
+                        <InputBase
+                            type="text"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                        />
                     </label>
                 </div>
             ) : (
                 <label className="sw-fld">
                     <span>Name</span>
-                    <input type="text" value={name} onChange={e => setName(e.target.value)} />
+                    <InputBase type="text" value={name} onChange={e => setName(e.target.value)} />
                 </label>
             )}
             <div className="sw-row">
                 <label className="sw-fld">
                     <span>URL</span>
-                    <input
+                    <InputBase
                         type="url"
                         value={url}
                         onChange={e => setUrl(e.target.value)}
@@ -547,7 +536,7 @@ const InstanceStep = ({ title, lead, services, list, onAdd, onRemove, busy, toke
                 </label>
                 <label className="sw-fld">
                     <span>{tokenLabel}</span>
-                    <input
+                    <InputBase
                         type="password"
                         name="api_key"
                         value={api}
@@ -556,14 +545,13 @@ const InstanceStep = ({ title, lead, services, list, onAdd, onRemove, busy, toke
                     />
                 </label>
             </div>
-            <button
-                type="button"
-                className="sw-btn secondary"
+            <Button
+                variant="secondary"
                 onClick={() => onAdd(service, { name, url, api }, reset)}
                 disabled={busy}
             >
                 {busy ? 'Testing…' : 'Test & add'}
-            </button>
+            </Button>
             <div className="sw-list">
                 {list.map((inst, i) => (
                     <div className="sw-inst" key={`${inst.service}-${inst.name}-${i}`}>
@@ -600,11 +588,11 @@ const TmdbStep = ({ value, valid, onChange, onSave, busy }) => (
         {valid && <div className="sw-callout ok">✓ TMDB key is in place.</div>}
         <label className="sw-fld">
             <span>TMDB API key (v3)</span>
-            <input type="text" value={value} onChange={e => onChange(e.target.value)} />
+            <InputBase type="text" value={value} onChange={e => onChange(e.target.value)} />
         </label>
-        <button type="button" className="sw-btn secondary" onClick={onSave} disabled={busy}>
+        <Button variant="secondary" onClick={onSave} disabled={busy}>
             {busy ? 'Saving…' : 'Validate & save'}
-        </button>
+        </Button>
     </>
 );
 
@@ -619,9 +607,9 @@ const OptionalStep = ({ title, lead, configured, cta, onCta }) => (
                 ? '✓ Already configured — open settings to review or change it.'
                 : 'Not set up yet. You can configure this now or skip and do it later.'}
         </div>
-        <button type="button" className="sw-btn secondary" onClick={onCta}>
+        <Button variant="secondary" onClick={onCta}>
             {cta}
-        </button>
+        </Button>
     </>
 );
 
@@ -695,17 +683,8 @@ const WizardStyles = () => (
         .sw-opt { font-size:.8rem; color:var(--text-tertiary); }
         .sw-fld { display:block; margin-bottom:1rem; }
         .sw-fld > span { display:block; font-size:.8125rem; font-weight:500; color:var(--text-secondary); margin-bottom:.375rem; }
-        .sw-fld input, .sw-fld select { width:100%; height:44px; padding:0 .75rem; background:var(--input-bg); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-md,12px); font-family:inherit; font-size:.95rem; box-sizing:border-box; }
-        .sw-fld input:focus, .sw-fld select:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
         .sw-row { display:grid; grid-template-columns:1fr 1fr; gap:.9rem; }
         .sw-row3 { display:grid; grid-template-columns:1fr 1fr 130px; gap:.9rem; }
-        .sw-fld-btn .sw-btn { width:100%; }
-        .sw-btn { font-family:inherit; font-size:.9rem; font-weight:600; height:44px; padding:0 1.1rem; border-radius:var(--radius-md,12px); border:none; cursor:pointer; background:var(--primary); color:var(--on-color-text); }
-        .sw-btn:hover:not(:disabled) { background:var(--color-primary-strong); }
-        .sw-btn:disabled { opacity:.45; cursor:not-allowed; }
-        .sw-btn.secondary { background:var(--surface-alt); color:var(--text-primary); }
-        .sw-btn.ghost { background:transparent; color:var(--text-secondary); border:1px solid var(--border); }
-        .sw-btn.ghost:hover:not(:disabled) { color:var(--text-primary); border-color:var(--primary); }
         .sw-callout { padding:.85rem 1rem; border-radius:var(--radius-md,12px); font-size:.83rem; color:var(--text-secondary); margin-bottom:1.2rem; }
         .sw-callout.info { background:color-mix(in srgb, var(--accent) 10%, transparent); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
         .sw-callout.ok { background:color-mix(in srgb, var(--success) 12%, transparent); border:1px solid color-mix(in srgb, var(--success) 32%, transparent); }

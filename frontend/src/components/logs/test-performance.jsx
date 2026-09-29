@@ -65,7 +65,7 @@ export function LogPerformanceTest() {
                     type="number"
                     value={lineCount}
                     onChange={e => setLineCount(parseInt(e.target.value) || 1000)}
-                    className="border border-default rounded-md p-2"
+                    className="border border-border rounded-md p-2"
                     min="100"
                     max="10000"
                     step="100"

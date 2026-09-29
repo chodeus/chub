@@ -283,7 +283,7 @@ class FeatureErrorBoundaryBase extends Component {
         if (retryCount >= 3) {
             return (
                 <div
-                    className="bg-surface-alt border border-border-subtle rounded-md my-2 font-sans"
+                    className="bg-surface-alt border border-border-light rounded-md my-2 font-sans"
                     title={`${featureName} is temporarily disabled due to repeated errors`}
                 >
                     <div className="p-3 text-sm text-fg-subtle flex items-center gap-2">

@@ -359,7 +359,7 @@ export const JobsPage = () => {
     }
 
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
             <PageHeader
                 title="Jobs"
                 description="Queued, running and completed runs — retry failures or clear old jobs."
@@ -413,9 +413,7 @@ export const JobsPage = () => {
                             <div className="hidden sm:block w-px self-stretch bg-border my-3" />
                         )}
                         <div className="px-4 sm:px-[22px] py-3.5 flex flex-col gap-1.5 min-w-[116px] flex-1">
-                            <span className="font-mono text-[10px] tracking-[1.2px] text-fg-subtle">
-                                {s.label}
-                            </span>
+                            <span className="eyebrow">{s.label}</span>
                             <span className={`font-mono font-semibold text-[18px] ${s.tone}`}>
                                 {s.value}
                             </span>
@@ -547,7 +545,7 @@ export const JobsPage = () => {
                 <div className="border border-border rounded-lg overflow-hidden">
                     <table className="w-full text-sm table-fixed sm:table-auto">
                         <thead>
-                            <tr className="bg-surface-alt border-b border-border font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                            <tr className="bg-surface-alt border-b border-border eyebrow">
                                 <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">
                                     Job
                                 </th>
@@ -671,7 +669,9 @@ export const JobsPage = () => {
             {/* Module Execution History */}
             {Array.isArray(executionHistory) && executionHistory.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-fg mb-3">Recent Module Executions</h3>
+                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                        Recent Module Executions
+                    </h2>
                     <div className="space-y-1">
                         {executionHistory.map((entry, i) => (
                             <div

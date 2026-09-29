@@ -3,8 +3,9 @@ import { Link } from 'react-router';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
-import { LoadingButton, SegmentedControl, StatusDot } from '../../components/ui/index.js';
+import { Button, LoadingButton, SegmentedControl, StatusDot } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { formatDate } from '../../utils/datetime.js';
 
 const SORT_OPTIONS = [
@@ -129,41 +130,34 @@ const PosterGDriveSearchPage = () => {
     return (
         <div className="flex flex-col gap-5">
             {/* Toolbar */}
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        GDrive Sources
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+            <PageHeader
+                title="GDrive Sources"
+                description={
+                    <>
                         Google Drive folders{' '}
                         <span className="font-mono text-fg-muted">sync_gdrive</span> pulls posters
                         from via rclone.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2.5">
-                    {sources.length > 0 && (
-                        <LoadingButton
-                            loading={isSyncingAll}
-                            loadingText="Syncing…"
-                            variant="surface"
-                            icon="sync"
-                            onClick={() => syncAll()}
-                        >
-                            Sync all
-                        </LoadingButton>
-                    )}
-                    <Link
-                        to="/settings/modules"
-                        className="touch-expand inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold no-underline hover:brightness-110 transition"
-                        style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
-                    >
-                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                            add
-                        </span>
-                        Add source
-                    </Link>
-                </div>
-            </div>
+                    </>
+                }
+                actions={
+                    <>
+                        {sources.length > 0 && (
+                            <LoadingButton
+                                loading={isSyncingAll}
+                                loadingText="Syncing…"
+                                variant="surface"
+                                icon="sync"
+                                onClick={() => syncAll()}
+                            >
+                                Sync all
+                            </LoadingButton>
+                        )}
+                        <Button as={Link} to="/settings/modules" icon="add">
+                            Add source
+                        </Button>
+                    </>
+                }
+            />
 
             {/* Summary banner */}
             {sources.length > 0 && (
@@ -275,7 +269,7 @@ const PosterGDriveSearchPage = () => {
                 >
                     <div className="overflow-x-auto">
                         <div className="min-w-[720px]">
-                            <div className="grid grid-cols-[1.4fr_1.4fr_0.8fr_1fr_0.9fr_80px] gap-3.5 px-[18px] py-2.5 border-b border-border font-mono text-[10px] tracking-[1px] text-fg-faint">
+                            <div className="grid grid-cols-[1.4fr_1.4fr_0.8fr_1fr_0.9fr_80px] gap-3.5 px-[18px] py-2.5 border-b border-border eyebrow">
                                 <span>SOURCE</span>
                                 <span>DRIVE FOLDER</span>
                                 <span>POSTERS</span>

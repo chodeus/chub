@@ -13,6 +13,7 @@ import { Button, StatusDot } from '../components/ui';
 import { Modal } from '../components/modals/Modal';
 import { Skeleton } from '../components/ui';
 import Dropdown from '../components/ui/Dropdown.jsx';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useToast } from '../contexts/ToastContext.jsx';
 import { humanize } from '../utils/tools.js';
 import { formatDateTime } from '../utils/datetime.js';
@@ -448,12 +449,10 @@ const DashboardPage = () => {
     return (
         <div className="flex flex-col gap-5">
             {/* Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Dashboard
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+            <PageHeader
+                title="Dashboard"
+                description={
+                    <>
                         {moduleCount} modules · {instanceHealth.total} instances ·{' '}
                         <span
                             className="font-mono text-fg-muted"
@@ -461,55 +460,41 @@ const DashboardPage = () => {
                         >
                             {isConnected ? 'live' : 'polling'}
                         </span>
-                    </p>
-                </div>
-                <div className="flex items-center gap-2.5">
-                    <button
-                        type="button"
-                        onClick={handleRefreshAll}
-                        className="touch-expand inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-surface-elevated transition-colors"
-                    >
-                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                            refresh
-                        </span>
-                        Refresh
-                    </button>
-                    <button
-                        ref={newRunRef}
-                        type="button"
-                        onClick={() => setNewRunOpen(o => !o)}
-                        className="touch-expand inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 transition"
-                        style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
-                    >
-                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                            add
-                        </span>
-                        New run
-                    </button>
-                    <Dropdown
-                        isOpen={newRunOpen}
-                        onClose={() => setNewRunOpen(false)}
-                        anchorRef={newRunRef}
-                        placement="bottom-right"
-                    >
-                        <div className="max-h-72 overflow-y-auto">
-                            {moduleList.map(m => (
-                                <button
-                                    key={m.name}
-                                    type="button"
-                                    onClick={() => {
-                                        setNewRunOpen(false);
-                                        setRunNowTarget(m.name);
-                                    }}
-                                    className="touch-target w-full text-left px-3 py-2 rounded-md text-sm text-fg hover:bg-row-hover transition-colors"
-                                >
-                                    {humanize(m.name)}
-                                </button>
-                            ))}
-                        </div>
-                    </Dropdown>
-                </div>
-            </div>
+                    </>
+                }
+                actions={
+                    <>
+                        <Button variant="surface" icon="refresh" onClick={handleRefreshAll}>
+                            Refresh
+                        </Button>
+                        <Button ref={newRunRef} icon="add" onClick={() => setNewRunOpen(o => !o)}>
+                            New run
+                        </Button>
+                        <Dropdown
+                            isOpen={newRunOpen}
+                            onClose={() => setNewRunOpen(false)}
+                            anchorRef={newRunRef}
+                            placement="bottom-right"
+                        >
+                            <div className="max-h-72 overflow-y-auto">
+                                {moduleList.map(m => (
+                                    <button
+                                        key={m.name}
+                                        type="button"
+                                        onClick={() => {
+                                            setNewRunOpen(false);
+                                            setRunNowTarget(m.name);
+                                        }}
+                                        className="touch-target w-full text-left px-3 py-2 rounded-md text-sm text-fg hover:bg-row-hover transition-colors"
+                                    >
+                                        {humanize(m.name)}
+                                    </button>
+                                ))}
+                            </div>
+                        </Dropdown>
+                    </>
+                }
+            />
 
             {/* Status strip — scheduler / running / pending / failed / instances
                 / last-failure. Mono labels + mono values. */}
@@ -595,9 +580,7 @@ const DashboardPage = () => {
                                 className="px-4 sm:px-[22px] py-3.5 flex flex-col gap-1.5 min-w-0"
                                 style={{ flex: c.grow || 1, minWidth: 116 }}
                             >
-                                <span className="font-mono text-[10px] tracking-[1.2px] text-fg-subtle">
-                                    {c.label}
-                                </span>
+                                <span className="eyebrow">{c.label}</span>
                                 {c.node || (
                                     <span
                                         className={`font-mono font-semibold text-[18px] ${c.tone}`}
@@ -635,7 +618,7 @@ const DashboardPage = () => {
                     </div>
                     <div className="overflow-x-auto">
                         <div className="min-w-[620px]">
-                            <div className="grid grid-cols-[1.7fr_1.5fr_0.9fr_1.3fr_86px] gap-3 px-5 py-2 border-y border-border font-mono text-[10px] tracking-[1px] text-fg-faint">
+                            <div className="grid grid-cols-[1.7fr_1.5fr_0.9fr_1.3fr_86px] gap-3 px-5 py-2 border-y border-border eyebrow">
                                 <span>MODULE</span>
                                 <span>SCHEDULE</span>
                                 <span>LAST</span>

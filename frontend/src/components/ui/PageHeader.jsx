@@ -13,14 +13,19 @@ export const PageHeader = ({ title, description, actions }) => {
                     <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">{description}</p>
                 )}
             </div>
-            {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+            {/* gap-y-3 clears a Toggle's 44px coarse hit box once the actions wrap. */}
+            {actions && (
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-3 shrink-0 max-w-full">
+                    {actions}
+                </div>
+            )}
         </div>
     );
 };
 
 PageHeader.propTypes = {
     title: PropTypes.string.isRequired,
-    description: PropTypes.string,
+    description: PropTypes.node,
     actions: PropTypes.node,
 };
 
