@@ -196,7 +196,7 @@ export const DirListDragDropField = React.memo(
                 </DndContext>
 
                 {field.priorityOrder && (
-                    <div className="mt-3 font-mono text-[11px] text-fg-subtle">
+                    <div className="mt-3 font-mono text-meta text-fg-subtle">
                         ↑ lowest priority · highest priority ↓
                     </div>
                 )}

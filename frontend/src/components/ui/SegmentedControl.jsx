@@ -14,7 +14,7 @@ const SegmentedControl = ({
     const wrapH = size === 'sm' ? 'h-9' : 'h-11';
     // min-w-11 pins touch-expand's 44px box to the segment's own width, so a
     // one-character schema label can't reach across gap-0.5 into its neighbour.
-    const segH = size === 'sm' ? 'h-7 min-w-11 px-3 text-xs' : 'h-9 min-w-11 px-3.5 text-[13px]';
+    const segH = size === 'sm' ? 'h-7 min-w-11 px-3 text-xs' : 'h-9 min-w-11 px-3.5 text-dense';
     const wrapLayout = fullWidth ? 'flex w-full' : 'inline-flex';
     const segFlex = fullWidth ? 'flex-1' : '';
 

@@ -168,10 +168,8 @@ const PosterGDriveSearchPage = () => {
                         </span>
                     </span>
                     <div className="min-w-0">
-                        <div className="text-[13.5px] font-semibold text-fg">
-                            Google Drive sources
-                        </div>
-                        <div className="font-mono text-[11px] text-fg-subtle mt-0.5">
+                        <div className="text-dense font-semibold text-fg">Google Drive sources</div>
+                        <div className="font-mono text-meta text-fg-subtle mt-0.5">
                             {sources.length} sources · {totalFiles.toLocaleString()} posters cached
                             · last sync {lastSyncLabel}
                         </div>
@@ -195,7 +193,7 @@ const PosterGDriveSearchPage = () => {
                         <select
                             value={sortBy}
                             onChange={e => setSortBy(e.target.value)}
-                            className="h-full bg-transparent border-0 outline-none text-[13px] text-fg-muted pl-1.5 pr-3 cursor-pointer"
+                            className="h-full bg-transparent border-0 outline-none text-dense text-fg-muted pl-1.5 pr-3 cursor-pointer"
                             aria-label="Sort sources"
                         >
                             {SORT_OPTIONS.map(o => (
@@ -211,7 +209,7 @@ const PosterGDriveSearchPage = () => {
                         <select
                             value={pickerSelection}
                             onChange={e => setPickerSelection(e.target.value)}
-                            className="h-11 min-w-[180px] rounded-[9px] bg-surface border border-border text-[13px] text-fg-muted px-3 cursor-pointer outline-none focus:border-primary"
+                            className="h-11 min-w-[180px] rounded-[9px] bg-surface border border-border text-dense text-fg-muted px-3 cursor-pointer outline-none focus:border-primary"
                             aria-label="Sync a specific folder"
                         >
                             <option value="">Sync folder…</option>
@@ -300,7 +298,7 @@ const PosterGDriveSearchPage = () => {
                                             </span>
                                         </div>
                                         <span
-                                            className="font-mono text-[11.5px] text-fg-data truncate"
+                                            className="font-mono text-meta text-fg-data truncate"
                                             title={source.location}
                                         >
                                             {source.location}
@@ -315,7 +313,7 @@ const PosterGDriveSearchPage = () => {
                                         >
                                             {(source.file_count ?? 0).toLocaleString()}
                                         </span>
-                                        <span className="font-mono text-[11.5px] text-fg-subtle truncate">
+                                        <span className="font-mono text-meta text-fg-subtle truncate">
                                             {formatLastSynced(source._lastSyncedMs)}
                                         </span>
                                         <span

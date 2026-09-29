@@ -18,7 +18,7 @@ export const ModuleSelect = () => {
                 value={selectedModule || ''}
                 onChange={e => onModuleChange(e.target.value)}
                 aria-label="Select module"
-                className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none text-[13px] text-fg cursor-pointer"
+                className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none text-dense text-fg cursor-pointer"
             >
                 <option value="">Select module</option>
                 {modules.map(module => (

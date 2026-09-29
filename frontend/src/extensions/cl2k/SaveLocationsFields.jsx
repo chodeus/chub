@@ -69,7 +69,7 @@ const AddButton = ({ label, onClick, disabled }) => (
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className="inline-flex items-center gap-1.5 h-8 px-3 shrink-0 rounded-lg border border-border bg-surface-elevated text-fg-muted text-[12.5px] font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
+        className="inline-flex items-center gap-1.5 h-8 px-3 shrink-0 rounded-lg border border-border bg-surface-elevated text-fg-muted text-dense font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
     >
         <Icon name="add" className="text-[16px]" />
         {label}
@@ -81,9 +81,7 @@ const AddButton = ({ label, onClick, disabled }) => (
 // same button.
 const CardIntro = ({ description, action }) => (
     <div className="flex items-start justify-between gap-3 -mt-3 mb-3.5">
-        <p className="text-[12.5px] leading-[1.45] text-fg-subtle max-w-[480px] m-0">
-            {description}
-        </p>
+        <p className="text-dense leading-[1.45] text-fg-subtle max-w-[480px] m-0">{description}</p>
         {action}
     </div>
 );
@@ -91,7 +89,7 @@ const CardIntro = ({ description, action }) => (
 // The routing UI: one toggling pill per artwork type.
 const TypeChips = ({ microLabel, types, onToggle, disabled }) => (
     <div className="flex items-center gap-[7px] flex-wrap">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-subtle mr-0.5">
+        <span className="text-meta font-semibold uppercase tracking-[0.06em] text-fg-subtle mr-0.5">
             {microLabel}
         </span>
         {CL2K_ART_TYPES.map(t => {
@@ -104,7 +102,7 @@ const TypeChips = ({ microLabel, types, onToggle, disabled }) => (
                     aria-checked={selected}
                     disabled={disabled}
                     onClick={() => onToggle(t.value)}
-                    className={`inline-flex items-center gap-[5px] h-7 px-[11px] rounded-full text-[12.5px] font-medium border transition-colors duration-150 disabled:opacity-50 ${
+                    className={`inline-flex items-center gap-[5px] h-7 px-[11px] rounded-full text-dense font-medium border transition-colors duration-150 disabled:opacity-50 ${
                         selected
                             ? 'bg-primary/15 border-primary/65'
                             : 'bg-transparent border-border text-fg-subtle hover:border-primary/40'
@@ -122,8 +120,8 @@ const TypeChips = ({ microLabel, types, onToggle, disabled }) => (
 const EmptyState = ({ icon, heading, body, actionLabel, onAdd, disabled }) => (
     <div className="flex flex-col items-center gap-2 text-center border border-dashed border-border rounded-[10px] p-[26px]">
         <Icon name={icon} className="text-[24px] text-fg-dim" />
-        <p className="text-[13.5px] font-medium text-fg-muted m-0">{heading}</p>
-        <p className="text-[12.5px] leading-[1.45] text-fg-subtle max-w-[400px] m-0">{body}</p>
+        <p className="text-dense font-medium text-fg-muted m-0">{heading}</p>
+        <p className="text-dense leading-[1.45] text-fg-subtle max-w-[400px] m-0">{body}</p>
         <div className="mt-1">
             <AddButton label={actionLabel} onClick={onAdd} disabled={disabled} />
         </div>
@@ -330,7 +328,7 @@ const FolderEntry = ({
                     placeholder="/path/to/folder"
                     disabled={disabled}
                     onChange={e => onPatch({ path: e.target.value })}
-                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-[12.5px] text-fg-muted placeholder:text-fg-subtle focus:ring-primary focus:outline-none transition-colors"
+                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-dense text-fg-muted placeholder:text-fg-subtle focus:ring-primary focus:outline-none transition-colors"
                     aria-label="Folder path"
                 />
                 <button
@@ -473,7 +471,7 @@ const TestUploadButton = ({ folderId, disabled }) => {
             onClick={run}
             disabled={!canRun}
             title={(folderId || '').trim() ? undefined : 'Enter a Folder ID to test'}
-            className="inline-flex items-center gap-1.5 h-[38px] px-3 shrink-0 bg-surface border border-border rounded-lg text-fg-muted text-[12.5px] font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 h-[38px] px-3 shrink-0 bg-surface border border-border rounded-lg text-fg-muted text-dense font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
         >
             <Icon name="cloud_upload" className="text-[16px] text-accent" />
             {busy ? 'Testing…' : 'Test upload'}
@@ -540,7 +538,7 @@ const SplitSubfoldersButton = ({ folderId, disabled, onSplit }) => {
                     ? 'Create logos/backgrounds/squareart in this Drive folder and route each type to its own'
                     : 'Enter a Folder ID first'
             }
-            className="inline-flex items-center gap-1.5 h-[38px] px-3 shrink-0 bg-surface border border-border rounded-lg text-fg-muted text-[12.5px] font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 h-[38px] px-3 shrink-0 bg-surface border border-border rounded-lg text-fg-muted text-dense font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
         >
             <Icon name="create_new_folder" className="text-[16px] text-accent" />
             {busy ? 'Splitting…' : 'Split by type'}
@@ -578,7 +576,7 @@ const DriveEntry = ({
                     placeholder="Drive folder ID"
                     disabled={disabled}
                     onChange={e => onPatch({ folder_id: e.target.value })}
-                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-[12.5px] text-fg-muted placeholder:text-fg-subtle truncate focus:ring-primary focus:outline-none transition-colors"
+                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-dense text-fg-muted placeholder:text-fg-subtle truncate focus:ring-primary focus:outline-none transition-colors"
                     aria-label="Drive folder ID"
                 />
                 <TestUploadButton folderId={entry.folder_id} disabled={disabled} />
@@ -667,7 +665,7 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
             )}
             <div className="flex items-start gap-2 mt-3.5 pt-[13px] border-t border-border-light">
                 <Icon name="info" className="text-[16px] text-accent mt-px" />
-                <p className="text-[12.5px] leading-[1.45] text-fg-subtle m-0">
+                <p className="text-dense leading-[1.45] text-fg-subtle m-0">
                     Uploads use your Sync GDrive OAuth token — set one under Sync GDrive. A service
                     account can&apos;t own files in a personal Drive, so it has no usable upload
                     path.
@@ -688,7 +686,7 @@ export const Cl2kCoverageField = ({ rootConfig }) => {
 
     return (
         <div>
-            <p className="text-[12px] leading-[1.45] text-fg-subtle -mt-3 mb-2.5 m-0">
+            <p className="text-xs leading-[1.45] text-fg-subtle -mt-3 mb-2.5 m-0">
                 Types nobody claims aren&apos;t auto-saved — still downloadable from the maker page.
             </p>
             <div className="flex flex-col sm:flex-row gap-2.5">
@@ -707,19 +705,19 @@ export const Cl2kCoverageField = ({ rootConfig }) => {
                             }`}
                         >
                             <div
-                                className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] ${
+                                className={`text-meta font-semibold uppercase tracking-[0.06em] ${
                                     covered ? 'text-fg-subtle' : 'text-warning'
                                 }`}
                             >
                                 {COVERAGE_LABELS[t.value]}
                             </div>
                             {covered ? (
-                                <div className="text-[12.5px] text-fg mt-0.5">
+                                <div className="text-dense text-fg mt-0.5">
                                     <span className="font-mono font-semibold">{count}</span>{' '}
                                     {count === 1 ? 'location' : 'locations'}
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-[5px] text-[12.5px] text-warning mt-0.5">
+                                <div className="flex items-center gap-[5px] text-dense text-warning mt-0.5">
                                     <Icon name="download" className="text-[14px]" />
                                     Download only
                                 </div>
@@ -732,7 +730,7 @@ export const Cl2kCoverageField = ({ rootConfig }) => {
                 field can't render outside its section card, so it closes this card. */}
             <div className="flex items-start gap-2 mt-3.5 px-1">
                 <Icon name="info" className="text-[16px] text-accent mt-px" />
-                <p className="text-[12.5px] leading-[1.45] text-fg-subtle m-0">
+                <p className="text-dense leading-[1.45] text-fg-subtle m-0">
                     Anything not routed above isn&apos;t auto-saved — every generation stays
                     downloadable from the maker page.
                 </p>

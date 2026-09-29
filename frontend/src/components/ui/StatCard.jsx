@@ -25,11 +25,11 @@ export const StatCard = React.memo(
                 {icon && <StatIcon icon={icon} size="2xl" className="mb-2" />}
                 <p className="eyebrow mt-0 mb-4">{label}</p>
                 <p
-                    className={`font-mono text-[28px] leading-none font-semibold mt-2 mb-4 ${VALUE_TONES[valueColor] || 'text-fg'}`}
+                    className={`font-mono text-stat leading-none font-semibold mt-2 mb-4 ${VALUE_TONES[valueColor] || 'text-fg'}`}
                 >
                     {display}
                 </p>
-                <p className="text-[11.5px] text-fg-subtle mt-1.5 mb-4">{subtext || '\u00a0'}</p>
+                <p className="text-meta text-fg-subtle mt-1.5 mb-4">{subtext || '\u00a0'}</p>
                 {change && (
                     <StatChange
                         value={change.value}

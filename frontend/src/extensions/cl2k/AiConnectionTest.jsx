@@ -44,7 +44,7 @@ export const Cl2kAiTestField = ({ rootConfig }) => {
 
     return (
         <div className="flex flex-col gap-2">
-            <p className="text-[12px] leading-[1.45] text-fg-subtle -mt-3 m-0">
+            <p className="text-xs leading-[1.45] text-fg-subtle -mt-3 m-0">
                 Round-trips the provider&apos;s authenticated route using your saved settings — save
                 first if you have just changed the key.
             </p>
@@ -54,7 +54,7 @@ export const Cl2kAiTestField = ({ rootConfig }) => {
                     onClick={run}
                     disabled={busy || provider === 'none'}
                     title={provider === 'none' ? 'Choose an AI provider first' : undefined}
-                    className="inline-flex items-center gap-1.5 h-[38px] px-3 shrink-0 bg-surface border border-border rounded-lg text-fg-muted text-[12.5px] font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center gap-1.5 h-[38px] px-3 shrink-0 bg-surface border border-border rounded-lg text-fg-muted text-dense font-medium hover:text-fg hover:border-primary/50 disabled:opacity-50 transition-colors"
                 >
                     <span
                         className="material-symbols-outlined leading-none select-none text-[16px] text-accent"
@@ -67,7 +67,7 @@ export const Cl2kAiTestField = ({ rootConfig }) => {
             </div>
             {result && (
                 <p
-                    className={`text-[12px] leading-[1.45] m-0 ${
+                    className={`text-xs leading-[1.45] m-0 ${
                         result.ok ? 'text-fg-muted' : 'text-warning'
                     }`}
                 >

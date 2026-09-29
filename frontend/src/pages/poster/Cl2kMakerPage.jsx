@@ -753,7 +753,7 @@ const Cl2kMakerPage = () => {
                 title="CL2K Poster Maker"
                 description="Turn a TMDB/TVDB/IMDB title into a DAPS-named CL2K asset — the full 4-asset studio"
                 actions={
-                    <span className="font-mono text-[10px] tracking-[0.6px] px-2.5 py-1 rounded-md bg-accent/12 text-accent self-center">
+                    <span className="font-mono text-micro tracking-[0.6px] px-2.5 py-1 rounded-md bg-accent/12 text-accent self-center">
                         DEVELOP
                     </span>
                 }
@@ -799,10 +799,10 @@ const ConfigBanner = ({ config, uploadStatus }) => {
             {/* Config strip — the non-visual knobs live in Module Settings; the
                 save locations are shown read-only since there's no inline-save
                 backend, with a link back to edit them. */}
-            <section className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-[11px] bg-surface border border-border rounded-[10px] text-[12.5px]">
+            <section className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-[11px] bg-surface border border-border rounded-[10px] text-dense">
                 <span className="flex items-center gap-[7px] text-fg-subtle">
                     Save locations
-                    <span className="inline-flex items-center h-7 px-2.5 rounded-md bg-surface-inset border border-border font-mono text-[11.5px] text-fg-muted">
+                    <span className="inline-flex items-center h-7 px-2.5 rounded-md bg-surface-inset border border-border font-mono text-meta text-fg-muted">
                         {noLocations
                             ? 'none — download only'
                             : `${folderCount} folder${folderCount === 1 ? '' : 's'} · ${driveCount} Drive${driveCount === 1 ? '' : 's'}`}
@@ -832,7 +832,7 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                     <span className="material-symbols-outlined text-accent text-[17px] shrink-0">
                         info
                     </span>
-                    <span className="text-[12.5px] text-fg-muted">
+                    <span className="text-dense text-fg-muted">
                         No save locations configured — generated art isn&apos;t auto-saved but stays
                         downloadable here.{' '}
                         <Link
@@ -849,7 +849,7 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                     <span className="material-symbols-outlined text-warning text-[17px] shrink-0">
                         warning
                     </span>
-                    <span className="text-[12.5px] text-fg-muted">
+                    <span className="text-dense text-fg-muted">
                         Google Drive uploads configured but no OAuth token — uploads will fail,
                         local saves still work.{' '}
                         <Link
@@ -1080,7 +1080,7 @@ const TitlePicker = ({ onPick, toast }) => {
             className="mt-6 mx-auto w-full max-w-[640px] bg-surface border border-border rounded-xl p-5"
             style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
         >
-            <h2 className="font-display text-[15px] font-semibold text-fg mb-3.5">Pick a title</h2>
+            <h2 className="font-display text-heading font-semibold text-fg mb-3.5">Pick a title</h2>
 
             <div className="mb-3.5">
                 <SegmentedControl
@@ -1103,12 +1103,12 @@ const TitlePicker = ({ onPick, toast }) => {
                 <button
                     type="submit"
                     disabled={searching}
-                    className="h-[42px] px-[18px] rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 disabled:opacity-60 transition"
+                    className="h-[42px] px-[18px] rounded-lg bg-primary text-on-color font-display text-dense font-semibold hover:brightness-110 disabled:opacity-60 transition"
                 >
                     {searching ? 'Searching…' : 'Search'}
                 </button>
             </form>
-            <p className="text-[11.5px] text-fg-subtle mb-3">
+            <p className="text-meta text-fg-subtle mb-3">
                 Try: dune, severance, shogun, oppenheimer…
             </p>
 
@@ -1128,7 +1128,7 @@ const TitlePicker = ({ onPick, toast }) => {
                                 }`}
                             >
                                 <span className="text-sm text-fg truncate">{title}</span>
-                                <span className="font-mono text-[11.5px] text-fg-subtle shrink-0">
+                                <span className="font-mono text-meta text-fg-subtle shrink-0">
                                     {date ? date.slice(0, 4) : '—'} · #{r.id}
                                 </span>
                             </button>
@@ -1138,7 +1138,7 @@ const TitlePicker = ({ onPick, toast }) => {
             )}
 
             <div className="border-t border-border pt-3.5">
-                <p className="text-[12.5px] text-fg-subtle mb-2.5">
+                <p className="text-dense text-fg-subtle mb-2.5">
                     …or paste a TMDB / TVDB / IMDB ID or URL
                 </p>
                 <div className="flex gap-2">
@@ -1147,13 +1147,13 @@ const TitlePicker = ({ onPick, toast }) => {
                         value={paste}
                         onChange={e => setPaste(e.target.value)}
                         placeholder="e.g. 603, tt0133093, tvdb:413715, or a TMDB/TVDB URL"
-                        className={`${inputCls} h-10 font-mono text-[13px]`}
+                        className={`${inputCls} h-10 font-mono text-dense`}
                     />
                     <button
                         type="button"
                         onClick={runPaste}
                         disabled={resolving}
-                        className="h-10 px-4 rounded-lg bg-surface-inset border border-border text-fg-muted text-[13px] font-semibold hover:bg-row-hover hover:text-fg disabled:opacity-60 transition"
+                        className="h-10 px-4 rounded-lg bg-surface-inset border border-border text-fg-muted text-dense font-semibold hover:bg-row-hover hover:text-fg disabled:opacity-60 transition"
                     >
                         {resolving ? 'Resolving…' : 'Use ID'}
                     </button>
@@ -1997,21 +1997,21 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                         {item.year ? (
                             <span className="font-mono text-sm text-fg-subtle">{item.year}</span>
                         ) : null}
-                        <span className="font-mono text-[10px] uppercase px-1.5 py-0.5 rounded bg-success/15 text-success">
+                        <span className="font-mono text-micro uppercase px-1.5 py-0.5 rounded bg-success/15 text-success">
                             {item.kind}
                         </span>
                         {item.tmdb_id ? (
-                            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-surface-inset text-accent">
+                            <span className="font-mono text-meta px-2 py-0.5 rounded bg-surface-inset text-accent">
                                 TMDB {item.tmdb_id}
                             </span>
                         ) : null}
                         {item.tvdb_id ? (
-                            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-surface-inset text-accent">
+                            <span className="font-mono text-meta px-2 py-0.5 rounded bg-surface-inset text-accent">
                                 TVDB {item.tvdb_id}
                             </span>
                         ) : null}
                         {item.imdb_id ? (
-                            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-surface-inset text-accent">
+                            <span className="font-mono text-meta px-2 py-0.5 rounded bg-surface-inset text-accent">
                                 {item.imdb_id}
                             </span>
                         ) : null}
@@ -2045,13 +2045,13 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                                 key={t.key}
                                 type="button"
                                 onClick={() => setTab(t.key)}
-                                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 sm:px-4 py-2 rounded-md text-[13px] transition-colors ${
+                                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 sm:px-4 py-2 rounded-md text-dense transition-colors ${
                                     on
                                         ? 'bg-primary text-on-color font-semibold'
                                         : 'text-fg-muted hover:text-fg'
                                 }`}
                             >
-                                <span className="font-mono text-[9px] opacity-80">{t.ar}</span>
+                                <span className="font-mono text-micro opacity-80">{t.ar}</span>
                                 {t.label}
                             </button>
                         );
@@ -2218,7 +2218,7 @@ const StudioAccordion = ({
                 <span className="flex-1 text-left eyebrow">{title}</span>
                 {dot && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
                 {count != null && (
-                    <span className="font-mono text-[10px] text-fg-subtle">{count}</span>
+                    <span className="font-mono text-micro text-fg-subtle">{count}</span>
                 )}
             </button>
             {open && <div className="pt-3">{children}</div>}
@@ -2798,7 +2798,7 @@ const RenderPanel = ({
                     <button
                         type="button"
                         onClick={() => setOutputMode('cl2k')}
-                        className={`px-3.5 py-2 rounded-md text-[13px] transition-colors ${
+                        className={`px-3.5 py-2 rounded-md text-dense transition-colors ${
                             outputMode === 'cl2k'
                                 ? 'bg-primary text-on-color font-semibold'
                                 : 'text-fg-muted hover:text-fg'
@@ -2815,7 +2815,7 @@ const RenderPanel = ({
                             setBackdropSource('upload');
                             setBackdrop(null);
                         }}
-                        className={`px-3.5 py-2 rounded-md text-[13px] transition-colors ${
+                        className={`px-3.5 py-2 rounded-md text-dense transition-colors ${
                             outputMode === 'asis'
                                 ? 'bg-primary text-on-color font-semibold'
                                 : 'text-fg-muted hover:text-fg'
@@ -2824,7 +2824,7 @@ const RenderPanel = ({
                         File as-is
                     </button>
                 </div>
-                <span className="ml-auto font-mono text-[11px] text-fg-subtle truncate">
+                <span className="ml-auto font-mono text-meta text-fg-subtle truncate">
                     → {fileNameHint}
                 </span>
             </div>
@@ -2861,7 +2861,7 @@ const RenderPanel = ({
                     </div>
                     <div className="flex flex-col gap-4">
                         <div>
-                            <h2 className="font-display text-[15px] font-semibold text-fg">
+                            <h2 className="font-display text-heading font-semibold text-fg">
                                 Re-file an existing poster
                             </h2>
                             <p className="text-xs text-fg-subtle mt-1">
@@ -4658,14 +4658,14 @@ const Picker = ({
                                 bottom so it can't run into the language badge, and
                                 off the top-right so it clears the selected check. */}
                                 {it.width ? (
-                                    <span className="absolute top-0 left-0 text-[11px] font-mono text-white bg-black/60 px-1">
+                                    <span className="absolute top-0 left-0 text-meta font-mono text-white bg-black/60 px-1">
                                         {it.width}×{it.height}
                                     </span>
                                 ) : null}
                                 {/* Language badge: 'textless' (null language) art is pure
                                 artwork — no AI text pass needed at all. */}
                                 {'iso_639_1' in it ? (
-                                    <span className="absolute bottom-0 left-0 text-[11px] font-mono text-white bg-black/60 px-1">
+                                    <span className="absolute bottom-0 left-0 text-meta font-mono text-white bg-black/60 px-1">
                                         {it.iso_639_1 || 'textless'}
                                     </span>
                                 ) : null}
@@ -4838,7 +4838,7 @@ const GDrivePosterTile = ({ asset, disabled, onPick }) => (
         {asset.style && (
             <StyleStamp
                 style={asset.style}
-                className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
+                className="absolute top-1.5 left-1.5 z-10 text-micro pointer-events-none"
             />
         )}
     </button>
@@ -5354,7 +5354,7 @@ const LogoSelector = ({
                 <div className="mt-2 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                         <span className="text-xs text-fg-muted">Invert logo</span>
-                        <span className="block text-[11px] text-fg-subtle">
+                        <span className="block text-meta text-fg-subtle">
                             white becomes transparent, black becomes white (for plate/sticker logos)
                         </span>
                     </div>

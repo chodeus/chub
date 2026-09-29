@@ -70,11 +70,11 @@ const SetupDetails = ({ wiring }) => {
                 >
                     chevron_right
                 </span>
-                <span className="font-display text-[15px] font-semibold text-fg">
+                <span className="font-display text-heading font-semibold text-fg">
                     Setup &amp; secret
                 </span>
                 <span
-                    className={`ml-auto font-mono text-[11px] px-2.5 py-[3px] rounded-full ${
+                    className={`ml-auto font-mono text-meta px-2.5 py-[3px] rounded-full ${
                         secretConfigured
                             ? 'bg-success/15 text-success'
                             : 'bg-warning/15 text-warning'
@@ -328,7 +328,7 @@ const AutoSetupBoard = () => {
     return (
         <section className="bg-surface border border-border rounded-xl overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
-                <h2 className="font-display text-[15px] font-semibold text-fg flex items-center gap-2.5">
+                <h2 className="font-display text-heading font-semibold text-fg flex items-center gap-2.5">
                     <span className="material-symbols-outlined text-[18px] text-accent">bolt</span>
                     Auto-setup
                 </h2>
@@ -378,9 +378,9 @@ const AutoSetupBoard = () => {
                     value={baseUrl}
                     onChange={e => setBaseUrl(e.target.value)}
                     placeholder="http://192.168.1.10:8060"
-                    className="h-9 px-3 rounded-lg bg-surface-inset border border-border font-mono text-[13px] text-fg focus:border-accent outline-none"
+                    className="h-9 px-3 rounded-lg bg-surface-inset border border-border font-mono text-dense text-fg focus:border-accent outline-none"
                 />
-                <span className="text-[11.5px] text-fg-subtle">
+                <span className="text-meta text-fg-subtle">
                     {status?.public_url_configured
                         ? 'From your saved public_url. '
                         : status?.detected_base_url
@@ -394,7 +394,7 @@ const AutoSetupBoard = () => {
                     </Link>{' '}
                     to persist.
                 </span>
-                <label className="touch-target mt-1.5 flex items-center gap-2 text-[12.5px] text-fg-muted select-none">
+                <label className="touch-target mt-1.5 flex items-center gap-2 text-dense text-fg-muted select-none">
                     <input
                         type="checkbox"
                         checked={includeUpgrade}
@@ -406,7 +406,7 @@ const AutoSetupBoard = () => {
             </div>
 
             {status?.base_url_error && (
-                <div className="mx-5 mt-2 p-3 rounded-lg border border-warning/30 bg-warning/10 text-[13px] text-fg">
+                <div className="mx-5 mt-2 p-3 rounded-lg border border-warning/30 bg-warning/10 text-dense text-fg">
                     {status.base_url_error}
                 </div>
             )}
@@ -438,20 +438,20 @@ const AutoSetupBoard = () => {
                                             <span className="font-semibold text-fg">
                                                 {inst.name}
                                             </span>
-                                            <span className="ml-2 font-mono text-[10px] px-1.5 py-[2px] rounded bg-surface-inset text-fg-subtle">
+                                            <span className="ml-2 font-mono text-micro px-1.5 py-[2px] rounded bg-surface-inset text-fg-subtle">
                                                 {TYPE_LABEL[inst.type] || inst.type}
                                             </span>
                                         </td>
                                         <td className="px-3 py-3">
                                             <span
-                                                className={`font-mono text-[11px] px-2 py-[3px] rounded-full ${meta.cls}`}
+                                                className={`font-mono text-meta px-2 py-[3px] rounded-full ${meta.cls}`}
                                             >
                                                 {meta.label}
                                             </span>
                                             {(inst.error ||
                                                 (inst.drift_fields || []).length > 0 ||
                                                 inst.foreign_webhook) && (
-                                                <div className="mt-1 text-[11.5px] text-fg-subtle max-w-[46ch]">
+                                                <div className="mt-1 text-meta text-fg-subtle max-w-[46ch]">
                                                     {inst.error ||
                                                         (inst.drift_fields?.length
                                                             ? `Stale: ${inst.drift_fields.join(', ')}`
@@ -571,7 +571,7 @@ export const WebhooksPage = () => {
                     >
                         warning
                     </span>
-                    <div className="text-[13.5px] text-fg leading-relaxed">
+                    <div className="text-dense text-fg leading-relaxed">
                         <strong className="text-warning">
                             Webhook endpoints are unauthenticated.
                         </strong>{' '}
@@ -593,7 +593,7 @@ export const WebhooksPage = () => {
             {/* BASE URL strip */}
             <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-surface border border-border">
                 <span className="eyebrow shrink-0">BASE URL</span>
-                <span className="flex-1 min-w-0 font-mono text-[13px] text-fg-muted truncate">
+                <span className="flex-1 min-w-0 font-mono text-dense text-fg-muted truncate">
                     {baseUrl}
                 </span>
                 <button
@@ -612,13 +612,13 @@ export const WebhooksPage = () => {
             {/* RECENT CALLERS telemetry table */}
             <section className="bg-surface border border-border rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-5 pt-4 pb-3">
-                    <h2 className="font-display text-[15px] font-semibold text-fg flex items-center gap-2.5">
+                    <h2 className="font-display text-heading font-semibold text-fg flex items-center gap-2.5">
                         <span
                             className="w-[7px] h-[7px] rounded-full bg-success"
                             aria-hidden="true"
                         />
                         Recent callers
-                        <span className="font-mono text-[11px] font-normal text-fg-subtle">
+                        <span className="font-mono text-meta font-normal text-fg-subtle">
                             last 7 days
                         </span>
                     </h2>
@@ -659,17 +659,17 @@ export const WebhooksPage = () => {
                                             {r.event_type || 'Poster on add'}
                                         </td>
                                         <td className="px-3 py-3">
-                                            <span className="font-mono text-[11px] px-2 py-[3px] rounded-md bg-primary/14 text-source-cl2k">
+                                            <span className="font-mono text-meta px-2 py-[3px] rounded-md bg-primary/14 text-source-cl2k">
                                                 poster_renamerr
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3 font-mono text-[11.5px] text-fg-data">
+                                        <td className="px-3 py-3 font-mono text-meta text-fg-data">
                                             {r.client_host}
                                         </td>
-                                        <td className="px-3 py-3 text-right font-mono text-[12px] text-fg-muted">
+                                        <td className="px-3 py-3 text-right font-mono text-xs text-fg-muted">
                                             {r.count}
                                         </td>
-                                        <td className="px-3 py-3 pr-5 text-right font-mono text-[11.5px] text-fg-subtle whitespace-nowrap">
+                                        <td className="px-3 py-3 pr-5 text-right font-mono text-meta text-fg-subtle whitespace-nowrap">
                                             {timeAgo(r.last_seen)}
                                         </td>
                                     </tr>
@@ -679,7 +679,7 @@ export const WebhooksPage = () => {
                     </div>
                 )}
                 {origins.by_status && Object.keys(origins.by_status).length > 0 && (
-                    <p className="px-5 py-3 border-t border-border-light font-mono text-[11px] text-fg-subtle">
+                    <p className="px-5 py-3 border-t border-border-light font-mono text-meta text-fg-subtle">
                         Total {origins.total} ·{' '}
                         {Object.entries(origins.by_status)
                             .map(([s, c]) => `${s}: ${c}`)
@@ -698,7 +698,7 @@ export const WebhooksPage = () => {
                 >
                     info
                 </span>
-                <span className="text-[12.5px] text-fg-subtle">
+                <span className="text-dense text-fg-subtle">
                     Each hit is recorded as a job with its origin (client host + endpoint), so a
                     noisy or dead webhook shows up in{' '}
                     <Link to="/settings/jobs" className="text-accent hover:underline">

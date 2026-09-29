@@ -202,7 +202,7 @@ const MediaSearchPage = () => {
                         aria-label="Search library"
                     />
                     {hasResults && (
-                        <span className="font-mono text-[11px] text-fg-subtle shrink-0">
+                        <span className="font-mono text-meta text-fg-subtle shrink-0">
                             {total} results
                         </span>
                     )}
@@ -220,7 +220,7 @@ const MediaSearchPage = () => {
                     <select
                         value={filters.sort}
                         onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value }))}
-                        className="h-full bg-transparent border-0 outline-none text-[13.5px] text-fg-muted pl-1.5 pr-3 cursor-pointer"
+                        className="h-full bg-transparent border-0 outline-none text-dense text-fg-muted pl-1.5 pr-3 cursor-pointer"
                         aria-label="Sort results"
                     >
                         <option value="title">Sort: Title</option>
@@ -264,7 +264,7 @@ const MediaSearchPage = () => {
 
             {hasResults && (
                 <>
-                    <p className="font-mono text-[11.5px] text-fg-subtle m-0">
+                    <p className="font-mono text-meta text-fg-subtle m-0">
                         {total} result{total !== 1 ? 's' : ''} for &quot;{term}&quot;
                     </p>
                     <div className="flex flex-col gap-3">
@@ -349,7 +349,7 @@ const MediaSearchPage = () => {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="flex items-baseline gap-2.5 flex-wrap min-w-0">
-                                                <span className="font-display text-[16px] font-semibold text-fg">
+                                                <span className="font-display text-base font-semibold text-fg">
                                                     {item.title}
                                                 </span>
                                                 {item.year && (
@@ -358,7 +358,7 @@ const MediaSearchPage = () => {
                                                     </span>
                                                 )}
                                                 {item.season_number != null && (
-                                                    <span className="font-mono text-[10px] px-[7px] py-0.5 rounded-[5px] bg-primary/15 text-source-cl2k">
+                                                    <span className="font-mono text-micro px-[7px] py-0.5 rounded-[5px] bg-primary/15 text-source-cl2k">
                                                         {item.season_number === 0
                                                             ? 'Specials'
                                                             : `Season ${item.season_number}`}
@@ -367,7 +367,7 @@ const MediaSearchPage = () => {
                                             </div>
                                             <div className="flex items-center gap-1.5 shrink-0">
                                                 <span
-                                                    className={`font-mono text-[10px] font-semibold px-[9px] py-[3px] rounded-full ${
+                                                    className={`font-mono text-micro font-semibold px-[9px] py-[3px] rounded-full ${
                                                         item.matched
                                                             ? 'bg-success/15 text-success'
                                                             : 'bg-warning/15 text-warning'
@@ -386,7 +386,7 @@ const MediaSearchPage = () => {
                                         </div>
 
                                         {meta.length > 0 && (
-                                            <div className="flex items-center gap-2.5 flex-wrap mt-1.5 font-mono text-[11.5px] text-fg-data">
+                                            <div className="flex items-center gap-2.5 flex-wrap mt-1.5 font-mono text-meta text-fg-data">
                                                 {meta.map((m, i) => (
                                                     <React.Fragment key={m.key}>
                                                         {i > 0 && (
@@ -399,7 +399,7 @@ const MediaSearchPage = () => {
                                         )}
 
                                         {genres.length > 0 && (
-                                            <div className="text-[12.5px] text-fg-subtle mt-1.5">
+                                            <div className="text-dense text-fg-subtle mt-1.5">
                                                 {genres.join(' · ')}
                                             </div>
                                         )}
@@ -412,7 +412,7 @@ const MediaSearchPage = () => {
                                                         href={link.href}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="font-mono text-[10.5px] px-2 py-0.5 rounded-[5px] bg-surface-inset text-accent hover:text-source-cl2k transition-colors no-underline"
+                                                        className="font-mono text-meta px-2 py-0.5 rounded-[5px] bg-surface-inset text-accent hover:text-source-cl2k transition-colors no-underline"
                                                     >
                                                         {link.label} {link.value}
                                                     </a>
@@ -425,7 +425,7 @@ const MediaSearchPage = () => {
                                                 {tags.map(tag => (
                                                     <span
                                                         key={tag}
-                                                        className="font-mono text-[10.5px] px-2 py-0.5 rounded-[5px] bg-surface-inset text-fg-subtle"
+                                                        className="font-mono text-meta px-2 py-0.5 rounded-[5px] bg-surface-inset text-fg-subtle"
                                                     >
                                                         {tag}
                                                     </span>
@@ -434,17 +434,17 @@ const MediaSearchPage = () => {
                                         )}
 
                                         {item.media_file && (
-                                            <div className="font-mono text-[11px] text-fg-subtle mt-2 truncate">
+                                            <div className="font-mono text-meta text-fg-subtle mt-2 truncate">
                                                 {item.media_file}
                                             </div>
                                         )}
                                         {item.folder && !item.media_file && (
-                                            <div className="font-mono text-[11px] text-fg-subtle mt-2 truncate">
+                                            <div className="font-mono text-meta text-fg-subtle mt-2 truncate">
                                                 {item.folder}
                                             </div>
                                         )}
                                         {item.created_at && (
-                                            <div className="text-[11px] text-fg-subtle mt-1.5">
+                                            <div className="text-meta text-fg-subtle mt-1.5">
                                                 Added {formatDate(item.created_at)}
                                             </div>
                                         )}

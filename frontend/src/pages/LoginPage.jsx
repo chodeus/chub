@@ -86,10 +86,10 @@ const LoginPage = () => {
                         style={{ boxShadow: '0 6px 26px rgba(255,201,68,.34)' }}
                     />
                     <div className="text-center leading-tight">
-                        <div className="font-display text-[26px] font-bold tracking-[0.5px] text-fg">
+                        <div className="font-display text-title font-bold tracking-[0.5px] text-fg">
                             CHUB
                         </div>
-                        <div className="text-[13px] font-medium text-fg-subtle mt-0.5">
+                        <div className="text-dense font-medium text-fg-subtle mt-0.5">
                             Media Manager
                         </div>
                     </div>
@@ -103,10 +103,10 @@ const LoginPage = () => {
                     autoComplete="off"
                 >
                     <div>
-                        <h1 className="font-display text-[19px] font-semibold text-fg">
+                        <h1 className="font-display text-lg font-semibold text-fg">
                             {isSetup ? 'Create your admin account' : 'Sign in'}
                         </h1>
-                        <p className="text-[12.5px] text-fg-subtle mt-1">
+                        <p className="text-dense text-fg-subtle mt-1">
                             Local account · this CHUB instance
                         </p>
                     </div>
@@ -201,7 +201,7 @@ const LoginPage = () => {
                 </form>
 
                 {/* Connection footer */}
-                <div className="flex items-center justify-center gap-2.5 font-mono text-[11px] text-fg-subtle">
+                <div className="flex items-center justify-center gap-2.5 font-mono text-meta text-fg-subtle">
                     <span
                         className="w-[7px] h-[7px] rounded-full bg-success"
                         style={{ boxShadow: '0 0 0 3px rgba(108,188,102,.16)' }}

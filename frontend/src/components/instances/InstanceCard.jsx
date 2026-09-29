@@ -159,7 +159,7 @@ export const InstanceCard = ({
         <div className="rounded-xl bg-surface border border-border hover:border-border-strong transition-colors overflow-hidden">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[18px] py-[15px]">
                 <span
-                    className="shrink-0 w-11 h-11 rounded-[10px] flex items-center justify-center font-display text-[17px] font-bold"
+                    className="shrink-0 w-11 h-11 rounded-[10px] flex items-center justify-center font-display text-base font-bold"
                     style={{ background: tint, color }}
                     aria-hidden="true"
                 >
@@ -168,12 +168,12 @@ export const InstanceCard = ({
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-display text-[15px] font-semibold text-fg truncate">
+                        <span className="font-display text-heading font-semibold text-fg truncate">
                             {name}
                         </span>
                     </div>
                     <div
-                        className="font-mono text-[11.5px] text-fg-data mt-1 truncate"
+                        className="font-mono text-meta text-fg-data mt-1 truncate"
                         title={instance.url}
                     >
                         {instance.url || '—'}
@@ -188,13 +188,13 @@ export const InstanceCard = ({
 
                 <div className="flex flex-col items-end gap-1 shrink-0 mr-1">
                     <span
-                        className={`flex items-center gap-1.5 text-[12px] font-semibold ${healthTone}`}
+                        className={`flex items-center gap-1.5 text-xs font-semibold ${healthTone}`}
                     >
                         <StatusDot status={dotStatus} size={7} ring={false} />
                         <span className="capitalize">{healthLabel}</span>
                     </span>
                     {metaBits.length > 0 && (
-                        <span className="font-mono text-[10.5px] text-fg-subtle">
+                        <span className="font-mono text-meta text-fg-subtle">
                             {metaBits.join(' · ')}
                         </span>
                     )}
@@ -259,8 +259,8 @@ export const InstanceCard = ({
             </div>
 
             {expanded && (
-                <div className="px-[18px] pb-4 pt-1 border-t border-border-light flex flex-col gap-3 text-[12.5px]">
-                    <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-[11.5px] text-fg-subtle pt-3">
+                <div className="px-[18px] pb-4 pt-1 border-t border-border-light flex flex-col gap-3 text-dense">
+                    <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-meta text-fg-subtle pt-3">
                         <span>
                             <span className="text-fg-subtle">last tested</span>{' '}
                             <span className="text-fg-muted">{lastTested}</span>
@@ -275,7 +275,7 @@ export const InstanceCard = ({
 
                     {/* Plex per-library breakdown */}
                     {isPlex && libEntries.length > 0 && (
-                        <div className="font-mono text-[11.5px] text-fg-subtle flex flex-wrap gap-x-4 gap-y-1">
+                        <div className="font-mono text-meta text-fg-subtle flex flex-wrap gap-x-4 gap-y-1">
                             {libEntries.map(([lib, count]) => (
                                 <span key={lib}>
                                     <span className="text-success">{count}</span> {lib}
@@ -303,7 +303,7 @@ export const InstanceCard = ({
                             </div>
                             {plexLibraries && plexLibraries.length > 0 ? (
                                 <>
-                                    <p className="text-[11px] text-fg-subtle mb-1.5">
+                                    <p className="text-meta text-fg-subtle mb-1.5">
                                         Only enabled libraries appear elsewhere in CHUB. Tick the
                                         libraries to expose, then Save.
                                     </p>
@@ -367,7 +367,7 @@ export const InstanceCard = ({
                                             {isSavingLibraries ? 'Saving…' : 'Save'}
                                         </Button>
                                         {libDirty && (
-                                            <span className="text-[11px] text-warning">
+                                            <span className="text-meta text-warning">
                                                 Unsaved changes
                                             </span>
                                         )}

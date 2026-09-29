@@ -50,7 +50,7 @@ const Section = ({ title, titleColor = 'text-fg', children, tone }) => (
         }`}
         style={tone === 'danger' ? undefined : { boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
     >
-        <h2 className={`font-display text-[15px] font-semibold mb-4 ${titleColor}`}>{title}</h2>
+        <h2 className={`font-display text-heading font-semibold mb-4 ${titleColor}`}>{title}</h2>
         {children}
     </section>
 );
@@ -75,7 +75,7 @@ const InsetSelect = ({ value, onChange, disabled, children, ariaLabel }) => (
             onChange={onChange}
             disabled={disabled}
             aria-label={ariaLabel}
-            className="appearance-none h-11 pl-3 pr-8 rounded-lg bg-surface-inset border border-border font-mono text-[13px] text-fg cursor-pointer disabled:opacity-50 focus:border-primary outline-none"
+            className="appearance-none h-11 pl-3 pr-8 rounded-lg bg-surface-inset border border-border font-mono text-dense text-fg cursor-pointer disabled:opacity-50 focus:border-primary outline-none"
         >
             {children}
         </select>
@@ -96,7 +96,7 @@ const InsetInput = ({ value, onChange, onBlur, placeholder, ariaLabel }) => (
         onBlur={onBlur}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="h-[34px] w-[280px] max-w-full shrink-0 px-3 rounded-lg bg-surface-inset border border-border font-mono text-[13px] text-fg focus:border-primary outline-none"
+        className="h-[34px] w-[280px] max-w-full shrink-0 px-3 rounded-lg bg-surface-inset border border-border font-mono text-dense text-fg focus:border-primary outline-none"
     />
 );
 
@@ -295,18 +295,18 @@ export const SystemSettingsPage = () => {
                         <span className="font-mono text-sm text-fg">{version}</span>
                         {updateState &&
                             (updateState.update_available ? (
-                                <span className="font-mono text-[11px] px-2.5 py-[3px] rounded-full bg-warning/15 text-warning">
+                                <span className="font-mono text-meta px-2.5 py-[3px] rounded-full bg-warning/15 text-warning">
                                     update available{' '}
                                     {updateState.remote_version
                                         ? `· ${updateState.remote_version}`
                                         : ''}
                                 </span>
                             ) : updateState.checked ? (
-                                <span className="font-mono text-[11px] px-2.5 py-[3px] rounded-full bg-success/15 text-success">
+                                <span className="font-mono text-meta px-2.5 py-[3px] rounded-full bg-success/15 text-success">
                                     up to date
                                 </span>
                             ) : (
-                                <span className="font-mono text-[11px] px-2.5 py-[3px] rounded-full bg-surface-inset text-fg-subtle">
+                                <span className="font-mono text-meta px-2.5 py-[3px] rounded-full bg-surface-inset text-fg-subtle">
                                     check failed
                                 </span>
                             ))}
@@ -314,7 +314,7 @@ export const SystemSettingsPage = () => {
                             type="button"
                             onClick={checkUpdate}
                             disabled={checkingUpdate}
-                            className="touch-expand ml-auto text-[12.5px] text-accent hover:underline disabled:opacity-50"
+                            className="touch-expand ml-auto text-dense text-accent hover:underline disabled:opacity-50"
                         >
                             {checkingUpdate ? 'Checking…' : 'Check for updates'}
                         </button>
@@ -453,7 +453,7 @@ export const SystemSettingsPage = () => {
                     <button
                         type="button"
                         onClick={() => setShowDbDetails(s => !s)}
-                        className="touch-expand flex items-center gap-1.5 pt-2 text-[12.5px] text-fg-subtle hover:text-fg"
+                        className="touch-expand flex items-center gap-1.5 pt-2 text-dense text-fg-subtle hover:text-fg"
                     >
                         <span
                             className="material-symbols-outlined text-[18px] transition-transform"
@@ -526,13 +526,13 @@ export const SystemSettingsPage = () => {
 
                 {/* DANGER ZONE */}
                 <Section title="Danger zone" titleColor="text-error" tone="danger">
-                    <p className="text-[12.5px] text-fg-subtle -mt-2 mb-3.5">
+                    <p className="text-dense text-fg-subtle -mt-2 mb-3.5">
                         This action cannot be undone.
                     </p>
                     <button
                         type="button"
                         onClick={() => setConfirmClearPoster(true)}
-                        className="touch-expand h-9 px-3.5 rounded-lg bg-transparent border border-error/35 text-error text-[12.5px] font-semibold hover:bg-error/10 transition-colors"
+                        className="touch-expand h-9 px-3.5 rounded-lg bg-transparent border border-error/35 text-error text-dense font-semibold hover:bg-error/10 transition-colors"
                     >
                         Clear poster cache
                     </button>

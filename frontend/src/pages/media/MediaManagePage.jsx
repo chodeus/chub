@@ -38,10 +38,10 @@ const ManageSectionHeader = ({ icon, iconClass, title, count, countClass, childr
         <span className={`material-symbols-outlined text-[18px] ${iconClass}`} aria-hidden="true">
             {icon}
         </span>
-        <h2 className="font-display text-[15px] font-semibold text-fg">{title}</h2>
+        <h2 className="font-display text-heading font-semibold text-fg">{title}</h2>
         {count != null && (
             <span
-                className={`font-mono text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${countClass}`}
+                className={`font-mono text-meta font-semibold px-2.5 py-0.5 rounded-full ${countClass}`}
             >
                 {count}
             </span>
@@ -85,15 +85,15 @@ const DuplicateGroup = ({
                 >
                     chevron_right
                 </span>
-                <span className="font-display text-[15px] font-semibold text-fg truncate">
+                <span className="font-display text-heading font-semibold text-fg truncate">
                     {dup.title || dup.normalized_title}
                 </span>
                 {dup.year && <span className="font-mono text-xs text-fg-subtle">{dup.year}</span>}
-                <span className="font-mono text-[10px] uppercase px-[7px] py-0.5 rounded-[5px] bg-warning/15 text-warning shrink-0">
+                <span className="font-mono text-micro uppercase px-[7px] py-0.5 rounded-[5px] bg-warning/15 text-warning shrink-0">
                     {dup.count} copies
                 </span>
                 {uniqueInstances.length > 0 && (
-                    <span className="ml-auto font-mono text-[11.5px] text-fg-subtle truncate hidden sm:inline">
+                    <span className="ml-auto font-mono text-meta text-fg-subtle truncate hidden sm:inline">
                         {uniqueInstances.join(' · ')}
                     </span>
                 )}
@@ -144,25 +144,25 @@ const DuplicateGroup = ({
                                                 )}
                                             </button>
                                             <span
-                                                className={`font-mono text-[12.5px] font-semibold truncate ${
+                                                className={`font-mono text-dense font-semibold truncate ${
                                                     isKeep ? 'text-success' : 'text-fg-muted'
                                                 }`}
                                                 title={live.quality || ''}
                                             >
                                                 {live.quality || '—'}
                                             </span>
-                                            <span className="font-mono text-[12px] text-fg-muted">
+                                            <span className="font-mono text-xs text-fg-muted">
                                                 {live.size_human || '—'}
                                             </span>
                                             <span
-                                                className="font-mono text-[11px] text-fg-subtle truncate"
+                                                className="font-mono text-meta text-fg-subtle truncate"
                                                 title={live.path || m.folder || ''}
                                             >
                                                 {live.path || m.folder || '—'}
                                             </span>
                                             <span className="text-right">
                                                 <span
-                                                    className={`font-mono text-[10px] font-semibold px-[9px] py-[3px] rounded-full ${
+                                                    className={`font-mono text-micro font-semibold px-[9px] py-[3px] rounded-full ${
                                                         isKeep
                                                             ? 'bg-success/15 text-success'
                                                             : 'bg-error/15 text-error'
@@ -289,7 +289,7 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
                             value={filter}
                             onChange={e => setFilter(e.target.value)}
                             placeholder="Filter duplicates…"
-                            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[12.5px] text-fg placeholder:text-fg-subtle"
+                            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-dense text-fg placeholder:text-fg-subtle"
                         />
                     </div>
                 )}
@@ -308,12 +308,10 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
                             check
                         </span>
                     </span>
-                    <span className="text-[13.5px] font-semibold text-fg">
+                    <span className="text-dense font-semibold text-fg">
                         {selectedIds.length} cop{selectedIds.length === 1 ? 'y' : 'ies'} selected
                     </span>
-                    <span className="font-mono text-[12px] text-fg-muted">
-                        frees {fmtBytes(freed)}
-                    </span>
+                    <span className="font-mono text-xs text-fg-muted">frees {fmtBytes(freed)}</span>
                     <div className="ml-auto flex gap-2">
                         <Button variant="ghost" size="small" onClick={() => setSelected({})}>
                             Clear
@@ -850,7 +848,7 @@ const MediaManagePage = () => {
                         Scan
                     </LoadingButton>
                     {lastScanTime && (
-                        <span className="ml-auto font-mono text-[11.5px] text-fg-subtle">
+                        <span className="ml-auto font-mono text-meta text-fg-subtle">
                             Last scan: {formatDateTime(lastScanTime)}
                         </span>
                     )}
@@ -924,15 +922,15 @@ const MediaManagePage = () => {
                                 >
                                     <div className="flex items-center flex-wrap gap-2.5 mb-2.5">
                                         <span
-                                            className={`font-mono text-[10px] font-semibold px-2.5 py-[3px] rounded-md ${badgeBg} ${badgeColor}`}
+                                            className={`font-mono text-micro font-semibold px-2.5 py-[3px] rounded-md ${badgeBg} ${badgeColor}`}
                                         >
                                             {badgeLabel}
                                         </span>
-                                        <span className="font-mono text-[11.5px] text-fg-subtle">
+                                        <span className="font-mono text-meta text-fg-subtle">
                                             {issue.instance}
                                         </span>
                                         {isPlexNotArr && issue.library_name && (
-                                            <span className="font-mono text-[11.5px] text-fg-subtle">
+                                            <span className="font-mono text-meta text-fg-subtle">
                                                 {issue.library_name}
                                             </span>
                                         )}
@@ -956,7 +954,7 @@ const MediaManagePage = () => {
                                                     {issue.name}
                                                 </span>
                                                 {issue.year && (
-                                                    <span className="font-mono text-[13px] text-fg-subtle">
+                                                    <span className="font-mono text-dense text-fg-subtle">
                                                         {issue.year}
                                                     </span>
                                                 )}
@@ -977,7 +975,7 @@ const MediaManagePage = () => {
                                                     {issue.name}
                                                 </span>
                                                 {issue.year && (
-                                                    <span className="font-mono text-[13px] text-fg-subtle">
+                                                    <span className="font-mono text-dense text-fg-subtle">
                                                         {issue.year}
                                                     </span>
                                                 )}
@@ -1002,7 +1000,7 @@ const MediaManagePage = () => {
                                                     {issue.nested?.title}
                                                 </span>
                                                 {issue.nested?.year && (
-                                                    <span className="font-mono text-[13px] text-fg-subtle">
+                                                    <span className="font-mono text-dense text-fg-subtle">
                                                         {issue.nested.year}
                                                     </span>
                                                 )}

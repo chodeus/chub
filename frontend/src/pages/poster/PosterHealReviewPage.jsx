@@ -36,13 +36,13 @@ const TYPE_LABEL = {
 
 const TypePills = ({ types, muted }) =>
     types.length === 0 ? (
-        <span className="text-[11px] text-fg-subtle italic">nothing routed here</span>
+        <span className="text-meta text-fg-subtle italic">nothing routed here</span>
     ) : (
         <span className="flex items-center gap-[5px] flex-wrap">
             {types.map(t => (
                 <span
                     key={t}
-                    className={`inline-flex items-center h-[22px] px-2 rounded-full text-[11px] font-medium ${
+                    className={`inline-flex items-center h-[22px] px-2 rounded-full text-meta font-medium ${
                         muted ? 'bg-surface text-fg-subtle' : 'bg-primary/15 text-primary-hover'
                     }`}
                 >
@@ -57,8 +57,8 @@ const CoverageRow = ({ icon, name, value, types, muted }) => (
         <span className="material-symbols-outlined text-[17px] text-fg-dim" aria-hidden="true">
             {icon}
         </span>
-        <span className="text-[12.5px] font-medium text-fg">{name || 'Unnamed'}</span>
-        <span className="font-mono text-[11.5px] text-fg-muted break-all">{value}</span>
+        <span className="text-dense font-medium text-fg">{name || 'Unnamed'}</span>
+        <span className="font-mono text-meta text-fg-muted break-all">{value}</span>
         <span className="ml-auto">
             <TypePills types={types} muted={muted} />
         </span>
@@ -100,26 +100,26 @@ const CoveragePanel = () => {
     return (
         <section className="flex flex-col gap-2.5 p-4 rounded-xl bg-surface border border-border">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h2 className="font-display text-[13.5px] font-semibold text-fg m-0">
+                <h2 className="font-display text-dense font-semibold text-fg m-0">
                     Kept up to date
                 </h2>
-                <span className="inline-flex items-center h-[22px] px-2.5 rounded-md bg-surface-inset border border-border font-mono text-[11px] text-fg-muted">
+                <span className="inline-flex items-center h-[22px] px-2.5 rounded-md bg-surface-inset border border-border font-mono text-meta text-fg-muted">
                     {folders.length} folders · {drives.length} Drives
                 </span>
                 <Link
                     to="/settings/modules/cl2k_maker"
-                    className="ml-auto text-[12px] font-medium text-accent hover:underline"
+                    className="ml-auto text-xs font-medium text-accent hover:underline"
                 >
                     Edit in Module Settings →
                 </Link>
             </div>
 
             {!cov.available ? (
-                <p className="text-[12px] text-fg-subtle m-0">
+                <p className="text-xs text-fg-subtle m-0">
                     The CL2K Maker extension isn’t available, so nothing is being healed.
                 </p>
             ) : folders.length === 0 && drives.length === 0 ? (
-                <p className="text-[12px] text-fg-subtle m-0">
+                <p className="text-xs text-fg-subtle m-0">
                     No save locations are configured — the healer has nothing to scan.
                 </p>
             ) : (
@@ -145,12 +145,12 @@ const CoveragePanel = () => {
                             />
                         ))}
                     </div>
-                    <p className="text-[11.5px] text-fg-subtle m-0">
+                    <p className="text-meta text-fg-subtle m-0">
                         Every location above is scanned. Folder tags show what the maker saves
                         there; Drive tags show which types are renamed in that Drive.
                     </p>
                     {unrouted.length > 0 && (
-                        <p className="flex items-start gap-1.5 text-[11.5px] text-warning m-0">
+                        <p className="flex items-start gap-1.5 text-meta text-warning m-0">
                             <span
                                 className="material-symbols-outlined text-[15px] leading-[1.3]"
                                 aria-hidden="true"
@@ -183,7 +183,7 @@ const ReviewRow = ({ review, busy, onApply, onDismiss }) => {
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span
-                        className={`font-mono text-[10px] px-1.5 py-0.5 rounded-[5px] ${
+                        className={`font-mono text-micro px-1.5 py-0.5 rounded-[5px] ${
                             failed
                                 ? 'bg-error/15 text-error'
                                 : pending
@@ -193,13 +193,13 @@ const ReviewRow = ({ review, busy, onApply, onDismiss }) => {
                     >
                         {failed ? 'Auto-apply failed' : driftLabel(review.drift_type)}
                     </span>
-                    <span className="text-[11px] text-fg-subtle">{review.reason}</span>
+                    <span className="text-meta text-fg-subtle">{review.reason}</span>
                 </div>
-                <div className="font-mono text-[12px] text-fg-subtle line-through truncate">
+                <div className="font-mono text-xs text-fg-subtle line-through truncate">
                     {review.current_filename}
                 </div>
                 {!pending && (
-                    <div className="font-mono text-[12.5px] text-fg mt-0.5 truncate">
+                    <div className="font-mono text-dense text-fg mt-0.5 truncate">
                         {review.proposed_filename}
                     </div>
                 )}
@@ -210,7 +210,7 @@ const ReviewRow = ({ review, busy, onApply, onDismiss }) => {
                         type="button"
                         onClick={() => onApply(review)}
                         disabled={busy}
-                        className="inline-flex items-center h-9 px-4 rounded-lg bg-primary text-on-color font-display text-[13px] font-semibold hover:brightness-110 disabled:opacity-50 transition"
+                        className="inline-flex items-center h-9 px-4 rounded-lg bg-primary text-on-color font-display text-dense font-semibold hover:brightness-110 disabled:opacity-50 transition"
                     >
                         Apply
                     </button>
@@ -219,7 +219,7 @@ const ReviewRow = ({ review, busy, onApply, onDismiss }) => {
                     type="button"
                     onClick={() => onDismiss(review)}
                     disabled={busy}
-                    className="inline-flex items-center h-9 px-3.5 rounded-lg bg-surface-inset border border-border text-fg-muted text-[13px] hover:text-fg disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center h-9 px-3.5 rounded-lg bg-surface-inset border border-border text-fg-muted text-dense hover:text-fg disabled:opacity-50 transition-colors"
                 >
                     Dismiss
                 </button>
@@ -302,12 +302,12 @@ export const PosterHealReviewPage = () => {
 
                 <div className="flex-1 min-w-0 flex flex-col gap-3">
                     <div className="flex items-center justify-between">
-                        <span className="text-[13px] text-fg-subtle">
+                        <span className="text-dense text-fg-subtle">
                             {loading ? 'Loading…' : `${reviews.length} needing action`}
                         </span>
                         <Link
                             to="/poster/cl2k-maker"
-                            className="text-[13px] font-medium text-accent hover:underline"
+                            className="text-dense font-medium text-accent hover:underline"
                         >
                             ← Back to CL2K Maker
                         </Link>
@@ -319,7 +319,7 @@ export const PosterHealReviewPage = () => {
                                 task_alt
                             </span>
                             <p>Nothing to review — your CL2K posters are up to date.</p>
-                            <p className="text-[12px] mt-1">
+                            <p className="text-xs mt-1">
                                 Run the Poster Healer (or wait for its schedule) to check again.
                             </p>
                         </div>

@@ -132,7 +132,7 @@ const InstanceRow = ({ inst }) => {
         <div className="rounded-xl bg-surface border border-border px-[18px] py-[15px]">
             <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
                 <div className="w-full sm:w-[150px] shrink-0 min-w-0">
-                    <span className="block font-display text-[15px] font-semibold text-fg truncate">
+                    <span className="block font-display text-heading font-semibold text-fg truncate">
                         {inst.instance_name}
                     </span>
                 </div>
@@ -197,7 +197,7 @@ export const BreakdownTabs = ({ stats }) => {
 
     return (
         <section>
-            <h2 className="font-display text-[15px] font-semibold text-fg mb-3">Breakdowns</h2>
+            <h2 className="font-display text-heading font-semibold text-fg mb-3">Breakdowns</h2>
             <ChipGroup
                 single
                 className="mb-4"
@@ -230,7 +230,7 @@ const RecentlyAdded = ({ data }) => {
     const last30 = data?.last_30d || 0;
     return (
         <section>
-            <h2 className="font-display text-[15px] font-semibold text-fg mb-1">Recently Added</h2>
+            <h2 className="font-display text-heading font-semibold text-fg mb-1">Recently Added</h2>
             <p className="text-xs text-fg-subtle mb-3">
                 {last7.toLocaleString()} in the last 7 days · {last30.toLocaleString()} in the last
                 30 days
@@ -394,7 +394,7 @@ const MediaStatsPage = () => {
                 vertical list of full-width rows. */}
             {instanceGroups.map(([type, insts]) => (
                 <section key={type}>
-                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3 flex items-center gap-2.5">
+                    <h2 className="font-display text-heading font-semibold text-fg mb-3 flex items-center gap-2.5">
                         <ServiceIcon service={type} size="small" />
                         {TYPE_LABEL[type] || type}
                     </h2>

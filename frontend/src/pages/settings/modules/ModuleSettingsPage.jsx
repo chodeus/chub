@@ -288,7 +288,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
         return (
             <div>
                 <div className="flex items-center gap-1 mb-2">
-                    <span className="text-[14px] font-medium text-fg">{actionLabel}</span>
+                    <span className="text-sm font-medium text-fg">{actionLabel}</span>
                     {modeF.helpText && <InfoTooltip text={modeF.helpText} />}
                 </div>
                 <SegmentedControl
@@ -313,7 +313,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                         <button
                             type="button"
                             onClick={() => setOpenMoreModes(s => ({ ...s, [meta.id]: true }))}
-                            className="mt-2 inline-flex items-center min-h-11 gap-1 text-[12.5px] text-fg-subtle hover:text-fg"
+                            className="mt-2 inline-flex items-center min-h-11 gap-1 text-dense text-fg-subtle hover:text-fg"
                         >
                             <span className="material-symbols-outlined text-[16px]">
                                 expand_more
@@ -322,7 +322,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                         </button>
                     ))}
                 {modeF.description && (
-                    <div className="text-[12px] text-fg-subtle mt-2 leading-relaxed">
+                    <div className="text-xs text-fg-subtle mt-2 leading-relaxed">
                         {modeF.description}
                     </div>
                 )}
@@ -352,7 +352,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
             >
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-1.5 min-w-0">
-                        <h2 className="font-display text-[15px] font-semibold text-fg">
+                        <h2 className="font-display text-heading font-semibold text-fg">
                             {meta.title}
                         </h2>
                         {enableF?.helpText && <InfoTooltip text={enableF.helpText} />}
@@ -366,9 +366,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                     )}
                 </div>
                 {subtitle && (
-                    <p className="text-[12.5px] text-fg-subtle mt-1 mb-0 leading-snug">
-                        {subtitle}
-                    </p>
+                    <p className="text-dense text-fg-subtle mt-1 mb-0 leading-snug">{subtitle}</p>
                 )}
                 <div className={`flex flex-col gap-4 mt-4 ${dimCls}`}>
                     {modeF && renderActionRow(meta, modeF, moduleData)}
@@ -380,7 +378,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                 onClick={() =>
                                     setOpenAdvanced(s => ({ ...s, [meta.id]: !s[meta.id] }))
                                 }
-                                className="touch-expand flex items-center justify-between w-full h-[42px] px-3 rounded-[10px] bg-surface-inset border border-border text-fg-muted text-[13px] font-medium hover:text-fg transition-colors"
+                                className="touch-expand flex items-center justify-between w-full h-[42px] px-3 rounded-[10px] bg-surface-inset border border-border text-fg-muted text-dense font-medium hover:text-fg transition-colors"
                             >
                                 <span className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-[17px] text-fg-subtle">
@@ -408,7 +406,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                             <span className="material-symbols-outlined text-[17px] text-accent shrink-0">
                                 info
                             </span>
-                            <span className="text-[12px] text-fg-data leading-relaxed">
+                            <span className="text-xs text-fg-data leading-relaxed">
                                 {meta.note}
                             </span>
                         </div>
@@ -428,7 +426,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                     activeModule && (
                         <>
                             {hasDryRun && isRunnable && (
-                                <label className="flex items-center gap-2 text-[13px] text-fg-muted cursor-pointer select-none">
+                                <label className="flex items-center gap-2 text-dense text-fg-muted cursor-pointer select-none">
                                     Dry run
                                     <Toggle
                                         label="Dry run"
@@ -602,7 +600,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                                             <div className="flex items-center gap-2.5 min-w-0">
                                                 {group.name && (
-                                                    <h2 className="font-display text-[15px] font-semibold text-fg">
+                                                    <h2 className="font-display text-heading font-semibold text-fg">
                                                         {group.name}
                                                     </h2>
                                                 )}

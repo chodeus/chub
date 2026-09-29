@@ -361,7 +361,7 @@ const PosterAssetsSearchPage = () => {
     };
 
     const selectCls =
-        'h-11 rounded-[9px] bg-surface border border-border text-fg-muted text-[13px] px-3 cursor-pointer outline-none focus:border-primary';
+        'h-11 rounded-[9px] bg-surface border border-border text-fg-muted text-dense px-3 cursor-pointer outline-none focus:border-primary';
 
     return (
         <div className="flex flex-col gap-5">
@@ -455,7 +455,7 @@ const PosterAssetsSearchPage = () => {
                         <div className={`font-display text-2xl font-bold mt-1.5 ${c.tone}`}>
                             {c.value}
                         </div>
-                        <div className="text-[12px] text-fg-subtle mt-1">{c.sub}</div>
+                        <div className="text-xs text-fg-subtle mt-1">{c.sub}</div>
                     </div>
                 ))}
             </div>
@@ -547,7 +547,7 @@ const PosterAssetsSearchPage = () => {
             {/* Collections */}
             {Array.isArray(collections) && collections.length > 0 && (
                 <section>
-                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3 flex items-center gap-2.5">
+                    <h2 className="font-display text-heading font-semibold text-fg mb-3 flex items-center gap-2.5">
                         <span
                             className="material-symbols-outlined text-[18px] text-primary"
                             aria-hidden="true"
@@ -674,7 +674,7 @@ const PosterAssetsSearchPage = () => {
             ) : items.length > 0 ? (
                 <section>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                        <h2 className="font-display text-[15px] font-semibold text-fg">
+                        <h2 className="font-display text-heading font-semibold text-fg">
                             Posters ({total})
                         </h2>
                         <Pagination
@@ -749,7 +749,7 @@ const PosterAssetsSearchPage = () => {
                                     {item.style && (
                                         <StyleStamp
                                             style={item.style}
-                                            className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
+                                            className="absolute top-1.5 left-1.5 z-10 text-micro pointer-events-none"
                                         />
                                     )}
                                     {/* pointer-events must track opacity: while

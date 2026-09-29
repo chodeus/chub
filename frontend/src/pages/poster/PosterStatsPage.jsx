@@ -365,7 +365,7 @@ const PosterStatsPage = () => {
                             <select
                                 value={period}
                                 onChange={e => setPeriod(e.target.value)}
-                                className="h-full bg-transparent border-0 outline-none text-[13.5px] text-fg-muted px-3 cursor-pointer"
+                                className="h-full bg-transparent border-0 outline-none text-dense text-fg-muted px-3 cursor-pointer"
                                 aria-label="Time period"
                             >
                                 {PERIOD_OPTIONS.map(opt => (
@@ -422,7 +422,7 @@ const PosterStatsPage = () => {
                     <div className="flex flex-col gap-5">
                         {sourceBars.length > 0 && (
                             <section>
-                                <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                                <h2 className="font-display text-heading font-semibold text-fg mb-3">
                                     By source
                                 </h2>
                                 <div className="p-4 rounded-xl bg-surface border border-border">
@@ -432,7 +432,7 @@ const PosterStatsPage = () => {
                         )}
                         {typeBars.length > 0 && (
                             <section>
-                                <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                                <h2 className="font-display text-heading font-semibold text-fg mb-3">
                                     By type
                                 </h2>
                                 <div className="p-4 rounded-xl bg-surface border border-border">
@@ -443,7 +443,7 @@ const PosterStatsPage = () => {
                     </div>
                     {contributors.length > 0 && (
                         <section>
-                            <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                            <h2 className="font-display text-heading font-semibold text-fg mb-3">
                                 Top contributors
                             </h2>
                             <div className="rounded-xl bg-surface border border-border overflow-hidden">
@@ -453,7 +453,7 @@ const PosterStatsPage = () => {
                                         className="flex items-center gap-3 px-4 py-3 border-b border-border-light last:border-0"
                                     >
                                         <span
-                                            className="shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center font-display text-[13px] font-bold"
+                                            className="shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center font-display text-dense font-bold"
                                             style={{
                                                 background: `color-mix(in srgb, ${CONTRIB_COLORS[i % CONTRIB_COLORS.length]} 13%, transparent)`,
                                                 color: CONTRIB_COLORS[i % CONTRIB_COLORS.length],
@@ -462,10 +462,10 @@ const PosterStatsPage = () => {
                                         >
                                             {c.name.charAt(0).toUpperCase()}
                                         </span>
-                                        <span className="flex-1 min-w-0 text-[13.5px] font-medium text-fg truncate">
+                                        <span className="flex-1 min-w-0 text-dense font-medium text-fg truncate">
                                             {c.name}
                                         </span>
-                                        <span className="font-mono text-[12px] text-fg-subtle">
+                                        <span className="font-mono text-xs text-fg-subtle">
                                             {c.count.toLocaleString()}
                                         </span>
                                     </div>
@@ -479,7 +479,7 @@ const PosterStatsPage = () => {
             {/* Poster Breakdown — applied variant mix (interactive: click to request) */}
             {variantBars.length > 0 && (
                 <section>
-                    <h2 className="font-display text-[15px] font-semibold text-fg mb-1 flex items-center gap-2.5">
+                    <h2 className="font-display text-heading font-semibold text-fg mb-1 flex items-center gap-2.5">
                         <span
                             className="material-symbols-outlined text-[18px] text-primary"
                             aria-hidden="true"
@@ -526,7 +526,7 @@ const PosterStatsPage = () => {
             {/* Matched Poster Stats */}
             {Array.isArray(matchedStats) && matchedStats.length > 0 && (
                 <section>
-                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                    <h2 className="font-display text-heading font-semibold text-fg mb-3">
                         Matched Poster Stats
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -582,7 +582,7 @@ const PosterStatsPage = () => {
 
             {/* Low-resolution Posters */}
             <section>
-                <h2 className="font-display text-[15px] font-semibold text-fg mb-3 flex items-center gap-2.5">
+                <h2 className="font-display text-heading font-semibold text-fg mb-3 flex items-center gap-2.5">
                     <span
                         className="material-symbols-outlined text-[18px] text-warning"
                         aria-hidden="true"
@@ -651,7 +651,7 @@ const PosterStatsPage = () => {
             {/* GDrive Sync Status */}
             {gdriveStats.length > 0 && (
                 <section>
-                    <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                    <h2 className="font-display text-heading font-semibold text-fg mb-3">
                         GDrive Sync Status
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">

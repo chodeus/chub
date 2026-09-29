@@ -171,11 +171,11 @@ export const ModulesHubPage = () => {
 
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2.5">
-                                    <span className="font-display text-[14.5px] font-semibold text-fg truncate">
+                                    <span className="font-display text-sm font-semibold text-fg truncate">
                                         {meta.name}
                                     </span>
                                     <span
-                                        className={`shrink-0 font-mono text-[9px] px-1.5 py-0.5 rounded-[5px] ${SCHED_STYLE[label]}`}
+                                        className={`shrink-0 font-mono text-micro px-1.5 py-0.5 rounded-[5px] ${SCHED_STYLE[label]}`}
                                     >
                                         {label}
                                     </span>
@@ -187,7 +187,7 @@ export const ModulesHubPage = () => {
 
                             <Link
                                 to={`/settings/modules/${key}`}
-                                className="touch-expand shrink-0 font-mono text-[11px] text-accent hover:underline"
+                                className="touch-expand shrink-0 font-mono text-meta text-accent hover:underline"
                             >
                                 Configure
                             </Link>

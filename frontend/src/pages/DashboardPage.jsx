@@ -522,7 +522,7 @@ const DashboardPage = () => {
                             label: 'SCHEDULER',
                             grow: 1.3,
                             node: (
-                                <span className="flex items-center gap-2 font-display font-semibold text-[16px] text-fg">
+                                <span className="flex items-center gap-2 font-display font-semibold text-base text-fg">
                                     <StatusDot
                                         status={
                                             runningCount > 0
@@ -559,7 +559,7 @@ const DashboardPage = () => {
                                             ? `/logs?module=${encodeURIComponent(lastFailure.moduleName)}`
                                             : '/settings/jobs'
                                     }
-                                    className={`font-medium text-[15px] no-underline truncate ${lastFailure ? 'text-error' : 'text-fg-muted'}`}
+                                    className={`font-medium text-heading no-underline truncate ${lastFailure ? 'text-error' : 'text-fg-muted'}`}
                                     title={
                                         lastFailure?.ts ? formatDateTime(lastFailure.ts) : undefined
                                     }
@@ -582,9 +582,7 @@ const DashboardPage = () => {
                             >
                                 <span className="eyebrow">{c.label}</span>
                                 {c.node || (
-                                    <span
-                                        className={`font-mono font-semibold text-[18px] ${c.tone}`}
-                                    >
+                                    <span className={`font-mono font-semibold text-lg ${c.tone}`}>
                                         {c.value}
                                     </span>
                                 )}
@@ -602,7 +600,7 @@ const DashboardPage = () => {
                 >
                     <div className="flex items-center justify-between px-5 pt-4 pb-3.5">
                         <div>
-                            <h2 className="font-display text-[15px] font-semibold text-fg m-0">
+                            <h2 className="font-display text-heading font-semibold text-fg m-0">
                                 Modules
                             </h2>
                             <p className="text-fg-subtle text-xs mt-0.5 mb-0">
@@ -611,7 +609,7 @@ const DashboardPage = () => {
                         </div>
                         <Link
                             to="/logs"
-                            className="touch-expand text-[12.5px] text-accent no-underline font-medium hover:underline whitespace-nowrap"
+                            className="touch-expand text-dense text-accent no-underline font-medium hover:underline whitespace-nowrap"
                         >
                             All logs →
                         </Link>
@@ -687,11 +685,11 @@ const DashboardPage = () => {
                                                     onClick={e => e.stopPropagation()}
                                                     className="min-w-0 no-underline"
                                                 >
-                                                    <div className="font-semibold text-[13.5px] text-fg truncate hover:text-accent">
+                                                    <div className="font-semibold text-dense text-fg truncate hover:text-accent">
                                                         {humanize(mod.name)}
                                                     </div>
                                                     <div
-                                                        className="font-mono text-[9.5px] tracking-[0.5px] mt-0.5"
+                                                        className="font-mono text-micro tracking-[0.5px] mt-0.5"
                                                         style={{
                                                             color: auto
                                                                 ? 'var(--primary)'
@@ -783,11 +781,11 @@ const DashboardPage = () => {
                                                                 style={{ background: pillColor }}
                                                                 aria-hidden="true"
                                                             />
-                                                            <span className="text-[12.5px] font-medium text-fg-muted truncate">
+                                                            <span className="text-dense font-medium text-fg-muted truncate">
                                                                 {sub.label}
                                                             </span>
                                                             <span
-                                                                className="shrink-0 font-mono text-[8.5px] tracking-[0.4px] uppercase px-1.5 py-px rounded-[5px]"
+                                                                className="shrink-0 font-mono text-micro tracking-[0.4px] uppercase px-1.5 py-px rounded-[5px]"
                                                                 style={{
                                                                     color: pillColor,
                                                                     background: pillBg,
@@ -796,14 +794,14 @@ const DashboardPage = () => {
                                                                 {sub.kind}
                                                             </span>
                                                         </div>
-                                                        <div className="font-mono text-[11.5px] text-fg-data truncate">
+                                                        <div className="font-mono text-meta text-fg-data truncate">
                                                             {scheduleToHuman(sub.schedule)}
                                                         </div>
-                                                        <div className="font-mono text-[10.5px] text-fg-subtle truncate">
+                                                        <div className="font-mono text-meta text-fg-subtle truncate">
                                                             {overrideKeys.join(', ')}
                                                         </div>
                                                         <div
-                                                            className={`font-mono text-[11.5px] truncate ${en ? 'text-fg-muted' : 'text-fg-subtle'}`}
+                                                            className={`font-mono text-meta truncate ${en ? 'text-fg-muted' : 'text-fg-subtle'}`}
                                                         >
                                                             {subNext}
                                                         </div>
@@ -826,7 +824,7 @@ const DashboardPage = () => {
                         style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
                     >
                         <div className="flex items-center justify-between mb-3.5">
-                            <h2 className="font-display text-[15px] font-semibold text-fg m-0">
+                            <h2 className="font-display text-heading font-semibold text-fg m-0">
                                 Up next
                             </h2>
                             <Link
@@ -881,11 +879,11 @@ const DashboardPage = () => {
                                                 )}
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex justify-between gap-2">
-                                                        <span className="font-semibold text-[13.5px] text-fg truncate">
+                                                        <span className="font-semibold text-dense text-fg truncate">
                                                             {entry.label}
                                                         </span>
                                                         <span
-                                                            className="font-mono text-[11.5px] shrink-0"
+                                                            className="font-mono text-meta shrink-0"
                                                             style={{
                                                                 color: entry.running
                                                                     ? 'var(--accent)'
@@ -913,7 +911,7 @@ const DashboardPage = () => {
                                                             />
                                                         </div>
                                                     ) : (
-                                                        <div className="font-mono text-[11px] text-fg-subtle mt-1 truncate">
+                                                        <div className="font-mono text-meta text-fg-subtle mt-1 truncate">
                                                             {entry.next.toLocaleTimeString([], {
                                                                 hour: '2-digit',
                                                                 minute: '2-digit',
@@ -937,11 +935,11 @@ const DashboardPage = () => {
                             style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
                         >
                             <div className="flex items-baseline justify-between mb-4">
-                                <h2 className="font-display text-[15px] font-semibold text-fg m-0">
+                                <h2 className="font-display text-heading font-semibold text-fg m-0">
                                     Storage
                                 </h2>
                                 {posterStats.cached > 0 && (
-                                    <span className="font-mono text-[11px] text-fg-subtle">
+                                    <span className="font-mono text-meta text-fg-subtle">
                                         {posterStats.cached.toLocaleString()} posters cached
                                     </span>
                                 )}
@@ -972,13 +970,13 @@ const DashboardPage = () => {
                                         <div key={paths.join('|')}>
                                             <div className="flex justify-between items-baseline mb-1.5">
                                                 <span
-                                                    className="font-mono text-[11px] tracking-[0.5px] text-fg-muted truncate"
+                                                    className="font-mono text-meta tracking-[0.5px] text-fg-muted truncate"
                                                     title={paths.join(', ')}
                                                 >
                                                     {paths.join(' · ')}
                                                 </span>
                                                 <span
-                                                    className="font-mono text-[11.5px] shrink-0"
+                                                    className="font-mono text-meta shrink-0"
                                                     style={{ color: pctColor }}
                                                 >
                                                     {pct}%
@@ -993,7 +991,7 @@ const DashboardPage = () => {
                                                     }}
                                                 />
                                             </div>
-                                            <div className="font-mono text-[10.5px] text-fg-subtle mt-1.5">
+                                            <div className="font-mono text-meta text-fg-subtle mt-1.5">
                                                 {fmt(freeGb)} free of {fmt(totalGb)}
                                             </div>
                                         </div>

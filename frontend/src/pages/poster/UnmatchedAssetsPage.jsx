@@ -86,7 +86,7 @@ const ReelPosterCard = ({ poster }) => {
                 {isBuilt && (
                     <StyleStamp
                         style={poster.style}
-                        className="absolute top-1.5 left-1.5 text-[8px]"
+                        className="absolute top-1.5 left-1.5 text-micro"
                     />
                 )}
             </div>
@@ -95,7 +95,7 @@ const ReelPosterCard = ({ poster }) => {
             </p>
             {sourceDrive && (
                 <p
-                    className="font-mono text-[9px] text-fg-subtle text-center truncate"
+                    className="font-mono text-micro text-fg-subtle text-center truncate"
                     title={`Source drive: ${sourceDrive}`}
                 >
                     {sourceDrive}
@@ -126,7 +126,7 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
     return (
         <section>
             <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h3 className="font-display text-[15px] font-semibold text-fg flex items-center gap-2.5">
+                <h3 className="font-display text-heading font-semibold text-fg flex items-center gap-2.5">
                     <span className="w-[7px] h-[7px] rounded-full bg-success" aria-hidden="true" />
                     Recently matched
                 </h3>
@@ -237,7 +237,7 @@ const SortHeader = ({ label, sortKey, sort, onSort, align = 'left', mono = false
                 } ${align === 'right' ? 'flex-row-reverse' : ''}`}
             >
                 {label}
-                <span className="w-2 text-[10px] leading-none">
+                <span className="w-2 text-micro leading-none">
                     {active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
                 </span>
             </button>
@@ -304,7 +304,7 @@ const MissingPosterChips = ({ item }) => {
                 <span
                     key={c.key}
                     title={c.title}
-                    className="inline-flex items-center px-2 py-[3px] rounded-[5px] font-mono text-[9.5px] font-semibold uppercase whitespace-nowrap bg-warning/15 text-warning"
+                    className="inline-flex items-center px-2 py-[3px] rounded-[5px] font-mono text-micro font-semibold uppercase whitespace-nowrap bg-warning/15 text-warning"
                 >
                     {c.label}
                 </span>
@@ -503,7 +503,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                         setPage(0);
                     }}
                 />
-                <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-warning/15 text-warning">
+                <span className="font-mono text-meta px-2 py-0.5 rounded-full bg-warning/15 text-warning">
                     {filtered.length}
                 </span>
                 <div className="flex-1 min-w-[14rem] flex items-center gap-2 h-10 px-3 rounded-lg bg-surface border border-border focus-within:border-primary transition-colors">
@@ -601,17 +601,17 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                                                 item.title
                                                             )}
                                                         </div>
-                                                        <div className="font-mono text-[10px] text-fg-subtle mt-0.5">
+                                                        <div className="font-mono text-micro text-fg-subtle mt-0.5">
                                                             {item.year || '—'}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-2.5 font-mono text-[11px] uppercase text-fg-data">
+                                            <td className="px-4 py-2.5 font-mono text-meta uppercase text-fg-data">
                                                 {TYPE_LABELS[item._type]}
                                             </td>
                                             <td className="px-4 py-2.5">
-                                                <span className="flex items-center gap-2 min-w-0 font-mono text-[11px] text-fg-muted">
+                                                <span className="flex items-center gap-2 min-w-0 font-mono text-meta text-fg-muted">
                                                     <span
                                                         className="shrink-0 w-1.5 h-1.5 rounded-full"
                                                         style={{
@@ -629,7 +629,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                                 <MissingPosterChips item={item} />
                                             </td>
                                             <td
-                                                className="px-4 py-2.5 font-mono text-[12px] text-accent whitespace-nowrap align-top"
+                                                className="px-4 py-2.5 font-mono text-xs text-accent whitespace-nowrap align-top"
                                                 title={externalIdTitle(item)}
                                             >
                                                 {extIds.length ? (
@@ -759,7 +759,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                 >
                     info
                 </span>
-                <span className="text-[12.5px] text-fg-subtle">
+                <span className="text-dense text-fg-subtle">
                     Matched artwork can come from <span className="text-accent">GDrive</span>,{' '}
                     <span className="text-success">local assets</span>, or be built in{' '}
                     <span className="text-source-cl2k">CL2K</span> /{' '}
@@ -1114,7 +1114,7 @@ const MissingChips = ({ typeKeys, reasons }) => {
                     <span
                         key={tk}
                         title={reason || undefined}
-                        className={`inline-flex items-center px-2 py-[3px] rounded-[5px] font-mono text-[9.5px] font-semibold uppercase whitespace-nowrap ${MISSING_CHIP_COLOR(tk)}`}
+                        className={`inline-flex items-center px-2 py-[3px] rounded-[5px] font-mono text-micro font-semibold uppercase whitespace-nowrap ${MISSING_CHIP_COLOR(tk)}`}
                     >
                         {meta?.label || tk}
                     </span>
@@ -1326,7 +1326,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                         setPage(0);
                     }}
                 />
-                <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-warning/15 text-warning">
+                <span className="font-mono text-meta px-2 py-0.5 rounded-full bg-warning/15 text-warning">
                     {filtered.length}
                 </span>
                 {typeFilter && (
@@ -1643,7 +1643,7 @@ const PickerThumb = ({ cand, busy, onApply }) => {
             <div className="px-2 py-1">
                 <p className="text-xs text-fg-muted truncate">{cand.style || cand.owner || '—'}</p>
                 {cand.season_number != null && (
-                    <p className="text-[10px] text-fg-subtle">Season {cand.season_number}</p>
+                    <p className="text-micro text-fg-subtle">Season {cand.season_number}</p>
                 )}
             </div>
             <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-primary opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1737,7 +1737,7 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                                     setTargetIdx(i);
                                     setResult({ targetId: undefined, list: null });
                                 }}
-                                className={`touch-expand h-9 min-w-11 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                                className={`touch-expand h-9 min-w-11 px-3 rounded-[7px] text-dense font-semibold transition-colors ${
                                     i === targetIdx
                                         ? 'bg-primary text-on-color'
                                         : 'bg-surface-inset text-fg-muted hover:text-fg'
@@ -1819,7 +1819,7 @@ const ArtworkPickerThumb = ({ cand, busy, onApply }) => {
             <div className="px-2 py-1">
                 <p className="text-xs text-fg-muted truncate">{cand.style || cand.owner || '—'}</p>
                 {cand.season_number != null && (
-                    <p className="text-[10px] text-fg-subtle">Season {cand.season_number}</p>
+                    <p className="text-micro text-fg-subtle">Season {cand.season_number}</p>
                 )}
             </div>
             <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-primary opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2092,7 +2092,7 @@ const UnmatchedAssetsPage = () => {
                 description="Library items missing a poster or background — match a source or request the artwork."
                 actions={
                     grandTotal.total > 0 && (
-                        <span className="font-mono text-[12px] text-fg-subtle whitespace-nowrap">
+                        <span className="font-mono text-xs text-fg-subtle whitespace-nowrap">
                             <span className="text-warning">{grandTotal.unmatched || 0}</span>{' '}
                             unmatched · {(grandTotal.percent_complete || 0).toFixed(1)}% complete
                         </span>

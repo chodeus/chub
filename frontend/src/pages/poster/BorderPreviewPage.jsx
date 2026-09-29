@@ -230,7 +230,7 @@ const BorderReplacerrPage = () => {
 const SectionHeader = ({ title, description, action = null }) => (
     <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-            <h2 className="font-display text-[15px] font-semibold text-fg">{title}</h2>
+            <h2 className="font-display text-heading font-semibold text-fg">{title}</h2>
             {description && <p className="text-sm text-fg-subtle mt-1 max-w-2xl">{description}</p>}
         </div>
         {action}
@@ -271,7 +271,7 @@ const HolidaysSection = ({ holidays, onChange, disabled }) => {
                 <h2 className="font-display text-base font-semibold text-fg">
                     No holidays configured
                 </h2>
-                <p className="text-[13px] text-fg-subtle mt-1.5 max-w-md mx-auto leading-relaxed">
+                <p className="text-dense text-fg-subtle mt-1.5 max-w-md mx-auto leading-relaxed">
                     Add holidays (name and date window) in{' '}
                     <Link to="/settings/modules" className="text-accent hover:underline">
                         Module Settings → Border Replacerr
@@ -571,7 +571,7 @@ const ThumbnailGroup = ({
                                     </span>
                                 </span>
                             )}
-                            <span className="absolute bottom-0 left-0 right-0 text-[11px] font-mono text-white bg-black/60 px-1 py-0.5 truncate">
+                            <span className="absolute bottom-0 left-0 right-0 text-meta font-mono text-white bg-black/60 px-1 py-0.5 truncate">
                                 {name}
                             </span>
                         </button>
@@ -772,7 +772,7 @@ const PreviewCard = ({ preview }) => {
                     >
                         {preview.title}
                     </div>
-                    <div className="font-mono text-[11px] text-fg-subtle mt-0.5">{kindLabel}</div>
+                    <div className="font-mono text-meta text-fg-subtle mt-0.5">{kindLabel}</div>
                 </div>
                 {preview.border ? (
                     <div
