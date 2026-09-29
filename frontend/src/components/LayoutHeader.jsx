@@ -149,6 +149,7 @@ const LayoutHeader = React.memo(() => {
                         isOpen={mobileMenuOpen}
                         onClick={handleHamburgerClick}
                         ariaLabel="Main Menu"
+                        className="focus-visible:outline-sidebar-accent"
                     />
                 </div>
 

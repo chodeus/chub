@@ -127,3 +127,17 @@ describe.each(Object.keys(ACCENTS))('%s accent', key => {
         }
     });
 });
+
+// The stylesheets paint the default accent before ThemeContext applies one, so they must hold Violet.
+it.each([
+    ['dark', './dark.css'],
+    ['light', './light.css'],
+])('%s stylesheet defaults match the Violet accent', (theme, file) => {
+    const tokens = readTokens(file);
+    const { violet } = ACCENTS;
+    expect(tokens.primary).toEqual(rgb(violet[theme].brand));
+    expect(tokens['primary-hover']).toEqual(rgb(violet[theme].hover));
+    expect(tokens['on-color-text']).toEqual(rgb(violet[theme].onBrand));
+    expect(tokens['sidebar-accent']).toEqual(rgb(violet.dark.brand));
+    expect(tokens['sidebar-on-accent']).toEqual(rgb(violet.dark.onBrand));
+});

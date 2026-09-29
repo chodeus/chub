@@ -225,7 +225,7 @@ const LayoutSidebar = React.memo(() => {
                     <button
                         type="button"
                         onClick={toggleTheme}
-                        className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-sidebar-text hover:bg-sidebar-hover transition-colors touch-target shrink-0"
+                        className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-sidebar-text hover:bg-sidebar-hover focus-visible:outline-sidebar-accent transition-colors touch-target shrink-0"
                         aria-label="Toggle theme"
                         title={`Theme: ${actualTheme}`}
                     >
@@ -253,7 +253,7 @@ const LayoutSidebar = React.memo(() => {
                         <button
                             type="button"
                             onClick={logout}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-sidebar-text hover:bg-sidebar-bg transition-colors touch-target"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-sidebar-text hover:bg-sidebar-bg focus-visible:outline-sidebar-accent transition-colors touch-target"
                             aria-label="Log out"
                             title="Log out"
                         >
