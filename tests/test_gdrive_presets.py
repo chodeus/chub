@@ -171,7 +171,8 @@ def test_first_start_baselines_without_announcing(monkeypatch, tmp_path, notice_
     _catalogue(monkeypatch, tmp_path, [OLD, LATER])
     log = _Log()
 
-    assert gdrive_presets.announce_new_presets(notice_db, _sync(), log) == []
+    fresh = gdrive_presets.announce_new_presets(notice_db, _sync(), log)
+    assert fresh == []
     assert notice_db.gdrive_preset_notice.seen_ids() == {OLD["id"], LATER["id"]}
     assert log.lines == []
 
@@ -181,7 +182,8 @@ def test_preset_added_after_baseline_is_announced(monkeypatch, tmp_path, notice_
     notice_db.gdrive_preset_notice.mark_seen([OLD["id"]])
     log = _Log()
 
-    assert gdrive_presets.announce_new_presets(notice_db, _sync(), log) == [LATER]
+    fresh = gdrive_presets.announce_new_presets(notice_db, _sync(), log)
+    assert fresh == [LATER]
     assert "Latecurator (CL2K)" in log.lines[0]
 
 
