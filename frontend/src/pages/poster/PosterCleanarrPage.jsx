@@ -1290,7 +1290,7 @@ const PosterCleanarrPage = () => {
                                             value={search}
                                             onChange={e => setSearch(e.target.value)}
                                             placeholder="Search titles…"
-                                            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[12.5px] text-fg placeholder:text-fg-subtle"
+                                            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[12.5px] text-fg placeholder:text-fg-dim"
                                         />
                                     </div>
                                     {/* Tree list */}

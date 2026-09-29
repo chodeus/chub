@@ -283,7 +283,7 @@ const PosterGDriveSearchPage = () => {
                                     ? { label: 'Syncing', dot: 'running', tone: 'text-accent' }
                                     : source._lastSyncedMs
                                       ? { label: 'Synced', dot: 'success', tone: 'text-success' }
-                                      : { label: 'Never', dot: 'idle', tone: 'text-fg-subtle' };
+                                      : { label: 'Never', dot: 'idle', tone: 'text-fg-faint' };
                                 return (
                                     <div
                                         key={source.id || source.name || i}

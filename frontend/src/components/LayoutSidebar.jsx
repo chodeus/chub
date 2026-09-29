@@ -126,7 +126,7 @@ const LayoutSidebar = React.memo(() => {
                     {NAV_SECTIONS.map(section => (
                         <div key={section.id} className="mb-2">
                             {section.heading && (
-                                <div className="px-3 pt-4 pb-2 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-sidebar-heading">
+                                <div className="px-3 pt-4 pb-2 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-fg-faint">
                                     {section.heading}
                                 </div>
                             )}

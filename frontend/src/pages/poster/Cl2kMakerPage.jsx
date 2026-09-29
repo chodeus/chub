@@ -1073,7 +1073,7 @@ const TitlePicker = ({ onPick, toast }) => {
     }, [paste, kind, onPick, toast]);
 
     const inputCls =
-        'flex-1 min-w-0 h-[42px] px-3.5 rounded-lg bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary transition-colors placeholder:text-fg-subtle';
+        'flex-1 min-w-0 h-[42px] px-3.5 rounded-lg bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary transition-colors placeholder:text-fg-dim';
 
     return (
         <section
@@ -1108,7 +1108,7 @@ const TitlePicker = ({ onPick, toast }) => {
                     {searching ? 'Searching…' : 'Search'}
                 </button>
             </form>
-            <p className="text-[11.5px] text-fg-subtle mb-3">
+            <p className="text-[11.5px] text-fg-dim mb-3">
                 Try: dune, severance, shogun, oppenheimer…
             </p>
 
@@ -2218,7 +2218,7 @@ const StudioAccordion = ({
                 <span className="flex-1 text-left eyebrow">{title}</span>
                 {dot && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
                 {count != null && (
-                    <span className="font-mono text-[10px] text-fg-subtle">{count}</span>
+                    <span className="font-mono text-[10px] text-fg-dim">{count}</span>
                 )}
             </button>
             {open && <div className="pt-3">{children}</div>}
@@ -2824,7 +2824,7 @@ const RenderPanel = ({
                         File as-is
                     </button>
                 </div>
-                <span className="ml-auto font-mono text-[11px] text-fg-subtle truncate">
+                <span className="ml-auto font-mono text-[11px] text-fg-dim truncate">
                     → {fileNameHint}
                 </span>
             </div>

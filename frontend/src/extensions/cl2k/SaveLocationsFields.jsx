@@ -91,7 +91,7 @@ const CardIntro = ({ description, action }) => (
 // The routing UI: one toggling pill per artwork type.
 const TypeChips = ({ microLabel, types, onToggle, disabled }) => (
     <div className="flex items-center gap-[7px] flex-wrap">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-subtle mr-0.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-faint mr-0.5">
             {microLabel}
         </span>
         {CL2K_ART_TYPES.map(t => {
@@ -149,7 +149,7 @@ const NameRow = ({
             placeholder="Name"
             disabled={disabled}
             onChange={e => onRename(e.target.value)}
-            className="flex-1 min-w-0 bg-transparent border-none p-0 text-sm font-semibold text-fg placeholder:text-fg-subtle focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent border-none p-0 text-sm font-semibold text-fg placeholder:text-fg-dim focus:outline-none"
             aria-label="Location name"
         />
         <button
@@ -157,7 +157,7 @@ const NameRow = ({
             onClick={onDelete}
             disabled={disabled}
             aria-label={deleteLabel}
-            className="text-fg-subtle hover:text-error disabled:opacity-50 transition-colors"
+            className="text-fg-dim hover:text-error disabled:opacity-50 transition-colors"
         >
             <Icon name="delete" className="text-[18px]" />
         </button>
@@ -330,7 +330,7 @@ const FolderEntry = ({
                     placeholder="/path/to/folder"
                     disabled={disabled}
                     onChange={e => onPatch({ path: e.target.value })}
-                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-[12.5px] text-fg-muted placeholder:text-fg-subtle focus:ring-primary focus:outline-none transition-colors"
+                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-[12.5px] text-fg-muted placeholder:text-fg-dim focus:ring-primary focus:outline-none transition-colors"
                     aria-label="Folder path"
                 />
                 <button
@@ -578,7 +578,7 @@ const DriveEntry = ({
                     placeholder="Drive folder ID"
                     disabled={disabled}
                     onChange={e => onPatch({ folder_id: e.target.value })}
-                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-[12.5px] text-fg-muted placeholder:text-fg-subtle truncate focus:ring-primary focus:outline-none transition-colors"
+                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-[12.5px] text-fg-muted placeholder:text-fg-dim truncate focus:ring-primary focus:outline-none transition-colors"
                     aria-label="Drive folder ID"
                 />
                 <TestUploadButton folderId={entry.folder_id} disabled={disabled} />
@@ -708,7 +708,7 @@ export const Cl2kCoverageField = ({ rootConfig }) => {
                         >
                             <div
                                 className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] ${
-                                    covered ? 'text-fg-subtle' : 'text-warning'
+                                    covered ? 'text-fg-faint' : 'text-warning'
                                 }`}
                             >
                                 {COVERAGE_LABELS[t.value]}
