@@ -235,3 +235,36 @@ def test_nothing_is_new_before_the_baseline(monkeypatch, tmp_path, notice_db):
     """If the startup baseline never ran, the notice must stay empty, not list every preset."""
     _catalogue(monkeypatch, tmp_path, [OLD, LATER])
     assert gdrive_presets.new_presets(_sync(), notice_db) == []
+
+
+def test_interrupted_baseline_leaves_nothing_half_done(monkeypatch, tmp_path, notice_db):
+    """A baseline that dies midway must record nothing, or the ids it missed show up as new."""
+    import contextlib
+    import sqlite3
+
+    _catalogue(monkeypatch, tmp_path, [OLD, LATER])
+    table = notice_db.gdrive_preset_notice
+    real = table.get_connection
+    inserts = []
+
+    @contextlib.contextmanager
+    def second_insert_fails():
+        with real() as conn:
+            class Proxy:
+                def execute(self, sql, params=()):
+                    if sql.lstrip().startswith("INSERT"):
+                        inserts.append(params)
+                        if len(inserts) == 2:
+                            raise sqlite3.OperationalError("disk I/O error")
+                    return conn.execute(sql, params)
+
+                def commit(self):
+                    conn.commit()
+
+            yield Proxy()
+
+    monkeypatch.setattr(table, "get_connection", second_insert_fails)
+    with pytest.raises(sqlite3.OperationalError):
+        gdrive_presets.mark_presets_seen(notice_db)
+    monkeypatch.setattr(table, "get_connection", real)
+    assert table.seen_ids() == set()

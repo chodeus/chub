@@ -13,8 +13,10 @@ class GdrivePresetNotice(DatabaseBase):
         return {row["preset_id"] for row in rows or []}
 
     def mark_seen(self, preset_ids: Iterable[str]) -> None:
-        for preset_id in preset_ids:
-            self.execute_query(
-                "INSERT OR IGNORE INTO gdrive_preset_notice (preset_id) VALUES (?)",
-                (preset_id,),
-            )
+        # One transaction: a baseline cut short must leave nothing, not a partial set
+        self.execute_transaction(
+            [
+                ("INSERT OR IGNORE INTO gdrive_preset_notice (preset_id) VALUES (?)", (i,))
+                for i in preset_ids
+            ]
+        )
