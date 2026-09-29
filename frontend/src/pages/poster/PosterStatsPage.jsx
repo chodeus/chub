@@ -60,12 +60,12 @@ const sourceBarColor = label => {
 
 // Avatar tints for the Top-contributors list (cycled by row index).
 const CONTRIB_COLORS = [
-    'var(--source-cl2k)',
-    'var(--source-gdrive)',
-    'var(--source-local)',
-    'var(--source-mm2k)',
-    'var(--manual)',
-    'var(--error)',
+    'text-source-cl2k bg-source-cl2k/13',
+    'text-source-gdrive bg-source-gdrive/13',
+    'text-source-local bg-source-local/13',
+    'text-source-mm2k bg-source-mm2k/13',
+    'text-manual bg-manual/13',
+    'text-error bg-error/13',
 ];
 
 const ASSET_TYPE_LABELS = {
@@ -453,11 +453,7 @@ const PosterStatsPage = () => {
                                         className="flex items-center gap-3 px-4 py-3 border-b border-border-light last:border-0"
                                     >
                                         <span
-                                            className="shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center font-display text-dense font-bold"
-                                            style={{
-                                                background: `color-mix(in srgb, ${CONTRIB_COLORS[i % CONTRIB_COLORS.length]} 13%, transparent)`,
-                                                color: CONTRIB_COLORS[i % CONTRIB_COLORS.length],
-                                            }}
+                                            className={`shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center font-display text-dense font-bold ${CONTRIB_COLORS[i % CONTRIB_COLORS.length]}`}
                                             aria-hidden="true"
                                         >
                                             {c.name.charAt(0).toUpperCase()}

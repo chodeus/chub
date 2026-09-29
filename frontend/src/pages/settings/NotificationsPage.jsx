@@ -28,24 +28,24 @@ const MODULE_KEYS = withExtensionConfigModuleKeys(moduleOrder).filter(
 const METHOD = {
     discord: {
         label: 'Discord',
-        tint: 'var(--method-discord)',
-        tintBg: 'color-mix(in srgb, var(--method-discord) 14%, transparent)',
-        tintBorder: 'color-mix(in srgb, var(--method-discord) 32%, transparent)',
+        text: 'text-method-discord',
+        tintBg: 'bg-method-discord/14',
+        tintBorder: 'border-method-discord/32',
         status: 'Direct',
-        statusColor: 'var(--success)',
-        statusRing: 'color-mix(in srgb, var(--success) 16%, transparent)',
+        statusText: 'text-success',
+        statusDot: 'bg-success ring-[3px] ring-success/16',
         blurb: 'Post rich embeds straight into a channel with an incoming webhook URL. No account needed.',
         addLabel: 'Add webhook',
         noun: 'webhook',
     },
     notifiarr: {
         label: 'Notifiarr',
-        tint: 'var(--method-notifiarr)',
-        tintBg: 'color-mix(in srgb, var(--method-notifiarr) 14%, transparent)',
-        tintBorder: 'color-mix(in srgb, var(--method-notifiarr) 32%, transparent)',
+        text: 'text-method-notifiarr',
+        tintBg: 'bg-method-notifiarr/14',
+        tintBorder: 'border-method-notifiarr/32',
         status: 'Connected',
-        statusColor: 'var(--accent)',
-        statusRing: 'color-mix(in srgb, var(--accent) 16%, transparent)',
+        statusText: 'text-accent',
+        statusDot: 'bg-accent ring-[3px] ring-accent/16',
         blurb: 'Route alerts through your Notifiarr account — fan out to Discord, mobile push, Telegram & more.',
         addLabel: 'Add alert',
         noun: 'alert',
@@ -316,8 +316,7 @@ report on."
                         >
                             <div className="flex items-start gap-3">
                                 <div
-                                    className="shrink-0 w-10 h-10 rounded-[11px] flex items-center justify-center"
-                                    style={{ background: m.tintBg }}
+                                    className={`shrink-0 w-10 h-10 rounded-[11px] flex items-center justify-center ${m.tintBg}`}
                                 >
                                     <ServiceIcon service={method} size="small" />
                                 </div>
@@ -327,15 +326,10 @@ report on."
                                             {m.label}
                                         </span>
                                         <span
-                                            className="flex items-center gap-1.5 font-mono text-micro"
-                                            style={{ color: m.statusColor }}
+                                            className={`flex items-center gap-1.5 font-mono text-micro ${m.statusText}`}
                                         >
                                             <span
-                                                className="w-1.5 h-1.5 rounded-full"
-                                                style={{
-                                                    background: m.statusColor,
-                                                    boxShadow: `0 0 0 3px ${m.statusRing}`,
-                                                }}
+                                                className={`w-1.5 h-1.5 rounded-full ${m.statusDot}`}
                                             />
                                             {m.status}
                                         </span>
@@ -354,12 +348,7 @@ report on."
                                 <button
                                     type="button"
                                     onClick={() => openAdd(method)}
-                                    className="touch-expand flex items-center gap-1.5 h-8 px-[13px] rounded-lg font-display text-dense font-semibold transition hover:brightness-110"
-                                    style={{
-                                        background: m.tintBg,
-                                        border: `1px solid ${m.tintBorder}`,
-                                        color: m.tint,
-                                    }}
+                                    className={`touch-expand flex items-center gap-1.5 h-8 px-[13px] rounded-lg font-display text-dense font-semibold transition hover:brightness-110 border ${m.tintBg} ${m.tintBorder} ${m.text}`}
                                 >
                                     <span className="material-symbols-outlined text-[15px]">
                                         add
@@ -379,7 +368,7 @@ report on."
                 return (
                     <div key={method} className="mb-[26px]">
                         <div className="flex items-center gap-2.5 mb-3">
-                            <span style={{ color: m.tint }} className="flex">
+                            <span className={`flex ${m.text}`}>
                                 <ServiceIcon service={method} size="small" />
                             </span>
                             <span className="font-display text-sm font-semibold tracking-[.2px] text-fg">
@@ -503,8 +492,7 @@ const DestinationCard = ({
             {/* header band */}
             <div className="flex items-center gap-[14px] p-[15px_17px]">
                 <div
-                    className="shrink-0 w-10 h-10 rounded-[10px] flex items-center justify-center"
-                    style={{ background: meta.tintBg }}
+                    className={`shrink-0 w-10 h-10 rounded-[10px] flex items-center justify-center ${meta.tintBg}`}
                 >
                     <ServiceIcon service={d.method} size="small" />
                 </div>
@@ -514,8 +502,7 @@ const DestinationCard = ({
                             {d.name || meta.label}
                         </span>
                         <span
-                            className="font-mono text-micro uppercase tracking-[.5px] px-1.5 py-0.5 rounded-[5px]"
-                            style={{ background: meta.tintBg, color: meta.tint }}
+                            className={`font-mono text-micro uppercase tracking-[.5px] px-1.5 py-0.5 rounded-[5px] ${meta.tintBg} ${meta.text}`}
                         >
                             {meta.label}
                         </span>
@@ -570,15 +557,7 @@ const DestinationCard = ({
                     <span className="eyebrow w-16 shrink-0 pt-1.5">MODULES</span>
                     <div className="flex-1 min-w-0 flex flex-wrap items-center gap-[7px]">
                         {all && (
-                            <span
-                                className="flex items-center gap-1.5 px-[11px] py-1 rounded-[7px] text-xs font-semibold"
-                                style={{
-                                    background:
-                                        'color-mix(in srgb, var(--primary) 13%, transparent)',
-                                    border: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
-                                    color: 'var(--primary-hover)',
-                                }}
-                            >
+                            <span className="flex items-center gap-1.5 px-[11px] py-1 rounded-[7px] text-xs font-semibold border bg-primary/13 border-primary/30 text-primary-hover">
                                 <span className="material-symbols-outlined text-[14px]">check</span>
                                 All modules
                             </span>
@@ -650,29 +629,16 @@ const IconBtn = ({ icon, label, onClick }) => (
 );
 
 const TriggerPill = ({ active, label, tone, onClick }) => {
-    const colors =
+    const toneClasses =
         tone === 'success'
-            ? {
-                  c: 'var(--success)',
-                  bg: 'color-mix(in srgb, var(--success) 12%, transparent)',
-                  b: 'color-mix(in srgb, var(--success) 40%, transparent)',
-              }
-            : {
-                  c: 'var(--error)',
-                  bg: 'color-mix(in srgb, var(--error) 12%, transparent)',
-                  b: 'color-mix(in srgb, var(--error) 40%, transparent)',
-              };
+            ? 'text-success bg-success/12 border-success/40'
+            : 'text-error bg-error/12 border-error/40';
     return (
         <button
             type="button"
             aria-pressed={active}
             onClick={onClick}
-            className="touch-expand flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-xs font-semibold transition-colors"
-            style={{
-                color: active ? colors.c : 'var(--text-tertiary)',
-                background: active ? colors.bg : 'transparent',
-                border: `1px solid ${active ? colors.b : 'var(--border)'}`,
-            }}
+            className={`touch-expand flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-xs font-semibold transition-colors border ${active ? toneClasses : 'text-fg-subtle bg-transparent border-border'}`}
         >
             {active && <span className="material-symbols-outlined text-[14px]">check</span>}
             {label}

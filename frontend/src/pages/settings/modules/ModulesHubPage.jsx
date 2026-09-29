@@ -44,11 +44,11 @@ const MODULE_ICONS = {
 
 // Rotating icon tints (mock palette: cyan / green / lilac / gold / peach).
 const TINTS = [
-    ['var(--source-gdrive)', 'color-mix(in srgb, var(--source-gdrive) 12%, transparent)'],
-    ['var(--source-local)', 'color-mix(in srgb, var(--source-local) 12%, transparent)'],
-    ['var(--source-cl2k)', 'color-mix(in srgb, var(--source-cl2k) 14%, transparent)'],
-    ['var(--source-mm2k)', 'color-mix(in srgb, var(--source-mm2k) 12%, transparent)'],
-    ['var(--source-orphan)', 'color-mix(in srgb, var(--source-orphan) 12%, transparent)'],
+    'text-source-gdrive bg-source-gdrive/12',
+    'text-source-local bg-source-local/12',
+    'text-source-cl2k bg-source-cl2k/14',
+    'text-source-mm2k bg-source-mm2k/12',
+    'text-source-orphan bg-source-orphan/12',
 ];
 
 /** Friendly schedule pill label derived from the schedule DSL. */
@@ -149,7 +149,7 @@ export const ModulesHubPage = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {HUB_MODULES.map((key, i) => {
                     const meta = META[key] || { name: humanize(key), description: '' };
-                    const [iconColor, iconBg] = TINTS[i % TINTS.length];
+                    const tint = TINTS[i % TINTS.length];
                     const label = schedLabel(schedule[key]);
                     const enabled = !disabledSet.has(key);
                     return (
@@ -160,8 +160,7 @@ export const ModulesHubPage = () => {
                             }`}
                         >
                             <span
-                                className="shrink-0 w-[38px] h-[38px] rounded-[9px] flex items-center justify-center"
-                                style={{ background: iconBg, color: iconColor }}
+                                className={`shrink-0 w-[38px] h-[38px] rounded-[9px] flex items-center justify-center ${tint}`}
                                 aria-hidden="true"
                             >
                                 <span className="material-symbols-outlined text-[20px]">

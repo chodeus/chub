@@ -743,12 +743,12 @@ const DashboardPage = () => {
                                             subRows.map(sub => {
                                                 const en = sub.enabled !== false;
                                                 const isProfile = sub.kind === 'profile';
-                                                const pillColor = isProfile
-                                                    ? 'var(--source-gdrive)'
-                                                    : 'var(--warning)';
-                                                const pillBg = isProfile
-                                                    ? 'color-mix(in srgb, var(--source-gdrive) 12%, transparent)'
-                                                    : 'color-mix(in srgb, var(--warning) 12%, transparent)';
+                                                const dotTone = isProfile
+                                                    ? 'bg-source-gdrive'
+                                                    : 'bg-warning';
+                                                const pillTone = isProfile
+                                                    ? 'text-source-gdrive bg-source-gdrive/12'
+                                                    : 'text-warning bg-warning/12';
                                                 const nf = en
                                                     ? scheduleToNextFire(
                                                           sub.schedule,
@@ -777,19 +777,14 @@ const DashboardPage = () => {
                                                     >
                                                         <div className="flex items-center gap-2 min-w-0 pl-7">
                                                             <span
-                                                                className="w-1.5 h-1.5 rounded-full shrink-0"
-                                                                style={{ background: pillColor }}
+                                                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotTone}`}
                                                                 aria-hidden="true"
                                                             />
                                                             <span className="text-dense font-medium text-fg-muted truncate">
                                                                 {sub.label}
                                                             </span>
                                                             <span
-                                                                className="shrink-0 font-mono text-micro tracking-[0.4px] uppercase px-1.5 py-px rounded-[5px]"
-                                                                style={{
-                                                                    color: pillColor,
-                                                                    background: pillBg,
-                                                                }}
+                                                                className={`shrink-0 font-mono text-micro tracking-[0.4px] uppercase px-1.5 py-px rounded-[5px] ${pillTone}`}
                                                             >
                                                                 {sub.kind}
                                                             </span>
@@ -850,10 +845,8 @@ const DashboardPage = () => {
                                             >
                                                 {entry.running ? (
                                                     <span
-                                                        className="shrink-0 w-[9px] h-[9px] rounded-full bg-accent mt-1"
+                                                        className="shrink-0 w-[9px] h-[9px] rounded-full bg-accent ring-[3px] ring-accent/18 mt-1"
                                                         style={{
-                                                            boxShadow:
-                                                                '0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)',
                                                             animation:
                                                                 'chub-pulse 1.4s ease-in-out infinite',
                                                         }}
