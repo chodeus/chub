@@ -2,6 +2,26 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.49.1](https://github.com/chodeus/chub/compare/v2.49.0...v2.49.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **ci:** tell Trivy which architecture a per-arch digest is ([#668](https://github.com/chodeus/chub/issues/668)) ([4ab49a0](https://github.com/chodeus/chub/commit/4ab49a0e1b69d8954a8c98ba65594ce171f62750))
+* **frontend:** align Library Statistics with Assets Statistics ([#675](https://github.com/chodeus/chub/issues/675)) ([f655f72](https://github.com/chodeus/chub/commit/f655f72c7fb49b66c110bbaa6e0aa5f89f41f4f5))
+* **frontend:** make colours follow the theme and accent ([#676](https://github.com/chodeus/chub/issues/676)) ([a4b6a30](https://github.com/chodeus/chub/commit/a4b6a305308c181508975d1c8f7a7d8a4edce61e))
+* **frontend:** one type scale instead of 21 one-off text sizes ([#684](https://github.com/chodeus/chub/issues/684)) ([82f7542](https://github.com/chodeus/chub/commit/82f75423b7a7af974cbfacd5762211b1e5e11e15))
+* **frontend:** per-theme accent shades and readable app chrome ([#678](https://github.com/chodeus/chub/issues/678)) ([c43385c](https://github.com/chodeus/chub/commit/c43385c37a517b0cf3d3938ab363a163c5674c24))
+* **frontend:** readable muted text, placeholders and sidebar headings ([#679](https://github.com/chodeus/chub/issues/679)) ([15e4b0d](https://github.com/chodeus/chub/commit/15e4b0d0a05d1f7a03cdc0b975ccf1c6e0769836))
+* **frontend:** readable muted text, placeholders and sidebar headings ([#681](https://github.com/chodeus/chub/issues/681)) ([c0fa39a](https://github.com/chodeus/chub/commit/c0fa39a715e823bce0ba7ef9f3ee6c37634a3d4e))
+* **frontend:** share the page header, label, chip and settings layout ([#677](https://github.com/chodeus/chub/issues/677)) ([66055fe](https://github.com/chodeus/chub/commit/66055fe087b7e5c6e83798d10ec180622bbc289a))
+* **frontend:** shared spinner for Settings page loading states ([#683](https://github.com/chodeus/chub/issues/683)) ([804ea4a](https://github.com/chodeus/chub/commit/804ea4af58ef67a9a12e43413490c79f650759a7))
+
+
+### Refactoring
+
+* **frontend:** drop legacy colour aliases, unused parts and off-by-one radius names ([#682](https://github.com/chodeus/chub/issues/682)) ([946d327](https://github.com/chodeus/chub/commit/946d327964c9b7c439799e44c5cd73a4d777d3b3))
+
 ## [2.49.0](https://github.com/chodeus/chub/compare/v2.48.1...v2.49.0) (2026-09-22)
 
 
