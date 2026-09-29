@@ -2,7 +2,7 @@
 
 [data-theme='light'] {
     /* Brand & Semantic Colors */
-    --primary: #463fbc; /* Indigo primary */
+    --primary: #463fbc; /* Violet's light shade; ThemeContext.ACCENTS applies the chosen accent */
     --primary-hover: #3a339e;
     --accent: #0b5b9f; /* Link text: 6.1:1 on --bg, 4.5:1 on its own 20% tint. Brand hue lives in --azure. */
     --accent-2: #53e8f0; /* Cyan secondary accent */
@@ -23,6 +23,8 @@
     --source-cl2k: #5a4cad;
     --source-mm2k: #b9831f;
     --source-orphan: #884a28;
+    --method-discord: #5a4cad; /* Notifications: Discord destinations */
+    --method-notifiarr: #884a28; /* Notifications: Notifiarr destinations */
 
     /* Surface & Background Colors */
     --bg: #eef0fb; /* Pale indigo tint — panel surround */
@@ -53,6 +55,8 @@
     --sidebar-text: #fff;
     --sidebar-text-secondary: #b2d1e8;
     --sidebar-heading: #564f8a;
+    --sidebar-accent: #8767f7; /* Dark shade: the chrome stays dark here too */
+    --sidebar-on-accent: #fff;
     --header-bg: #110b28;
 
     /* Overlay & Modal Colors */

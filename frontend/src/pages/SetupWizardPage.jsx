@@ -659,13 +659,13 @@ const WizardStyles = () => (
     <style>{`
         .sw-page { display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:100dvh; background:var(--bg); padding:1.5rem; }
         .sw-card { width:100%; max-width:1000px; display:grid; grid-template-columns:270px 1fr; background:var(--surface); border:1px solid var(--border-light); border-radius:var(--radius-xl,24px); overflow:hidden; min-height:600px; }
-        .sw-rail { background:var(--sidebar-bg); padding:1.5rem 1.25rem; display:flex; flex-direction:column; gap:.2rem; border-right:1px solid var(--border-light); }
+        .sw-rail { background:var(--bg); padding:1.5rem 1.25rem; display:flex; flex-direction:column; gap:.2rem; border-right:1px solid var(--border-light); }
         .sw-brand { display:flex; align-items:center; gap:.65rem; margin-bottom:1.3rem; }
         .sw-logo { width:40px; height:40px; border-radius:10px; }
         .sw-name { font-family:var(--font-display); font-weight:800; font-size:1.18rem; color:var(--text-primary); }
         .sw-sub { font-size:.7rem; color:var(--text-tertiary); }
         .sw-step { display:flex; align-items:center; gap:.7rem; padding:.55rem .7rem; border-radius:var(--radius-md,12px); cursor:pointer; border:1px solid transparent; background:transparent; text-align:left; font-family:inherit; }
-        .sw-step:hover { background:var(--surface-alt); }
+        .sw-step:hover { background:var(--row-hover); }
         .sw-step.active { background:color-mix(in srgb, var(--primary) 22%, transparent); border-color:color-mix(in srgb, var(--primary) 45%, transparent); }
         .sw-dot { width:26px; height:26px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:.78rem; font-weight:600; background:var(--surface-alt); color:var(--text-secondary); border:1px solid var(--border); }
         .sw-step.active .sw-dot { background:var(--primary); color:var(--on-color-text); border-color:var(--primary); }

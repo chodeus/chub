@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { ACCENTS } from '../../contexts/ThemeContext.jsx';
 
 const TEXT_TOKENS = [
     'success',
@@ -17,6 +18,8 @@ const TEXT_TOKENS = [
     'source-cl2k',
     'source-orphan',
     'accent',
+    'method-discord',
+    'method-notifiarr',
 ];
 const SOLID_FILLS = ['success', 'warning', 'info', 'error', 'accent'];
 const TINTED_TEXT = [
@@ -29,8 +32,10 @@ const TINTED_TEXT = [
     'source-local',
     'source-cl2k',
     'source-orphan',
+    'method-discord',
+    'method-notifiarr',
 ];
-const RESTING_SURFACES = ['bg', 'surface', 'surface-alt'];
+const RESTING_SURFACES = ['bg', 'surface', 'surface-alt', 'surface-elevated'];
 
 const rgb = hex => {
     const digits = hex.length === 4 ? [...hex.slice(1)].map(d => d + d) : hex.slice(1).match(/../g);
@@ -65,6 +70,9 @@ const contrast = (a, b) => {
     return (hi + 0.05) / (lo + 0.05);
 };
 
+const expectReadable = (fg, bg, label) =>
+    expect(contrast(fg, bg), label).toBeGreaterThanOrEqual(4.5);
+
 describe.each([
     ['dark', './dark.css'],
     ['light', './light.css'],
@@ -72,29 +80,50 @@ describe.each([
     const tokens = readTokens(file);
 
     it.each(SOLID_FILLS)('--on-%s clears 4.5:1 on its solid fill', fill => {
-        expect(contrast(tokens[`on-${fill}`], tokens[fill])).toBeGreaterThanOrEqual(4.5);
+        expectReadable(tokens[`on-${fill}`], tokens[fill], `--on-${fill} on --${fill}`);
     });
 
     it.each(TEXT_TOKENS)('--%s clears 4.5:1 as text on every resting surface', token => {
         for (const surface of RESTING_SURFACES) {
-            expect(
-                contrast(tokens[token], tokens[surface]),
-                `--${token} on --${surface}`
-            ).toBeGreaterThanOrEqual(4.5);
+            expectReadable(tokens[token], tokens[surface], `--${token} on --${surface}`);
+        }
+    });
+
+    // Pills and badges set a colour's text on a 20% tint of itself.
+    it.each(TINTED_TEXT)('--%s clears 4.5:1 on its own tint over every resting surface', token => {
+        for (const surface of RESTING_SURFACES) {
+            const ownTint = tint(tokens[token], 0.2, tokens[surface]);
+            expectReadable(tokens[token], ownTint, `--${token} on its tint over --${surface}`);
         }
     });
 });
 
-// Pills and badges set a colour's text on a 20% tint of itself. Light only: dark --error falls to 3.9:1 there.
-describe('light theme tints', () => {
-    const tokens = readTokens('./light.css');
+// Dark shades are the brand fills (white on Violet and Azure is a brand call), so only their text hover is checked.
+describe.each(Object.keys(ACCENTS))('%s accent', key => {
+    const light = readTokens('./light.css');
+    const dark = readTokens('./dark.css');
+    const shades = theme =>
+        Object.fromEntries(Object.entries(ACCENTS[key][theme]).map(([k, hex]) => [k, rgb(hex)]));
 
-    it.each(TINTED_TEXT)('--%s clears 4.5:1 on its own tint over every resting surface', token => {
+    it('light shades read as text, on their own tint and under their ink', () => {
+        const { brand, hover, onBrand } = shades('light');
+        expectReadable(onBrand, brand, 'onBrand on brand');
         for (const surface of RESTING_SURFACES) {
-            expect(
-                contrast(tokens[token], tint(tokens[token], 0.2, tokens[surface])),
-                `--${token} on its tint over --${surface}`
-            ).toBeGreaterThanOrEqual(4.5);
+            const brandTint = tint(brand, 0.2, light[surface]);
+            expectReadable(brand, light[surface], `brand on --${surface}`);
+            expectReadable(brand, brandTint, `brand on its tint over --${surface}`);
+            expectReadable(hover, light[surface], `hover on --${surface}`);
+            expectReadable(hover, brandTint, `hover on the brand tint over --${surface}`);
+        }
+    });
+
+    // Accent text on an accent tint (bg-primary/15 text-primary-hover) uses the hover shade.
+    it('dark text hover reads on every resting surface and on the brand tint', () => {
+        const { brand, hover } = shades('dark');
+        for (const surface of RESTING_SURFACES) {
+            const brandTint = tint(brand, 0.2, dark[surface]);
+            expectReadable(hover, dark[surface], `hover on --${surface}`);
+            expectReadable(hover, brandTint, `hover on the brand tint over --${surface}`);
         }
     });
 });

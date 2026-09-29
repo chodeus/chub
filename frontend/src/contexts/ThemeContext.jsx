@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 
 /**
@@ -16,17 +16,33 @@ export const THEMES = {
 const THEME_STORAGE_KEY = 'chub-theme-preference';
 const ACCENT_STORAGE_KEY = 'chub-accent-preference';
 
-// Accent themes — each resolves to a brand colour + the text/icon colour that
-// sits ON the brand (dark for the light accents so labels stay legible). These
-// override --primary / --primary-text app-wide; neutrals never change.
-// (Mirrors design_handoff "Accent themes".)
+// Per theme: the brand fill, its text hover, and the ink that sits ON the fill. Light shades are
+// darker so the accent reads as text on light surfaces; contrast.test.js holds them to 4.5:1.
 export const ACCENTS = {
-    violet: { label: 'Violet', brand: '#8767f7', hover: '#a99eff', onBrand: '#ffffff' },
-    cyan: { label: 'Cyan', brand: '#53e8f0', hover: '#7af0f5', onBrand: '#110b28' },
-    azure: { label: 'Azure', brand: '#1992f3', hover: '#47a9f6', onBrand: '#ffffff' },
-    gold: { label: 'Gold', brand: '#ffc944', hover: '#ffd873', onBrand: '#110b28' },
+    violet: {
+        label: 'Violet',
+        dark: { brand: '#8767f7', hover: '#a99eff', onBrand: '#ffffff' },
+        light: { brand: '#463fbc', hover: '#3a339e', onBrand: '#ffffff' },
+    },
+    cyan: {
+        label: 'Cyan',
+        dark: { brand: '#53e8f0', hover: '#7af0f5', onBrand: '#110b28' },
+        light: { brand: '#0c627a', hover: '#094c5e', onBrand: '#ffffff' },
+    },
+    azure: {
+        label: 'Azure',
+        dark: { brand: '#1992f3', hover: '#47a9f6', onBrand: '#ffffff' },
+        light: { brand: '#0b5b9f', hover: '#094d87', onBrand: '#ffffff' },
+    },
+    gold: {
+        label: 'Gold',
+        dark: { brand: '#ffc944', hover: '#ffd873', onBrand: '#110b28' },
+        light: { brand: '#785400', hover: '#593f00', onBrand: '#ffffff' },
+    },
 };
 const DEFAULT_ACCENT = 'violet';
+
+const shadeKey = theme => (theme === THEMES.LIGHT ? 'light' : 'dark');
 
 const getStoredAccent = () => {
     if (typeof window === 'undefined') return DEFAULT_ACCENT;
@@ -50,14 +66,18 @@ const storeAccent = accent => {
 // Set the brand CSS variables inline on <html> so they win over the theme
 // stylesheet (which defines the Violet defaults). The shared components read
 // var(--primary) / var(--on-color-text), so this recolours the whole app.
-const applyAccent = accent => {
+const applyAccent = (accent, theme) => {
     if (typeof document === 'undefined') return;
-    const a = ACCENTS[accent] || ACCENTS[DEFAULT_ACCENT];
+    const shades = ACCENTS[accent] || ACCENTS[DEFAULT_ACCENT];
+    const a = shades[shadeKey(theme)];
     const s = document.documentElement.style;
     s.setProperty('--primary', a.brand);
     s.setProperty('--primary-hover', a.hover);
     s.setProperty('--primary-text', a.onBrand);
     s.setProperty('--on-color-text', a.onBrand);
+    // The sidebar and header stay dark in both themes, so they keep the dark shade.
+    s.setProperty('--sidebar-accent', shades.dark.brand);
+    s.setProperty('--sidebar-on-accent', shades.dark.onBrand);
 };
 
 // Create context
@@ -158,8 +178,20 @@ export const ThemeProvider = ({ children, defaultTheme = THEMES.SYSTEM }) => {
 
     // Apply the brand accent to the document (external side-effect, no setState).
     useEffect(() => {
-        applyAccent(accent);
-    }, [accent]);
+        applyAccent(accent, actualTheme);
+    }, [accent, actualTheme]);
+
+    // Each accent with the current theme's shades, so the picker's swatches match what applies.
+    const accents = useMemo(
+        () =>
+            Object.fromEntries(
+                Object.entries(ACCENTS).map(([key, a]) => [
+                    key,
+                    { label: a.label, ...a[shadeKey(actualTheme)] },
+                ])
+            ),
+        [actualTheme]
+    );
 
     const setAccent = useCallback(next => {
         if (!ACCENTS[next]) return;
@@ -278,7 +310,7 @@ export const ThemeProvider = ({ children, defaultTheme = THEMES.SYSTEM }) => {
         // Accent
         accent,
         setAccent,
-        accents: ACCENTS,
+        accents,
 
         // Actions
         setTheme,

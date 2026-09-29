@@ -23,13 +23,13 @@ const MODULE_KEYS = withExtensionConfigModuleKeys(moduleOrder).filter(
     m => m !== 'general' && m !== 'main' && !CONFIG_ONLY_MODULE_KEYS.has(m)
 );
 
-// Method identity: tints are fixed; status colours follow the light/dark theme, not the accent picker.
+// Method identity: tints and status colours follow the light/dark theme, not the accent picker.
 const METHOD = {
     discord: {
         label: 'Discord',
-        tint: '#a99eff',
-        tintBg: 'rgba(135,103,247,.14)',
-        tintBorder: 'rgba(135,103,247,.32)',
+        tint: 'var(--method-discord)',
+        tintBg: 'color-mix(in srgb, var(--method-discord) 14%, transparent)',
+        tintBorder: 'color-mix(in srgb, var(--method-discord) 32%, transparent)',
         status: 'Direct',
         statusColor: 'var(--success)',
         statusRing: 'color-mix(in srgb, var(--success) 16%, transparent)',
@@ -39,9 +39,9 @@ const METHOD = {
     },
     notifiarr: {
         label: 'Notifiarr',
-        tint: '#ff9d75',
-        tintBg: 'rgba(255,157,117,.14)',
-        tintBorder: 'rgba(255,157,117,.32)',
+        tint: 'var(--method-notifiarr)',
+        tintBg: 'color-mix(in srgb, var(--method-notifiarr) 14%, transparent)',
+        tintBorder: 'color-mix(in srgb, var(--method-notifiarr) 32%, transparent)',
         status: 'Connected',
         statusColor: 'var(--accent)',
         statusRing: 'color-mix(in srgb, var(--accent) 16%, transparent)',

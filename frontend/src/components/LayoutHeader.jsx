@@ -132,7 +132,7 @@ const LayoutHeader = React.memo(() => {
                     {/* CHUB Logo - Clickable Link to Home */}
                     <Link
                         to="/"
-                        className="touch-target flex items-center no-underline cursor-pointer transition-opacity hover:opacity-80 focus:outline-focus"
+                        className="touch-target flex items-center no-underline cursor-pointer transition-opacity hover:opacity-80 focus:outline-sidebar-accent"
                         aria-label="CHUB — Media Manager"
                     >
                         <img
@@ -167,7 +167,7 @@ const LayoutHeader = React.memo(() => {
                        slot between hamburger and theme toggle has context */
                     <div className="flex-1 min-w-0 flex items-center justify-center md:justify-start">
                         {pageTitle && (
-                            <h1 className="text-on-color font-semibold text-base md:text-lg truncate">
+                            <h1 className="text-sidebar-text font-semibold text-base md:text-lg truncate">
                                 {pageTitle}
                             </h1>
                         )}
@@ -178,7 +178,7 @@ const LayoutHeader = React.memo(() => {
                 <div className="flex items-center gap-3 shrink-0">
                     {/* Theme Toggle */}
                     <button
-                        className="flex items-center gap-2 px-3 py-2 bg-sidebar-hover border border-transparent rounded-lg text-on-color text-sm font-medium cursor-pointer transition-fast touch-target whitespace-nowrap hover:opacity-80 focus:outline-focus focus:outline-offset-2"
+                        className="flex items-center gap-2 px-3 py-2 bg-sidebar-hover border border-transparent rounded-lg text-sidebar-text text-sm font-medium cursor-pointer transition-fast touch-target whitespace-nowrap hover:opacity-80 focus:outline-sidebar-accent focus:outline-offset-2"
                         onClick={handleThemeToggle}
                         type="button"
                         aria-label={`Switch to ${isDarkTheme ? 'light' : 'dark'} theme`}

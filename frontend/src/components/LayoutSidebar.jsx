@@ -239,19 +239,21 @@ const LayoutSidebar = React.memo(() => {
                 {user && (
                     <div className="shrink-0 mx-2 mt-2 px-3 py-3 rounded-lg bg-sidebar-hover flex items-center gap-3">
                         <div
-                            className="w-9 h-9 rounded-full bg-primary text-on-color flex items-center justify-center text-sm font-semibold shrink-0"
+                            className="w-9 h-9 rounded-full bg-sidebar-accent text-sidebar-on-accent flex items-center justify-center text-sm font-semibold shrink-0"
                             aria-hidden="true"
                         >
                             {userInitial}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-on-color truncate">{user}</div>
+                            <div className="text-sm font-medium text-sidebar-text truncate">
+                                {user}
+                            </div>
                             <div className="text-xs text-sidebar-secondary truncate">Signed in</div>
                         </div>
                         <button
                             type="button"
                             onClick={logout}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-on-color hover:bg-sidebar-bg transition-colors touch-target"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-sidebar-text hover:bg-sidebar-bg transition-colors touch-target"
                             aria-label="Log out"
                             title="Log out"
                         >

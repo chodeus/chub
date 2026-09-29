@@ -9,7 +9,7 @@
     --accent-2: #8767f7;
     --success: #6cbc66; /* Healthy / active / Local source */
     --warning: #ffc944; /* Gold — logo, storage pressure, MM2K */
-    --error: #fd355c; /* Failed / bloat / danger */
+    --error: #fe6f8a; /* Failed / bloat / danger; light enough to read on its own 20% tint */
     --info: #53e8f0;
     --focus: #8767f7;
 
@@ -22,6 +22,8 @@
     --source-cl2k: #a99eff; /* CL2K provenance (light lilac) */
     --source-mm2k: #ffc944; /* MM2K provenance (gold) */
     --source-orphan: #ff9d75; /* Orphans (peach) */
+    --method-discord: #a99eff; /* Notifications: Discord destinations */
+    --method-notifiarr: #ff9d75; /* Notifications: Notifiarr destinations */
 
     /* Surface & Background Colors — indigo-black elevation ramp (no flat grays) */
     --bg: #110b28; /* Deep indigo canvas */
@@ -39,7 +41,7 @@
     /* Text & Content Colors */
     --text-primary: #fff;
     --text-secondary: #b2d1e8;
-    --text-tertiary: #6582ca;
+    --text-tertiary: #6a86cc;
     --text-muted: #4f4a7a; /* Faint */
     --text-faint: #564f8a; /* Section headings / idle */
     --text-data: #8ea3cc; /* On-mono-data secondary */
@@ -52,6 +54,8 @@
     --sidebar-text: #fff;
     --sidebar-text-secondary: #b2d1e8;
     --sidebar-heading: #564f8a;
+    --sidebar-accent: #8767f7; /* Accent on the always-dark chrome; ThemeContext sets it */
+    --sidebar-on-accent: #fff;
     --header-bg: #0c0820;
 
     /* Overlay & Modal Colors */

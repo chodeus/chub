@@ -1,7 +1,8 @@
-import { render } from '@testing-library/react';
-import { ThemeProvider, THEMES } from './ThemeContext.jsx';
+import { act, render, renderHook } from '@testing-library/react';
+import { ACCENTS, ThemeProvider, THEMES, useTheme } from './ThemeContext.jsx';
 
 const THEME_KEY = 'chub-theme-preference';
+const ACCENT_KEY = 'chub-accent-preference';
 
 const renderWithTheme = props =>
     render(
@@ -10,10 +11,41 @@ const renderWithTheme = props =>
         </ThemeProvider>
     );
 
+const darkByDefault = ({ children }) => (
+    <ThemeProvider defaultTheme={THEMES.DARK}>{children}</ThemeProvider>
+);
+
+const primary = () => document.documentElement.style.getPropertyValue('--primary');
+
 describe('ThemeProvider', () => {
     beforeEach(() => {
         localStorage.clear();
         document.documentElement.removeAttribute('data-theme');
+        document.documentElement.removeAttribute('style');
+    });
+
+    it("applies the stored accent's light shade in the light theme", () => {
+        localStorage.setItem(THEME_KEY, THEMES.LIGHT);
+        localStorage.setItem(ACCENT_KEY, 'gold');
+
+        renderWithTheme({ defaultTheme: THEMES.DARK });
+
+        expect(primary()).toBe(ACCENTS.gold.light.brand);
+        // The sidebar and header stay dark, so they keep the dark shade.
+        expect(document.documentElement.style.getPropertyValue('--sidebar-accent')).toBe(
+            ACCENTS.gold.dark.brand
+        );
+    });
+
+    it('re-applies the accent and the picker shades when the theme changes', () => {
+        localStorage.setItem(ACCENT_KEY, 'gold');
+        const { result } = renderHook(() => useTheme(), { wrapper: darkByDefault });
+        expect(primary()).toBe(ACCENTS.gold.dark.brand);
+
+        act(() => result.current.setTheme(THEMES.LIGHT));
+
+        expect(primary()).toBe(ACCENTS.gold.light.brand);
+        expect(result.current.accents.gold.brand).toBe(ACCENTS.gold.light.brand);
     });
 
     it('honours defaultTheme when nothing is stored', () => {
