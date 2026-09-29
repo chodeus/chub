@@ -2122,9 +2122,7 @@ const UnmatchedAssetsPage = () => {
                             <>
                                 {c.label}
                                 {c.count != null && (
-                                    <span className="ml-1.5 font-mono text-xs opacity-80">
-                                        {c.count}
-                                    </span>
+                                    <span className="ml-1.5 font-mono text-xs">{c.count}</span>
                                 )}
                             </>
                         ),

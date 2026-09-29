@@ -77,8 +77,10 @@ const ChipGroup = ({
                         {opt.label}
                         {opt.count != null && (
                             <span
-                                className={`ml-2 pl-2 border-l font-medium tabular-nums text-fg-subtle ${
-                                    on ? 'border-primary/40' : 'border-border'
+                                className={`ml-2 pl-2 border-l font-medium tabular-nums ${
+                                    on
+                                        ? 'border-primary/40 text-fg-muted'
+                                        : 'border-border text-fg-subtle'
                                 }`}
                             >
                                 {opt.count}
