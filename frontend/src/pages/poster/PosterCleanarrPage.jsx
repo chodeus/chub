@@ -1764,10 +1764,11 @@ const rowStyle = (selected, baseLeftPad) => ({
     paddingLeft: selected ? `${baseLeftPad - 3}px` : `${baseLeftPad}px`,
     transition: 'background 100ms',
 });
+// Pills mix with --surface, not transparent, so a selected row's tint can't dim their text.
 const bloatPill = {
     padding: '1px 6px',
     borderRadius: '9999px',
-    background: 'color-mix(in srgb, var(--error) 20%, transparent)',
+    background: 'color-mix(in srgb, var(--error) 20%, var(--surface))',
     color: 'var(--error)',
     fontWeight: 600,
     fontSize: '10px',
@@ -1775,7 +1776,7 @@ const bloatPill = {
 const stalePill = {
     padding: '1px 6px',
     borderRadius: '9999px',
-    background: 'color-mix(in srgb, var(--warning) 20%, transparent)',
+    background: 'color-mix(in srgb, var(--warning) 20%, var(--surface))',
     color: 'var(--warning)',
     fontWeight: 600,
     fontSize: '10px',

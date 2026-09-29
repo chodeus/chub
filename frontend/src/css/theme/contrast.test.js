@@ -14,7 +14,13 @@ const TEXT_TOKENS = [
     'service-plex',
 ];
 const SOLID_FILLS = ['success', 'warning', 'info', 'error', 'accent'];
+const TINTED_TEXT = ['success', 'warning', 'error', 'info'];
 const RESTING_SURFACES = ['bg', 'surface', 'surface-alt'];
+
+const rgb = hex => {
+    const digits = hex.length === 4 ? [...hex.slice(1)].map(d => d + d) : hex.slice(1).match(/../g);
+    return digits.map(d => parseInt(d, 16));
+};
 
 // Theme block only: the prefers-contrast override further down redefines some tokens.
 const readTokens = file => {
@@ -23,19 +29,21 @@ const readTokens = file => {
     return Object.fromEntries(
         [...block.matchAll(/--([\w-]+):\s*(#[0-9a-f]{3,6})\b/gi)].map(([, name, hex]) => [
             name,
-            hex,
+            rgb(hex),
         ])
     );
 };
 
-const luminance = hex => {
-    const digits = hex.length === 4 ? [...hex.slice(1)].map(d => d + d) : hex.slice(1).match(/../g);
-    const [r, g, b] = digits.map(d => {
-        const c = parseInt(d, 16) / 255;
+const luminance = color => {
+    const [r, g, b] = color.map(v => {
+        const c = v / 255;
         return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
     });
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
+
+// What `color-mix(in srgb, fg <share>, transparent)` shows once painted over bg.
+const tint = (fg, share, bg) => fg.map((v, i) => v * share + bg[i] * (1 - share));
 
 const contrast = (a, b) => {
     const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
@@ -57,6 +65,20 @@ describe.each([
             expect(
                 contrast(tokens[token], tokens[surface]),
                 `--${token} on --${surface}`
+            ).toBeGreaterThanOrEqual(4.5);
+        }
+    });
+});
+
+// Pills set semantic text on a 20% tint of itself. Light only: dark --error falls to 3.9:1 there.
+describe('light theme tints', () => {
+    const tokens = readTokens('./light.css');
+
+    it.each(TINTED_TEXT)('--%s clears 4.5:1 on its own tint over every resting surface', token => {
+        for (const surface of RESTING_SURFACES) {
+            expect(
+                contrast(tokens[token], tint(tokens[token], 0.2, tokens[surface])),
+                `--${token} on its tint over --${surface}`
             ).toBeGreaterThanOrEqual(4.5);
         }
     });

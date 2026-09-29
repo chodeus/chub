@@ -8,11 +8,11 @@
     --accent-2: #53e8f0; /* Cyan secondary accent */
     --focus: #463fbc; /* Focus indicator matches primary */
 
-    /* Darker than the dark theme's hues: each clears 4.5:1 as text on every light surface. */
-    --success: #357a38;
-    --warning: #8f6400;
-    --error: #c81e44;
-    --info: #0e7490;
+    /* Darker than the dark theme's hues: each clears 4.5:1 as text on every light surface, even on its own 20% tint. */
+    --success: #2d662f;
+    --warning: #785400;
+    --error: #aa1a3a;
+    --info: #0c627a;
 
     /* Extended accent roles — darkened where needed for contrast on white */
     --azure: #1992f3;
@@ -71,10 +71,10 @@
     --on-accent: #fff;
 
     /* Service identity, darkened to read as text on light surfaces */
-    --service-radarr: #357a38;
-    --service-sonarr: #0e7490;
+    --service-radarr: #2d662f;
+    --service-sonarr: #0c627a;
     --service-lidarr: #7e5e8d;
-    --service-plex: #8f6400;
+    --service-plex: #785400;
 
     /* Link state colors */
     --link-hover: #3a339e;
