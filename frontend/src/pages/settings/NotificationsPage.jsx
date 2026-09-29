@@ -384,7 +384,7 @@ report on."
                             <span className="font-display text-[14px] font-semibold tracking-[.2px] text-fg">
                                 {m.label}
                             </span>
-                            <span className="font-mono text-[10px] text-fg-faint px-[7px] py-0.5 rounded-full bg-surface-inset border border-border">
+                            <span className="font-mono text-[10px] text-fg-subtle px-[7px] py-0.5 rounded-full bg-surface-inset border border-border">
                                 {group.length}
                             </span>
                             <span className="flex-1 h-px bg-border-light" />
@@ -392,7 +392,7 @@ report on."
 
                         <div className="flex flex-col gap-3">
                             {group.length === 0 ? (
-                                <div className="border border-dashed border-border rounded-xl p-[18px] text-center text-[12.5px] text-fg-faint">
+                                <div className="border border-dashed border-border rounded-xl p-[18px] text-center text-[12.5px] text-fg-subtle">
                                     No {m.label} destinations yet.
                                 </div>
                             ) : (
@@ -583,7 +583,7 @@ const DestinationCard = ({
                             </span>
                         )}
                         {!all && selected.length === 0 && (
-                            <span className="text-[12.5px] text-fg-faint italic py-1">
+                            <span className="text-[12.5px] text-fg-subtle italic py-1">
                                 No modules yet — pick which runs report here.
                             </span>
                         )}

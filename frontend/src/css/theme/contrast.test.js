@@ -36,6 +36,8 @@ const TINTED_TEXT = [
     'method-notifiarr',
 ];
 const RESTING_SURFACES = ['bg', 'surface', 'surface-alt', 'surface-elevated'];
+const CHROME_TEXT = ['sidebar-text', 'sidebar-text-secondary', 'sidebar-heading'];
+const CHROME_SURFACES = ['sidebar-bg', 'header-bg'];
 
 const rgb = hex => {
     const digits = hex.length === 4 ? [...hex.slice(1)].map(d => d + d) : hex.slice(1).match(/../g);
@@ -85,6 +87,12 @@ describe.each([
 
     it.each(TEXT_TOKENS)('--%s clears 4.5:1 as text on every resting surface', token => {
         for (const surface of RESTING_SURFACES) {
+            expectReadable(tokens[token], tokens[surface], `--${token} on --${surface}`);
+        }
+    });
+
+    it.each(CHROME_TEXT)('--%s clears 4.5:1 on the sidebar and header', token => {
+        for (const surface of CHROME_SURFACES) {
             expectReadable(tokens[token], tokens[surface], `--${token} on --${surface}`);
         }
     });

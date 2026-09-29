@@ -405,7 +405,7 @@ export const JobsPage = () => {
                     {
                         label: 'FAILED',
                         value: jobStats.failed,
-                        tone: jobStats.failed > 0 ? 'text-error' : 'text-fg-dim',
+                        tone: jobStats.failed > 0 ? 'text-error' : 'text-fg-subtle',
                     },
                 ].map((s, i) => (
                     <React.Fragment key={s.label}>
