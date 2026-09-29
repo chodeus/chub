@@ -423,7 +423,7 @@ export const Cl2kLocalFoldersField = ({ value, onChange, disabled = false }) => 
                 <Modal.Footer>
                     <button
                         onClick={() => setBrowseIndex(null)}
-                        className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-alt transition-colors min-h-11"
+                        className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-elevated transition-colors min-h-11"
                     >
                         Close
                     </button>

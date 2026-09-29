@@ -9,7 +9,7 @@ import { Card } from '../../components/ui/card/Card';
  *
  * Demonstrates:
  * - All primitive compositions
- * - All layout variants (Grid, List, Inline)
+ * - The StatGrid layout
  * - All Card variants
  * - All value color variants
  * - Change indicators (positive, negative, inverse)

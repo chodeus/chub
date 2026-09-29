@@ -280,7 +280,7 @@ const SettingsMockPage = () => {
                     </p>
                     <button
                         onClick={() => setFilteredModules(SETTINGS_SCHEMA)}
-                        className="mt-4 px-4 py-2 bg-primary text-primary rounded-md hover:bg-primary-hover transition-colors"
+                        className="mt-4 px-4 py-2 bg-primary text-on-color rounded-md hover:bg-primary-hover transition-colors"
                     >
                         Clear search
                     </button>

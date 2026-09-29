@@ -351,7 +351,7 @@ const SpinnerTestPage = () => {
                                 onClick={() => setActiveTest(test.id)}
                                 className={`px-3 py-2 text-sm rounded transition-colors ${
                                     activeTest === test.id
-                                        ? 'bg-primary text-primary'
+                                        ? 'bg-primary text-on-color'
                                         : 'bg-surface hover:bg-surface-alt text-fg-muted hover:text-fg'
                                 }`}
                             >

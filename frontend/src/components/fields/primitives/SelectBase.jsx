@@ -50,15 +50,15 @@ export const SelectBase = React.memo(
         const selectClasses = [
             'h-11 w-full',
             'px-3 py-2',
-            'bg-input border border-border rounded-lg',
+            'bg-input border rounded-lg',
             'text-fg',
             'appearance-none',
             'transition-colors',
             'pr-11',
             'focus:ring-primary',
             !disabled && 'hover:border-primary hover:bg-input-hover',
-            invalid && 'border-error',
-            disabled && 'opacity-60 cursor-not-allowed bg-input-disabled border-input-disabled',
+            invalid ? 'border-error' : disabled ? 'border-input-disabled' : 'border-border',
+            disabled && 'opacity-60 cursor-not-allowed bg-input-disabled',
             disabled ? 'cursor-not-allowed' : 'cursor-pointer',
             className,
         ]
@@ -98,7 +98,7 @@ export const SelectBase = React.memo(
                         : children}
                 </select>
                 <span
-                    className={`material-symbols-outlined absolute top-1/2 right-3 pointer-events-none transition-colors -translate-y-1/2 text-primary leading-none ${disabled ? 'text-fg-subtle' : 'text-fg-muted'}`}
+                    className={`material-symbols-outlined absolute top-1/2 right-3 pointer-events-none transition-colors -translate-y-1/2 leading-none ${disabled ? 'text-fg-subtle' : 'text-fg-muted'}`}
                     aria-hidden="true"
                 >
                     keyboard_arrow_down
