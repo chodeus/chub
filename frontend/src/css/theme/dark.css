@@ -43,7 +43,7 @@
     --text-secondary: #b2d1e8;
     --text-tertiary: #6a86cc;
     --text-muted: #4f4a7a; /* Decorative separators and icons, never text */
-    --text-faint: #564f8a; /* Idle dots and markers, never text */
+    --text-faint: #6a62a5; /* Idle dots and markers, never text */
     --text-data: #8ea3cc; /* On-mono-data secondary */
 
     /* Layout Specific Colors */
