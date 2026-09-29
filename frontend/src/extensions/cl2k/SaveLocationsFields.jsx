@@ -328,7 +328,7 @@ const FolderEntry = ({
                     placeholder="/path/to/folder"
                     disabled={disabled}
                     onChange={e => onPatch({ path: e.target.value })}
-                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-dense text-fg-muted placeholder:text-fg-subtle focus:ring-primary focus:outline-none transition-colors"
+                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-dense text-fg-muted placeholder:text-fg-subtle transition-colors"
                     aria-label="Folder path"
                 />
                 <button
@@ -576,7 +576,7 @@ const DriveEntry = ({
                     placeholder="Drive folder ID"
                     disabled={disabled}
                     onChange={e => onPatch({ folder_id: e.target.value })}
-                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-dense text-fg-muted placeholder:text-fg-subtle truncate focus:ring-primary focus:outline-none transition-colors"
+                    className="flex-1 min-w-0 h-[38px] px-3 bg-bg border border-border rounded-lg font-mono text-dense text-fg-muted placeholder:text-fg-subtle truncate transition-colors"
                     aria-label="Drive folder ID"
                 />
                 <TestUploadButton folderId={entry.folder_id} disabled={disabled} />

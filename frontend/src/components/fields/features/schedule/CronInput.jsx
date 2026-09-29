@@ -85,12 +85,12 @@ export const CronInput = React.memo(
                     ${
                         disabled
                             ? 'opacity-50 cursor-not-allowed bg-surface-disabled'
-                            : 'hover:border-border-hover focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary'
+                            : 'hover:border-border-hover focus:outline-none focus:ring-2'
                     }
                     ${
                         !isValid && value.trim()
                             ? 'border-error focus:ring-error focus:border-error'
-                            : 'border-border'
+                            : 'border-border focus:ring-primary focus:border-primary'
                     }
                 `}
                 />

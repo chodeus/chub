@@ -55,9 +55,12 @@ export const SelectBase = React.memo(
             'appearance-none',
             'transition-colors',
             'pr-11',
-            'focus:ring-primary',
             !disabled && 'hover:border-primary hover:bg-input-hover',
-            invalid ? 'border-error' : disabled ? 'border-input-disabled' : 'border-border',
+            invalid
+                ? 'border-error focus-visible:outline-error'
+                : disabled
+                  ? 'border-input-disabled'
+                  : 'border-border',
             disabled && 'opacity-60 cursor-not-allowed bg-input-disabled',
             disabled ? 'cursor-not-allowed' : 'cursor-pointer',
             className,
