@@ -17,6 +17,7 @@ import {
     blocksFromConfig,
     blocksToConfig,
 } from '../../components/modules/ScheduleBlocksEditor';
+import Spinner from '../../components/ui/Spinner.jsx';
 
 export const SchedulePage = () => {
     // Toast for notifications
@@ -212,11 +213,7 @@ export const SchedulePage = () => {
 
     // Loading state
     if (isLoadingSchedule) {
-        return (
-            <div className="flex justify-center items-center min-h-64">
-                <div className="text-fg text-lg">Loading module schedules...</div>
-            </div>
-        );
+        return <Spinner size="large" text="Loading module schedules..." center />;
     }
 
     // Error state

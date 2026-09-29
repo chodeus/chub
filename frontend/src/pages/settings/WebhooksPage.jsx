@@ -6,6 +6,7 @@ import { webhooksAPI } from '../../utils/api/webhooks.js';
 import { copyText } from '../../utils/clipboard.js';
 import { IconButton } from '../../components/ui';
 import { PageHeader } from '../../components/ui/PageHeader';
+import Spinner from '../../components/ui/Spinner.jsx';
 
 const buildPosterAddUrl = (path, secret) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -412,7 +413,9 @@ const AutoSetupBoard = () => {
 
             <div className="mt-3 overflow-x-auto">
                 {loading && !status ? (
-                    <p className="px-5 pb-5 text-sm text-fg-muted">Loading…</p>
+                    <div className="flex items-center gap-2 px-5 pb-5">
+                        <Spinner size="small" text="Loading…" />
+                    </div>
                 ) : instances.length === 0 ? (
                     <p className="px-5 pb-5 text-sm text-fg-muted">
                         No Radarr/Sonarr instances configured.

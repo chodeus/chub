@@ -17,6 +17,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToolbar } from '../../contexts/ToolbarContext';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+import Spinner from '../../components/ui/Spinner.jsx';
 
 /**
  * Memoized field component for better performance
@@ -252,11 +253,7 @@ export const GeneralSettingsPage = () => {
 
     // Loading state
     if (isLoading) {
-        return (
-            <div className="flex justify-center items-center min-h-64">
-                <div className="text-fg text-lg">Loading general settings...</div>
-            </div>
-        );
+        return <Spinner size="large" text="Loading general settings..." center />;
     }
 
     // Error state

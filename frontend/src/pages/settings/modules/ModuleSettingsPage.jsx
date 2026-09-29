@@ -15,6 +15,7 @@ import SegmentedControl from '../../../components/ui/SegmentedControl.jsx';
 import InfoTooltip from '../../../components/ui/InfoTooltip.jsx';
 import { Button } from '../../../components/ui/button/Button';
 import { PageHeader } from '../../../components/ui/PageHeader';
+import Spinner from '../../../components/ui/Spinner.jsx';
 
 /**
  * Memoized field component — only re-renders when value/key/disabled change.
@@ -683,16 +684,7 @@ export const ModuleSettingsPage = () => {
     }, []);
 
     if (isLoading) {
-        return (
-            <div className="p-6 max-w-4xl mx-auto">
-                <div className="flex items-center justify-center py-12">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                        <p className="text-fg-muted">Loading configuration...</p>
-                    </div>
-                </div>
-            </div>
-        );
+        return <Spinner size="large" text="Loading configuration..." center />;
     }
 
     return (

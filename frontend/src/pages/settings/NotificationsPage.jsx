@@ -13,6 +13,7 @@ import { humanize } from '../../utils/tools';
 import { moduleOrder } from '../../utils/constants/constants';
 import { CONFIG_ONLY_MODULE_KEYS } from '../../utils/constants/settings_schema';
 import { withExtensionConfigModuleKeys } from '../../extensions/index.js';
+import Spinner from '../../components/ui/Spinner.jsx';
 
 const REDACTED = '********';
 const CHIP_LIMIT = 6;
@@ -278,7 +279,7 @@ report on."
         return (
             <div className="flex flex-col gap-5">
                 {header}
-                <p className="text-fg-muted">Loading notifications…</p>
+                <Spinner size="large" text="Loading notifications…" center />
             </div>
         );
     }
