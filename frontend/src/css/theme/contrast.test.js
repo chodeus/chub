@@ -38,6 +38,7 @@ const TINTED_TEXT = [
 const RESTING_SURFACES = ['bg', 'surface', 'surface-alt', 'surface-elevated'];
 const CHROME_TEXT = ['sidebar-text', 'sidebar-text-secondary', 'sidebar-heading'];
 const CHROME_SURFACES = ['sidebar-bg', 'header-bg'];
+const MARKERS = ['text-faint'];
 
 const rgb = hex => {
     const digits = hex.length === 4 ? [...hex.slice(1)].map(d => d + d) : hex.slice(1).match(/../g);
@@ -75,6 +76,8 @@ const contrast = (a, b) => {
 const expectReadable = (fg, bg, label) =>
     expect(contrast(fg, bg), label).toBeGreaterThanOrEqual(4.5);
 
+const expectVisible = (fg, bg, label) => expect(contrast(fg, bg), label).toBeGreaterThanOrEqual(3);
+
 describe.each([
     ['dark', './dark.css'],
     ['light', './light.css'],
@@ -104,6 +107,13 @@ describe.each([
             expectReadable(tokens[token], ownTint, `--${token} on its tint over --${surface}`);
         }
     });
+
+    // Idle dots and markers show state, so they need 3:1 (WCAG 1.4.11).
+    it.each(MARKERS)('--%s clears 3:1 as a marker on every resting surface', token => {
+        for (const surface of RESTING_SURFACES) {
+            expectVisible(tokens[token], tokens[surface], `--${token} on --${surface}`);
+        }
+    });
 });
 
 // Dark shades are the brand fills (white on Violet and Azure is a brand call), so only their text hover is checked.
@@ -122,6 +132,14 @@ describe.each(Object.keys(ACCENTS))('%s accent', key => {
             expectReadable(brand, brandTint, `brand on its tint over --${surface}`);
             expectReadable(hover, light[surface], `hover on --${surface}`);
             expectReadable(hover, brandTint, `hover on the brand tint over --${surface}`);
+        }
+    });
+
+    // Bare text-primary is kept to icons (classGuards.test.js), which need 3:1.
+    it('dark brand clears 3:1 as an icon on every resting surface', () => {
+        const { brand } = shades('dark');
+        for (const surface of RESTING_SURFACES) {
+            expectVisible(brand, dark[surface], `brand on --${surface}`);
         }
     });
 
