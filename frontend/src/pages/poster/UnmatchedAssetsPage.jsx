@@ -2108,7 +2108,7 @@ const UnmatchedAssetsPage = () => {
                 Posters is what most users care about; artwork is one click away. */}
             <div className="flex items-center gap-3 flex-wrap">
                 <SegmentedControl
-                    ariaLabel="Artwork type"
+                    ariaLabel="Asset class"
                     options={[
                         { key: 'poster', label: 'Posters', count: posterViewCounts.unmatched },
                         {
