@@ -2,6 +2,28 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.50.0](https://github.com/chodeus/chub/compare/v2.49.1...v2.50.0) (2026-09-30)
+
+
+### Features
+
+* **gdrive-presets:** tell users when an update adds new drive presets ([#689](https://github.com/chodeus/chub/issues/689)) ([bde7229](https://github.com/chodeus/chub/commit/bde7229d5a86fd81043fc0469de446b40d7bc1ca))
+
+
+### Bug Fixes
+
+* **frontend:** a visible focus cue on six controls that had none ([#692](https://github.com/chodeus/chub/issues/692)) ([681c3ef](https://github.com/chodeus/chub/commit/681c3ef9f30348765eaeb1ab26f259c6d18726ad))
+* **frontend:** error focus colour on invalid fields, and no ring colours without a ring ([#686](https://github.com/chodeus/chub/issues/686)) ([6e2ff61](https://github.com/chodeus/chub/commit/6e2ff6195f7759d599b7642f256330c86ba69290))
+* **frontend:** one inline spinner for every loading placeholder ([#688](https://github.com/chodeus/chub/issues/688)) ([d39ddd1](https://github.com/chodeus/chub/commit/d39ddd16c385bbda7311b62fda3c3da96e4e1943))
+* **frontend:** readable accent text and visible idle markers ([#685](https://github.com/chodeus/chub/issues/685)) ([c260066](https://github.com/chodeus/chub/commit/c26006691e74ca392c12d2e9737bd3cd7397ace1))
+* **frontend:** readable white text on dark Violet and Azure buttons ([#690](https://github.com/chodeus/chub/issues/690)) ([7c711ba](https://github.com/chodeus/chub/commit/7c711ba7ceb05f6214ffa0e940be19d98adda09b))
+* **frontend:** stack toasts above the new-preset card instead of over it ([#691](https://github.com/chodeus/chub/issues/691)) ([4a21d99](https://github.com/chodeus/chub/commit/4a21d994a04c967cab650955235d850cd8a6605e))
+
+
+### Refactoring
+
+* **frontend:** token tints as classes instead of inline color-mix styles ([#693](https://github.com/chodeus/chub/issues/693)) ([820fa2b](https://github.com/chodeus/chub/commit/820fa2bed62d42cce5ad018ce29fa9fd2baeffba))
+
 ## [2.49.1](https://github.com/chodeus/chub/compare/v2.49.0...v2.49.1) (2026-09-29)
 
 
