@@ -1103,7 +1103,7 @@ const TitlePicker = ({ onPick, toast }) => {
                 <button
                     type="submit"
                     disabled={searching}
-                    className="h-[42px] px-[18px] rounded-lg bg-primary text-on-color font-display text-dense font-semibold hover:brightness-110 disabled:opacity-60 transition"
+                    className="h-[42px] px-[18px] rounded-lg bg-primary text-on-color font-display text-dense font-semibold hover:bg-primary-strong disabled:opacity-60 transition"
                 >
                     {searching ? 'Searching…' : 'Search'}
                 </button>
