@@ -187,7 +187,7 @@ const LoginPage = () => {
                     <button
                         type="submit"
                         disabled={submitting}
-                        className="h-11 rounded-[10px] bg-primary text-on-color font-display text-sm font-semibold flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60 transition"
+                        className="h-11 rounded-[10px] bg-primary text-on-color font-display text-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary-strong disabled:opacity-60 transition"
                         style={{ boxShadow: '0 5px 20px -6px var(--primary)' }}
                     >
                         {submitting

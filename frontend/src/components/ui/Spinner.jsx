@@ -8,30 +8,36 @@ const Spinner = ({ size = 'medium', text, className = '', center = false }) => {
 
     const sizeClasses = sizeMap[size] || sizeMap.medium;
 
-    const spinnerElement = (
-        <div className={`inline-block ${className}`.trim()}>
-            <div
-                className={`rounded-full animate-spin ${sizeClasses} border-2 border-border border-t-primary`}
-            />
-        </div>
+    // Text makes it a status message screen readers announce; a bare ring stays decorative.
+    const status = text ? { role: 'status', 'aria-live': 'polite' } : {};
+
+    const ring = (
+        <span
+            aria-hidden="true"
+            className={`block shrink-0 rounded-full animate-spin ${sizeClasses} border-2 border-border border-t-primary`}
+        />
     );
 
     if (center) {
         return (
-            <div className="flex items-center justify-center p-4 min-h-content">
+            <div {...status} className="flex items-center justify-center p-4 min-h-content">
                 <div className="flex flex-col items-center gap-3">
-                    {spinnerElement}
+                    <span className={`inline-block ${className}`.trim()}>{ring}</span>
                     {text && <p className="text-sm m-0 text-fg-muted">{text}</p>}
                 </div>
             </div>
         );
     }
 
+    // One aligned unit; the label takes the surrounding font size, so set it on the caller.
     return (
-        <>
-            {spinnerElement}
-            {text && <span className="text-sm m-0 text-fg-muted">{text}</span>}
-        </>
+        <span
+            {...status}
+            className={`inline-flex items-center gap-2 text-fg-muted ${className}`.trim()}
+        >
+            {ring}
+            {text && <span>{text}</span>}
+        </span>
     );
 };
 

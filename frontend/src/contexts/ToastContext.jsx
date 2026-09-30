@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
 const ToastContext = createContext();
+const ToastDockContext = createContext(() => {});
 
 export function useToast() {
     const toasts = useContext(ToastContext);
@@ -8,6 +9,11 @@ export function useToast() {
         throw new Error('useToast must be used within a ToastProvider');
     }
     return toasts;
+}
+
+/** Setter for the height of a card docked in the toast corner; toasts stack above it. */
+export function useToastDock() {
+    return useContext(ToastDockContext);
 }
 
 // Export toast types for backward compatibility
@@ -89,6 +95,7 @@ function Toast({ id, message, type, onClose }) {
 
 export function ToastProvider({ children }) {
     const [toasts, setToasts] = useState([]);
+    const [dockHeight, setDockHeight] = useState(0);
 
     const showToast = useCallback((message, type = 'info') => {
         const id = Date.now() + Math.random();
@@ -112,8 +119,12 @@ export function ToastProvider({ children }) {
 
     return (
         <ToastContext.Provider value={toastMethods}>
-            {children}
-            <div className="fixed bottom-4 right-4 md:max-w-sm max-w-none flex flex-col gap-2 z-notification pointer-events-none">
+            <ToastDockContext.Provider value={setDockHeight}>{children}</ToastDockContext.Provider>
+            {/* A docked card stays below modals, so the toasts move up rather than join its layer */}
+            <div
+                className="fixed bottom-4 right-4 md:max-w-sm max-w-none flex flex-col gap-2 z-notification pointer-events-none"
+                style={dockHeight ? { bottom: `calc(1.5rem + ${dockHeight}px)` } : undefined}
+            >
                 {toasts.map(toast => (
                     <Toast key={toast.id} {...toast} onClose={removeToast} />
                 ))}

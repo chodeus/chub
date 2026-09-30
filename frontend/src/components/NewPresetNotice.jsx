@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button, LoadingButton } from './ui';
 import { dismissNewGdrivePresets, fetchNewGdrivePresets } from '../utils/gdrivePresets.js';
+import { useToastDock } from '../contexts/ToastContext.jsx';
 
 const SYNC_GDRIVE_SETTINGS = '/settings/modules/sync_gdrive';
 
@@ -14,6 +15,9 @@ const NewPresetNotice = () => {
     const [presets, setPresets] = useState([]);
     const [hidden, setHidden] = useState(false);
     const [busy, setBusy] = useState(false);
+    const setDockHeight = useToastDock();
+    const cardRef = useRef(null);
+    const visible = !hidden && presets.length > 0;
 
     useEffect(() => {
         let mounted = true;
@@ -45,13 +49,29 @@ const NewPresetNotice = () => {
         navigate(SYNC_GDRIVE_SETTINGS);
     }, [navigate]);
 
-    if (hidden || presets.length === 0) return null;
+    // Toasts stack above the card while it shows, instead of covering it
+    useEffect(() => {
+        const card = cardRef.current;
+        if (!visible || !card) return undefined;
+        const report = () => setDockHeight(card.offsetHeight);
+        report();
+        if (typeof ResizeObserver === 'undefined') return () => setDockHeight(0);
+        const observer = new ResizeObserver(report);
+        observer.observe(card);
+        return () => {
+            observer.disconnect();
+            setDockHeight(0);
+        };
+    }, [visible, setDockHeight]);
+
+    if (!visible) return null;
 
     const title =
         presets.length === 1 ? 'New GDrive preset' : `${presets.length} new GDrive presets`;
 
     return (
         <section
+            ref={cardRef}
             aria-label={title}
             className="fixed bottom-4 right-4 z-fixed w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface-elevated p-4 shadow-lg"
         >

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import NewPresetNotice from './NewPresetNotice.jsx';
+import { ToastProvider } from '../contexts/ToastContext.jsx';
 import { dismissNewGdrivePresets, fetchNewGdrivePresets } from '../utils/gdrivePresets.js';
 
 vi.mock('../utils/gdrivePresets.js', () => ({
@@ -94,6 +95,39 @@ describe('NewPresetNotice', () => {
         expect(fetchNewGdrivePresets.mock.calls[0][0].signal.aborted).toBe(true);
         await Promise.resolve();
         expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('lifts the toasts above the card while it shows', async () => {
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                observe() {}
+                disconnect() {}
+            }
+        );
+        const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(120);
+        fetchNewGdrivePresets.mockResolvedValue(PRESETS.slice(0, 1));
+        dismissNewGdrivePresets.mockResolvedValue({});
+        try {
+            render(
+                <ToastProvider>
+                    <MemoryRouter>
+                        <NewPresetNotice />
+                    </MemoryRouter>
+                </ToastProvider>
+            );
+            const toasts = document.querySelector('.z-notification');
+
+            await screen.findByRole('region', { name: 'New GDrive preset' });
+            // jsdom reorders calc() terms, so match the measured height
+            await waitFor(() => expect(toasts.style.bottom).toMatch(/calc\(.*120px/));
+
+            await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+            await waitFor(() => expect(toasts.style.bottom).toBe(''));
+        } finally {
+            height.mockRestore();
+            vi.unstubAllGlobals();
+        }
     });
 
     it('opens Sync GDrive and hides without dismissing', async () => {
