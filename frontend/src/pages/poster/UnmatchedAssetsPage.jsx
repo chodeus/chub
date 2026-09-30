@@ -660,7 +660,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                                         <button
                                                             type="button"
                                                             onClick={() => handleCopy(item)}
-                                                            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[7px] bg-primary text-on-color text-xs font-semibold hover:brightness-110 transition"
+                                                            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[7px] bg-primary text-on-color text-xs font-semibold hover:bg-primary-strong transition"
                                                             title="Copy a poster request to the clipboard"
                                                         >
                                                             <span className="material-symbols-outlined text-[14px]">

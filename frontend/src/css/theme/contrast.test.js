@@ -116,7 +116,7 @@ describe.each([
     });
 });
 
-// Dark shades are the brand fills (white on Violet and Azure is a brand call), so only their text hover is checked.
+// Dark shades are the brand fills: their ink must read on them, and text uses the hover shade.
 describe.each(Object.keys(ACCENTS))('%s accent', key => {
     const light = readTokens('./light.css');
     const dark = readTokens('./dark.css');
@@ -133,6 +133,11 @@ describe.each(Object.keys(ACCENTS))('%s accent', key => {
             expectReadable(hover, light[surface], `hover on --${surface}`);
             expectReadable(hover, brandTint, `hover on the brand tint over --${surface}`);
         }
+    });
+
+    it('onBrand text reads on the dark brand fill', () => {
+        const { brand, onBrand } = shades('dark');
+        expectReadable(onBrand, brand, 'onBrand on brand');
     });
 
     // Bare text-primary is kept to icons (classGuards.test.js), which need 3:1.
