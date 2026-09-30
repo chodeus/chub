@@ -498,9 +498,11 @@ export const JobsPage = () => {
                                 {isOpen && (
                                     <div className="border-t border-border pt-2">
                                         {detailLoading ? (
-                                            <span className="text-xs text-fg-muted">
-                                                Loading...
-                                            </span>
+                                            <Spinner
+                                                size="small"
+                                                text="Loading..."
+                                                className="text-xs"
+                                            />
                                         ) : jobDetail ? (
                                             <div className="grid grid-cols-2 gap-2 text-xs">
                                                 {Object.entries(jobDetail)
@@ -619,9 +621,11 @@ export const JobsPage = () => {
                                         <tr className="bg-surface-alt/30">
                                             <td colSpan={7} className="px-4 py-3">
                                                 {detailLoading ? (
-                                                    <span className="text-xs text-fg-muted">
-                                                        Loading...
-                                                    </span>
+                                                    <Spinner
+                                                        size="small"
+                                                        text="Loading..."
+                                                        className="text-xs"
+                                                    />
                                                 ) : jobDetail ? (
                                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                                                         {Object.entries(jobDetail)

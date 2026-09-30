@@ -101,7 +101,7 @@ const DuplicateGroup = ({
 
             {expanded &&
                 (loading ? (
-                    <div className="px-4 py-4 border-t border-border-light">
+                    <div className="px-4 py-4 border-t border-border-light text-sm">
                         <Spinner size="small" text="Probing copies…" />
                     </div>
                 ) : members && members.length ? (
