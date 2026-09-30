@@ -135,7 +135,7 @@ describe.each(Object.keys(ACCENTS))('%s accent', key => {
         }
     });
 
-    it('dark ink reads on the dark brand fill', () => {
+    it('onBrand text reads on the dark brand fill', () => {
         const { brand, onBrand } = shades('dark');
         expectReadable(onBrand, brand, 'onBrand on brand');
     });
