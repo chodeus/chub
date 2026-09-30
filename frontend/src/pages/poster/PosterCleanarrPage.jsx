@@ -241,18 +241,12 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
     const source = variant.cls?.source || variant.source || 'uploads';
     const isPlex = source === 'plex';
     const isActive = !!variant.active;
+    const tileBorder = isPlex
+        ? 'border-border-strong'
+        : isActive
+          ? 'border-success ring-2 ring-success/40'
+          : 'border-error/85';
     const tileStyle = {
-        borderWidth: '3px',
-        borderStyle: 'solid',
-        borderColor: isPlex
-            ? 'var(--border-strong)'
-            : isActive
-              ? 'var(--success)'
-              : 'color-mix(in srgb, var(--error) 85%, transparent)',
-        boxShadow:
-            isActive && !isPlex
-                ? '0 0 0 2px color-mix(in srgb, var(--success) 40%, transparent)'
-                : 'none',
         // Poster aspect ratio — lets the full image show without cropping the
         // top/bottom. Non-poster variants (art/banners/episode thumbs) render
         // letterboxed via object-contain on the <img>, which is fine because
@@ -273,7 +267,7 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
     };
     return (
         <div
-            className="relative rounded-md overflow-hidden bg-surface cursor-pointer"
+            className={`relative rounded-md overflow-hidden bg-surface cursor-pointer border-[3px] ${tileBorder}`}
             style={tileStyle}
             onClick={() => onPreview(variant)}
             title={
@@ -1733,18 +1727,10 @@ const Chevron = ({ open, visible, onClick }) => {
                 e.stopPropagation();
                 onClick();
             }}
-            className="w-6 h-6 shrink-0 inline-flex items-center justify-center rounded-md cursor-pointer"
-            style={{
-                background: open
-                    ? 'var(--primary)'
-                    : 'color-mix(in srgb, var(--primary) 15%, transparent)',
-                color: open ? 'var(--on-color-text, #fff)' : 'var(--primary)',
-                border: `1px solid ${open ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 40%, transparent)'}`,
-                transition: 'background 100ms',
-            }}
+            className={`w-6 h-6 shrink-0 inline-flex items-center justify-center rounded-md cursor-pointer border transition-colors duration-100 ${open ? 'bg-primary border-primary' : 'bg-primary/15 border-primary/40'}`}
         >
             <span
-                className="material-symbols-outlined leading-none"
+                className={`material-symbols-outlined leading-none ${open ? 'text-on-color' : 'text-primary'}`}
                 style={{
                     fontSize: '16px',
                     transform: open ? 'rotate(90deg)' : 'none',
@@ -1757,16 +1743,12 @@ const Chevron = ({ open, visible, onClick }) => {
     );
 };
 
-// Row-style helpers — selected rows get a left accent bar + faint primary
+// Row helpers — selected rows get a left accent bar + faint primary
 // tint. Tree depth is encoded in the baseLeftPad argument.
-const rowBorder = { borderBottom: '1px solid color-mix(in srgb, var(--border) 40%, transparent)' };
+const rowClass = selected =>
+    `cursor-pointer border-b border-border/40 border-l-[3px] transition-colors duration-100 ${selected ? 'bg-primary/15 border-l-primary' : 'border-l-transparent'}`;
 const rowStyle = (selected, baseLeftPad) => ({
-    ...rowBorder,
-    cursor: 'pointer',
-    background: selected ? 'color-mix(in srgb, var(--primary) 15%, transparent)' : 'transparent',
-    borderLeft: selected ? '3px solid var(--primary)' : '3px solid transparent',
     paddingLeft: selected ? `${baseLeftPad - 3}px` : `${baseLeftPad}px`,
-    transition: 'background 100ms',
 });
 // Pills mix with --surface, not transparent, so a selected row's tint can't dim their text.
 const bloatPill = {
@@ -1821,7 +1803,7 @@ const BundleTreeRow = ({
     return (
         <>
             <div
-                className="flex items-center gap-2 pr-2 py-2"
+                className={`flex items-center gap-2 pr-2 py-2 ${rowClass(showSelected)}`}
                 style={rowStyle(showSelected, 8)}
                 onClick={() => onSelect({ kind: 'show', bundlePath: bundle.bundle_path })}
             >
@@ -1873,7 +1855,7 @@ const BundleTreeRow = ({
                             return (
                                 <React.Fragment key={season.n}>
                                     <div
-                                        className="touch-target flex items-center gap-2 pr-2 py-1.5"
+                                        className={`touch-target flex items-center gap-2 pr-2 py-1.5 ${rowClass(seasonSelected)}`}
                                         style={rowStyle(seasonSelected, 24)}
                                         onClick={() =>
                                             onSelect({
@@ -1931,7 +1913,7 @@ const BundleTreeRow = ({
                                                 return (
                                                     <div
                                                         key={episode.n}
-                                                        className="touch-target flex items-center gap-2 pr-2 py-1.5"
+                                                        className={`touch-target flex items-center gap-2 pr-2 py-1.5 ${rowClass(epSelected)}`}
                                                         style={rowStyle(epSelected, 48)}
                                                         onClick={() =>
                                                             onSelect({

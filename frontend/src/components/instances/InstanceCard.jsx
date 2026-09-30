@@ -6,12 +6,12 @@ import { humanize } from '../../utils/tools';
 import { formatDateTime } from '../../utils/datetime';
 import { formatSecondsAgo } from '../../utils/schedule';
 
-// Service identity colour + tint for the avatar / type pill.
+// Service identity colour + tint for the avatar.
 const SERVICE_STYLE = {
-    radarr: ['var(--service-radarr)', 'color-mix(in srgb, var(--service-radarr) 14%, transparent)'],
-    sonarr: ['var(--service-sonarr)', 'color-mix(in srgb, var(--service-sonarr) 14%, transparent)'],
-    lidarr: ['var(--service-lidarr)', 'color-mix(in srgb, var(--service-lidarr) 16%, transparent)'],
-    plex: ['var(--service-plex)', 'color-mix(in srgb, var(--service-plex) 14%, transparent)'],
+    radarr: 'text-service-radarr bg-service-radarr/14',
+    sonarr: 'text-service-sonarr bg-service-sonarr/14',
+    lidarr: 'text-service-lidarr bg-service-lidarr/16',
+    plex: 'text-service-plex bg-service-plex/14',
 };
 
 // Render an API key masked — dots plus the last few real chars (the config GET
@@ -59,10 +59,7 @@ export const InstanceCard = ({
     isSavingLibraries,
 }) => {
     const [expanded, setExpanded] = useState(false);
-    const [color, tint] = SERVICE_STYLE[serviceType] || [
-        'var(--text-tertiary)',
-        'color-mix(in srgb, var(--text-tertiary) 14%, transparent)',
-    ];
+    const serviceStyle = SERVICE_STYLE[serviceType] || 'text-fg-subtle bg-fg-subtle/14';
     const name = humanize(instance.name);
     const initial = (instance.name || '?').charAt(0).toUpperCase();
     const enabled = instance.enabled !== false;
@@ -159,8 +156,7 @@ export const InstanceCard = ({
         <div className="rounded-xl bg-surface border border-border hover:border-border-strong transition-colors overflow-hidden">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[18px] py-[15px]">
                 <span
-                    className="shrink-0 w-11 h-11 rounded-[10px] flex items-center justify-center font-display text-base font-bold"
-                    style={{ background: tint, color }}
+                    className={`shrink-0 w-11 h-11 rounded-[10px] flex items-center justify-center font-display text-base font-bold ${serviceStyle}`}
                     aria-hidden="true"
                 >
                     {initial}

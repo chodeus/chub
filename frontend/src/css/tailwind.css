@@ -36,6 +36,8 @@
     --color-azure: var(--azure);
     --color-gold-deep: var(--gold-deep);
     --color-manual: var(--manual);
+    --color-method-discord: var(--method-discord);
+    --color-method-notifiarr: var(--method-notifiarr);
     --color-source-gdrive: var(--source-gdrive);
     --color-source-local: var(--source-local);
     --color-source-cl2k: var(--source-cl2k);
