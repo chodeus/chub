@@ -15,7 +15,7 @@ const InfoTooltip = ({ text, label = 'More info' }) => {
                 aria-describedby={open ? tooltipId : undefined}
                 onClick={() => setOpen(o => !o)}
                 onBlur={() => setOpen(false)}
-                className="touch-expand inline-flex items-center justify-center w-6 h-6 shrink-0 text-fg-subtle hover:text-fg-muted focus-visible:text-fg-muted outline-none cursor-help"
+                className="touch-expand inline-flex items-center justify-center w-6 h-6 shrink-0 text-fg-subtle hover:text-fg-muted focus-visible:text-fg-muted cursor-help"
             >
                 <span className="material-symbols-outlined text-[15px] leading-none">info</span>
             </button>

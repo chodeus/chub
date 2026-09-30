@@ -147,7 +147,7 @@ const NameRow = ({
             placeholder="Name"
             disabled={disabled}
             onChange={e => onRename(e.target.value)}
-            className="flex-1 min-w-0 bg-transparent border-none p-0 text-sm font-semibold text-fg placeholder:text-fg-subtle focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent border-none p-0 text-sm font-semibold text-fg placeholder:text-fg-subtle"
             aria-label="Location name"
         />
         <button
