@@ -277,7 +277,7 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
                 countClass="bg-warning/15 text-warning"
             >
                 {duplicates.length > 0 && (
-                    <div className="ml-auto flex items-center gap-2 h-9 px-3 rounded-lg bg-surface border border-border w-full sm:w-auto sm:flex-[0_1_280px]">
+                    <div className="ml-auto flex items-center gap-2 h-9 px-3 rounded-lg bg-surface border border-border focus-within:border-primary w-full sm:w-auto sm:flex-[0_1_280px]">
                         <span
                             className="material-symbols-outlined text-base text-fg-subtle"
                             aria-hidden="true"

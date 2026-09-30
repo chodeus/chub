@@ -186,7 +186,7 @@ const PosterGDriveSearchPage = () => {
                         value={filterBy}
                         onChange={setFilterBy}
                     />
-                    <div className="flex items-center h-11 rounded-[9px] bg-surface border border-border">
+                    <div className="flex items-center h-11 rounded-[9px] bg-surface border border-border focus-within:border-primary">
                         <span className="material-symbols-outlined text-[16px] text-fg-subtle pl-3">
                             sort
                         </span>

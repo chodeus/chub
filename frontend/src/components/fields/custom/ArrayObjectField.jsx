@@ -499,7 +499,7 @@ export const ArrayObjectField = ({
                         onChange={e => set('label', e.target.value)}
                         placeholder="Profile name"
                         disabled={disabled}
-                        className="font-display font-semibold text-sm text-fg bg-transparent border-0 outline-none min-w-[140px] max-w-[240px] flex-1"
+                        className="font-display font-semibold text-sm text-fg bg-transparent border-0 min-w-[140px] max-w-[240px] flex-1"
                     />
                     <span
                         className={`font-mono text-meta shrink-0 ${enabled ? 'text-accent' : 'text-fg-subtle'}`}
