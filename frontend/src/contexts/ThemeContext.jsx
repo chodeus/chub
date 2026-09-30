@@ -21,7 +21,7 @@ const ACCENT_STORAGE_KEY = 'chub-accent-preference';
 export const ACCENTS = {
     violet: {
         label: 'Violet',
-        dark: { brand: '#8767f7', hover: '#a99eff', onBrand: '#ffffff' },
+        dark: { brand: '#7c58f6', hover: '#a99eff', onBrand: '#ffffff' },
         light: { brand: '#463fbc', hover: '#3a339e', onBrand: '#ffffff' },
     },
     cyan: {
@@ -31,7 +31,7 @@ export const ACCENTS = {
     },
     azure: {
         label: 'Azure',
-        dark: { brand: '#1992f3', hover: '#47a9f6', onBrand: '#ffffff' },
+        dark: { brand: '#0b78d0', hover: '#47a9f6', onBrand: '#ffffff' },
         light: { brand: '#0b5b9f', hover: '#094d87', onBrand: '#ffffff' },
     },
     gold: {

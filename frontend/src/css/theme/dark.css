@@ -3,7 +3,7 @@
 :root,
 [data-theme='dark'] {
     /* Brand & Semantic Colors */
-    --primary: #8767f7; /* Violet brand — buttons, active nav, AUTO tag */
+    --primary: #7c58f6; /* Violet brand — buttons, active nav, AUTO tag */
     --primary-hover: #a99eff;
     --accent: #53e8f0; /* Cyan — live/running, links, GDrive, info */
     --accent-2: #8767f7;
@@ -54,7 +54,7 @@
     --sidebar-text: #fff;
     --sidebar-text-secondary: #b2d1e8;
     --sidebar-heading: #7d78a5;
-    --sidebar-accent: #8767f7; /* Accent on the always-dark chrome; ThemeContext sets it */
+    --sidebar-accent: #7c58f6; /* Accent on the always-dark chrome; ThemeContext sets it */
     --sidebar-on-accent: #fff;
     --header-bg: #0c0820;
 

@@ -660,7 +660,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                                         <button
                                                             type="button"
                                                             onClick={() => handleCopy(item)}
-                                                            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[7px] bg-primary text-on-color text-xs font-semibold hover:brightness-110 transition"
+                                                            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[7px] bg-primary text-on-color text-xs font-semibold hover:bg-primary-strong transition"
                                                             title="Copy a poster request to the clipboard"
                                                         >
                                                             <span className="material-symbols-outlined text-[14px]">
@@ -1749,7 +1749,9 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                     </div>
                 )}
                 {candidates === null ? (
-                    <p className="text-sm text-fg-muted">Searching for posters…</p>
+                    <p className="text-sm">
+                        <Spinner size="small" text="Searching for posters…" />
+                    </p>
                 ) : loadFailed ? (
                     <p className="text-sm text-error">
                         Couldn&apos;t load candidate posters — the request failed. Check the logs
@@ -1913,7 +1915,9 @@ const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
                     saved &amp; locked either way.
                 </p>
                 {candidates === null ? (
-                    <p className="text-sm text-fg-muted">Searching for artwork…</p>
+                    <p className="text-sm">
+                        <Spinner size="small" text="Searching for artwork…" />
+                    </p>
                 ) : loadFailed ? (
                     <p className="text-sm text-error">
                         Couldn&apos;t load candidate {typeLabel} files — the request failed. Check

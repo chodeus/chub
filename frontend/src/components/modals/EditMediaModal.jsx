@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import { Button } from '../ui/index.js';
 import { mediaAPI } from '../../utils/api/media.js';
 import { formatDateTime } from '../../utils/datetime.js';
+import Spinner from '../ui/Spinner.jsx';
 
 /**
  * EditMediaModal - Inline metadata editing for media items
@@ -147,7 +148,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                     id="edit-media-history"
                                     className="border-t border-border px-3 py-2 max-h-56 overflow-y-auto text-xs"
                                 >
-                                    {historyLoading && <p className="text-fg-subtle">Loading…</p>}
+                                    {historyLoading && <Spinner size="small" text="Loading…" />}
                                     {historyError && !historyLoading && (
                                         <p className="text-error">{historyError}</p>
                                     )}

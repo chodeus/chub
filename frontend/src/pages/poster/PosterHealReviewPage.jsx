@@ -210,7 +210,7 @@ const ReviewRow = ({ review, busy, onApply, onDismiss }) => {
                         type="button"
                         onClick={() => onApply(review)}
                         disabled={busy}
-                        className="inline-flex items-center h-9 px-4 rounded-lg bg-primary text-on-color font-display text-dense font-semibold hover:brightness-110 disabled:opacity-50 transition"
+                        className="inline-flex items-center h-9 px-4 rounded-lg bg-primary text-on-color font-display text-dense font-semibold hover:bg-primary-strong disabled:opacity-50 transition"
                     >
                         Apply
                     </button>
