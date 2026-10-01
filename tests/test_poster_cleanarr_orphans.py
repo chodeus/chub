@@ -1004,7 +1004,9 @@ def test_delete_orphan_asset_removes_a_listed_orphan_and_its_empty_folder(
     keeper.write_bytes(b"x")
     [path] = _listed_orphans(db)
 
-    assert delete_orphan_asset(db, path, cfg, _logger())[0] == "deleted"
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert not gone.exists()
     assert keeper.exists()
@@ -1017,7 +1019,9 @@ def test_delete_orphan_asset_never_prunes_the_asset_dir_itself(
     (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
     [path] = _listed_orphans(db)
 
-    assert delete_orphan_asset(db, path, cfg, _logger())[0] == "deleted"
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert assets.is_dir()  # empty now, but it is the configured root
 
@@ -1032,7 +1036,9 @@ def test_delete_orphan_asset_keeps_a_folder_that_still_holds_assets(
     (gone / "Season01.jpg").write_bytes(b"x")
     poster = next(p for p in _listed_orphans(db) if p.endswith("poster.jpg"))
 
-    assert delete_orphan_asset(db, poster, cfg, _logger())[0] == "deleted"
+    outcome, _ = delete_orphan_asset(db, poster, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert (gone / "Season01.jpg").exists()
 
@@ -1044,7 +1050,9 @@ def test_delete_orphan_asset_refuses_a_file_the_job_would_spare(
     keeper = assets / "Keeper (2020).jpg"
     keeper.write_bytes(b"x")
 
-    assert delete_orphan_asset(db, str(keeper), cfg, _logger())[0] == "not_orphan"
+    outcome, _ = delete_orphan_asset(db, str(keeper), cfg, _logger())
+
+    assert outcome == "not_orphan"
     assert keeper.exists()
 
 
@@ -1058,7 +1066,9 @@ def test_delete_orphan_asset_refuses_a_file_outside_the_asset_dirs(
     media.write_bytes(b"x")
     assert resolve_confined(str(media), cfg) is not None
 
-    assert delete_orphan_asset(db, str(media), cfg, _logger())[0] == "not_orphan"
+    outcome, _ = delete_orphan_asset(db, str(media), cfg, _logger())
+
+    assert outcome == "not_orphan"
     assert media.exists()
 
 
@@ -1073,7 +1083,8 @@ def test_ignored_titles_are_neither_listed_nor_deletable(
 
     listed = [os.path.basename(p) for p in _listed_orphans(db)]
     assert listed == ["Lost Movie (2017).jpg"]
-    assert delete_orphan_asset(db, str(ignored), cfg, _logger())[0] == "not_orphan"
+    outcome, _ = delete_orphan_asset(db, str(ignored), cfg, _logger())
+    assert outcome == "not_orphan"
     assert ignored.exists()
 
 
@@ -1089,7 +1100,9 @@ def test_delete_orphan_asset_refuses_everything_when_the_library_is_empty(
     gone = assets / "Gone Movie (2019).jpg"
     gone.write_bytes(b"x")
 
-    assert delete_orphan_asset(db, str(gone), cfg, _logger())[0] == "not_orphan"
+    outcome, _ = delete_orphan_asset(db, str(gone), cfg, _logger())
+
+    assert outcome == "not_orphan"
     assert gone.exists()
 
 
@@ -1101,7 +1114,9 @@ def test_delete_orphan_asset_drops_the_cached_scan(
     [path] = _listed_orphans(db)
     assert get_cached_kometa_assets() is not None  # the listing warmed it
 
-    assert delete_orphan_asset(db, path, cfg, _logger())[0] == "deleted"
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert get_cached_kometa_assets() is None
 
@@ -1159,7 +1174,9 @@ def test_delete_orphan_asset_never_prunes_a_nested_asset_dir(
     path = _listed_orphans(db)[0]
     assert os.path.dirname(path) == os.path.realpath(inner)
 
-    assert delete_orphan_asset(db, path, cfg, _logger())[0] == "deleted"
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert inner.is_dir()
 
@@ -1178,7 +1195,8 @@ def test_a_scan_that_straddles_an_invalidation_leaves_the_cache_empty(
         return found
 
     monkeypatch.setattr(PosterCleanarr, "_find_orphans", _find_then_a_delete_lands)
-    assert len(scan_kometa_assets(db, _logger(), force=True)["orphans"]) == 1
+    scanned = scan_kometa_assets(db, _logger(), force=True)
+    assert len(scanned["orphans"]) == 1
     assert get_cached_kometa_assets() is None
 
     monkeypatch.setattr(PosterCleanarr, "_find_orphans", real_find)
@@ -1232,7 +1250,8 @@ def test_remove_confined_refuses_a_component_swapped_into_another_root(
     cfg = _live(monkeypatch, assets, media)
     assert resolve_confined(str(named), cfg) is not None  # resolves inside a root
 
-    assert not _make()._remove_confined(str(named), cfg, _logger())
+    removed = _make()._remove_confined(str(named), cfg, _logger())
+    assert not removed
     assert kept.exists()
 
 

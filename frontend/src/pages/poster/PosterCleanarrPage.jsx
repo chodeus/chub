@@ -538,11 +538,13 @@ const PosterCleanarrPage = () => {
             kometaLoadRef.current = token;
             return readKometaAssets(force, token).then(
                 data => {
+                    token.settled = true;
                     if (token.cancelled || !data) return;
                     setStaleItems(data.stale || []);
                     setOrphans(data.orphans || []);
                 },
                 () => {
+                    token.settled = true;
                     // Keep the old lists: emptied ones would read as "all cleaned up".
                     if (!token.cancelled)
                         toast.error('Could not refresh the stale and orphan lists');
@@ -973,7 +975,12 @@ const PosterCleanarrPage = () => {
             null
         );
 
+    // One row delete at a time: each answer is the list after ITS delete, so two in
+    // flight could land out of order and bring back a row the other one removed.
+    const [orphanDeleteBusy, setOrphanDeleteBusy] = useState(false);
+
     const deleteOrphan = async path => {
+        setOrphanDeleteBusy(true);
         let left;
         try {
             const res = await postersAPI.deleteKometaOrphan(path);
@@ -986,11 +993,14 @@ const PosterCleanarrPage = () => {
                     ? 'No longer an orphan — list refreshed'
                     : 'Failed to delete orphan'
             );
+        } finally {
+            setOrphanDeleteBusy(false);
         }
-        // Every server answer carries its re-check's list; rescan only when none came
-        // back, since a client timeout can follow a delete that did happen.
         if (Array.isArray(left)) setOrphans(left);
-        else loadKometaAssets(true);
+        // Rescan when no answer came back (a timeout can follow a delete that did
+        // happen), or when a read still running started before this delete.
+        const readPending = kometaLoadRef.current && !kometaLoadRef.current.settled;
+        if (!Array.isArray(left) || readPending) loadKometaAssets(true);
     };
 
     const runCleanup = () => {
@@ -1655,6 +1665,7 @@ const PosterCleanarrPage = () => {
                                     variant="danger"
                                     loading={isEnqueuing}
                                     loadingText="Starting…"
+                                    disabled={orphanDeleteBusy}
                                     onClick={() => setConfirmOrphanDelete({ all: true })}
                                 >
                                     Delete all
@@ -1677,6 +1688,7 @@ const PosterCleanarrPage = () => {
                                             size="small"
                                             aria-label={`Delete ${o.path}`}
                                             title="Delete this orphan"
+                                            disabled={orphanDeleteBusy}
                                             onClick={() => setConfirmOrphanDelete({ path: o.path })}
                                         />
                                     </div>

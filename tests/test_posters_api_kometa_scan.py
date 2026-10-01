@@ -204,7 +204,8 @@ def test_orphan_delete_route_rejects_a_missing_path_before_scanning(
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         client = _client(db)
         for body in ({}, {"path": ""}, {"path": 5}):
-            assert client.request("DELETE", ORPHAN_URL, json=body).status_code == 400
+            res = client.request("DELETE", ORPHAN_URL, json=body)
+            assert res.status_code == 400
     assert called == []
 
 
