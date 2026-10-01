@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.51.0](https://github.com/chodeus/chub/compare/v2.50.0...v2.51.0) (2026-10-01)
+
+
+### Features
+
+* **poster-cleanarr:** delete orphans from the page and keep its lists current ([#694](https://github.com/chodeus/chub/issues/694)) ([89bf2e6](https://github.com/chodeus/chub/commit/89bf2e611bf8795746da24fe18243ef737afeae4))
+
+
+### Bug Fixes
+
+* **poster-cleanarr:** anchor asset deletes by name and skip the rescan after one ([#695](https://github.com/chodeus/chub/issues/695)) ([cb81d09](https://github.com/chodeus/chub/commit/cb81d0995f87fceee9a741171616f91afda724dd))
+
 ## [2.50.0](https://github.com/chodeus/chub/compare/v2.49.1...v2.50.0) (2026-09-30)
 
 
