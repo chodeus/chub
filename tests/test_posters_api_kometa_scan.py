@@ -152,3 +152,127 @@ def test_cleanup_overrides_rejects_asset_dirs_outside_roots(tmp_path):
 
     with pytest.raises(ValueError):
         build_cleanup_overrides({"asset_dirs": ["/etc"]}, cfg)
+
+
+ORPHAN_URL = "/api/posters/plex-metadata/orphan"
+
+
+def _client(db):
+    """The posters router on a bare app, with the cleanarr logger stubbed."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    import backend.api.main as apimain
+    import backend.api.posters as posters
+    from backend.api.posters._shared import get_cleanarr_logger
+    from backend.util.config import ConfigError
+
+    app = FastAPI()
+    app.state.logger = _logger()
+    app.state.db = db
+    app.add_exception_handler(ConfigError, apimain.handle_config_error)
+    app.include_router(posters.router)
+    app.dependency_overrides[get_cleanarr_logger] = _logger
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_orphan_delete_route_maps_each_outcome(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        client = _client(db)
+        for outcome, status in (("deleted", 200), ("not_orphan", 409), ("failed", 400)):
+            monkeypatch.setattr(
+                "backend.modules.poster_cleanarr.delete_orphan_asset",
+                lambda _db, path, _cfg, _log, o=outcome: seen.append(path) or o,
+            )
+            res = client.request("DELETE", ORPHAN_URL, json={"path": "/assets/x.jpg"})
+            assert res.status_code == status, outcome
+    assert seen == ["/assets/x.jpg"] * 3
+
+
+def test_orphan_delete_route_rejects_a_missing_path_before_scanning(
+    tmp_path, monkeypatch
+):
+    called = []
+    monkeypatch.setattr(
+        "backend.modules.poster_cleanarr.delete_orphan_asset",
+        lambda *a: called.append(a) or "deleted",
+    )
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        client = _client(db)
+        for body in ({}, {"path": ""}, {"path": 5}):
+            assert client.request("DELETE", ORPHAN_URL, json=body).status_code == 400
+    assert called == []
+
+
+def test_orphan_delete_route_deletes_a_real_orphan(tmp_path, monkeypatch):
+    """End to end through the threadpool hop, with the real scan behind it."""
+    from backend.modules.poster_cleanarr import invalidate_kometa_assets_cache
+    from backend.util.normalization import normalize_titles
+
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    gone = assets / "Gone Movie (2019).jpg"
+    gone.write_bytes(b"x")
+    keeper = assets / "Keeper (2020).jpg"
+    keeper.write_bytes(b"x")
+    cfg = ChubConfig()
+    cfg.poster_renamerr.source_dirs = [str(tmp_path)]
+    cfg.poster_cleanarr.asset_dirs = [str(assets)]
+    cfg.poster_cleanarr.orphan_instances = ["radarr1"]
+    monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
+    invalidate_kometa_assets_cache()
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key, instance_name, normalized_title, "
+            "asset_type) VALUES (?,?,?,?)",
+            ("k1", "radarr1", normalize_titles("Keeper (2020)"), "movie"),
+        )
+        client = _client(db)
+        spared = client.request("DELETE", ORPHAN_URL, json={"path": str(keeper)})
+        res = client.request("DELETE", ORPHAN_URL, json={"path": str(gone)})
+
+    assert spared.status_code == 409
+    assert keeper.exists()
+    assert res.status_code == 200
+    assert not gone.exists()
+
+
+def test_cleanup_route_reports_a_run_already_in_flight(tmp_path, monkeypatch):
+    """A second request collapses onto the first job; its overrides never apply."""
+    cfg = ChubConfig()
+    monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        client = _client(db)
+        first = client.post("/api/posters/plex-metadata/cleanup", json={"mode": "report"})
+        second = client.post(
+            "/api/posters/plex-metadata/cleanup",
+            json={"mode": "nothing", "orphan_assets_enabled": True},
+        )
+
+    assert first.status_code == 200
+    assert not first.json()["data"].get("deduped")
+    assert second.status_code == 200
+    assert second.json()["data"]["deduped"] is True
+    assert second.json()["data"]["job_id"] == first.json()["data"]["job_id"]
+
+
+def test_orphan_delete_route_fails_closed_without_config(tmp_path, monkeypatch):
+    """An unreadable config is a 503 and no delete, as /gdrive/delete-local."""
+    called = []
+    monkeypatch.setattr(
+        "backend.modules.poster_cleanarr.delete_orphan_asset",
+        lambda *a: called.append(a) or "deleted",
+    )
+
+    def _unreadable():
+        raise OSError("config.yml unreadable")
+
+    monkeypatch.setattr("backend.util.config.load_config", _unreadable)
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        res = _client(db).request("DELETE", ORPHAN_URL, json={"path": "/assets/x.jpg"})
+
+    assert res.status_code == 503
+    assert res.json()["error_code"] == "CONFIG_UNAVAILABLE"
+    assert called == []

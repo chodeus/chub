@@ -256,6 +256,15 @@ async def run_plex_metadata_cleanup(
         result = db.worker.enqueue_job("jobs", payload, job_type="module_run")
         if result.get("success"):
             job_id = result.get("data", {}).get("job_id")
+            # Collapsed onto a run already in flight: these overrides never apply.
+            if result.get("deduped"):
+                logger.info(
+                    f"Poster cleanarr cleanup not queued: job {job_id} is in flight"
+                )
+                return ok(
+                    "Poster Cleanarr is already running",
+                    {"job_id": job_id, "mode": mode, "deduped": True},
+                )
             logger.info(
                 f"Poster cleanarr cleanup enqueued (mode={mode}, job_id={job_id})"
             )
@@ -311,6 +320,63 @@ async def delete_plex_metadata_variant(
         return error(
             "Error deleting variant",
             code="VARIANT_DELETE_ERROR",
+            status_code=500,
+        )
+
+
+@router.delete("/plex-metadata/orphan")
+async def delete_kometa_orphan(
+    request: Request,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cleanarr_logger),
+):
+    """Delete one orphaned Kometa asset. Body: `{path: str}`; 409 unless it is still an orphan."""
+    try:
+        from backend.modules.poster_cleanarr import delete_orphan_asset
+
+        body = await read_json_object(request)
+        if body is BODY_TOO_LARGE:
+            return body_too_large_error()
+        path = body.get("path")
+        if not isinstance(path, str) or not path:
+            return error("Missing 'path'", code="MISSING_PATH", status_code=400)
+        from backend.util.config import load_config
+
+        # Fail closed, as /gdrive/delete-local: without config nothing is an orphan.
+        try:
+            config = load_config()
+        except ConfigError:
+            raise
+        except Exception:  # noqa: S110 — treated as unavailable below
+            config = None
+        if config is None:
+            return error(
+                "Configuration unavailable — cannot verify the orphan",
+                code="CONFIG_UNAVAILABLE",
+                status_code=503,
+            )
+        # Re-checks the path with a full asset-dir walk, so keep it off the event loop.
+        outcome = await run_in_threadpool(delete_orphan_asset, db, path, config, logger)
+        if outcome == "not_orphan":
+            return error(
+                "Not an orphan (or no longer one) — rescan and retry",
+                code="NOT_AN_ORPHAN",
+                status_code=409,
+            )
+        if outcome != "deleted":
+            return error(
+                "Failed to delete orphan (outside the allowed roots or I/O error)",
+                code="ORPHAN_DELETE_FAILED",
+                status_code=400,
+            )
+        return ok("Orphan deleted", {"path": path})
+    except ConfigError:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting orphan: {e}")
+        return error(
+            "Error deleting orphan",
+            code="ORPHAN_DELETE_ERROR",
             status_code=500,
         )
 

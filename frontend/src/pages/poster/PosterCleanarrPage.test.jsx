@@ -1,4 +1,4 @@
-import { render as rtlRender, screen } from '@testing-library/react';
+import { act, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UIStateProvider } from '../../contexts/UIStateContext.jsx';
 
@@ -15,13 +15,15 @@ const mockPostersAPI = {
     getPlexVariantUrl: vi.fn(() => ''),
     scanKometaAssets: vi.fn(),
     enqueueKometaAssetsScan: vi.fn(),
+    deleteKometaOrphan: vi.fn(),
+    tailJobLog: vi.fn(),
 };
 vi.mock('../../utils/api/posters.js', () => ({ postersAPI: mockPostersAPI }));
 vi.mock('../../hooks/useStreamToken.js', () => ({ useStreamToken: () => null }));
 vi.mock('react-router', () => ({
     Link: ({ children, ...rest }) => <a {...rest}>{children}</a>,
 }));
-const toast = { success: vi.fn(), error: vi.fn() };
+const toast = { success: vi.fn(), error: vi.fn(), warning: vi.fn() };
 vi.mock('../../contexts/ToastContext.jsx', () => ({ useToast: () => toast }));
 
 let scanPayload = null;
@@ -90,6 +92,10 @@ beforeEach(() => {
     // undefined, which leaves staleItems empty and the stale-attribution memo
     // permanently short-circuited at its `if (!staleItems.length)` early exit.
     mockPostersAPI.scanKometaAssets.mockResolvedValue({ data: { stale: [], orphans: [] } });
+    // Every job (cleanup or scan) reports done on its first poll.
+    mockPostersAPI.tailJobLog.mockResolvedValue({
+        data: { status: 'success', lines: '', next_offset: 0 },
+    });
 });
 
 describe('Poster Cleanarr — unanchored bundle identity', () => {
@@ -254,5 +260,270 @@ describe('Poster Cleanarr — persisted tree state', () => {
         } finally {
             window.matchMedia = realMatchMedia;
         }
+    });
+});
+
+describe('Poster Cleanarr — stale and orphan lists stay current', () => {
+    const STALE = {
+        rating_key: null,
+        plex_title: '',
+        plex_year: null,
+        name: 'Gone Movie (2019) {tmdb-1}',
+        canonical: 'Gone Movie (2019) {tmdb-2}',
+        canonical_present: true,
+        size: 10,
+        folder: '/assets/Gone Movie (2019) {tmdb-1}',
+    };
+    const ORPHAN = { path: '/assets/Lost Movie (2017)/poster.jpg', parsed: 'x', size: 10 };
+    const OTHER = { path: '/assets/Lost Show (2018)/poster.jpg', parsed: 'y', size: 10 };
+
+    // First read = before the cleanup; every later read = the rescan after it.
+    const scansReturn = (before, after) =>
+        mockPostersAPI.scanKometaAssets
+            .mockResolvedValueOnce({ data: before })
+            .mockResolvedValue({ data: after });
+
+    beforeEach(() => {
+        mockPostersAPI.enqueueKometaAssetsScan.mockResolvedValue({ data: { job_id: 2 } });
+        mockPostersAPI.runPlexMetadataCleanup.mockResolvedValue({ data: { job_id: 1 } });
+        scanPayload = payload([GHOST_A]);
+    });
+
+    it('re-reads the stale list once a Remove run with Stale ticked finishes', async () => {
+        const user = userEvent.setup();
+        scansReturn({ stale: [STALE], orphans: [] }, { stale: [], orphans: [] });
+        render(<PosterCleanarrPage />);
+        expect(await screen.findByText(/1 stale duplicate/)).toBeInTheDocument();
+
+        await user.selectOptions(screen.getByRole('combobox'), 'remove');
+        await user.click(screen.getByRole('button', { name: 'Stale' }));
+        await user.click(screen.getByRole('button', { name: 'Delete bloat permanently' }));
+        const confirm = await screen.findByRole('dialog');
+        await user.click(within(confirm).getByRole('button', { name: 'Delete bloat permanently' }));
+
+        // The job deleted the folders; the page used to keep showing them.
+        await waitFor(() =>
+            expect(screen.queryByText(/1 stale duplicate/)).not.toBeInTheDocument()
+        );
+        expect(mockPostersAPI.runPlexMetadataCleanup).toHaveBeenCalledWith(
+            expect.objectContaining({
+                stale_duplicates_enabled: true,
+                stale_duplicates_mode: 'remove',
+            })
+        );
+        expect(mockPostersAPI.enqueueKometaAssetsScan).toHaveBeenCalledTimes(1);
+    });
+
+    it('Run scan rescans the Kometa assets too', async () => {
+        const user = userEvent.setup();
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        scansReturn({ stale: [STALE], orphans: [] }, { stale: [], orphans: [] });
+        render(<PosterCleanarrPage />);
+        expect(await screen.findByText(/1 stale duplicate/)).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Run scan' }));
+
+        await waitFor(() =>
+            expect(screen.queryByText(/1 stale duplicate/)).not.toBeInTheDocument()
+        );
+        expect(mockPostersAPI.enqueueKometaAssetsScan).toHaveBeenCalledTimes(1);
+    });
+
+    it('a slower, older read never overwrites a newer one', async () => {
+        const user = userEvent.setup();
+        let finishMountRead;
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        mockPostersAPI.scanKometaAssets
+            .mockReturnValueOnce(new Promise(resolve => (finishMountRead = resolve)))
+            .mockResolvedValue({ data: { stale: [], orphans: [OTHER] } });
+        render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: 'Run scan' }));
+        expect(await screen.findByText(OTHER.path)).toBeInTheDocument();
+        await act(async () => finishMountRead({ data: { stale: [], orphans: [ORPHAN] } }));
+
+        expect(screen.queryByText(ORPHAN.path)).not.toBeInTheDocument();
+        expect(screen.getByText(OTHER.path)).toBeInTheDocument();
+    });
+
+    it('deletes one orphan after confirming and drops only its row', async () => {
+        const user = userEvent.setup();
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: { stale: [], orphans: [ORPHAN, OTHER] },
+        });
+        // Hold the follow-up rescan: the row must go at once, not when that lands.
+        mockPostersAPI.enqueueKometaAssetsScan.mockReturnValue(new Promise(() => {}));
+        mockPostersAPI.deleteKometaOrphan.mockResolvedValue({ success: true });
+        render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: `Delete ${ORPHAN.path}` }));
+        expect(mockPostersAPI.deleteKometaOrphan).not.toHaveBeenCalled();
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
+
+        await waitFor(() => expect(screen.queryByText(ORPHAN.path)).not.toBeInTheDocument());
+        expect(mockPostersAPI.deleteKometaOrphan).toHaveBeenCalledWith(ORPHAN.path);
+        expect(screen.getByText(OTHER.path)).toBeInTheDocument();
+    });
+
+    it('says why and refreshes when the server no longer sees an orphan', async () => {
+        const user = userEvent.setup();
+        scansReturn({ stale: [], orphans: [ORPHAN] }, { stale: [], orphans: [] });
+        mockPostersAPI.deleteKometaOrphan.mockRejectedValue(
+            Object.assign(new Error('Not an orphan'), { status: 409 })
+        );
+        render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: `Delete ${ORPHAN.path}` }));
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
+
+        await waitFor(() => expect(screen.queryByText(ORPHAN.path)).not.toBeInTheDocument());
+        expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/No longer an orphan/));
+    });
+
+    it('a delete that fails in the browser still reconciles with the server', async () => {
+        const user = userEvent.setup();
+        // The server finished the delete after the browser gave up waiting.
+        scansReturn({ stale: [], orphans: [ORPHAN, OTHER] }, { stale: [], orphans: [OTHER] });
+        mockPostersAPI.deleteKometaOrphan.mockRejectedValue(
+            Object.assign(new Error('Request timeout'), { status: 408 })
+        );
+        render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: `Delete ${ORPHAN.path}` }));
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
+
+        await waitFor(() => expect(screen.queryByText(ORPHAN.path)).not.toBeInTheDocument());
+        expect(toast.error).toHaveBeenCalledWith('Failed to delete orphan');
+    });
+
+    it('rescans again when a delete discarded the walk it waited for', async () => {
+        const user = userEvent.setup();
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        mockPostersAPI.scanKometaAssets
+            .mockResolvedValueOnce({ data: { stale: [STALE], orphans: [] } })
+            .mockResolvedValueOnce({ data: { stale: [], orphans: [], scan_required: true } })
+            .mockResolvedValue({ data: { stale: [], orphans: [OTHER] } });
+        render(<PosterCleanarrPage />);
+        expect(await screen.findByText(/1 stale duplicate/)).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Run scan' }));
+
+        expect(await screen.findByText(OTHER.path)).toBeInTheDocument();
+        expect(mockPostersAPI.enqueueKometaAssetsScan).toHaveBeenCalledTimes(2);
+    });
+
+    it('a refresh that cannot start keeps the lists and says so', async () => {
+        const user = userEvent.setup();
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: { stale: [], orphans: [ORPHAN] },
+        });
+        mockPostersAPI.enqueueKometaAssetsScan.mockRejectedValue(new Error('offline'));
+        render(<PosterCleanarrPage />);
+        expect(await screen.findByText(ORPHAN.path)).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Run scan' }));
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith('Could not refresh the stale and orphan lists')
+        );
+        expect(screen.getByText(ORPHAN.path)).toBeInTheDocument();
+    });
+
+    it('a rescan job that fails keeps the lists and says so', async () => {
+        const user = userEvent.setup();
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: { stale: [], orphans: [ORPHAN] },
+        });
+        mockPostersAPI.tailJobLog.mockResolvedValue({
+            data: { status: 'error', lines: '', next_offset: 0 },
+        });
+        render(<PosterCleanarrPage />);
+        expect(await screen.findByText(ORPHAN.path)).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Run scan' }));
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith('Could not refresh the stale and orphan lists')
+        );
+        expect(screen.getByText(ORPHAN.path)).toBeInTheDocument();
+    });
+
+    it('refreshes the lists even when the log is hidden before the job ends', async () => {
+        const user = userEvent.setup();
+        let jobDone = false;
+        mockPostersAPI.tailJobLog.mockImplementation(jobId =>
+            Promise.resolve({
+                data: {
+                    status: jobId === 1 && !jobDone ? 'running' : 'success',
+                    lines: '',
+                    next_offset: 0,
+                },
+            })
+        );
+        scansReturn({ stale: [], orphans: [ORPHAN] }, { stale: [], orphans: [] });
+        render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: 'Delete all' }));
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
+        await user.click(await screen.findByRole('button', { name: 'Hide (job keeps running)' }));
+        jobDone = true;
+
+        await waitFor(() => expect(screen.queryByText(ORPHAN.path)).not.toBeInTheDocument(), {
+            timeout: 4000,
+        });
+    });
+
+    it('warns when Delete all collapses onto a run already in flight', async () => {
+        const user = userEvent.setup();
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: { stale: [], orphans: [ORPHAN] },
+        });
+        mockPostersAPI.runPlexMetadataCleanup.mockResolvedValue({
+            data: { job_id: 9, deduped: true },
+        });
+        render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: 'Delete all' }));
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
+
+        await waitFor(() =>
+            expect(toast.warning).toHaveBeenCalledWith(
+                expect.stringMatching(/already running \(job #9\)/)
+            )
+        );
+        expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('Delete all runs only the orphan pass in remove mode, then rescans', async () => {
+        const user = userEvent.setup();
+        scansReturn({ stale: [], orphans: [ORPHAN] }, { stale: [], orphans: [] });
+        render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: 'Delete all' }));
+        expect(mockPostersAPI.runPlexMetadataCleanup).not.toHaveBeenCalled();
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
+
+        await waitFor(() => expect(screen.queryByText(ORPHAN.path)).not.toBeInTheDocument());
+        expect(mockPostersAPI.runPlexMetadataCleanup).toHaveBeenCalledWith({
+            mode: 'nothing',
+            orphan_assets_enabled: true,
+            orphan_assets_mode: 'remove',
+            stale_duplicates_enabled: false,
+            overlays_only: false,
+        });
     });
 });

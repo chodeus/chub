@@ -10,13 +10,22 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.modules.poster_cleanarr import ORPHAN_RESTORE_DIR_NAME, PosterCleanarr
+from backend.modules import poster_cleanarr as pc
+from backend.modules.poster_cleanarr import (
+    ORPHAN_RESTORE_DIR_NAME,
+    PosterCleanarr,
+    delete_orphan_asset,
+    get_cached_kometa_assets,
+    invalidate_kometa_assets_cache,
+    scan_kometa_assets,
+)
 from backend.util.config import ChubConfig, ConfigError
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
 from backend.util.path_safety import resolve_confined
 import errno
 import os
+import time
 
 def _logger():
     return SimpleNamespace(
@@ -945,3 +954,233 @@ def test_build_library_id_sets_filters_by_instance(db):
     assert tmdb_ids == {12345}
     assert tvdb_ids == {67890}
     assert 99999 not in tmdb_ids  # other instance excluded
+
+
+# ── UI orphan delete + the cached Kometa scan ────────────────────────────────
+
+
+@pytest.fixture
+def no_kometa_cache():
+    """The scan cache is module-level: start and end every test without one."""
+    invalidate_kometa_assets_cache()
+    yield
+    invalidate_kometa_assets_cache()
+
+
+def _asset_dir(db, tmp_path, monkeypatch, ignore=()):
+    """(asset dir, live config): the dir sits inside the allowed roots; the library holds Keeper (2020)."""
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    cfg = _live(monkeypatch, tmp_path)
+    cfg.poster_cleanarr.asset_dirs = [str(assets)]
+    cfg.poster_cleanarr.orphan_instances = ["radarr1"]
+    cfg.poster_cleanarr.orphan_ignore_titles = list(ignore)
+    _seed_media(db, "k1", "radarr1", normalize_titles("Keeper (2020)"))
+    return assets, cfg
+
+
+def _listed_orphans(db):
+    """Orphan paths exactly as the Poster Cleanarr page receives them."""
+    return [o["path"] for o in scan_kometa_assets(db, _logger(), force=True)["orphans"]]
+
+
+def _warm_kometa_cache():
+    """Seed the scan cache without walking anything."""
+    with pc._kometa_cache_lock:
+        pc._kometa_cache["kometa"] = {
+            "_ts": time.time(),
+            "data": {"stale": [], "orphans": [], "stats": {}},
+        }
+
+
+def test_delete_orphan_asset_removes_a_listed_orphan_and_its_empty_folder(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    gone = assets / "Gone Movie (2019)"
+    gone.mkdir()
+    (gone / "poster.jpg").write_bytes(b"x")
+    keeper = assets / "Keeper (2020).jpg"
+    keeper.write_bytes(b"x")
+    [path] = _listed_orphans(db)
+
+    assert delete_orphan_asset(db, path, cfg, _logger()) == "deleted"
+
+    assert not gone.exists()
+    assert keeper.exists()
+
+
+def test_delete_orphan_asset_never_prunes_the_asset_dir_itself(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
+    [path] = _listed_orphans(db)
+
+    assert delete_orphan_asset(db, path, cfg, _logger()) == "deleted"
+
+    assert assets.is_dir()  # empty now, but it is the configured root
+
+
+def test_delete_orphan_asset_keeps_a_folder_that_still_holds_assets(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    gone = assets / "Gone Show (2018)"
+    gone.mkdir()
+    (gone / "poster.jpg").write_bytes(b"x")
+    (gone / "Season01.jpg").write_bytes(b"x")
+    poster = next(p for p in _listed_orphans(db) if p.endswith("poster.jpg"))
+
+    assert delete_orphan_asset(db, poster, cfg, _logger()) == "deleted"
+
+    assert (gone / "Season01.jpg").exists()
+
+
+def test_delete_orphan_asset_refuses_a_file_the_job_would_spare(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    keeper = assets / "Keeper (2020).jpg"
+    keeper.write_bytes(b"x")
+
+    assert delete_orphan_asset(db, str(keeper), cfg, _logger()) == "not_orphan"
+    assert keeper.exists()
+
+
+def test_delete_orphan_asset_refuses_a_file_outside_the_asset_dirs(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """Allowed roots also cover media dirs; only the scan's own paths are deletable."""
+    _, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    media = tmp_path / "media" / "Gone Movie (2019).jpg"
+    media.parent.mkdir()
+    media.write_bytes(b"x")
+    assert resolve_confined(str(media), cfg) is not None
+
+    assert delete_orphan_asset(db, str(media), cfg, _logger()) == "not_orphan"
+    assert media.exists()
+
+
+def test_ignored_titles_are_neither_listed_nor_deletable(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """The page's orphan list must be the job's: an ignored title is never offered."""
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch, ignore=["Gone Movie (2019)"])
+    ignored = assets / "Gone Movie (2019).jpg"
+    ignored.write_bytes(b"x")
+    (assets / "Lost Movie (2017).jpg").write_bytes(b"x")
+
+    listed = [os.path.basename(p) for p in _listed_orphans(db)]
+    assert listed == ["Lost Movie (2017).jpg"]
+    assert delete_orphan_asset(db, str(ignored), cfg, _logger()) == "not_orphan"
+    assert ignored.exists()
+
+
+def test_delete_orphan_asset_refuses_everything_when_the_library_is_empty(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """An empty comparison set is a failed sync, not 'every asset is an orphan'."""
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    cfg = _live(monkeypatch, tmp_path)
+    cfg.poster_cleanarr.asset_dirs = [str(assets)]
+    cfg.poster_cleanarr.orphan_instances = ["radarr1"]
+    gone = assets / "Gone Movie (2019).jpg"
+    gone.write_bytes(b"x")
+
+    assert delete_orphan_asset(db, str(gone), cfg, _logger()) == "not_orphan"
+    assert gone.exists()
+
+
+def test_delete_orphan_asset_drops_the_cached_scan(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
+    [path] = _listed_orphans(db)
+    assert get_cached_kometa_assets() is not None  # the listing warmed it
+
+    assert delete_orphan_asset(db, path, cfg, _logger()) == "deleted"
+
+    assert get_cached_kometa_assets() is None
+
+
+def test_orphan_removal_drops_the_cached_scan_but_a_report_keeps_it(
+    tmp_path, monkeypatch, no_kometa_cache
+):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    orphan = tmp_path / "Gone Movie (2019).png"
+    orphan.write_bytes(b"x")
+    _warm_kometa_cache()
+
+    m._execute_orphan_mode([_orphan_item(orphan, tmp_path)], "report", _logger())
+    assert get_cached_kometa_assets() is not None
+
+    m._execute_orphan_mode([_orphan_item(orphan, tmp_path)], "remove", _logger())
+    assert not orphan.exists()
+    assert get_cached_kometa_assets() is None
+
+
+def test_stale_removal_drops_the_cached_scan(tmp_path, monkeypatch, no_kometa_cache):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    root = tmp_path / "assets"
+    (root / "Gone Show (2018) {tvdb-1}").mkdir(parents=True)
+    old = root / "Gone - Show (2018) {tvdb-1}"
+    old.mkdir()
+    stale = {
+        "folder": str(old),
+        "asset_dir": str(root),
+        "name": old.name,
+        "canonical": "Gone Show (2018) {tvdb-1}",
+        "canonical_present": True,
+        "id": ("tvdb", 1),
+        "size": 1,
+    }
+    _warm_kometa_cache()
+
+    m._execute_stale_mode([stale], "remove", _logger())
+
+    assert not old.exists()
+    assert get_cached_kometa_assets() is None
+
+
+def test_delete_orphan_asset_never_prunes_a_nested_asset_dir(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """With asset dirs [a, a/inner], the outer walk lists inner's files first."""
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    inner = assets / "inner"
+    inner.mkdir()
+    (inner / "Gone Movie (2019).jpg").write_bytes(b"x")
+    cfg.poster_cleanarr.asset_dirs = [str(assets), str(inner)]
+    path = _listed_orphans(db)[0]
+    assert os.path.dirname(path) == os.path.realpath(inner)
+
+    assert delete_orphan_asset(db, path, cfg, _logger()) == "deleted"
+
+    assert inner.is_dir()
+
+
+def test_a_scan_that_straddles_an_invalidation_leaves_the_cache_empty(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """Its walk predates the delete, so caching it would resurrect the deleted file."""
+    assets, _ = _asset_dir(db, tmp_path, monkeypatch)
+    (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
+    real_find = PosterCleanarr._find_orphans
+
+    def _find_then_a_delete_lands(self, *a, **k):
+        found = real_find(self, *a, **k)
+        invalidate_kometa_assets_cache()
+        return found
+
+    monkeypatch.setattr(PosterCleanarr, "_find_orphans", _find_then_a_delete_lands)
+    assert len(scan_kometa_assets(db, _logger(), force=True)["orphans"]) == 1
+    assert get_cached_kometa_assets() is None
+
+    monkeypatch.setattr(PosterCleanarr, "_find_orphans", real_find)
+    scan_kometa_assets(db, _logger(), force=True)
+    assert get_cached_kometa_assets() is not None  # an undisturbed scan still caches
