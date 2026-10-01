@@ -95,6 +95,11 @@ const formatBytes = bytes => {
 // Module-level so reference is stable across renders (fixes exhaustive-deps warning).
 const TERMINAL_STATUSES = ['success', 'error', 'cancelled'];
 
+const ORPHAN_DELETE_ERRORS = {
+    409: 'No longer an orphan — list refreshed',
+    503: 'Orphan check unavailable — nothing was deleted',
+};
+
 // Poll a background job's log-tail until it reaches a terminal status. Resolves
 // with the final status (or undefined once `token.cancelled` flips, e.g. on
 // unmount or a superseding scan). Shared by the metadata-scan and kometa-scan
@@ -528,21 +533,36 @@ const PosterCleanarrPage = () => {
     const [staleItems, setStaleItems] = useState([]);
     const [orphans, setOrphans] = useState([]);
 
+    // Cancelled on unmount: no job watch or Kometa read may start after it. Declared
+    // above the load effect so a StrictMode remount re-arms it before loading.
+    const pageAliveRef = useRef(null);
+    useEffect(() => {
+        const token = { cancelled: false };
+        pageAliveRef.current = token;
+        return () => {
+            token.cancelled = true;
+        };
+    }, []);
+
     // A newer load cancels an older one, so a slow read never lands last. setState
     // only inside .then keeps it callable from an effect (see useModuleExecution).
     const kometaLoadRef = useRef(null);
     const loadKometaAssets = useCallback(
         (force = false) => {
+            // A late caller, such as a delete answering after unmount, must not start a scan.
+            if (pageAliveRef.current?.cancelled) return Promise.resolve();
             if (kometaLoadRef.current) kometaLoadRef.current.cancelled = true;
             const token = { cancelled: false };
             kometaLoadRef.current = token;
             return readKometaAssets(force, token).then(
                 data => {
+                    token.settled = true;
                     if (token.cancelled || !data) return;
                     setStaleItems(data.stale || []);
                     setOrphans(data.orphans || []);
                 },
                 () => {
+                    token.settled = true;
                     // Keep the old lists: emptied ones would read as "all cleaned up".
                     if (!token.cancelled)
                         toast.error('Could not refresh the stale and orphan lists');
@@ -603,19 +623,8 @@ const PosterCleanarrPage = () => {
     // refreshScan — a real scan is the source of truth.
     const [deletedPaths, setDeletedPaths] = useState(new Set());
 
-    // Cleanup jobs are watched here, not by the log modal: hiding the modal stops
-    // its polling, and the lists must still refresh. Cancelled on unmount.
-    const pageAliveRef = useRef(null);
-    useEffect(() => {
-        const token = { cancelled: false };
-        pageAliveRef.current = token;
-        return () => {
-            token.cancelled = true;
-        };
-    }, []);
-
-    // `targets` are applied to deletedPaths when the job lands `success`, so the
-    // bloat counts and tiles update without forcing a 30s+ rescan.
+    // Watched here, not by the log modal: hiding it stops its polling. `targets` go to
+    // deletedPaths on `success`, so bloat tiles update without a 30s+ rescan.
     const watchCleanupJob = useCallback(
         (jobId, targets) =>
             pollJobUntilDone(jobId, pageAliveRef.current).then(status => {
@@ -973,21 +982,32 @@ const PosterCleanarrPage = () => {
             null
         );
 
+    // One row delete at a time: each answer is the list after ITS delete, so two in
+    // flight could land out of order and bring back a row the other one removed.
+    const [orphanDeleteBusy, setOrphanDeleteBusy] = useState(false);
+
     const deleteOrphan = async path => {
+        setOrphanDeleteBusy(true);
+        let left;
+        let answered = true;
         try {
-            await postersAPI.deleteKometaOrphan(path);
-            setOrphans(prev => prev.filter(o => o.path !== path));
+            const res = await postersAPI.deleteKometaOrphan(path);
+            left = res?.data?.orphans;
             toast.success('Orphan deleted');
         } catch (err) {
-            toast.error(
-                err?.status === 409
-                    ? 'No longer an orphan — refreshing the list'
-                    : 'Failed to delete orphan'
-            );
+            // No body means no answer: a timeout or a network failure.
+            answered = Boolean(err?.data);
+            left = err?.data?.data?.orphans;
+            toast.error(ORPHAN_DELETE_ERRORS[err?.status] || 'Failed to delete orphan');
+        } finally {
+            setOrphanDeleteBusy(false);
         }
-        // Reconcile either way (a 409, or a client timeout after a server-side
-        // delete) and supersede any read that started before this delete.
-        loadKometaAssets(true);
+        // An answer without a list (503) could not check anything: keep this one.
+        if (Array.isArray(left)) setOrphans(left);
+        // Rescan when no answer came back (a timeout can follow a delete that did
+        // happen), or when a read still running started before this delete.
+        const readPending = kometaLoadRef.current && !kometaLoadRef.current.settled;
+        if (!answered || readPending) loadKometaAssets(true);
     };
 
     const runCleanup = () => {
@@ -1652,6 +1672,7 @@ const PosterCleanarrPage = () => {
                                     variant="danger"
                                     loading={isEnqueuing}
                                     loadingText="Starting…"
+                                    disabled={orphanDeleteBusy}
                                     onClick={() => setConfirmOrphanDelete({ all: true })}
                                 >
                                     Delete all
@@ -1674,6 +1695,7 @@ const PosterCleanarrPage = () => {
                                             size="small"
                                             aria-label={`Delete ${o.path}`}
                                             title="Delete this orphan"
+                                            disabled={orphanDeleteBusy}
                                             onClick={() => setConfirmOrphanDelete({ path: o.path })}
                                         />
                                     </div>

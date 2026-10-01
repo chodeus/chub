@@ -1004,7 +1004,9 @@ def test_delete_orphan_asset_removes_a_listed_orphan_and_its_empty_folder(
     keeper.write_bytes(b"x")
     [path] = _listed_orphans(db)
 
-    assert delete_orphan_asset(db, path, cfg, _logger()) == "deleted"
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert not gone.exists()
     assert keeper.exists()
@@ -1017,7 +1019,9 @@ def test_delete_orphan_asset_never_prunes_the_asset_dir_itself(
     (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
     [path] = _listed_orphans(db)
 
-    assert delete_orphan_asset(db, path, cfg, _logger()) == "deleted"
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert assets.is_dir()  # empty now, but it is the configured root
 
@@ -1032,7 +1036,9 @@ def test_delete_orphan_asset_keeps_a_folder_that_still_holds_assets(
     (gone / "Season01.jpg").write_bytes(b"x")
     poster = next(p for p in _listed_orphans(db) if p.endswith("poster.jpg"))
 
-    assert delete_orphan_asset(db, poster, cfg, _logger()) == "deleted"
+    outcome, _ = delete_orphan_asset(db, poster, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert (gone / "Season01.jpg").exists()
 
@@ -1044,7 +1050,9 @@ def test_delete_orphan_asset_refuses_a_file_the_job_would_spare(
     keeper = assets / "Keeper (2020).jpg"
     keeper.write_bytes(b"x")
 
-    assert delete_orphan_asset(db, str(keeper), cfg, _logger()) == "not_orphan"
+    outcome, _ = delete_orphan_asset(db, str(keeper), cfg, _logger())
+
+    assert outcome == "not_orphan"
     assert keeper.exists()
 
 
@@ -1058,7 +1066,9 @@ def test_delete_orphan_asset_refuses_a_file_outside_the_asset_dirs(
     media.write_bytes(b"x")
     assert resolve_confined(str(media), cfg) is not None
 
-    assert delete_orphan_asset(db, str(media), cfg, _logger()) == "not_orphan"
+    outcome, _ = delete_orphan_asset(db, str(media), cfg, _logger())
+
+    assert outcome == "not_orphan"
     assert media.exists()
 
 
@@ -1073,14 +1083,15 @@ def test_ignored_titles_are_neither_listed_nor_deletable(
 
     listed = [os.path.basename(p) for p in _listed_orphans(db)]
     assert listed == ["Lost Movie (2017).jpg"]
-    assert delete_orphan_asset(db, str(ignored), cfg, _logger()) == "not_orphan"
+    outcome, _ = delete_orphan_asset(db, str(ignored), cfg, _logger())
+    assert outcome == "not_orphan"
     assert ignored.exists()
 
 
 def test_delete_orphan_asset_refuses_everything_when_the_library_is_empty(
     db, tmp_path, monkeypatch, no_kometa_cache
 ):
-    """An empty comparison set is a failed sync, not 'every asset is an orphan'."""
+    """An empty comparison set is a failed sync: no verdict, and no list that reads as empty."""
     assets = tmp_path / "assets"
     assets.mkdir()
     cfg = _live(monkeypatch, tmp_path)
@@ -1089,7 +1100,10 @@ def test_delete_orphan_asset_refuses_everything_when_the_library_is_empty(
     gone = assets / "Gone Movie (2019).jpg"
     gone.write_bytes(b"x")
 
-    assert delete_orphan_asset(db, str(gone), cfg, _logger()) == "not_orphan"
+    outcome, left = delete_orphan_asset(db, str(gone), cfg, _logger())
+
+    assert outcome == "unavailable"
+    assert left is None
     assert gone.exists()
 
 
@@ -1101,7 +1115,9 @@ def test_delete_orphan_asset_drops_the_cached_scan(
     [path] = _listed_orphans(db)
     assert get_cached_kometa_assets() is not None  # the listing warmed it
 
-    assert delete_orphan_asset(db, path, cfg, _logger()) == "deleted"
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert get_cached_kometa_assets() is None
 
@@ -1159,7 +1175,9 @@ def test_delete_orphan_asset_never_prunes_a_nested_asset_dir(
     path = _listed_orphans(db)[0]
     assert os.path.dirname(path) == os.path.realpath(inner)
 
-    assert delete_orphan_asset(db, path, cfg, _logger()) == "deleted"
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "deleted"
 
     assert inner.is_dir()
 
@@ -1178,9 +1196,125 @@ def test_a_scan_that_straddles_an_invalidation_leaves_the_cache_empty(
         return found
 
     monkeypatch.setattr(PosterCleanarr, "_find_orphans", _find_then_a_delete_lands)
-    assert len(scan_kometa_assets(db, _logger(), force=True)["orphans"]) == 1
+    scanned = scan_kometa_assets(db, _logger(), force=True)
+    assert len(scanned["orphans"]) == 1
     assert get_cached_kometa_assets() is None
 
     monkeypatch.setattr(PosterCleanarr, "_find_orphans", real_find)
     scan_kometa_assets(db, _logger(), force=True)
     assert get_cached_kometa_assets() is not None  # an undisturbed scan still caches
+
+
+def test_delete_orphan_asset_returns_the_orphans_left(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """The page lists this directly instead of walking the asset dirs again."""
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
+    (assets / "Lost Movie (2017).jpg").write_bytes(b"x")
+    gone = next(p for p in _listed_orphans(db) if "Gone" in p)
+
+    outcome, left = delete_orphan_asset(db, gone, cfg, _logger())
+
+    assert outcome == "deleted"
+    assert [os.path.basename(o["path"]) for o in left] == ["Lost Movie (2017).jpg"]
+    assert set(left[0]) == {"path", "parsed", "size"}
+
+
+def test_a_refused_delete_still_returns_the_current_orphans(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    keeper = assets / "Keeper (2020).jpg"
+    keeper.write_bytes(b"x")
+    (assets / "Lost Movie (2017).jpg").write_bytes(b"x")
+
+    outcome, left = delete_orphan_asset(db, str(keeper), cfg, _logger())
+
+    assert outcome == "not_orphan"
+    assert [os.path.basename(o["path"]) for o in left] == ["Lost Movie (2017).jpg"]
+
+
+def test_remove_confined_refuses_a_component_swapped_into_another_root(
+    tmp_path, monkeypatch
+):
+    """A link inside the asset dir must not carry a delete into another allowed root."""
+    assets, media = tmp_path / "assets", tmp_path / "media"
+    (media / "Gone Movie (2019)").mkdir(parents=True)
+    kept = media / "Gone Movie (2019)" / "poster.jpg"
+    kept.write_bytes(b"x")
+    assets.mkdir()
+    (assets / "Gone Movie (2019)").symlink_to(
+        media / "Gone Movie (2019)", target_is_directory=True
+    )
+    named = assets / "Gone Movie (2019)" / "poster.jpg"
+    cfg = _live(monkeypatch, assets, media)
+    assert resolve_confined(str(named), cfg) is not None  # resolves inside a root
+
+    removed = _make()._remove_confined(str(named), cfg, _logger())
+    assert not removed
+    assert kept.exists()
+
+
+def test_orphan_move_refuses_a_restore_dir_swapped_into_another_root(
+    tmp_path, monkeypatch
+):
+    """The move destination is anchored by name the same way as its source."""
+    assets, media = tmp_path / "assets", tmp_path / "media"
+    assets.mkdir()
+    media.mkdir()
+    (assets / ORPHAN_RESTORE_DIR_NAME).symlink_to(media, target_is_directory=True)
+    orphan = assets / "Gone Movie (2019).png"
+    orphan.write_bytes(b"x")
+    m = _make(assets, media)
+    _live(monkeypatch, assets, media)
+
+    res = m._execute_orphan_mode([_orphan_item(orphan, assets)], "move", _logger())
+
+    assert res["count"] == 0
+    assert orphan.exists()
+    assert not (media / "Gone Movie (2019).png").exists()
+
+
+def test_a_refused_delete_drops_the_cached_scan(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """The re-check is fresher than a cached scan that may still list the path."""
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    keeper = assets / "Keeper (2020).jpg"
+    keeper.write_bytes(b"x")
+    _warm_kometa_cache()
+
+    outcome, _ = delete_orphan_asset(db, str(keeper), cfg, _logger())
+
+    assert outcome == "not_orphan"
+    assert get_cached_kometa_assets() is None
+
+
+def test_a_failed_delete_drops_the_cached_scan(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
+    [path] = _listed_orphans(db)
+    monkeypatch.setattr(PosterCleanarr, "_remove_confined", lambda *a: False)
+    _warm_kometa_cache()
+
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "failed"
+    assert get_cached_kometa_assets() is None
+
+
+def test_an_unavailable_check_keeps_the_cached_scan(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """No trusted re-check ran, so nothing fresher replaces what the cache holds."""
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    monkeypatch.setattr(PosterCleanarr, "_find_orphans", lambda *a, **k: None)
+    _warm_kometa_cache()
+
+    outcome, _ = delete_orphan_asset(db, str(assets / "x.jpg"), cfg, _logger())
+
+    assert outcome == "unavailable"
+    assert get_cached_kometa_assets() is not None
