@@ -439,6 +439,30 @@ describe('Poster Cleanarr — stale and orphan lists stay current', () => {
         expect(mockPostersAPI.enqueueKometaAssetsScan).not.toHaveBeenCalled();
     });
 
+    it('starts no rescan once the page has gone', async () => {
+        const user = userEvent.setup();
+        let failDelete;
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: { stale: [], orphans: [ORPHAN] },
+        });
+        mockPostersAPI.deleteKometaOrphan.mockReturnValue(
+            new Promise((_, reject) => (failDelete = reject))
+        );
+        const { unmount } = render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: `Delete ${ORPHAN.path}` }));
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
+        unmount();
+        // No answer after leaving: the recovery rescan would queue a scan nobody reads.
+        await act(async () =>
+            failDelete(Object.assign(new Error('Request timeout'), { status: 408 }))
+        );
+
+        expect(mockPostersAPI.enqueueKometaAssetsScan).not.toHaveBeenCalled();
+    });
+
     it('allows one row delete at a time', async () => {
         const user = userEvent.setup();
         let finishDelete;

@@ -533,11 +533,24 @@ const PosterCleanarrPage = () => {
     const [staleItems, setStaleItems] = useState([]);
     const [orphans, setOrphans] = useState([]);
 
+    // Cancelled on unmount: no job watch or Kometa read may start after it. Declared
+    // above the load effect so a StrictMode remount re-arms it before loading.
+    const pageAliveRef = useRef(null);
+    useEffect(() => {
+        const token = { cancelled: false };
+        pageAliveRef.current = token;
+        return () => {
+            token.cancelled = true;
+        };
+    }, []);
+
     // A newer load cancels an older one, so a slow read never lands last. setState
     // only inside .then keeps it callable from an effect (see useModuleExecution).
     const kometaLoadRef = useRef(null);
     const loadKometaAssets = useCallback(
         (force = false) => {
+            // A late caller, such as a delete answering after unmount, must not start a scan.
+            if (pageAliveRef.current?.cancelled) return Promise.resolve();
             if (kometaLoadRef.current) kometaLoadRef.current.cancelled = true;
             const token = { cancelled: false };
             kometaLoadRef.current = token;
@@ -610,19 +623,8 @@ const PosterCleanarrPage = () => {
     // refreshScan — a real scan is the source of truth.
     const [deletedPaths, setDeletedPaths] = useState(new Set());
 
-    // Cleanup jobs are watched here, not by the log modal: hiding the modal stops
-    // its polling, and the lists must still refresh. Cancelled on unmount.
-    const pageAliveRef = useRef(null);
-    useEffect(() => {
-        const token = { cancelled: false };
-        pageAliveRef.current = token;
-        return () => {
-            token.cancelled = true;
-        };
-    }, []);
-
-    // `targets` are applied to deletedPaths when the job lands `success`, so the
-    // bloat counts and tiles update without forcing a 30s+ rescan.
+    // Watched here, not by the log modal: hiding it stops its polling. `targets` go to
+    // deletedPaths on `success`, so bloat tiles update without a 30s+ rescan.
     const watchCleanupJob = useCallback(
         (jobId, targets) =>
             pollJobUntilDone(jobId, pageAliveRef.current).then(status => {
