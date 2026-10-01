@@ -5,7 +5,7 @@ import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
-import { Button, LoadingButton } from '../../components/ui/index.js';
+import { Button, IconButton, LoadingButton } from '../../components/ui/index.js';
 import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 
@@ -119,6 +119,30 @@ function pollJobUntilDone(jobId, token) {
         };
         poll();
     });
+}
+
+// The Kometa stale/orphan scan, or null once `token` is cancelled. `force` rescans
+// first: a cleanup run or Run scan must never be answered from the cached walk.
+async function readKometaAssets(force, token) {
+    if (!force) {
+        const res = await postersAPI.scanKometaAssets();
+        const data = res?.data || {};
+        if (!data.scan_required) return data;
+    }
+    // The walk runs in a background job, off the server's event loop. A delete
+    // landing mid-walk discards that walk (scan_required again), so retry.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const enq = await postersAPI.enqueueKometaAssetsScan();
+        const jobId = enq?.data?.job_id;
+        if (!jobId) throw new Error('Kometa scan was not queued');
+        const status = await pollJobUntilDone(jobId, token);
+        if (token.cancelled) return null;
+        if (status !== 'success') throw new Error(`Kometa scan ended: ${status}`);
+        const res = await postersAPI.scanKometaAssets();
+        const data = res?.data || {};
+        if (!data.scan_required) return data;
+    }
+    throw new Error('Kometa scan kept being superseded');
 }
 
 // ---------------------------------------------------------------------------
@@ -353,15 +377,11 @@ const ModeCheck = ({ label, checked, disabled, onChange, title }) => (
 // ---------------------------------------------------------------------------
 // Live cleanup log modal (polling)
 // ---------------------------------------------------------------------------
-const LiveLogModal = ({ jobId, onClose, onCompleted }) => {
+const LiveLogModal = ({ jobId, onClose }) => {
     const [text, setText] = useState('');
     const [status, setStatus] = useState('running');
     const offsetRef = useRef(0);
     const preRef = useRef(null);
-    // Guard so onCompleted fires exactly once per job — the polling loop
-    // exits as soon as it sees a terminal status, but we still want a single
-    // notification edge for the parent.
-    const completedFiredRef = useRef(false);
 
     const [prevJobId, setPrevJobId] = useState(jobId);
     if (prevJobId !== jobId) {
@@ -370,19 +390,11 @@ const LiveLogModal = ({ jobId, onClose, onCompleted }) => {
         setStatus('running');
     }
 
-    // Ref so the poll effect doesn't restart (refetching from offset 0) when the
-    // parent passes a new onCompleted identity each render.
-    const onCompletedRef = useRef(onCompleted);
-    useEffect(() => {
-        onCompletedRef.current = onCompleted;
-    }, [onCompleted]);
-
     useEffect(() => {
         if (!jobId) return undefined;
         let cancelled = false;
         let timer = null;
         offsetRef.current = 0;
-        completedFiredRef.current = false;
         const poll = () =>
             postersAPI
                 .tailJobLog(jobId, offsetRef.current)
@@ -398,13 +410,7 @@ const LiveLogModal = ({ jobId, onClose, onCompleted }) => {
                         }, 0);
                     }
                     if (data.status) setStatus(data.status);
-                    if (TERMINAL_STATUSES.includes(data.status)) {
-                        if (!completedFiredRef.current && onCompletedRef.current) {
-                            completedFiredRef.current = true;
-                            onCompletedRef.current(jobId, data.status);
-                        }
-                        return;
-                    }
+                    if (TERMINAL_STATUSES.includes(data.status)) return;
                     timer = setTimeout(poll, 1500);
                 })
                 .catch(() => {
@@ -522,37 +528,36 @@ const PosterCleanarrPage = () => {
     const [staleItems, setStaleItems] = useState([]);
     const [orphans, setOrphans] = useState([]);
 
+    // A newer load cancels an older one, so a slow read never lands last. setState
+    // only inside .then keeps it callable from an effect (see useModuleExecution).
+    const kometaLoadRef = useRef(null);
+    const loadKometaAssets = useCallback(
+        (force = false) => {
+            if (kometaLoadRef.current) kometaLoadRef.current.cancelled = true;
+            const token = { cancelled: false };
+            kometaLoadRef.current = token;
+            return readKometaAssets(force, token).then(
+                data => {
+                    if (token.cancelled || !data) return;
+                    setStaleItems(data.stale || []);
+                    setOrphans(data.orphans || []);
+                },
+                () => {
+                    // Keep the old lists: emptied ones would read as "all cleaned up".
+                    if (!token.cancelled)
+                        toast.error('Could not refresh the stale and orphan lists');
+                }
+            );
+        },
+        [toast]
+    );
+
     useEffect(() => {
-        const token = { cancelled: false };
-        const load = async () => {
-            try {
-                let res = await postersAPI.scanKometaAssets();
-                let data = res?.data || {};
-                // Cold cache → the walk runs in a background job, not on the
-                // server's event loop. Enqueue it, wait, then re-read.
-                if (data.scan_required) {
-                    const enq = await postersAPI.enqueueKometaAssetsScan();
-                    const jobId = enq?.data?.job_id;
-                    if (jobId) await pollJobUntilDone(jobId, token);
-                    if (token.cancelled) return;
-                    res = await postersAPI.scanKometaAssets();
-                    data = res?.data || {};
-                }
-                if (token.cancelled) return;
-                setStaleItems(data.stale || []);
-                setOrphans(data.orphans || []);
-            } catch {
-                if (!token.cancelled) {
-                    setStaleItems([]);
-                    setOrphans([]);
-                }
-            }
-        };
-        load();
+        loadKometaAssets();
         return () => {
-            token.cancelled = true;
+            if (kometaLoadRef.current) kometaLoadRef.current.cancelled = true;
         };
-    }, []);
+    }, [loadKometaAssets]);
 
     // Scan state. Session-only — scanning is an explicit user action, so we
     // intentionally don't persist this. Navigating away and back resets the
@@ -584,6 +589,8 @@ const PosterCleanarrPage = () => {
     const [previewTarget, setPreviewTarget] = useState(null);
     const [confirmSetActive, setConfirmSetActive] = useState(null);
     const [confirmRemove, setConfirmRemove] = useState(false);
+    // { path } for one orphan, { all: true } for the whole orphan pass.
+    const [confirmOrphanDelete, setConfirmOrphanDelete] = useState(null);
     const [liveJobId, setLiveJobId] = useState(null);
     const [isEnqueuing, setIsEnqueuing] = useState(false);
     // True while a background scan job is enqueued + polling (drives the
@@ -596,10 +603,35 @@ const PosterCleanarrPage = () => {
     // refreshScan — a real scan is the source of truth.
     const [deletedPaths, setDeletedPaths] = useState(new Set());
 
-    // Paths targeted by the currently-running cleanup job. Populated at enqueue
-    // and applied to deletedPaths when the job lands `success`, so the bloat
-    // counts and tiles update without forcing a 30s+ rescan.
-    const pendingCleanupTargetsRef = useRef(null);
+    // Cleanup jobs are watched here, not by the log modal: hiding the modal stops
+    // its polling, and the lists must still refresh. Cancelled on unmount.
+    const pageAliveRef = useRef(null);
+    useEffect(() => {
+        const token = { cancelled: false };
+        pageAliveRef.current = token;
+        return () => {
+            token.cancelled = true;
+        };
+    }, []);
+
+    // `targets` are applied to deletedPaths when the job lands `success`, so the
+    // bloat counts and tiles update without forcing a 30s+ rescan.
+    const watchCleanupJob = useCallback(
+        (jobId, targets) =>
+            pollJobUntilDone(jobId, pageAliveRef.current).then(status => {
+                if (!status) return;
+                // Any terminal status: a run that failed part-way may still
+                // have moved or removed stale and orphaned assets.
+                loadKometaAssets(true);
+                if (status !== 'success' || !targets?.length) return;
+                setDeletedPaths(prev => {
+                    const next = new Set(prev);
+                    for (const p of targets) next.add(p);
+                    return next;
+                });
+            }),
+        [loadKometaAssets]
+    );
 
     // ---- Scan data ----
     const byMedia = useApiData({
@@ -860,52 +892,110 @@ const PosterCleanarrPage = () => {
 
     const clearSelection = () => setSelectedPaths(new Set());
 
+    // Enqueue a cleanup job, tail it in the live log modal and watch it; true once started.
+    const startCleanupJob = useCallback(
+        async (body, label, targets) => {
+            setIsEnqueuing(true);
+            try {
+                const res = await postersAPI.runPlexMetadataCleanup(body);
+                const jobId = res?.data?.job_id;
+                if (!jobId) {
+                    toast.error('Failed to start cleanup');
+                    return false;
+                }
+                setLiveJobId(jobId);
+                if (res.data.deduped) {
+                    // Collapsed onto a run in flight: show that run; this request never applies.
+                    toast.warning(
+                        `Poster Cleanarr is already running (job #${jobId}) — try again once it finishes`
+                    );
+                    watchCleanupJob(jobId, null);
+                    return false;
+                }
+                toast.success(`${label} started (job #${jobId})`);
+                watchCleanupJob(jobId, targets);
+                return true;
+            } catch {
+                toast.error('Failed to start cleanup');
+                return false;
+            } finally {
+                setIsEnqueuing(false);
+            }
+        },
+        [toast, watchCleanupJob]
+    );
+
     const executeCleanup = useCallback(async () => {
         const meta = MODE_META[mode];
         if (!meta || !meta.action) return;
-        setIsEnqueuing(true);
+        const body = { mode };
+        if (meta.scopeable && selectedPaths.size > 0) body.target_paths = Array.from(selectedPaths);
+        // Bloat: when unchecked, force the harmless "nothing" mode so the
+        // job skips Plex-variant deletion but can still run stale/orphan.
+        body.mode = cleanBloat ? mode : 'nothing';
+        body.stale_duplicates_enabled = cleanStale;
+        body.orphan_assets_enabled = cleanOrphan;
+        if (cleanStale) body.stale_duplicates_mode = mode;
+        if (cleanOrphan) body.orphan_assets_mode = mode;
+        // Overlays-only narrows the bloat pass to Kometa overlay images;
+        // only meaningful when bloat is actually running.
+        body.overlays_only = cleanBloat && cleanOverlaysOnly;
+        // Stash the targeted paths so the job watcher can optimistically
+        // remove them from the UI when the job succeeds.
+        // Null = full-library run; we don't know what got deleted, so we
+        // leave deletedPaths alone (user re-scans for a fresh count).
+        // Only the bloat pass touches the selected variants; with bloat off the
+        // mode is 'nothing', so nothing was deleted and nothing may be hidden.
+        const targets = cleanBloat ? body.target_paths || null : null;
+        if (await startCleanupJob(body, meta.label, targets)) setSelectedPaths(new Set());
+    }, [
+        mode,
+        cleanBloat,
+        cleanStale,
+        cleanOrphan,
+        cleanOverlaysOnly,
+        selectedPaths,
+        startCleanupJob,
+    ]);
+
+    // The orphan pass alone, in remove mode: the job re-checks every asset
+    // against the library, so it acts on the current set, not this list.
+    const deleteAllOrphans = () =>
+        startCleanupJob(
+            {
+                mode: 'nothing',
+                orphan_assets_enabled: true,
+                orphan_assets_mode: 'remove',
+                stale_duplicates_enabled: false,
+                overlays_only: false,
+            },
+            'Orphan cleanup',
+            null
+        );
+
+    const deleteOrphan = async path => {
         try {
-            const body = { mode };
-            if (meta.scopeable && selectedPaths.size > 0)
-                body.target_paths = Array.from(selectedPaths);
-            // Bloat: when unchecked, force the harmless "nothing" mode so the
-            // job skips Plex-variant deletion but can still run stale/orphan.
-            body.mode = cleanBloat ? mode : 'nothing';
-            body.stale_duplicates_enabled = cleanStale;
-            body.orphan_assets_enabled = cleanOrphan;
-            if (cleanStale) body.stale_duplicates_mode = mode;
-            if (cleanOrphan) body.orphan_assets_mode = mode;
-            // Overlays-only narrows the bloat pass to Kometa overlay images;
-            // only meaningful when bloat is actually running.
-            body.overlays_only = cleanBloat && cleanOverlaysOnly;
-            const res = await postersAPI.runPlexMetadataCleanup(body);
-            const jobId = res?.data?.job_id;
-            if (!jobId) {
-                toast.error('Failed to start cleanup');
-                return;
-            }
-            toast.success(`${meta.label} started (job #${jobId})`);
-            // Stash the targeted paths so the LiveLogModal's onCompleted hook
-            // can optimistically remove them from the UI when the job succeeds.
-            // Null = full-library run; we don't know what got deleted, so we
-            // leave deletedPaths alone (user re-scans for a fresh count).
-            // Only the bloat pass touches the selected variants; with bloat off the
-            // mode is 'nothing', so nothing was deleted and nothing may be hidden.
-            pendingCleanupTargetsRef.current = cleanBloat ? body.target_paths || null : null;
-            setLiveJobId(jobId);
-            setSelectedPaths(new Set());
-        } catch {
-            toast.error('Failed to start cleanup');
-        } finally {
-            setIsEnqueuing(false);
+            await postersAPI.deleteKometaOrphan(path);
+            setOrphans(prev => prev.filter(o => o.path !== path));
+            toast.success('Orphan deleted');
+        } catch (err) {
+            toast.error(
+                err?.status === 409
+                    ? 'No longer an orphan — refreshing the list'
+                    : 'Failed to delete orphan'
+            );
         }
-    }, [mode, cleanBloat, cleanStale, cleanOrphan, cleanOverlaysOnly, selectedPaths, toast]);
+        // Reconcile either way (a 409, or a client timeout after a server-side
+        // delete) and supersede any read that started before this delete.
+        loadKometaAssets(true);
+    };
 
     const runCleanup = () => {
         // Report mode is the UI scan — populate tiles, don't enqueue a backend
         // job (the log dialog doesn't tail, so it adds no value over refresh).
         if (mode === 'report') {
             refreshScan();
+            loadKometaAssets(true);
             return;
         }
         if (MODE_META[mode]?.confirm) {
@@ -1550,23 +1640,42 @@ const PosterCleanarrPage = () => {
 
                     {orphans.length > 0 && (
                         <section className="rounded-lg border border-border bg-surface mt-4 p-4">
-                            <div className="flex items-center gap-2 mb-3">
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
                                 <h2 className="text-sm font-semibold text-fg">Orphaned assets</h2>
                                 <span style={typeBadge}>{orphans.length}</span>
                                 <span className="text-fg-subtle text-xs">
                                     Kometa assets with no matching media in your library
                                 </span>
+                                <LoadingButton
+                                    className="ml-auto"
+                                    size="small"
+                                    variant="danger"
+                                    loading={isEnqueuing}
+                                    loadingText="Starting…"
+                                    onClick={() => setConfirmOrphanDelete({ all: true })}
+                                >
+                                    Delete all
+                                </LoadingButton>
                             </div>
                             <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
                                 {orphans.map(o => (
                                     <div
                                         key={o.path}
-                                        className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
+                                        className="flex items-center gap-2 py-1.5 border-b border-border text-sm"
                                     >
-                                        <span className="truncate text-fg-muted">{o.path}</span>
+                                        <span className="truncate text-fg-muted mr-auto">
+                                            {o.path}
+                                        </span>
                                         <span className="text-fg-subtle text-xs whitespace-nowrap">
                                             {formatBytes(o.size)}
                                         </span>
+                                        <IconButton
+                                            icon="delete"
+                                            size="small"
+                                            aria-label={`Delete ${o.path}`}
+                                            title="Delete this orphan"
+                                            onClick={() => setConfirmOrphanDelete({ path: o.path })}
+                                        />
                                     </div>
                                 ))}
                             </div>
@@ -1672,6 +1781,47 @@ const PosterCleanarrPage = () => {
                     </Button>
                 </Modal.Footer>
             </Modal>
+            <Modal isOpen={!!confirmOrphanDelete} onClose={() => setConfirmOrphanDelete(null)}>
+                <Modal.Header>
+                    {confirmOrphanDelete?.all
+                        ? 'Delete every orphaned asset?'
+                        : 'Delete this orphaned asset?'}
+                </Modal.Header>
+                <Modal.Body>
+                    <p className="text-sm">
+                        {confirmOrphanDelete?.all ? (
+                            <>
+                                Runs the orphan cleanup now. Every Kometa asset is checked against
+                                your library again, and the ones that still have no match are
+                                deleted from disk. This cannot be undone.
+                            </>
+                        ) : (
+                            <>
+                                <span className="font-mono break-all">
+                                    {confirmOrphanDelete?.path}
+                                </span>{' '}
+                                is deleted from disk. This cannot be undone.
+                            </>
+                        )}
+                    </p>
+                </Modal.Body>
+                <Modal.Footer align="right">
+                    <Button variant="secondary" onClick={() => setConfirmOrphanDelete(null)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="danger"
+                        onClick={() => {
+                            const target = confirmOrphanDelete;
+                            setConfirmOrphanDelete(null);
+                            if (target?.all) deleteAllOrphans();
+                            else if (target?.path) deleteOrphan(target.path);
+                        }}
+                    >
+                        Delete
+                    </Button>
+                </Modal.Footer>
+            </Modal>
             <Modal isOpen={!!confirmMakeActive} onClose={() => setConfirmMakeActive(null)}>
                 <Modal.Header>Promote variant and delete rest?</Modal.Header>
                 <Modal.Body>
@@ -1691,24 +1841,7 @@ const PosterCleanarrPage = () => {
                     </Button>
                 </Modal.Footer>
             </Modal>
-            <LiveLogModal
-                jobId={liveJobId}
-                onClose={() => setLiveJobId(null)}
-                onCompleted={(_jobId, jobStatus) => {
-                    if (jobStatus !== 'success') {
-                        pendingCleanupTargetsRef.current = null;
-                        return;
-                    }
-                    const targets = pendingCleanupTargetsRef.current;
-                    pendingCleanupTargetsRef.current = null;
-                    if (!targets || targets.length === 0) return;
-                    setDeletedPaths(prev => {
-                        const next = new Set(prev);
-                        for (const p of targets) next.add(p);
-                        return next;
-                    });
-                }}
-            />
+            <LiveLogModal jobId={liveJobId} onClose={() => setLiveJobId(null)} />
         </div>
     );
 };

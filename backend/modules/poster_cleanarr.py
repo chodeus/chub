@@ -8,7 +8,7 @@ import shutil
 import threading
 import time
 import zipfile
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 from PIL import Image, UnidentifiedImageError
 
@@ -39,6 +39,8 @@ KOMETA_OVERLAY_EXIF_VALUE = "overlay"
 _KOMETA_CACHE_TTL_SEC = 300
 _kometa_cache_lock = threading.Lock()
 _kometa_cache: Dict[str, Any] = {}
+# Bumped by every invalidation: a scan that straddles one must not repopulate.
+_kometa_cache_generation = 0
 
 
 def _first_int_id(regex, names: Tuple[str, ...]) -> Optional[int]:
@@ -300,16 +302,9 @@ class PosterCleanarr(ChubModule):
                 with ChubDB(logger=self.logger) as db:
                     orphan_stats = self._run_orphan_pass(
                         db=db,
-                        instances=self._resolve_orphan_instances(self.config),
-                        asset_dirs=list(getattr(self.config, "asset_dirs", []) or []),
                         mode=getattr(self.config, "orphan_assets_mode", "report"),
-                        include_collections=bool(
-                            getattr(self.config, "include_collections", True)
-                        ),
                         logger=self.logger,
-                        ignore_titles=list(
-                            getattr(self.config, "orphan_ignore_titles", []) or []
-                        ),
+                        **self._orphan_scope(self.config),
                     )
 
             # === Stale-duplicate asset cleanup ===
@@ -859,6 +854,16 @@ class PosterCleanarr(ChubModule):
             getattr(config, "instances", []) or []
         )
 
+    @classmethod
+    def _orphan_scope(cls, config: Any) -> Dict[str, Any]:
+        """Orphan-pass inputs from a cleanarr config: the job, UI scan and UI delete must agree."""
+        return {
+            "instances": cls._resolve_orphan_instances(config),
+            "asset_dirs": list(getattr(config, "asset_dirs", []) or []),
+            "include_collections": bool(getattr(config, "include_collections", True)),
+            "ignore_titles": list(getattr(config, "orphan_ignore_titles", []) or []),
+        }
+
     def _live_config(self, logger: Logger) -> Optional[ChubConfig]:
         """Config as it is on disk now, or None (logged) so callers fail closed."""
         # Never self.full_config: that snapshot is taken at construction, so a
@@ -1122,9 +1127,26 @@ class PosterCleanarr(ChubModule):
             )
             return {"count": 0, "total_size": 0, "mode": mode}
 
+        orphans = self._find_orphans(
+            db, instances, asset_dirs, include_collections, logger, ignore_titles
+        )
+        if orphans is None:
+            return {"count": 0, "total_size": 0, "mode": mode}
+        return self._execute_orphan_mode(orphans, mode, logger)
+
+    def _find_orphans(
+        self,
+        db: ChubDB,
+        instances: List[str],
+        asset_dirs: List[str],
+        include_collections: bool,
+        logger: Logger,
+        ignore_titles: Optional[List[str]] = None,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Orphans in the authorized `asset_dirs`; None when the comparison set can't be trusted."""
         valid_dirs = self._authorized_asset_dirs(asset_dirs, logger)
         if not valid_dirs:
-            return {"count": 0, "total_size": 0, "mode": mode}
+            return None
 
         titles = self._build_library_title_set(db, instances, include_collections)
         if not titles:
@@ -1133,7 +1155,7 @@ class PosterCleanarr(ChubModule):
                 "run poster_renamerr at least once to populate media_cache "
                 "before enabling orphan cleanup. Skipping to avoid mass deletion."
             )
-            return {"count": 0, "total_size": 0, "mode": mode}
+            return None
 
         tmdb_ids, tvdb_ids = self._build_library_id_sets(db, instances)
         ignore_keys = {
@@ -1153,8 +1175,7 @@ class PosterCleanarr(ChubModule):
         )
         total_size = sum(item["size"] for item in orphans)
         logger.info(f"Found {len(orphans)} orphan assets ({format_bytes(total_size)}).")
-
-        return self._execute_orphan_mode(orphans, mode, logger)
+        return orphans
 
     def _build_library_title_set(
         self, db: ChubDB, instances: List[str], include_collections: bool
@@ -1363,6 +1384,7 @@ class PosterCleanarr(ChubModule):
         self._report_refusals(logger, "Stale-duplicate cleanup")
         empty = 0
         if touched:
+            invalidate_kometa_assets_cache()
             # Re-read before the sweep too, and skip it entirely on None: the
             # weaker base_dir-only floor is for the bloat pass, not for this one.
             sweep_config = self._live_config(logger)
@@ -1626,6 +1648,7 @@ class PosterCleanarr(ChubModule):
         # loop above can run for minutes, and None must skip the sweep entirely.
         empty_dirs = 0
         if touched_dirs:
+            invalidate_kometa_assets_cache()
             sweep_config = self._live_config(logger)
             if sweep_config is not None:
                 empty_dirs = sum(
@@ -1882,9 +1905,12 @@ def scan_kometa_assets(
 
     from backend.util.config import load_config
 
+    with _kometa_cache_lock:
+        started_generation = _kometa_cache_generation
     cfg = load_config().poster_cleanarr
-    instances = PosterCleanarr._resolve_orphan_instances(cfg)
-    asset_dirs = list(getattr(cfg, "asset_dirs", []) or [])
+    scope = PosterCleanarr._orphan_scope(cfg)
+    instances = scope["instances"]
+    asset_dirs = scope["asset_dirs"]
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
 
@@ -1909,13 +1935,8 @@ def scan_kometa_assets(
         for d in stale_raw
     ]
 
-    titles = ca._build_library_title_set(db, instances, True)
-    tmdb_ids, tvdb_ids = ca._build_library_id_sets(db, instances)
-    orphan_raw = (
-        ca._scan_orphan_assets(asset_dirs, titles, tmdb_ids, tvdb_ids, set())
-        if titles
-        else []
-    )
+    # The UI deletes from this list, so it must be the job's own orphan set.
+    orphan_raw = ca._find_orphans(db, logger=logger, **scope) or []
     orphans = [
         {"path": o["path"], "parsed": o.get("parsed"), "size": o["size"]}
         for o in orphan_raw
@@ -1927,7 +1948,8 @@ def scan_kometa_assets(
         "stats": {"stale_count": len(stale), "orphan_count": len(orphans)},
     }
     with _kometa_cache_lock:
-        _kometa_cache["kometa"] = {"_ts": time.time(), "data": result}
+        if _kometa_cache_generation == started_generation:
+            _kometa_cache["kometa"] = {"_ts": time.time(), "data": result}
     return result
 
 
@@ -1939,3 +1961,45 @@ def get_cached_kometa_assets() -> Optional[Dict[str, Any]]:
         if entry and (time.time() - entry["_ts"]) < _KOMETA_CACHE_TTL_SEC:
             return entry["data"]
     return None
+
+
+def invalidate_kometa_assets_cache() -> None:
+    """Drop the cached Kometa scan; call after anything moves or removes an asset."""
+    global _kometa_cache_generation
+    with _kometa_cache_lock:
+        _kometa_cache.pop("kometa", None)
+        _kometa_cache_generation += 1
+
+
+def delete_orphan_asset(
+    db: ChubDB, path: str, logger: Logger
+) -> Literal["deleted", "not_orphan", "failed"]:
+    """Remove one file only if the cleanup job would flag it as an orphan right now."""
+    from backend.util.config import load_config
+
+    ca = PosterCleanarr.__new__(PosterCleanarr)
+    ca.logger = logger
+    scope = PosterCleanarr._orphan_scope(load_config().poster_cleanarr)
+    orphans = ca._find_orphans(db, logger=logger, **scope) or []
+    # Exact match against a fresh scan, never a confinement check alone: the
+    # allowed roots also cover media dirs.
+    item = next((o for o in orphans if o["path"] == path), None)
+    if item is None:
+        return "not_orphan"
+    config = ca._live_config(logger)
+    removed = ca._remove_confined(item["path"], config, logger)
+    if removed:
+        logger.info(f"UI orphan delete: {item['path']}")
+        parent = os.path.dirname(item["path"])
+        # Never prune a configured asset dir, including one nested inside another.
+        asset_roots = {
+            os.path.realpath(os.path.expanduser(d)) for d in scope["asset_dirs"]
+        }
+        if parent not in asset_roots:
+            try:
+                ca._rmdir_confined(parent, config)
+            except OSError:
+                pass  # the folder still holds other assets
+        invalidate_kometa_assets_cache()
+    ca._report_refusals(logger, "Orphan delete")
+    return "deleted" if removed else "failed"

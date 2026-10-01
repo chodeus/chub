@@ -679,6 +679,15 @@ export const postersAPI = {
             headers: { 'Content-Type': 'application/json' },
         }),
 
+    /** Delete one orphaned Kometa asset; 409 when the server's re-check spares it.
+     *  Long timeout: the server re-walks the asset dirs before deleting. */
+    deleteKometaOrphan: path =>
+        apiCore.delete('/posters/plex-metadata/orphan', {
+            body: JSON.stringify({ path }),
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 120000,
+        }),
+
     /** Make a variant the active poster in Plex. */
     setPlexMetadataActive: (ratingKey, path) =>
         apiCore.post('/posters/plex-metadata/set-active', {
