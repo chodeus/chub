@@ -907,14 +907,19 @@ class PosterCleanarr(ChubModule):
         return str(real)
 
     def _walk_open_dir(
-        self, real_dir: str, config: ChubConfig, logger: Logger
+        self, real_dir: str, named_dir: str, config: ChubConfig, logger: Logger
     ) -> Optional[int]:
-        """Descriptor on `real_dir`, opened one component at a time from its allowed root."""
+        """Descriptor on `real_dir` (`named_dir` resolved), walked down from `named_dir`'s root."""
         # The root is the trust ANCHOR: its own ancestors are unverifiable from
         # here, so confinement starts at it and every step below refuses a link.
-        root = containing_root(real_dir, config)
+        root = containing_root(os.path.normpath(named_dir), config)
         if root is None:
             logger.error(f"Refusing to open {real_dir}: no allowed root contains it")
+            return None
+        # Anchored by NAME: a component swapped to a link must not move the walk
+        # into whichever other allowed root it now resolves into.
+        if real_dir != str(root) and not real_dir.startswith(str(root) + os.sep):
+            logger.error(f"Refusing to open {named_dir}: it resolves outside {root}")
             return None
         flags = (
             os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -952,7 +957,7 @@ class PosterCleanarr(ChubModule):
         parent = self._confined_target(os.path.dirname(path), config, logger)
         if parent is None or config is None:
             return None
-        dir_fd = self._walk_open_dir(parent, config, logger)
+        dir_fd = self._walk_open_dir(parent, os.path.dirname(path), config, logger)
         if dir_fd is None:
             return None
         try:
@@ -1026,7 +1031,9 @@ class PosterCleanarr(ChubModule):
             dest_parent = self._confined_target(os.path.dirname(dest), config, logger)
             if dest_parent is None or config is None:
                 return False
-            dest_fd = self._walk_open_dir(dest_parent, config, logger)
+            dest_fd = self._walk_open_dir(
+                dest_parent, os.path.dirname(dest), config, logger
+            )
             if dest_fd is None:
                 return False
             try:
@@ -1937,10 +1944,7 @@ def scan_kometa_assets(
 
     # The UI deletes from this list, so it must be the job's own orphan set.
     orphan_raw = ca._find_orphans(db, logger=logger, **scope) or []
-    orphans = [
-        {"path": o["path"], "parsed": o.get("parsed"), "size": o["size"]}
-        for o in orphan_raw
-    ]
+    orphans = _orphan_rows(orphan_raw)
 
     result = {
         "stale": stale,
@@ -1971,10 +1975,18 @@ def invalidate_kometa_assets_cache() -> None:
         _kometa_cache_generation += 1
 
 
+def _orphan_rows(orphans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Orphans in the shape the Poster Cleanarr page lists them."""
+    return [
+        {"path": o["path"], "parsed": o.get("parsed"), "size": o["size"]}
+        for o in orphans
+    ]
+
+
 def delete_orphan_asset(
     db: ChubDB, path: str, config: ChubConfig, logger: Logger
-) -> Literal["deleted", "not_orphan", "failed"]:
-    """Remove one file only if the cleanup job would flag it as an orphan right now."""
+) -> Tuple[Literal["deleted", "not_orphan", "failed"], List[Dict[str, Any]]]:
+    """Remove one file only if the cleanup job would flag it now; also returns the orphans left."""
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
     scope = PosterCleanarr._orphan_scope(config.poster_cleanarr)
@@ -1983,7 +1995,7 @@ def delete_orphan_asset(
     # allowed roots also cover media dirs.
     item = next((o for o in orphans if o["path"] == path), None)
     if item is None:
-        return "not_orphan"
+        return "not_orphan", _orphan_rows(orphans)
     removed = ca._remove_confined(item["path"], config, logger)
     if removed:
         logger.info(f"UI orphan delete: {item['path']}")
@@ -1999,4 +2011,6 @@ def delete_orphan_asset(
                 pass  # the folder still holds other assets
         invalidate_kometa_assets_cache()
     ca._report_refusals(logger, "Orphan delete")
-    return "deleted" if removed else "failed"
+    if not removed:
+        return "failed", _orphan_rows(orphans)
+    return "deleted", _orphan_rows([o for o in orphans if o["path"] != path])

@@ -356,20 +356,25 @@ async def delete_kometa_orphan(
                 status_code=503,
             )
         # Re-checks the path with a full asset-dir walk, so keep it off the event loop.
-        outcome = await run_in_threadpool(delete_orphan_asset, db, path, config, logger)
+        outcome, orphans = await run_in_threadpool(
+            delete_orphan_asset, db, path, config, logger
+        )
+        # Every answer carries the re-check's orphan list, so the page needs no rescan.
         if outcome == "not_orphan":
             return error(
-                "Not an orphan (or no longer one) — rescan and retry",
+                "Not an orphan (or no longer one)",
                 code="NOT_AN_ORPHAN",
+                data={"orphans": orphans},
                 status_code=409,
             )
         if outcome != "deleted":
             return error(
                 "Failed to delete orphan (outside the allowed roots or I/O error)",
                 code="ORPHAN_DELETE_FAILED",
+                data={"orphans": orphans},
                 status_code=400,
             )
-        return ok("Orphan deleted", {"path": path})
+        return ok("Orphan deleted", {"path": path, "orphans": orphans})
     except ConfigError:
         raise
     except Exception as e:

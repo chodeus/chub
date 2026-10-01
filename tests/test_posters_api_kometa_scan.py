@@ -178,16 +178,18 @@ def _client(db):
 
 def test_orphan_delete_route_maps_each_outcome(tmp_path, monkeypatch):
     seen = []
+    left = [{"path": "/assets/y.jpg", "parsed": "y", "size": 1}]
     monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         client = _client(db)
         for outcome, status in (("deleted", 200), ("not_orphan", 409), ("failed", 400)):
             monkeypatch.setattr(
                 "backend.modules.poster_cleanarr.delete_orphan_asset",
-                lambda _db, path, _cfg, _log, o=outcome: seen.append(path) or o,
+                lambda _db, path, _cfg, _log, o=outcome: seen.append(path) or (o, left),
             )
             res = client.request("DELETE", ORPHAN_URL, json={"path": "/assets/x.jpg"})
             assert res.status_code == status, outcome
+            assert res.json()["data"]["orphans"] == left, outcome
     assert seen == ["/assets/x.jpg"] * 3
 
 
@@ -197,7 +199,7 @@ def test_orphan_delete_route_rejects_a_missing_path_before_scanning(
     called = []
     monkeypatch.setattr(
         "backend.modules.poster_cleanarr.delete_orphan_asset",
-        lambda *a: called.append(a) or "deleted",
+        lambda *a: called.append(a) or ("deleted", []),
     )
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         client = _client(db)
@@ -234,8 +236,10 @@ def test_orphan_delete_route_deletes_a_real_orphan(tmp_path, monkeypatch):
         res = client.request("DELETE", ORPHAN_URL, json={"path": str(gone)})
 
     assert spared.status_code == 409
+    assert [o["path"] for o in spared.json()["data"]["orphans"]] == [str(gone)]
     assert keeper.exists()
     assert res.status_code == 200
+    assert res.json()["data"]["orphans"] == []
     assert not gone.exists()
 
 

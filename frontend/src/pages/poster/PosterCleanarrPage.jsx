@@ -974,20 +974,23 @@ const PosterCleanarrPage = () => {
         );
 
     const deleteOrphan = async path => {
+        let left;
         try {
-            await postersAPI.deleteKometaOrphan(path);
-            setOrphans(prev => prev.filter(o => o.path !== path));
+            const res = await postersAPI.deleteKometaOrphan(path);
+            left = res?.data?.orphans;
             toast.success('Orphan deleted');
         } catch (err) {
+            left = err?.data?.data?.orphans;
             toast.error(
                 err?.status === 409
-                    ? 'No longer an orphan — refreshing the list'
+                    ? 'No longer an orphan — list refreshed'
                     : 'Failed to delete orphan'
             );
         }
-        // Reconcile either way (a 409, or a client timeout after a server-side
-        // delete) and supersede any read that started before this delete.
-        loadKometaAssets(true);
+        // Every server answer carries its re-check's list; rescan only when none came
+        // back, since a client timeout can follow a delete that did happen.
+        if (Array.isArray(left)) setOrphans(left);
+        else loadKometaAssets(true);
     };
 
     const runCleanup = () => {
