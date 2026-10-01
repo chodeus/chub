@@ -340,8 +340,23 @@ async def delete_kometa_orphan(
         path = body.get("path")
         if not isinstance(path, str) or not path:
             return error("Missing 'path'", code="MISSING_PATH", status_code=400)
+        from backend.util.config import load_config
+
+        # Fail closed, as /gdrive/delete-local: without config nothing is an orphan.
+        try:
+            config = load_config()
+        except ConfigError:
+            raise
+        except Exception:  # noqa: S110 — treated as unavailable below
+            config = None
+        if config is None:
+            return error(
+                "Configuration unavailable — cannot verify the orphan",
+                code="CONFIG_UNAVAILABLE",
+                status_code=503,
+            )
         # Re-checks the path with a full asset-dir walk, so keep it off the event loop.
-        outcome = await run_in_threadpool(delete_orphan_asset, db, path, logger)
+        outcome = await run_in_threadpool(delete_orphan_asset, db, path, config, logger)
         if outcome == "not_orphan":
             return error(
                 "Not an orphan (or no longer one) — rescan and retry",

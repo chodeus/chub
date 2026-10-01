@@ -1972,21 +1972,18 @@ def invalidate_kometa_assets_cache() -> None:
 
 
 def delete_orphan_asset(
-    db: ChubDB, path: str, logger: Logger
+    db: ChubDB, path: str, config: ChubConfig, logger: Logger
 ) -> Literal["deleted", "not_orphan", "failed"]:
     """Remove one file only if the cleanup job would flag it as an orphan right now."""
-    from backend.util.config import load_config
-
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
-    scope = PosterCleanarr._orphan_scope(load_config().poster_cleanarr)
+    scope = PosterCleanarr._orphan_scope(config.poster_cleanarr)
     orphans = ca._find_orphans(db, logger=logger, **scope) or []
     # Exact match against a fresh scan, never a confinement check alone: the
     # allowed roots also cover media dirs.
     item = next((o for o in orphans if o["path"] == path), None)
     if item is None:
         return "not_orphan"
-    config = ca._live_config(logger)
     removed = ca._remove_confined(item["path"], config, logger)
     if removed:
         logger.info(f"UI orphan delete: {item['path']}")

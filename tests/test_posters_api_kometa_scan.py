@@ -178,12 +178,13 @@ def _client(db):
 
 def test_orphan_delete_route_maps_each_outcome(tmp_path, monkeypatch):
     seen = []
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         client = _client(db)
         for outcome, status in (("deleted", 200), ("not_orphan", 409), ("failed", 400)):
             monkeypatch.setattr(
                 "backend.modules.poster_cleanarr.delete_orphan_asset",
-                lambda _db, path, _log, o=outcome: seen.append(path) or o,
+                lambda _db, path, _cfg, _log, o=outcome: seen.append(path) or o,
             )
             res = client.request("DELETE", ORPHAN_URL, json={"path": "/assets/x.jpg"})
             assert res.status_code == status, outcome
@@ -255,3 +256,23 @@ def test_cleanup_route_reports_a_run_already_in_flight(tmp_path, monkeypatch):
     assert second.status_code == 200
     assert second.json()["data"]["deduped"] is True
     assert second.json()["data"]["job_id"] == first.json()["data"]["job_id"]
+
+
+def test_orphan_delete_route_fails_closed_without_config(tmp_path, monkeypatch):
+    """An unreadable config is a 503 and no delete, as /gdrive/delete-local."""
+    called = []
+    monkeypatch.setattr(
+        "backend.modules.poster_cleanarr.delete_orphan_asset",
+        lambda *a: called.append(a) or "deleted",
+    )
+
+    def _unreadable():
+        raise OSError("config.yml unreadable")
+
+    monkeypatch.setattr("backend.util.config.load_config", _unreadable)
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        res = _client(db).request("DELETE", ORPHAN_URL, json={"path": "/assets/x.jpg"})
+
+    assert res.status_code == 503
+    assert res.json()["error_code"] == "CONFIG_UNAVAILABLE"
+    assert called == []
