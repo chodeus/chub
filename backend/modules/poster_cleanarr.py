@@ -2002,6 +2002,8 @@ def delete_orphan_asset(
     # allowed roots also cover media dirs.
     item = next((o for o in orphans if o["path"] == path), None)
     if item is None:
+        # This re-check is fresher than a cached scan that may still list the path.
+        invalidate_kometa_assets_cache()
         return "not_orphan", _orphan_rows(orphans)
     removed = ca._remove_confined(item["path"], config, logger)
     if removed:
@@ -2016,7 +2018,8 @@ def delete_orphan_asset(
                 ca._rmdir_confined(parent, config)
             except OSError:
                 pass  # the folder still holds other assets
-        invalidate_kometa_assets_cache()
+    # After the unlink, so a scan straddling it never caches the deleted file.
+    invalidate_kometa_assets_cache()
     ca._report_refusals(logger, "Orphan delete")
     if not removed:
         return "failed", _orphan_rows(orphans)

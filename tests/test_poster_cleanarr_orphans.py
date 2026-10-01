@@ -1274,3 +1274,47 @@ def test_orphan_move_refuses_a_restore_dir_swapped_into_another_root(
     assert res["count"] == 0
     assert orphan.exists()
     assert not (media / "Gone Movie (2019).png").exists()
+
+
+def test_a_refused_delete_drops_the_cached_scan(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """The re-check is fresher than a cached scan that may still list the path."""
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    keeper = assets / "Keeper (2020).jpg"
+    keeper.write_bytes(b"x")
+    _warm_kometa_cache()
+
+    outcome, _ = delete_orphan_asset(db, str(keeper), cfg, _logger())
+
+    assert outcome == "not_orphan"
+    assert get_cached_kometa_assets() is None
+
+
+def test_a_failed_delete_drops_the_cached_scan(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
+    [path] = _listed_orphans(db)
+    monkeypatch.setattr(PosterCleanarr, "_remove_confined", lambda *a: False)
+    _warm_kometa_cache()
+
+    outcome, _ = delete_orphan_asset(db, path, cfg, _logger())
+
+    assert outcome == "failed"
+    assert get_cached_kometa_assets() is None
+
+
+def test_an_unavailable_check_keeps_the_cached_scan(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    """No trusted re-check ran, so nothing fresher replaces what the cache holds."""
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    monkeypatch.setattr(PosterCleanarr, "_find_orphans", lambda *a, **k: None)
+    _warm_kometa_cache()
+
+    outcome, _ = delete_orphan_asset(db, str(assets / "x.jpg"), cfg, _logger())
+
+    assert outcome == "unavailable"
+    assert get_cached_kometa_assets() is not None
