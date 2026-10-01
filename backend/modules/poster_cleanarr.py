@@ -1985,12 +1985,19 @@ def _orphan_rows(orphans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def delete_orphan_asset(
     db: ChubDB, path: str, config: ChubConfig, logger: Logger
-) -> Tuple[Literal["deleted", "not_orphan", "failed"], List[Dict[str, Any]]]:
+) -> Tuple[
+    Literal["deleted", "not_orphan", "failed", "unavailable"],
+    Optional[List[Dict[str, Any]]],
+]:
     """Remove one file only if the cleanup job would flag it now; also returns the orphans left."""
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
     scope = PosterCleanarr._orphan_scope(config.poster_cleanarr)
-    orphans = ca._find_orphans(db, logger=logger, **scope) or []
+    orphans = ca._find_orphans(db, logger=logger, **scope)
+    # An untrusted comparison set gives no verdict and no list: an empty one would
+    # read as "nothing left" and wipe the page's list.
+    if orphans is None:
+        return "unavailable", None
     # Exact match against a fresh scan, never a confinement check alone: the
     # allowed roots also cover media dirs.
     item = next((o for o in orphans if o["path"] == path), None)

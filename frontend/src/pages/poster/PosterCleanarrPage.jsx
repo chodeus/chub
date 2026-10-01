@@ -95,6 +95,11 @@ const formatBytes = bytes => {
 // Module-level so reference is stable across renders (fixes exhaustive-deps warning).
 const TERMINAL_STATUSES = ['success', 'error', 'cancelled'];
 
+const ORPHAN_DELETE_ERRORS = {
+    409: 'No longer an orphan — list refreshed',
+    503: 'Orphan check unavailable — nothing was deleted',
+};
+
 // Poll a background job's log-tail until it reaches a terminal status. Resolves
 // with the final status (or undefined once `token.cancelled` flips, e.g. on
 // unmount or a superseding scan). Shared by the metadata-scan and kometa-scan
@@ -982,25 +987,25 @@ const PosterCleanarrPage = () => {
     const deleteOrphan = async path => {
         setOrphanDeleteBusy(true);
         let left;
+        let answered = true;
         try {
             const res = await postersAPI.deleteKometaOrphan(path);
             left = res?.data?.orphans;
             toast.success('Orphan deleted');
         } catch (err) {
+            // No body means no answer: a timeout or a network failure.
+            answered = Boolean(err?.data);
             left = err?.data?.data?.orphans;
-            toast.error(
-                err?.status === 409
-                    ? 'No longer an orphan — list refreshed'
-                    : 'Failed to delete orphan'
-            );
+            toast.error(ORPHAN_DELETE_ERRORS[err?.status] || 'Failed to delete orphan');
         } finally {
             setOrphanDeleteBusy(false);
         }
+        // An answer without a list (503) could not check anything: keep this one.
         if (Array.isArray(left)) setOrphans(left);
         // Rescan when no answer came back (a timeout can follow a delete that did
         // happen), or when a read still running started before this delete.
         const readPending = kometaLoadRef.current && !kometaLoadRef.current.settled;
-        if (!Array.isArray(left) || readPending) loadKometaAssets(true);
+        if (!answered || readPending) loadKometaAssets(true);
     };
 
     const runCleanup = () => {

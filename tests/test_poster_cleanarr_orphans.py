@@ -1091,7 +1091,7 @@ def test_ignored_titles_are_neither_listed_nor_deletable(
 def test_delete_orphan_asset_refuses_everything_when_the_library_is_empty(
     db, tmp_path, monkeypatch, no_kometa_cache
 ):
-    """An empty comparison set is a failed sync, not 'every asset is an orphan'."""
+    """An empty comparison set is a failed sync: no verdict, and no list that reads as empty."""
     assets = tmp_path / "assets"
     assets.mkdir()
     cfg = _live(monkeypatch, tmp_path)
@@ -1100,9 +1100,10 @@ def test_delete_orphan_asset_refuses_everything_when_the_library_is_empty(
     gone = assets / "Gone Movie (2019).jpg"
     gone.write_bytes(b"x")
 
-    outcome, _ = delete_orphan_asset(db, str(gone), cfg, _logger())
+    outcome, left = delete_orphan_asset(db, str(gone), cfg, _logger())
 
-    assert outcome == "not_orphan"
+    assert outcome == "unavailable"
+    assert left is None
     assert gone.exists()
 
 

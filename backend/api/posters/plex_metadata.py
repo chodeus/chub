@@ -359,7 +359,13 @@ async def delete_kometa_orphan(
         outcome, orphans = await run_in_threadpool(
             delete_orphan_asset, db, path, config, logger
         )
-        # Every answer carries the re-check's orphan list, so the page needs no rescan.
+        if outcome == "unavailable":
+            return error(
+                "Orphan check unavailable; nothing deleted",
+                code="ORPHAN_CHECK_UNAVAILABLE",
+                status_code=503,
+            )
+        # Every other answer carries the re-check's list, so the page needs no rescan.
         if outcome == "not_orphan":
             return error(
                 "Not an orphan (or no longer one)",

@@ -413,6 +413,32 @@ describe('Poster Cleanarr — stale and orphan lists stay current', () => {
         expect(mockPostersAPI.enqueueKometaAssetsScan).toHaveBeenCalledTimes(1);
     });
 
+    it('keeps the list when the server could not check the orphan', async () => {
+        const user = userEvent.setup();
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: { stale: [], orphans: [ORPHAN, OTHER] },
+        });
+        mockPostersAPI.deleteKometaOrphan.mockRejectedValue(
+            Object.assign(new Error('Orphan check unavailable'), {
+                status: 503,
+                data: { success: false, error_code: 'ORPHAN_CHECK_UNAVAILABLE' },
+            })
+        );
+        render(<PosterCleanarrPage />);
+
+        await user.click(await screen.findByRole('button', { name: `Delete ${ORPHAN.path}` }));
+        await user.click(
+            within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+        );
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/unavailable/))
+        );
+        expect(screen.getByText(ORPHAN.path)).toBeInTheDocument();
+        expect(screen.getByText(OTHER.path)).toBeInTheDocument();
+        expect(mockPostersAPI.enqueueKometaAssetsScan).not.toHaveBeenCalled();
+    });
+
     it('allows one row delete at a time', async () => {
         const user = userEvent.setup();
         let finishDelete;

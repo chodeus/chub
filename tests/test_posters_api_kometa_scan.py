@@ -182,15 +182,22 @@ def test_orphan_delete_route_maps_each_outcome(tmp_path, monkeypatch):
     monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         client = _client(db)
-        for outcome, status in (("deleted", 200), ("not_orphan", 409), ("failed", 400)):
+        cases = (
+            ("deleted", left, 200),
+            ("not_orphan", left, 409),
+            ("failed", left, 400),
+            ("unavailable", None, 503),
+        )
+        for outcome, rows, status in cases:
             monkeypatch.setattr(
                 "backend.modules.poster_cleanarr.delete_orphan_asset",
-                lambda _db, path, _cfg, _log, o=outcome: seen.append(path) or (o, left),
+                lambda _db, path, _cfg, _log, o=outcome, r=rows: seen.append(path) or (o, r),
             )
             res = client.request("DELETE", ORPHAN_URL, json={"path": "/assets/x.jpg"})
             assert res.status_code == status, outcome
-            assert res.json()["data"]["orphans"] == left, outcome
-    assert seen == ["/assets/x.jpg"] * 3
+            # A 503 has no verdict, so it must not carry a list that reads as empty.
+            assert res.json().get("data", {}).get("orphans") == rows, outcome
+    assert seen == ["/assets/x.jpg"] * 4
 
 
 def test_orphan_delete_route_rejects_a_missing_path_before_scanning(
