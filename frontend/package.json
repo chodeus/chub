@@ -20,7 +20,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-virtual": "^3.14.13",
     "cron-validator": "^1.4.0",
-    "cronstrue": "^3.27.0",
+    "cronstrue": "^3.29.0",
     "prop-types": "15.8.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
