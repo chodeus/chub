@@ -141,3 +141,22 @@ describe('clearStreamToken invalidates an in-flight mint', () => {
         expect(streamAuth.streamTokenSnapshot()).toBe('current');
     });
 });
+
+describe('clearStreamToken forgets the auth state', () => {
+    it('asks again after a clear, so turning the login back on mints a token', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(tokenResponse(''))
+            .mockResolvedValueOnce(tokenResponse('minted'));
+        vi.stubGlobal('fetch', fetchMock);
+
+        expect(await streamAuth.ensureStreamToken()).toBe('');
+        expect(streamAuth.streamAuthDisabled()).toBe(true);
+
+        streamAuth.clearStreamToken();
+
+        expect(streamAuth.streamAuthDisabled()).toBe(false);
+        expect(await streamAuth.ensureStreamToken()).toBe('minted');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+});

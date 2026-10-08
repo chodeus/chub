@@ -204,5 +204,7 @@ export function clearStreamToken() {
     retryAfterMs = 0;
     retryDelayMs = RETRY_BASE_MS;
     rejectedJwt = null;
+    // The session changed, so the login may have been turned off or back on: re-learn it.
+    authConfigured = null;
     notify();
 }

@@ -73,7 +73,7 @@ def test_auth_status_returns_unconfigured(monkeypatch, app_with_router, tmp_path
     body = resp.json()
     assert body["success"] is True
     assert body["data"]["configured"] is False
-    assert body["data"]["required"] is True
+    assert body["data"]["required"] is False
 
 
 def test_auth_status_returns_configured(monkeypatch, app_with_router):
@@ -85,6 +85,7 @@ def test_auth_status_returns_configured(monkeypatch, app_with_router):
     client = TestClient(app)
     resp = client.get("/api/auth/status")
     assert resp.json()["data"]["configured"] is True
+    assert resp.json()["data"]["required"] is True
 
 
 # --- Logout (stateless) ---

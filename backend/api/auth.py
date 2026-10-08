@@ -1,7 +1,7 @@
 """
 Authentication API endpoints for CHUB.
 
-Provides login, setup (first-run), and auth status endpoints.
+Provides login, setup (first-run), turning the login off, and auth status endpoints.
 """
 
 import hmac
@@ -44,6 +44,10 @@ class SetupRequest(BaseModel):
     password: str
 
 
+class DisableRequest(BaseModel):
+    password: str
+
+
 def _is_auth_configured() -> bool:
     """Check if authentication has been set up."""
     # ConfigError propagates to the CONFIG_INVALID handler (500). Swallowing it as
@@ -62,7 +66,7 @@ def auth_status(logger: Any = Depends(get_logger)) -> JSONResponse:
     configured = _is_auth_configured()
     return ok(
         "Auth status retrieved",
-        {"configured": configured, "required": True},
+        {"configured": configured, "required": configured},
     )
 
 
@@ -238,3 +242,51 @@ def login(
         "Login successful",
         {"token": token, "username": config.auth.username},
     )
+
+
+@router.post(
+    "/disable",
+    summary="Turn the login off",
+    description="Delete the stored login so CHUB stops asking for one. Needs the current password.",
+    dependencies=[Depends(login_limiter)],
+)
+@config_write
+def disable_auth(
+    request_data: DisableRequest, logger: Any = Depends(get_logger)
+) -> JSONResponse:
+    """Clear the credentials and JWT secret; every issued token dies with the secret."""
+    try:
+        config = load_config()
+    except ConfigError as e:
+        logger.error(f"Turning the login off failed — config error: {e}")
+        return error(
+            "Server configuration error", code="CONFIG_ERROR", status_code=500
+        )
+
+    if not (config.auth.username and config.auth.password_hash):
+        return error(
+            "The login is already off", code="AUTH_NOT_CONFIGURED", status_code=409
+        )
+
+    # 403, not 401: core.js treats a 401 as a dead session and logs the user out.
+    if not verify_password(request_data.password, config.auth.password_hash):
+        logger.warning("Failed attempt to turn the login off")
+        return error(
+            "Incorrect password", code="AUTH_INVALID_PASSWORD", status_code=403
+        )
+
+    config.auth.username = ""
+    config.auth.password_hash = ""
+    config.auth.jwt_secret = ""
+    try:
+        save_config(config)
+    except ConfigError as e:
+        logger.error(f"Turning the login off failed — could not save: {e}")
+        return error(
+            "Failed to save auth configuration",
+            code="AUTH_SETUP_ERROR",
+            status_code=500,
+        )
+
+    logger.info("Login turned off; CHUB no longer asks for credentials")
+    return ok("Login turned off")

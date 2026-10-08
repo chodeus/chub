@@ -6,6 +6,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 import { instancesAPI } from '../utils/api/instances.js';
 import { configAPI } from '../utils/api/config.js';
 import { SECRET_INPUT_PROPS } from '../utils/forms/secretInput.js';
+import { newLoginError } from '../utils/forms/newLogin.js';
 import { Button } from '../components/ui';
 import { InputBase, SelectBase } from '../components/fields/primitives';
 
@@ -63,6 +64,7 @@ const SetupWizardPage = () => {
 
     // Account
     const [acctDone, setAcctDone] = useState(false);
+    const [noLogin, setNoLogin] = useState(false);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');
@@ -142,10 +144,12 @@ const SetupWizardPage = () => {
     }, []);
 
     // ── Step completion + gate ───────────────────────────────────────────
+    const hasLogin = acctDone || authConfigured === true;
+    const accountDone = hasLogin || noLogin;
     const isDone = id => {
         switch (id) {
             case 'account':
-                return acctDone || authConfigured === true;
+                return accountDone;
             case 'plex':
                 return plex.length > 0;
             case 'arr':
@@ -161,17 +165,13 @@ const SetupWizardPage = () => {
         }
     };
 
-    const requirementsMet =
-        (acctDone || authConfigured === true) && (plex.length > 0 || arr.length > 0) && tmdbValid;
+    const requirementsMet = accountDone && (plex.length > 0 || arr.length > 0) && tmdbValid;
 
     // ── Actions ──────────────────────────────────────────────────────────
     const createAccount = async () => {
-        if (!username.trim() || password.length < 8) {
-            toast.error('Username required and password must be at least 8 characters');
-            return;
-        }
-        if (password !== confirm) {
-            toast.error('Passwords do not match');
+        const invalid = newLoginError(username, password, confirm);
+        if (invalid) {
+            toast.error(invalid);
             return;
         }
         setBusy(true);
@@ -291,7 +291,9 @@ const SetupWizardPage = () => {
                         {cur.id === 'welcome' && <WelcomeStep authConfigured={authConfigured} />}
                         {cur.id === 'account' && (
                             <AccountStep
-                                done={acctDone || authConfigured === true}
+                                done={hasLogin}
+                                noLogin={noLogin}
+                                setNoLogin={setNoLogin}
                                 username={username}
                                 password={password}
                                 confirm={confirm}
@@ -355,7 +357,8 @@ const SetupWizardPage = () => {
                         )}
                         {cur.id === 'review' && (
                             <ReviewStep
-                                account={acctDone || authConfigured === true}
+                                account={accountDone}
+                                noLogin={!hasLogin && noLogin}
                                 username={username}
                                 plex={plex}
                                 arr={arr}
@@ -427,6 +430,8 @@ const WelcomeStep = ({ authConfigured }) => (
 
 const AccountStep = ({
     done,
+    noLogin,
+    setNoLogin,
     username,
     password,
     confirm,
@@ -439,47 +444,105 @@ const AccountStep = ({
     <>
         <h2>Create your user account</h2>
         <p className="sw-lead">
-            CHUB is protected by a single user login, stored locally (bcrypt-hashed) — no account or
-            cloud service involved.
+            CHUB can ask for a single user login, stored locally (bcrypt-hashed) — no account or
+            cloud service involved. You can turn it on or off later in Settings → General.
         </p>
         {done ? (
             <div className="sw-callout ok">✓ User account is configured.</div>
         ) : (
             <>
-                <label className="sw-fld">
-                    <span>Username</span>
-                    <InputBase
-                        type="text"
-                        value={username}
-                        onChange={e => setUsername(e.target.value)}
-                        autoComplete="username"
-                    />
-                </label>
-                <div className="sw-row">
-                    <label className="sw-fld">
-                        <span>Password</span>
-                        <InputBase
-                            type="password"
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            autoComplete="new-password"
+                <div className="sw-choice" role="radiogroup" aria-label="Login">
+                    <label className={`sw-pick${noLogin ? '' : ' on'}`}>
+                        <input
+                            type="radio"
+                            name="sw-login"
+                            checked={!noLogin}
+                            onChange={() => setNoLogin(false)}
                         />
+                        <span className="sw-meta">
+                            <b>Require a login</b>
+                            <small>Recommended</small>
+                        </span>
                     </label>
-                    <label className="sw-fld">
-                        <span>Confirm password</span>
-                        <InputBase
-                            type="password"
-                            value={confirm}
-                            onChange={e => setConfirm(e.target.value)}
-                            autoComplete="new-password"
+                    <label className={`sw-pick${noLogin ? ' on' : ''}`}>
+                        <input
+                            type="radio"
+                            name="sw-login"
+                            checked={noLogin}
+                            onChange={() => setNoLogin(true)}
                         />
+                        <span className="sw-meta">
+                            <b>No login</b>
+                            <small>Open to anyone who can reach CHUB</small>
+                        </span>
                     </label>
                 </div>
-                <Button variant="secondary" onClick={onCreate} disabled={busy}>
-                    {busy ? 'Creating…' : 'Create account'}
-                </Button>
+                {noLogin ? (
+                    <div className="sw-callout warn">
+                        Anyone who can reach CHUB can use it and change its settings, including your
+                        instance API keys. Only choose this if CHUB is not reachable from outside
+                        your network.
+                    </div>
+                ) : (
+                    <AccountForm
+                        username={username}
+                        password={password}
+                        confirm={confirm}
+                        setUsername={setUsername}
+                        setPassword={setPassword}
+                        setConfirm={setConfirm}
+                        onCreate={onCreate}
+                        busy={busy}
+                    />
+                )}
             </>
         )}
+    </>
+);
+
+const AccountForm = ({
+    username,
+    password,
+    confirm,
+    setUsername,
+    setPassword,
+    setConfirm,
+    onCreate,
+    busy,
+}) => (
+    <>
+        <label className="sw-fld">
+            <span>Username</span>
+            <InputBase
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                autoComplete="username"
+            />
+        </label>
+        <div className="sw-row">
+            <label className="sw-fld">
+                <span>Password</span>
+                <InputBase
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                />
+            </label>
+            <label className="sw-fld">
+                <span>Confirm password</span>
+                <InputBase
+                    type="password"
+                    value={confirm}
+                    onChange={e => setConfirm(e.target.value)}
+                    autoComplete="new-password"
+                />
+            </label>
+        </div>
+        <Button variant="secondary" onClick={onCreate} disabled={busy}>
+            {busy ? 'Creating…' : 'Create account'}
+        </Button>
     </>
 );
 
@@ -613,10 +676,15 @@ const OptionalStep = ({ title, lead, configured, cta, onCta }) => (
     </>
 );
 
-const ReviewStep = ({ account, username, plex, arr, tmdb, gdrive, notify }) => {
+const accountSummary = (account, noLogin, username) => {
+    if (noLogin) return 'No login — open to anyone who can reach CHUB';
+    return account ? username || 'configured' : 'Not created';
+};
+
+const ReviewStep = ({ account, noLogin, username, plex, arr, tmdb, gdrive, notify }) => {
     const rows = useMemo(
         () => [
-            ['User account', account, account ? username || 'configured' : 'Not created'],
+            ['User account', account, accountSummary(account, noLogin, username)],
             [
                 'Media server (Plex)',
                 plex.length > 0,
@@ -631,7 +699,7 @@ const ReviewStep = ({ account, username, plex, arr, tmdb, gdrive, notify }) => {
             ['Poster drive sync', gdrive, gdrive ? 'Configured' : 'Skipped'],
             ['Notifications', notify, notify ? 'Configured' : 'Skipped'],
         ],
-        [account, username, plex, arr, tmdb, gdrive, notify]
+        [account, noLogin, username, plex, arr, tmdb, gdrive, notify]
     );
     return (
         <>
@@ -688,6 +756,11 @@ const WizardStyles = () => (
         .sw-callout { padding:.85rem 1rem; border-radius:var(--radius-lg,12px); font-size:.83rem; color:var(--text-secondary); margin-bottom:1.2rem; }
         .sw-callout.info { background:color-mix(in srgb, var(--accent) 10%, transparent); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
         .sw-callout.ok { background:color-mix(in srgb, var(--success) 12%, transparent); border:1px solid color-mix(in srgb, var(--success) 32%, transparent); }
+        .sw-callout.warn { background:color-mix(in srgb, var(--warning) 12%, transparent); border:1px solid color-mix(in srgb, var(--warning) 32%, transparent); }
+        .sw-choice { display:grid; grid-template-columns:1fr 1fr; gap:.9rem; margin-bottom:1.2rem; }
+        .sw-pick { display:flex; align-items:center; gap:.7rem; padding:.7rem .9rem; border-radius:var(--radius-lg,12px); background:var(--input-bg); border:1px solid var(--border-light); cursor:pointer; }
+        .sw-pick.on { border-color:var(--accent); }
+        .sw-pick input { accent-color:var(--accent); }
         .sw-list { display:flex; flex-direction:column; gap:.5rem; margin-top:1rem; }
         .sw-inst { display:flex; align-items:center; gap:.7rem; padding:.7rem .9rem; border-radius:var(--radius-lg,12px); background:var(--input-bg); border:1px solid var(--border-light); }
         .sw-tag { font-size:.65rem; text-transform:uppercase; letter-spacing:.05em; padding:.15rem .5rem; border-radius:999px; background:color-mix(in srgb, var(--accent) 22%, transparent); color:var(--accent); font-weight:700; }
@@ -708,7 +781,7 @@ const WizardStyles = () => (
             .sw-card { grid-template-columns:1fr; }
             .sw-rail { flex-direction:row; overflow-x:auto; border-right:none; border-bottom:1px solid var(--border-light); }
             .sw-labels, .sw-sub { display:none; }
-            .sw-row, .sw-row3 { grid-template-columns:1fr; }
+            .sw-row, .sw-row3, .sw-choice { grid-template-columns:1fr; }
             .sw-page { padding:1rem; }
             .sw-content { padding:1.25rem 1rem 1.5rem; }
             /* Review gate leads the wrapped row; empty spacers add no line. */
