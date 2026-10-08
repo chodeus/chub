@@ -164,12 +164,10 @@ def test_disable_fails_closed_when_the_config_is_unreadable(client, store, monke
 
 def test_a_session_from_before_the_login_was_off_dies_with_it(client, store):
     old_headers = _bearer(store)
-    assert (
-        client.post(
-            "/api/auth/disable", json={"password": PASSWORD}, headers=old_headers
-        ).status_code
-        == 200
+    disabled = client.post(
+        "/api/auth/disable", json={"password": PASSWORD}, headers=old_headers
     )
+    assert disabled.status_code == 200
 
     resp = client.post(
         "/api/auth/setup", json={"username": "admin", "password": "a-new-password"}
