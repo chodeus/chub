@@ -18,6 +18,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useToolbar } from '../../contexts/ToolbarContext';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import Spinner from '../../components/ui/Spinner.jsx';
+import AccessCard from './AccessCard.jsx';
 
 /**
  * Memoized field component for better performance
@@ -459,6 +460,8 @@ export const GeneralSettingsPage = () => {
                     </div>
                 )
             )}
+
+            <AccessCard />
 
             {/* First-run setup — re-runs the full-screen Setup Wizard. The
                 wizard also auto-launches on a fresh install; this is the

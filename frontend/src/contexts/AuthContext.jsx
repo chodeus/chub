@@ -174,6 +174,30 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     }, []);
 
+    /** Turn the login off. The server deletes it, and every session dies with its secret. */
+    const disableAuth = useCallback(
+        async password => {
+            const bearer = token || getStoredToken();
+            const res = await fetch('/api/auth/disable', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+                },
+                body: JSON.stringify({ password }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 401) logout();
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Could not turn the login off');
+            }
+            logout();
+            setAuthConfigured(false);
+            return data;
+        },
+        [token, logout]
+    );
+
     /**
      * Persist that the first-run wizard is done so it no longer gates the app.
      * Optimistically flips local state even if the POST fails (the backfill /
@@ -206,6 +230,7 @@ export const AuthProvider = ({ children }) => {
         login,
         setup,
         logout,
+        disableAuth,
         markSetupComplete,
     };
 

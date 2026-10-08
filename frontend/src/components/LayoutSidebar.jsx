@@ -21,7 +21,7 @@ const BrandMark = () => (
 const LayoutSidebar = React.memo(() => {
     const location = useLocation();
     const { mobileMenuOpen, closeMobileMenu, isMobile } = useUIState();
-    const { user, logout } = useAuth();
+    const { user, logout, authConfigured } = useAuth();
     const { toggleTheme, isDarkTheme, isLightTheme, actualTheme } = useTheme();
     const sidebarRef = useRef(null);
 
@@ -267,6 +267,27 @@ const LayoutSidebar = React.memo(() => {
                             </span>
                         </button>
                     </div>
+                )}
+
+                {authConfigured === false && (
+                    <NavLink
+                        to="/settings/general"
+                        onClick={handleNavLinkClick}
+                        className="shrink-0 mx-2 mt-2 px-3 py-3 rounded-lg bg-sidebar-hover flex items-center gap-3 text-sidebar-text-secondary hover:text-sidebar-text transition-colors"
+                        title="Turn the login on in Settings → General"
+                    >
+                        <span className="material-symbols-outlined text-base" aria-hidden="true">
+                            lock_open
+                        </span>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-sidebar-text truncate">
+                                Login off
+                            </div>
+                            <div className="text-xs text-sidebar-text-secondary truncate">
+                                Turn on in Settings
+                            </div>
+                        </div>
+                    </NavLink>
                 )}
             </div>
         </aside>

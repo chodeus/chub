@@ -110,4 +110,62 @@ describe('AuthProvider', () => {
 
         expect(result.current.isAuthenticated).toBe(false);
     });
+
+    const stubDisable = response => {
+        const calls = [];
+        const base = fetch;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url, init) => {
+                if (!url.includes('/api/auth/disable')) return base(url, init);
+                calls.push(init);
+                return response;
+            })
+        );
+        return calls;
+    };
+
+    it('turns the login off with the password and the session bearer', async () => {
+        const { result } = await mountAuth();
+        await act(async () => {
+            await result.current.login('dean', 'pw');
+        });
+        const calls = stubDisable(reply({ success: true }));
+
+        await act(async () => {
+            await result.current.disableAuth('pw');
+        });
+
+        expect(calls).toHaveLength(1);
+        expect(calls[0].headers.Authorization).toBe('Bearer t0ken');
+        expect(JSON.parse(calls[0].body)).toEqual({ password: 'pw' });
+        expect(result.current.isAuthenticated).toBe(false);
+        expect(result.current.authConfigured).toBe(false);
+        expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
+    });
+
+    it('keeps the session when the password is wrong', async () => {
+        const { result } = await mountAuth();
+        await act(async () => {
+            await result.current.login('dean', 'pw');
+        });
+        stubDisable(
+            Promise.resolve({
+                ok: false,
+                status: 403,
+                json: () => Promise.resolve({ success: false, message: 'Incorrect password' }),
+            })
+        );
+
+        let thrown;
+        await act(async () => {
+            await result.current.disableAuth('nope').catch(err => {
+                thrown = err;
+            });
+        });
+
+        expect(thrown?.message).toBe('Incorrect password');
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.authConfigured).toBe(true);
+    });
 });
