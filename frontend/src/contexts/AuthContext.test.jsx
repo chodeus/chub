@@ -7,6 +7,7 @@ vi.mock('../utils/api/streamAuth.js', () => ({
 vi.mock('../utils/api/core.js', () => ({ apiCore: { clearCache: vi.fn() } }));
 
 const { AuthProvider, useAuth } = await import('./AuthContext.jsx');
+const { clearStreamToken } = await import('../utils/api/streamAuth.js');
 
 const TOKEN_KEY = 'chub-auth-token';
 const reply = data => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data) });
@@ -167,5 +168,43 @@ describe('AuthProvider', () => {
         expect(thrown?.message).toBe('Incorrect password');
         expect(result.current.isAuthenticated).toBe(true);
         expect(result.current.authConfigured).toBe(true);
+    });
+
+    it('forgets the cached stream-token state when a new login is created', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(url => {
+                if (url.includes('/api/auth/status'))
+                    return reply({ success: true, data: { configured: false } });
+                if (url.includes('/api/auth/setup'))
+                    return reply({ success: true, data: { token: 't0ken', username: 'dean' } });
+                return reply({ success: true, data: { completed: true } });
+            })
+        );
+        const { result } = await mountAuth();
+        clearStreamToken.mockClear();
+
+        await act(async () => {
+            await result.current.setup('dean', 'a-new-password');
+        });
+
+        expect(clearStreamToken).toHaveBeenCalledTimes(1);
+        expect(result.current.authConfigured).toBe(true);
+    });
+
+    it('treats a failed status check as unknown, not as the login being off', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(url => {
+                if (url.includes('/api/auth/status'))
+                    return reply({ success: false, message: 'Configuration unavailable' });
+                return reply({ success: true, data: { completed: true } });
+            })
+        );
+
+        const { result } = await mountAuth();
+
+        expect(result.current.loading).toBe(false);
+        expect(result.current.authConfigured).toBeNull();
     });
 });

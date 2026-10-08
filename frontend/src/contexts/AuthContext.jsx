@@ -45,7 +45,7 @@ const clearStoredToken = () => {
 export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(getStoredToken);
     const [user, setUser] = useState(null);
-    const [authConfigured, setAuthConfigured] = useState(null); // null = loading
+    const [authConfigured, setAuthConfigured] = useState(null); // null = loading or unknown
     const [setupComplete, setSetupComplete] = useState(null); // null = loading
     const [loading, setLoading] = useState(true);
 
@@ -62,8 +62,9 @@ export const AuthProvider = ({ children }) => {
                 .then(res => res.json())
                 .then(async data => {
                     if (cancelled) return;
+                    // Unknown, not "off": false would show "Login off" and the setup form.
                     if (!data.success) {
-                        setAuthConfigured(false);
+                        setAuthConfigured(null);
                         return;
                     }
                     const configured = data.data.configured;
@@ -96,7 +97,7 @@ export const AuthProvider = ({ children }) => {
                     }
                 })
                 .catch(() => {
-                    if (!cancelled) setAuthConfigured(false);
+                    if (!cancelled) setAuthConfigured(null);
                 });
 
         // First-run gate. Fail-safe to "complete" on any error so a status
@@ -147,6 +148,8 @@ export const AuthProvider = ({ children }) => {
         if (!res.ok || !data.success) {
             throw new Error(data.message || 'Setup failed');
         }
+        // A tab that ran with the login off cached "no stream token needed".
+        clearStreamToken();
         const newToken = data.data.token;
         storeToken(newToken);
         setToken(newToken);
