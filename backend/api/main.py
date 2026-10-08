@@ -110,8 +110,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """
     Require a valid JWT Bearer token on all /api/* routes
     (except auth, health, version, and static assets).
-    When auth is not yet configured, all requests are allowed
-    so the setup flow can proceed.
+    When no login is stored (first run, or turned off via
+    /api/auth/disable), all requests are allowed.
     """
 
     def _scope_denied(self, request: Request, reason: str, path: str) -> JSONResponse:
@@ -168,7 +168,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
 
         if not config.auth.username or not config.auth.password_hash:
-            # Auth not set up yet — allow all requests (first-run state)
+            # No login stored: first run, or the user turned it off.
             return await call_next(request)
 
         # Auth is configured — validate Bearer token.
