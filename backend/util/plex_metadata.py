@@ -810,6 +810,7 @@ def variant_in_use(plex_path: str, filename: str) -> Optional[bool]:
         conn = sqlite3.connect(f"{Path(db).as_uri()}?mode=ro", uri=True, timeout=5)
         try:
             cur = conn.cursor()
+            checked = False
             sources = [("metadata_items", IN_USE_IMAGE_COLUMNS)]
             cur.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='tags'"
@@ -824,13 +825,15 @@ def variant_in_use(plex_path: str, filename: str) -> Optional[bool]:
                             (f"%{escaped}%",),
                         )
                         values = cur.fetchall()
+                        checked = True
                     except sqlite3.OperationalError as e:
                         if not _is_missing_schema_error(e):
                             raise
                         continue
                     if any(_in_use_filename(v) == filename for (v,) in values):
                         return True
-            return False
+            # No artwork column could be read: unverified, not "unused"
+            return False if checked else None
         finally:
             conn.close()
     except Exception:

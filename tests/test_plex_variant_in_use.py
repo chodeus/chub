@@ -88,6 +88,23 @@ def _variant(tmp_path, name):
     return path
 
 
+def test_unverified_when_no_artwork_column_can_be_read(tmp_path):
+    db_dir = tmp_path / "Plug-in Support" / "Databases"
+    db_dir.mkdir(parents=True)
+    con = sqlite3.connect(db_dir / PLEX_DB_NAME)
+    con.execute("CREATE TABLE metadata_items (id INTEGER PRIMARY KEY, title TEXT)")
+    con.commit()
+    con.close()
+    plex_path = str(tmp_path)
+    variant = _variant(tmp_path, "aaa111")
+
+    in_use = variant_in_use(plex_path, "aaa111")
+    outcome = delete_variant(str(variant), plex_path=plex_path)
+
+    assert (in_use, outcome) == (None, "unverified")
+    assert variant.exists()
+
+
 def test_delete_keeps_a_variant_plex_uses_now_and_removes_one_it_does_not(tmp_path):
     plex_path, _ = _plex(tmp_path)
     used = _variant(tmp_path, "aaa111")
