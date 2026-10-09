@@ -112,7 +112,15 @@ class PosterSelfHeal(ChubModule):
 
     def _fresh_media_index(self, db: ChubDB):
         """Index of the configured ARR instances' media, re-synced now; None if it could not be."""
-        arrs = build_sync_instance_map(self.full_config, self.logger)["arrs"]
+        from backend.util.config import load_config
+
+        # Live config, the same one resync_media checks the names against
+        try:
+            live = load_config()
+        except Exception as e:
+            self.logger.error(f"Cannot load the config for Poster Self-Heal ({e}).")
+            return None
+        arrs = build_sync_instance_map(live, self.logger)["arrs"]
         if not resync_media(db, self.logger, arrs, purpose="Poster Self-Heal"):
             return None
         # Rows of instances no longer configured are stale by definition

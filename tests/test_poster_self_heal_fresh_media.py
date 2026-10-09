@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.modules.poster_self_heal import PosterSelfHeal
-from backend.util.config import ChubConfig, InstanceDetail
+from backend.util.config import ChubConfig, ConfigError, InstanceDetail
 from backend.util.database import ChubDB
 
 
@@ -78,6 +78,36 @@ def test_no_index_when_the_resync_fails(heal):
     index = heal.module._fresh_media_index(heal.db)
 
     assert index is None
+
+
+def test_index_follows_the_live_config_not_the_construction_snapshot(heal, monkeypatch):
+    # Snapshot from before radarr_new was added and while radarr_removed still existed
+    snapshot = ChubConfig()
+    snapshot.instances.radarr["radarr_main"] = InstanceDetail(url="http://a:7878", api="k")
+    snapshot.instances.radarr["radarr_removed"] = InstanceDetail(url="http://b:7878", api="k")
+    heal.module.full_config = snapshot
+    live = ChubConfig()
+    live.instances.radarr["radarr_main"] = InstanceDetail(url="http://a:7878", api="k")
+    live.instances.radarr["radarr_new"] = InstanceDetail(url="http://c:7878", api="k")
+    monkeypatch.setattr("backend.util.config.load_config", lambda: live)
+    heal.sync = lambda db: _seed(db, "k4", "radarr_new", 404)
+
+    index = heal.module._fresh_media_index(heal.db)
+
+    assert heal.maps == [{"arrs": ["radarr_main", "radarr_new"], "plex": {}}]
+    assert {tmdb for _kind, tmdb in index["tmdb"]} == {101, 404}
+
+
+def test_no_index_when_the_live_config_cannot_load(heal, monkeypatch):
+    def unreadable():
+        raise ConfigError("unreadable config")
+
+    monkeypatch.setattr("backend.util.config.load_config", unreadable)
+
+    index = heal.module._fresh_media_index(heal.db)
+
+    assert index is None
+    assert heal.maps == []
 
 
 @pytest.mark.parametrize("index, reaches_reviews", [(None, False), ({}, True)])
