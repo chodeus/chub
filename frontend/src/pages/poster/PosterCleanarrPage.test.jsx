@@ -661,6 +661,24 @@ describe('Poster Cleanarr — variant delete re-check', () => {
         expect(mockPostersAPI.enqueuePlexMetadataScan).toHaveBeenCalled();
     });
 
+    it('keeps a single variant Plex uses now, says why, and rescans', async () => {
+        const user = userEvent.setup();
+        scanPayload = payload([anchored]);
+        mockPostersAPI.deletePlexMetadataVariant.mockRejectedValue({ status: 409, data: {} });
+        render(<PosterCleanarrPage />);
+        await user.click(screen.getByText('Real Movie'));
+        await user.click(await screen.findByAltText('only_a'));
+
+        await user.click(screen.getByRole('button', { name: 'Delete this variant' }));
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith(
+                'Plex is using this variant now — it was not deleted'
+            )
+        );
+        expect(mockPostersAPI.enqueuePlexMetadataScan).toHaveBeenCalled();
+    });
+
     it('counts other failures as failed without a rescan', async () => {
         const user = userEvent.setup();
         scanPayload = payload([anchored]);

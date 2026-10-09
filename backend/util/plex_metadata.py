@@ -113,7 +113,7 @@ def _is_missing_schema_error(exc: sqlite3.OperationalError) -> bool:
 
 
 def _in_use_filename(value: Any) -> Optional[str]:
-    """The file an artwork URL points at (`upload://…/<name>`, `metadata://…/<name>`), else None."""
+    """The file an `upload://` or `metadata://` artwork URL names, else None."""
     if not isinstance(value, str) or not value.startswith(("upload://", "metadata://")):
         return None
     parsed = urlparse(value)
@@ -800,13 +800,13 @@ def get_cached_transcoder(plex_path: str) -> Optional[Dict[str, int]]:
 
 
 def variant_in_use(plex_path: str, filename: str) -> Optional[bool]:
-    """Whether Plex's live DB references `filename` right now (read-only); None when it cannot be read."""
+    """Whether Plex's live DB references `filename` now; None when it can't be read."""
     db = os.path.join(plex_path, "Plug-in Support", "Databases", PLEX_DB_NAME)
     if not filename or not os.path.isfile(db):
         return None
     escaped = filename.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     try:
-        # mode=ro on the live file: the scan's copy of an ~800 MB DB is too slow per delete
+        # mode=ro on the live file: copying an ~800 MB DB per delete is too slow
         conn = sqlite3.connect(f"{Path(db).as_uri()}?mode=ro", uri=True, timeout=5)
         try:
             cur = conn.cursor()
@@ -840,16 +840,7 @@ def variant_in_use(plex_path: str, filename: str) -> Optional[bool]:
 def delete_variant(
     file_path: str, *, plex_path: str
 ) -> Literal["deleted", "in_use", "unverified", "refused"]:
-    """
-    Delete one variant file from disk, unless Plex uses it now.
-
-    Refuses paths that:
-    - resolve outside Plex's Metadata dir, or
-    - sit under any `.bundle/Contents/` subtree (Plex-managed — deleting
-      these would have no lasting effect because Plex re-downloads them
-      from its metadata agents, and would pollute the scan cache).
-    The page's "active" flag comes from a cached scan, so the in-use check is re-run live here.
-    """
+    """Delete a variant unless it is outside Metadata, Plex-managed, or in use now."""
     real = resolve_in_metadata_dir(file_path, plex_path)
     if real is None:
         return "refused"

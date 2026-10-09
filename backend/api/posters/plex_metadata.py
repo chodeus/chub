@@ -312,7 +312,7 @@ async def delete_plex_metadata_variant(
                 status_code=409,
             )
         if outcome == "unverified":
-            logger.warning(f"UI delete refused, Plex's database could not be read: {path}")
+            logger.warning(f"UI delete refused, Plex's DB could not be read: {path}")
             return error(
                 "Could not check whether Plex uses this variant; nothing was deleted",
                 code="VARIANT_CHECK_FAILED",
