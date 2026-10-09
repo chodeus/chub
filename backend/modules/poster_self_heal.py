@@ -18,6 +18,7 @@ import os
 
 from backend.util.base_module import ChubModule
 from backend.util.cl2k.gdrive_upload import list_files
+from backend.util.connector import build_sync_instance_map, resync_media
 from backend.util.database import ChubDB
 from backend.util.database.poster_heal_review import poster_heal_review_for
 from backend.util.notification import NotificationManager
@@ -109,6 +110,17 @@ def drive_twins(cl2k) -> tuple:
 class PosterSelfHeal(ChubModule):
     """Detect stale ids / changed titles / missing ids on CL2K posters."""
 
+    def _fresh_media_index(self, db: ChubDB):
+        """Index of the configured ARR instances' media, re-synced now; None if it could not be."""
+        arrs = build_sync_instance_map(self.full_config, self.logger)["arrs"]
+        if not resync_media(db, self.logger, arrs, purpose="Poster Self-Heal"):
+            return None
+        # Rows of instances no longer configured are stale by definition
+        names = set(arrs)
+        return index_media(
+            [m for m in db.media.get_all() if m.get("instance_name") in names]
+        )
+
     def run(self) -> None:
         cl2k = getattr(self.full_config, "cl2k_maker", None)
         if cl2k is None:
@@ -183,7 +195,9 @@ class PosterSelfHeal(ChubModule):
             posters = [
                 (p, twin_of(p.get("image_type"))) for p in local_posters
             ] + drive_posters
-            media_index = index_media(db.media.get_all())
+            media_index = self._fresh_media_index(db)
+            if media_index is None:
+                return
             reviews = poster_heal_review_for(db)
 
             # Drop open proposals that can no longer be acted on. Live-Drive rows
