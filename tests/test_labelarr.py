@@ -428,6 +428,7 @@ def test_adhoc_sync_fails_when_plex_no_longer_has_the_item(monkeypatch):
 
     monkeypatch.setattr(labelarr_mod, "PlexClient", _GoneClient)
     m.sync_to_plex = lambda **kwargs: pytest.fail("must not sync a missing item")
+    db.media.upsert = lambda *a, **k: pytest.fail("must not retag a missing item")
 
     result = m.labelarr_sync_adhoc(
         source_instance="radarr_main",
@@ -438,6 +439,33 @@ def test_adhoc_sync_fails_when_plex_no_longer_has_the_item(monkeypatch):
     )
 
     assert (result["success"], result["error_code"]) == (False, "PLEX_ITEM_NOT_FOUND")
+
+
+def test_adhoc_sync_reports_a_failed_plex_read_as_a_failure_not_a_missing_item(
+    monkeypatch,
+):
+    m, db = _adhoc_module(
+        plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}
+    )
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+
+    class _BrokenClient(_LivePlexClient):
+        def current_labels(self, entry):
+            raise RuntimeError("Plex timed out")
+
+    monkeypatch.setattr(labelarr_mod, "PlexClient", _BrokenClient)
+    m.sync_to_plex = lambda **kwargs: pytest.fail("must not sync without live labels")
+    db.media.upsert = lambda *a, **k: pytest.fail("must not retag before Plex is read")
+
+    result = m.labelarr_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_id=1,
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        plex_mapping_id=7,
+    )
+
+    assert (result["success"], result["error_code"]) == (False, "LABELARR_SYNC_FAILED")
 
 
 def _bulk_module(monkeypatch, resynced):

@@ -984,19 +984,15 @@ class PlexClient:
             )
 
     def current_labels(self, entry: Dict[str, Any]) -> Optional[List[str]]:
-        """The item's labels as Plex holds them now; None when the item cannot be found."""
-        try:
-            targets = self._locate_targets_uncached(
-                entry.get("library_name"),
-                entry.get("title"),
-                year=entry.get("year"),
-                is_collection=entry.get("asset_type") == "collection",
-                season_number=entry.get("season_number"),
-                plex_id=entry.get("plex_id"),
-            )
-        except Exception as e:
-            self.logger.error(f"Could not read labels for '{entry.get('title')}': {e}")
-            return None
+        """The item's labels as Plex holds them now; None when Plex no longer has it. A failed lookup raises."""
+        targets = self._locate_targets_uncached(
+            entry.get("library_name"),
+            entry.get("title"),
+            year=entry.get("year"),
+            is_collection=entry.get("asset_type") == "collection",
+            season_number=entry.get("season_number"),
+            plex_id=entry.get("plex_id"),
+        )
         if not targets:
             return None
         return [label.tag for label in (getattr(targets[0], "labels", None) or [])]

@@ -1,6 +1,8 @@
-"""PlexClient.current_labels reads an item's labels live, and says None when it can't."""
+"""PlexClient.current_labels reads an item's labels live: None when gone, raises when the read fails."""
 
 from types import SimpleNamespace
+
+import pytest
 
 from backend.util.plex import PlexClient
 
@@ -28,11 +30,13 @@ def test_returns_the_live_item_labels():
     assert seen == {"library": "Films", "title": "Some Film", "plex_id": "7"}
 
 
-def test_none_when_the_item_is_gone_or_the_lookup_fails():
+def test_none_when_plex_no_longer_has_the_item():
+    assert _client(lambda *a, **k: []).current_labels(ENTRY) is None
+
+
+def test_a_failed_lookup_raises_rather_than_reading_as_gone():
     def boom(*a, **k):
         raise RuntimeError("Plex unreachable")
 
-    gone = _client(lambda *a, **k: []).current_labels(ENTRY)
-    failed = _client(boom).current_labels(ENTRY)
-
-    assert (gone, failed) == (None, None)
+    with pytest.raises(RuntimeError):
+        _client(boom).current_labels(ENTRY)

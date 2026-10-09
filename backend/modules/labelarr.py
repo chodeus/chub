@@ -604,6 +604,16 @@ class Labelarr(ChubModule):
                         "error_code": "PLEX_CONNECTION_FAILED",
                     }
 
+                # Compare against the labels Plex has now, before any ARR tag write
+                live_labels = plex_client.current_labels(plex_item)
+                if live_labels is None:
+                    return {
+                        "success": False,
+                        "message": f"'{plex_item.get('title')}' was not found in Plex",
+                        "error_code": "PLEX_ITEM_NOT_FOUND",
+                    }
+                plex_item = {**plex_item, "labels": live_labels}
+
                 # Apply tag actions to media item
                 current_tags = self._parse_tags(media_item.get("tags", []))
                 tags_to_add = tag_actions.get("add", [])
@@ -690,15 +700,6 @@ class Labelarr(ChubModule):
                 labels_lower = {tag.lower(): tag for tag in managed_tags}
 
                 # Execute sync using labelarr's existing business logic (connector-based)
-                # Compare against the labels Plex has now, not the last walk's copy
-                live_labels = plex_client.current_labels(plex_item)
-                if live_labels is None:
-                    return {
-                        "success": False,
-                        "message": f"'{plex_item.get('title')}' was not found in Plex",
-                        "error_code": "PLEX_ITEM_NOT_FOUND",
-                    }
-                plex_item = {**plex_item, "labels": live_labels}
                 sync_result = self.sync_to_plex(
                     plex_client=plex_client,
                     plex_item=plex_item,
