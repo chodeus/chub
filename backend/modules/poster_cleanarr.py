@@ -14,7 +14,7 @@ from PIL import Image, UnidentifiedImageError
 
 from backend.util.base_module import ChubModule
 from backend.util.config import ChubConfig
-from backend.util.connector import Connector
+from backend.util.connector import resync_media
 from backend.util.constants import (
     ASSET_IMAGE_EXTENSIONS,
     asset_type_regex,
@@ -42,9 +42,6 @@ _kometa_cache_lock = threading.Lock()
 _kometa_cache: Dict[str, Any] = {}
 # Bumped by every invalidation: a scan that straddles one must not repopulate.
 _kometa_cache_generation = 0
-
-
-ARR_KINDS = ("radarr", "sonarr", "lidarr")
 
 
 def _first_int_id(regex, names: Tuple[str, ...]) -> Optional[int]:
@@ -834,19 +831,15 @@ class PosterCleanarr(ChubModule):
         stale_on = getattr(self.config, "stale_duplicates_enabled", False)
         if not (orphans_on or stale_on):
             return orphan_stats, stale_stats
-        # Selection from this run's config (keeps per-run overrides); instance
-        # definitions from the live config, the same one the Connector loads.
+        # Selection from this run's config, so per-run overrides survive
         scope = self._orphan_scope(self.config)
-        live = self._live_config(self.logger)
-        if live is None:
-            return orphan_stats, stale_stats
         with ChubDB(logger=self.logger) as db:
-            refreshed = self._refresh_comparison_set(
+            refreshed = resync_media(
                 db,
-                scope["instances"],
-                orphans_on and scope["include_collections"],
-                live,
                 self.logger,
+                scope["instances"],
+                include_collections=orphans_on and scope["include_collections"],
+                purpose="the asset check",
             )
             if not refreshed:
                 return orphan_stats, stale_stats
@@ -866,66 +859,6 @@ class PosterCleanarr(ChubModule):
                     logger=self.logger,
                 )
         return orphan_stats, stale_stats
-
-    @staticmethod
-    def _refresh_comparison_set(
-        db: ChubDB,
-        instances: List[str],
-        include_collections: bool,
-        config: ChubConfig,
-        logger: Logger,
-    ) -> bool:
-        """Re-sync media_cache (and collections) for `instances` from the live apps; False = don't trust it."""
-        known = config.instances
-        arr_defs = {
-            name: detail
-            for kind in ARR_KINDS
-            for name, detail in (getattr(known, kind, None) or {}).items()
-        }
-        plex_defs = known.plex or {}
-        arrs = [name for name in instances if name in arr_defs]
-        plex = (
-            {name: [] for name in instances if name in plex_defs}
-            if include_collections
-            else {}
-        )
-        # Cached rows of a name that cannot be re-synced (renamed, removed or disabled
-        # instance) are a stale comparison set, and stale sets delete new titles' assets
-        stuck = [name for name in instances if name not in arr_defs and name not in plex_defs]
-        stuck += [
-            name
-            for name in arrs + list(plex)
-            if not getattr(arr_defs.get(name) or plex_defs.get(name), "enabled", True)
-        ]
-        if stuck:
-            logger.error(
-                f"Cannot refresh {', '.join(stuck)}: not a configured, enabled instance. "
-                "Skipping the asset check rather than comparing against stale data."
-            )
-            return False
-        if not arrs and not plex:
-            return True
-        try:
-            with Connector(
-                db=db, logger=logger, instance_map={"arrs": arrs, "plex": plex}
-            ) as connector:
-                results = connector.update_arr_database() if arrs else []
-                if plex:
-                    results += connector.update_collections_database()
-        except Exception as e:
-            logger.error(
-                f"Could not refresh {', '.join(arrs + list(plex))} before the asset "
-                f"check ({e}); skipping it rather than comparing against stale data."
-            )
-            return False
-        failed = sorted({r.instance_name for r in results if not r.success})
-        if failed:
-            logger.error(
-                f"Could not refresh {', '.join(failed)} before the asset check; "
-                "skipping it rather than comparing against stale data."
-            )
-            return False
-        return True
 
     @staticmethod
     def _resolve_orphan_instances(config: Any) -> List[str]:
@@ -1994,15 +1927,18 @@ def scan_kometa_assets(
 
     with _kometa_cache_lock:
         started_generation = _kometa_cache_generation
-    full_config = load_config()
-    scope = PosterCleanarr._orphan_scope(full_config.poster_cleanarr)
+    scope = PosterCleanarr._orphan_scope(load_config().poster_cleanarr)
     instances = scope["instances"]
     asset_dirs = scope["asset_dirs"]
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
     # The page keeps its old lists on a failed scan; an empty one would read as "all cleaned up"
-    if not ca._refresh_comparison_set(
-        db, instances, scope["include_collections"], full_config, logger
+    if not resync_media(
+        db,
+        logger,
+        instances,
+        include_collections=scope["include_collections"],
+        purpose="the Kometa scan",
     ):
         raise RuntimeError("Could not refresh the media the Kometa scan compares against")
 
@@ -2078,8 +2014,12 @@ def delete_orphan_asset(
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
     scope = PosterCleanarr._orphan_scope(config.poster_cleanarr)
-    if not ca._refresh_comparison_set(
-        db, scope["instances"], scope["include_collections"], config, logger
+    if not resync_media(
+        db,
+        logger,
+        scope["instances"],
+        include_collections=scope["include_collections"],
+        purpose="the orphan delete",
     ):
         return "unavailable", None
     orphans = ca._find_orphans(db, logger=logger, **scope)

@@ -73,7 +73,7 @@ def env(monkeypatch, tmp_path):
         def update_collections_database(self):
             return []
 
-    monkeypatch.setattr("backend.modules.poster_cleanarr.Connector", _Connector)
+    monkeypatch.setattr("backend.util.connector.Connector", _Connector)
 
     class _SameDB:
         """run() opens its own ChubDB; hand it the test DB, never the default config/chub.db."""
@@ -227,49 +227,3 @@ def test_stale_pass_uses_the_folder_name_radarr_has_now(env):
     _, stale_stats = m._run_asset_passes()
 
     assert stale_stats["count"] == 0
-
-
-def test_refresh_scope_is_arr_instances_plus_plex_for_collections(env):
-    env.cfg.instances.plex["plex_main"] = InstanceDetail(
-        url="http://plex:32400", api="token"
-    )
-    names = ["radarr_main", "plex_main"]
-
-    with_collections = PosterCleanarr._refresh_comparison_set(
-        env.db, names, True, env.cfg, _logger()
-    )
-    without = PosterCleanarr._refresh_comparison_set(
-        env.db, names, False, env.cfg, _logger()
-    )
-
-    assert (with_collections, without) == (True, True)
-    assert env.maps == [
-        {"arrs": ["radarr_main"], "plex": {"plex_main": []}},
-        {"arrs": ["radarr_main"], "plex": {}},
-    ]
-
-
-@pytest.mark.parametrize(
-    "names, disabled",
-    [
-        (["radarr_main", "renamed_radarr"], None),
-        (["not_configured"], None),
-        (["radarr_main"], "radarr_main"),
-        (["radarr_main", "plex_main"], "plex_main"),
-    ],
-)
-def test_refresh_refuses_a_selection_it_cannot_resync(env, names, disabled):
-    env.cfg.instances.plex["plex_main"] = InstanceDetail(
-        url="http://plex:32400", api="token"
-    )
-    if disabled == "radarr_main":
-        env.cfg.instances.radarr["radarr_main"].enabled = False
-    elif disabled:
-        env.cfg.instances.plex[disabled].enabled = False
-
-    refreshed = PosterCleanarr._refresh_comparison_set(
-        env.db, names, True, env.cfg, _logger()
-    )
-
-    assert refreshed is False
-    assert env.maps == []

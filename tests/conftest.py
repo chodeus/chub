@@ -137,5 +137,5 @@ class _NoopConnector:
 
 @pytest.fixture
 def noop_media_resync(monkeypatch):
-    """Poster Cleanarr's pre-check re-sync succeeds without contacting any app."""
-    monkeypatch.setattr("backend.modules.poster_cleanarr.Connector", _NoopConnector)
+    """resync_media succeeds without contacting any app."""
+    monkeypatch.setattr("backend.util.connector.Connector", _NoopConnector)
