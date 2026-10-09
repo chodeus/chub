@@ -1,6 +1,8 @@
 """Focused tests for Nestarr scanner and API safety behavior."""
 
 import json
+import os
+import unicodedata
 from types import SimpleNamespace
 
 import pytest
@@ -86,6 +88,9 @@ class _FakeArr:
 
     def get_media(self):
         return self.media
+
+    def get_movie_data(self, _movie_id):
+        return []
 
 
 def _movie(arr_id, title, tmdb, has_file=True):
@@ -520,4 +525,210 @@ def test_unmatched_scan_compares_only_the_refreshed_libraries(phase1, stub_logge
     assert _unmatched(issues) == [("plex_not_in_arr", "Plex Only")]
     assert warnings == [
         "Unmatched check skipped for plex_main/Kids: Plex could not be refreshed."
+    ]
+
+
+# --- Phase 3: folder contents vs the ARR's file records ---
+
+
+def _tracked(path, root, media_id=1, title="Some Title", file_paths=(), kind="radarr"):
+    return {
+        "media_id": media_id,
+        "title": title,
+        "year": 2024,
+        "path": str(path),
+        "root_folder": str(root),
+        "instance_type": kind,
+        "instance_name": f"{kind}_main",
+        "has_file": True,
+        "file_paths": None if file_paths is None else [str(p) for p in file_paths],
+    }
+
+
+def _touch(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"")
+    return path
+
+
+def _file_issues(issues):
+    return {
+        issue["type"]: issue.get("video_files") or issue.get("missing_files")
+        for issue in issues
+        if issue["type"] in ("extra_video_in_folder", "missing_file")
+    }
+
+
+def test_file_check_flags_only_untracked_videos(stub_logger, tmp_path):
+    root = tmp_path / "movies"
+    folder = root / "Some Title (2024)"
+    tracked = _touch(folder / "Some Title (2024).mkv")
+    _touch(folder / "Some Title (2024) copy.mkv")
+    for skipped in (
+        "Featurettes/Making Of.mkv",
+        "Some Title (2024)-trailer.mkv",
+        "._Some Title (2024).mkv",
+        ".hidden/Other.mkv",
+        "Some Title (2024).nfo",
+    ):
+        _touch(folder / skipped)
+    scanner = _NestScanner(None, stub_logger)
+
+    issues = scanner._detect_stray_files(
+        {"movie": [_tracked(folder, root, file_paths=[tracked])]}
+    )
+
+    assert _file_issues(issues) == {
+        "extra_video_in_folder": ["Some Title (2024) copy.mkv"]
+    }
+
+
+def test_file_check_covers_series_and_missing_records(stub_logger, tmp_path):
+    root = tmp_path / "tv"
+    folder = root / "Some Show"
+    first = _touch(folder / "Season 01" / "Some Show - S01E01.mkv")
+    _touch(folder / "Season 01" / "Some Show - S01E02.mkv")
+    gone = folder / "Season 01" / "Some Show - S01E03.mkv"
+    scanner = _NestScanner(None, stub_logger)
+
+    issues = scanner._detect_stray_files(
+        {"series": [_tracked(folder, root, file_paths=[first, gone], kind="sonarr")]}
+    )
+
+    assert _file_issues(issues) == {
+        "extra_video_in_folder": ["Season 01/Some Show - S01E02.mkv"],
+        "missing_file": ["Season 01/Some Show - S01E03.mkv"],
+    }
+
+
+def test_file_check_matches_an_nfd_name_to_an_nfc_record(stub_logger, tmp_path):
+    root = tmp_path / "movies"
+    folder = root / "Cafe Film (2024)"
+    _touch(folder / unicodedata.normalize("NFD", "Café Film (2024).mkv"))
+    record = folder / unicodedata.normalize("NFC", "Café Film (2024).mkv")
+    scanner = _NestScanner(None, stub_logger)
+
+    issues = scanner._detect_stray_files(
+        {"movie": [_tracked(folder, root, file_paths=[record])]}
+    )
+
+    assert _file_issues(issues) == {}
+
+
+def test_file_check_skips_unknown_records(stub_logger, tmp_path):
+    root = tmp_path / "movies"
+    folder = root / "Some Title (2024)"
+    _touch(folder / "Untracked.mkv")
+    scanner = _NestScanner(None, stub_logger)
+
+    issues = scanner._detect_stray_files(
+        {"movie": [_tracked(folder, root, file_paths=None)]}
+    )
+
+    assert _file_issues(issues) == {}
+
+
+def test_file_check_skips_a_folder_it_cannot_fully_read(
+    monkeypatch, stub_logger, tmp_path
+):
+    root = tmp_path / "tv"
+    folder = root / "Some Show"
+    unreadable = folder / "Season 02"
+    recorded = _touch(unreadable / "Some Show - S02E01.mkv")
+    _touch(folder / "Season 01" / "Untracked.mkv")
+    real_walk = os.walk
+
+    def walk(top, onerror=None, **kwargs):
+        # What os.walk does for a directory it cannot list (chmod 0 does not stop root)
+        for dirpath, dirnames, filenames in real_walk(top, onerror=onerror, **kwargs):
+            if dirpath == str(unreadable):
+                onerror(PermissionError(13, "Permission denied", dirpath))
+                continue
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(os, "walk", walk)
+    scanner = _NestScanner(None, stub_logger)
+
+    issues = scanner._detect_stray_files(
+        {"series": [_tracked(folder, root, file_paths=[recorded], kind="sonarr")]}
+    )
+
+    assert _file_issues(issues) == {}
+    assert scanner.warnings == [
+        f"File check skipped for 1 folder(s) CHUB could not fully read, e.g. {folder}."
+    ]
+
+
+class _RecordsArr:
+    def __init__(self):
+        self.calls = []
+
+    def get_movie_data(self, movie_id):
+        self.calls.append(("movie", movie_id))
+        return {3: [{"path": "/movies/C/C.mkv"}], 4: None}[movie_id]
+
+    def get_episode_files_by_series(self, ids):
+        self.calls.append(("series", ids))
+        return {1: [{"path": "/tv/A/S01E01.mkv"}], 2: None}
+
+
+def test_file_paths_by_item_reads_each_apps_records(stub_logger, tmp_path):
+    for name in ("C", "D", "A", "B"):
+        (tmp_path / name).mkdir()
+    scanner = _NestScanner(None, stub_logger)
+    radarr_app, sonarr_app = _RecordsArr(), _RecordsArr()
+
+    radarr = scanner._file_paths_by_item(
+        radarr_app,
+        "radarr",
+        [
+            {"id": 1, "hasFile": True, "movieFile": {"path": "/movies/A/A.mkv"}},
+            {"id": 2, "hasFile": False, "path": str(tmp_path / "none")},
+            {"id": 3, "hasFile": True, "path": str(tmp_path / "C")},
+            {"id": 4, "hasFile": True, "path": str(tmp_path / "D")},
+            {"id": 5, "hasFile": True, "path": str(tmp_path / "unseen")},
+        ],
+    )
+    sonarr = scanner._file_paths_by_item(
+        sonarr_app,
+        "sonarr",
+        [
+            {"id": 1, "path": str(tmp_path / "A")},
+            {"id": 2, "path": str(tmp_path / "B")},
+            {"id": 9, "path": str(tmp_path / "unseen")},
+        ],
+    )
+
+    assert radarr == {1: ["/movies/A/A.mkv"], 2: [], 3: ["/movies/C/C.mkv"], 4: None}
+    assert sonarr == {1: ["/tv/A/S01E01.mkv"], 2: None}
+    # Folders CHUB cannot see get no request
+    assert radarr_app.calls == [("movie", 3), ("movie", 4)]
+    assert sonarr_app.calls == [("series", [1, 2])]
+    lidarr = scanner._file_paths_by_item(_RecordsArr(), "lidarr", [{"id": 1}])
+    assert lidarr == {}
+
+
+def test_scan_warns_when_file_records_could_not_load(
+    phase1, monkeypatch, stub_logger, tmp_path
+):
+    folder = tmp_path / "Some Movie (2024)"
+    folder.mkdir()
+    phase1.arr["radarr_main"] = [
+        {
+            "id": 10,
+            "title": "Some Movie",
+            "year": 2024,
+            "hasFile": True,
+            "path": str(folder),
+            "rootFolderPath": str(tmp_path),
+        }
+    ]
+    monkeypatch.setattr(_FakeArr, "get_movie_data", lambda self, _movie_id: None)
+    scanner = _NestScanner(_instances("radarr_main"), stub_logger)
+
+    scanner.scan()
+
+    assert scanner.warnings == [
+        "File check skipped for 1 item(s) in radarr_main: "
+        "their file records could not be loaded."
     ]

@@ -1568,37 +1568,30 @@ class SonarrClient(BaseARRClient):
         }
         return self._requester(threadsafe)(endpoint, params=params)
 
-    def _fetch_episodes_by_series(
-        self, series_ids: List[int], max_workers: int = 10
-    ) -> Dict[int, Dict[int, List[Dict[str, Any]]]]:
-        """Fetch all episodes for each series in parallel, grouped by season.
+    def _fetch_per_series(
+        self, endpoint: str, series_ids: List[int], max_workers: int = 10
+    ) -> Dict[int, Optional[List[Dict[str, Any]]]]:
+        """GET ``/{endpoint}?seriesId=X`` for every series in parallel; None marks a failed fetch.
 
-        Returns {series_id: {season_number: [episode, ...]}}. One
-        ``/episode?seriesId=X`` call per series replaces the previous
-        per-season fetches, and the calls run concurrently. Each thread uses
-        its own ``requests.Session`` because ``requests.Session`` is not safe
-        to share across threads.
+        Each thread uses its own ``requests.Session`` because ``requests.Session``
+        is not safe to share across threads.
         """
-        result: Dict[int, Dict[int, List[Dict[str, Any]]]] = {}
+        result: Dict[int, Optional[List[Dict[str, Any]]]] = {}
         if not series_ids:
             return result
 
         def fetch(sid: int):
             # Use the thread-safe requester (private session + the shared
             # retry/429/5xx ladder), so a transient error retries instead of
-            # silently yielding an empty season list for the whole series.
+            # silently yielding an empty list for the whole series.
             data = self.make_get_request_threadsafe(
-                f"{self.api_base}/episode?seriesId={sid}"
+                f"{self.api_base}/{endpoint}?seriesId={sid}"
             )
             if data is None:
                 self.logger.warning(
-                    f"Failed to fetch episodes for series {sid} after retries"
+                    f"Failed to fetch /{endpoint} for series {sid} after retries"
                 )
-                return sid, {}
-            by_season: Dict[int, List[Dict[str, Any]]] = {}
-            for ep in data:
-                by_season.setdefault(ep.get("seasonNumber"), []).append(ep)
-            return sid, by_season
+            return sid, data
 
         workers = min(max_workers, len(series_ids))
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -1606,14 +1599,37 @@ class SonarrClient(BaseARRClient):
             for future in as_completed(futures):
                 sid = futures[future]
                 try:
-                    sid, by_season = future.result()
-                    result[sid] = by_season
+                    sid, data = future.result()
+                    result[sid] = data
                 except Exception as e:
                     self.logger.warning(
-                        f"Failed to fetch episodes for series {sid}: {e}"
+                        f"Failed to fetch /{endpoint} for series {sid}: {e}"
                     )
-                    result[sid] = {}
+                    result[sid] = None
         return result
+
+    def _fetch_episodes_by_series(
+        self, series_ids: List[int], max_workers: int = 10
+    ) -> Dict[int, Dict[int, List[Dict[str, Any]]]]:
+        """Fetch all episodes for each series in parallel, grouped by season.
+
+        Returns {series_id: {season_number: [episode, ...]}}; a failed series maps to {}.
+        """
+        result: Dict[int, Dict[int, List[Dict[str, Any]]]] = {}
+        for sid, data in self._fetch_per_series(
+            "episode", series_ids, max_workers
+        ).items():
+            by_season: Dict[int, List[Dict[str, Any]]] = {}
+            for ep in data or []:
+                by_season.setdefault(ep.get("seasonNumber"), []).append(ep)
+            result[sid] = by_season
+        return result
+
+    def get_episode_files_by_series(
+        self, series_ids: List[int]
+    ) -> Dict[int, Optional[List[Dict[str, Any]]]]:
+        """Episode-file records per series, fetched in parallel; None marks a failed fetch."""
+        return self._fetch_per_series("episodefile", series_ids)
 
     def get_all_media(self, include_episode: bool = False) -> List[Dict[str, Any]]:
         items = self.get_media()
