@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 import backend.util.cl2k.image_fetch as image_fetch
-from backend.util.cl2k.plex_art import _matches, _resolve, plex_images
+from backend.util.cl2k.plex_art import _matches, _refresh_snapshot, _resolve, plex_images
 
 
 # --------------------------------------------------------------------------
@@ -564,3 +564,27 @@ def test_plex_images_does_not_refresh_when_plex_is_unreachable(monkeypatch):
 
     assert res["reason"] == "Could not reach Plex."
     assert refreshed == []
+
+
+def test_refresh_walks_only_libraries_of_the_wanted_type(monkeypatch):
+    cfg = _config(
+        {
+            "films": SimpleNamespace(url="http://a", api="t", enabled=True),
+            "music": SimpleNamespace(url="http://b", api="t", enabled=True),
+            "new": SimpleNamespace(url="http://c", api="t", enabled=True),
+        }
+    )
+    rows = {
+        "films": [_movie_row("1", 7), {"asset_type": "artist", "library_name": "Music"}],
+        "music": [{"asset_type": "artist", "library_name": "Music"}],
+    }
+    targets = []
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda db, cfg, logger, enabled, **k: targets.append(enabled),
+    )
+
+    _refresh_snapshot(cfg, _db(rows), _logger(), "movie")
+
+    assert targets == [{"films": ["Films"], "new": []}]
+

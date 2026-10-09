@@ -1,14 +1,14 @@
 """Plex artwork source for the CL2K maker (:full-image).
 
 Resolves a media item to its Plex ratingKey via the ``plex_media_cache`` (the
-same snapshot asset_renamerr already syncs, refreshed once when the item is
-missing or its key went stale) and fetches that item's clearLogos, art
-(backgrounds) and posters through plexapi.
+same snapshot asset_renamerr already syncs) and fetches that item's clearLogos,
+art (backgrounds) and posters through plexapi.
 
 READ-ONLY by design: it never uploads, selects, or deletes anything — so it
 cannot move an asset into or out of the in-use set and therefore can't trigger
-any Poster Cleanarr bloat removal. Kept here rather than in
-``backend/util/plex.py`` because the CL2K maker is part of the :full image.
+any Poster Cleanarr bloat removal. Kept here rather than in the shared
+``backend/util/plex.py`` because the CL2K maker is part of the :full image and
+shared files must stay byte-identical with main.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ def _resolve(
 
 
 def _refresh_snapshot(full_config, db, logger, media_type: Optional[str]) -> None:
-    """TTL-guarded walk of each enabled instance's movie (or TV) libraries; logs instead of raising."""
+    """TTL-guarded walk of each instance's movie (or TV) libraries; never raises."""
     from backend.util.plex_refresh import refresh_plex_cache_if_stale
 
     types = {"movie"} if (media_type or "").lower() == "movie" else _TV_TYPES
@@ -90,15 +90,17 @@ def _refresh_snapshot(full_config, db, logger, media_type: Optional[str]) -> Non
     for name, cfg in (getattr(full_config.instances, "plex", {}) or {}).items():
         if not (getattr(cfg, "enabled", True) and cfg.url and cfg.api):
             continue
+        rows = db.plex.get_by_instance(name) or []
+        libraries = {
+            row.get("library_name")
+            for row in rows
+            if row.get("library_name")
+            and (row.get("asset_type") or "").lower() in types
+        }
+        if rows and not libraries:
+            continue  # walked before and holds no library of this type
         # [] (all libraries) only for an instance never walked, so Music isn't re-walked
-        targets[name] = sorted(
-            {
-                row.get("library_name")
-                for row in db.plex.get_by_instance(name) or []
-                if (row.get("asset_type") or "").lower() in types
-                and row.get("library_name")
-            }
-        )
+        targets[name] = sorted(libraries)
     if not targets:
         return
     try:

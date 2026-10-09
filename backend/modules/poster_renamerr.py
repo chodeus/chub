@@ -879,7 +879,7 @@ class PosterRenamerr(ChubModule):
             if scope.add_posters
         }
         if enabled:
-            # The uploader refreshes later; refresh now so the skip sees the same snapshot
+            # The uploader refreshes later; refresh now so the skip sees that snapshot
             from backend.util.plex_refresh import refresh_plex_cache_if_stale
 
             try:
