@@ -121,6 +121,22 @@ class Labelarr(ChubModule):
             }
         return result
 
+    def _sync_item_or_skip(
+        self, plex_client, plex_item, labels_lower, db, plex_mapping_index
+    ) -> Optional[Dict[str, Any]]:
+        """sync_to_plex for one full-run item; a failed write is logged and skipped."""
+        try:
+            return self.sync_to_plex(
+                plex_client=plex_client,
+                plex_item=plex_item,
+                labels_lower=labels_lower,
+                db=db,
+                plex_mapping_index=plex_mapping_index,
+            )
+        except Exception as e:
+            self.logger.error(f"Label sync failed for '{plex_item.get('title')}': {e}")
+            return None
+
     def sync_to_plex(
         self,
         plex_client: PlexClient,
@@ -472,12 +488,12 @@ class Labelarr(ChubModule):
                                     "Cancellation requested, stopping label sync"
                                 )
                                 break
-                            result = self.sync_to_plex(
-                                plex_client=plex_client,
-                                plex_item=plex_item,
-                                labels_lower=labels_lower,
-                                db=db,
-                                plex_mapping_index=plex_mapping_index,
+                            result = self._sync_item_or_skip(
+                                plex_client,
+                                plex_item,
+                                labels_lower,
+                                db,
+                                plex_mapping_index,
                             )
                             if result:
                                 output.append(result)
@@ -790,7 +806,9 @@ class Labelarr(ChubModule):
             ):
                 return {
                     "success": False,
-                    "message": f"Could not refresh {source_instance}; nothing was synced.",
+                    "message": (
+                        f"Could not refresh {source_instance}; nothing was synced."
+                    ),
                     "error_code": "ARR_REFRESH_FAILED",
                     "data": {
                         "total": len(media_cache_ids),

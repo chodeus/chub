@@ -499,15 +499,7 @@ class PlexClient:
         return all_entries
 
     def _fetch_by_rating_key(self, plex_id: Any, season_number: Any = None):
-        """Fetch the exact Plex item by ratingKey (the stable per-item id).
-
-        Returns ``[item]``, or — when a *show* ratingKey arrives together with a
-        season_number — the matching ``[season]``. Returns ``None`` when Plex has
-        no such key (e.g. a stale ratingKey after the item was re-added), so the
-        caller falls back to a live title+year search. Any other fetch error
-        raises. Our index stores a season's own ratingKey, so seasons normally
-        fetch directly.
-        """
+        """Items for a ratingKey; None when Plex lacks the key, other errors raise."""
         try:
             rating_key = int(plex_id)
         except (TypeError, ValueError):
@@ -588,9 +580,8 @@ class PlexClient:
         Plex ratingKey from a guid-matched index hit), fetch that exact item —
         no title search, no same-title ambiguity, and it works even when the
         *arr title differs from Plex's. If the ratingKey is stale (item deleted
-        + re-added since the cache snapshot, so fetchItem 404s), we fall
+        + re-added since the cache snapshot, so fetchItem fails), we fall
         through to the live title+year search below, which self-heals the miss.
-        Any other fetch error raises rather than searching.
 
         Without a ``plex_id`` (lazy/fresh items, collections) the shared
         title-based rules apply: collections by title; movies/shows by
@@ -989,19 +980,27 @@ class PlexClient:
                 f"Failed to remove label '{label_name}' from '{matched_entry.get('title', '')}': {e}"
             )
 
+    def _label_target(self, entry: Dict[str, Any]):
+        """Label target: the exact ratingKey, else a title search; None when gone."""
+        plex_id = entry.get("plex_id")
+        if plex_id is not None:
+            located = self._fetch_by_rating_key(plex_id, entry.get("season_number"))
+        else:
+            located = self._locate_targets_uncached(
+                entry.get("library_name"),
+                entry.get("title"),
+                year=entry.get("year"),
+                is_collection=entry.get("asset_type") == "collection",
+                season_number=entry.get("season_number"),
+            )
+        return located[0] if located else None
+
     def current_labels(self, entry: Dict[str, Any]) -> Optional[List[str]]:
-        """The item's labels as Plex holds them now; None when Plex no longer has it. A failed lookup raises."""
-        targets = self._locate_targets_uncached(
-            entry.get("library_name"),
-            entry.get("title"),
-            year=entry.get("year"),
-            is_collection=entry.get("asset_type") == "collection",
-            season_number=entry.get("season_number"),
-            plex_id=entry.get("plex_id"),
-        )
-        if not targets:
+        """Labels Plex holds now; None when the item is gone. A failed lookup raises."""
+        target = self._label_target(entry)
+        if target is None:
             return None
-        return [label.tag for label in (getattr(targets[0], "labels", None) or [])]
+        return [label.tag for label in (getattr(target, "labels", None) or [])]
 
     def batch_update_labels(
         self,
@@ -1010,48 +1009,27 @@ class PlexClient:
         labels_to_remove: List[str],
         dry_run: bool = False,
     ) -> None:
-        """
-        Apply multiple label changes to a single Plex item in one search operation.
-        Avoids race conditions from separate search calls per label change.
-        """
-        try:
-            section = self.plex.library.section(matched_entry["library_name"])
-            asset_type = matched_entry.get("asset_type")
-            title = matched_entry.get("title")
-            year = matched_entry.get("year")
+        """Write labels to _label_target's item; raises if gone or a write fails."""
+        title = matched_entry.get("title")
+        library = matched_entry.get("library_name")
+        item = self._label_target(matched_entry)
+        if item is None:
+            raise LookupError(f"'{title}' is no longer in Plex library '{library}'")
 
-            if asset_type == "collection":
-                items = section.search(title=title, libtype="collection")
-            else:
-                items = section.search(title=title, year=year)
-
-            if not items:
-                self.logger.error(f"Item '{title}' not found in '{section.title}'")
-                return
-
-            item = items[0]
-
-            if dry_run:
-                for label in labels_to_add:
-                    self.logger.info(
-                        f"[DRY RUN] Would add label '{label}' to '{title}' in '{section.title}'"
-                    )
-                for label in labels_to_remove:
-                    self.logger.info(
-                        f"[DRY RUN] Would remove label '{label}' from '{title}' in '{section.title}'"
-                    )
-            else:
-                for label in labels_to_add:
-                    item.addLabel(label)
-                    self.logger.debug(
-                        f"Added label '{label}' to '{title}' in '{section.title}'"
-                    )
-                for label in labels_to_remove:
-                    item.removeLabel(label)
-                    self.logger.debug(
-                        f"Removed label '{label}' from '{title}' in '{section.title}'"
-                    )
-        except Exception as e:
-            self.logger.error(
-                f"Failed to update labels for '{matched_entry.get('title', '')}': {e}"
-            )
+        if dry_run:
+            for label in labels_to_add:
+                self.logger.info(
+                    f"[DRY RUN] Would add label '{label}' to '{title}' in '{library}'"
+                )
+            for label in labels_to_remove:
+                self.logger.info(
+                    f"[DRY RUN] Would remove label '{label}' from '{title}' "
+                    f"in '{library}'"
+                )
+            return
+        for label in labels_to_add:
+            item.addLabel(label)
+            self.logger.debug(f"Added label '{label}' to '{title}' in '{library}'")
+        for label in labels_to_remove:
+            item.removeLabel(label)
+            self.logger.debug(f"Removed label '{label}' from '{title}' in '{library}'")

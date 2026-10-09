@@ -291,6 +291,82 @@ def test_run_skips_unconfigured_plex_instance(monkeypatch):
     assert m.logger.errors == []
 
 
+def test_a_failed_label_write_raises_and_leaves_the_cache_alone():
+    m = make_module(config=SimpleNamespace(mappings=[], dry_run=False, log_level="info"))
+    m.logger = _RecordingLogger()
+    db = _FakeDB(
+        media_rows=[{"id": 1, "tags": ["kids"], "plex_mapping_id": 7}],
+        plex_rows=[{"id": 7, "title": "Movie", "asset_type": "movie", "labels": []}],
+    )
+    db.plex.upsert = lambda *a, **k: pytest.fail("a failed write must not be cached")
+
+    class _FailingClient:
+        def batch_update_labels(self, *a, **k):
+            raise LookupError("gone")
+
+    with pytest.raises(LookupError):
+        m.sync_to_plex(
+            plex_client=_FailingClient(),
+            plex_item=db.plex.get_by_id(7),
+            labels_lower={"kids": "kids"},
+            db=db,
+        )
+
+
+def test_run_skips_an_item_whose_label_write_fails(monkeypatch):
+    import backend.util.plex_refresh as plex_refresh_mod
+
+    mappings = [
+        LabelarrMapping(
+            app_instance="radarr_main",
+            labels=["kids"],
+            plex_instances=[
+                LabelarrPlexInstance(instance="plex_main", library_names=["Films"])
+            ],
+        )
+    ]
+    m = make_module(
+        config=SimpleNamespace(mappings=mappings, dry_run=False, log_level="info"),
+        full_config=ChubConfig(
+            instances=InstancesConfig(
+                plex={"plex_main": InstanceDetail(url="http://p", api="k")}
+            )
+        ),
+    )
+    m.logger = _RecordingLogger()
+    db = _FakeDB()
+    rows = [
+        {"id": 1, "plex_id": "1", "title": "First", "asset_type": "movie"},
+        {"id": 2, "plex_id": "2", "title": "Second", "asset_type": "movie"},
+    ]
+    db.plex.get_by_instance_and_library = lambda instance, library: rows
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+    monkeypatch.setattr(labelarr_mod, "Connector", _FakeConnector)
+    monkeypatch.setattr(labelarr_mod, "PlexClient", _LivePlexClient)
+    monkeypatch.setattr(
+        plex_refresh_mod, "refresh_plex_cache_if_stale", lambda *a, **k: None
+    )
+    sent = []
+    monkeypatch.setattr(
+        labelarr_mod,
+        "NotificationManager",
+        lambda *a, **k: SimpleNamespace(send_notification=sent.append),
+    )
+    m.handle_messages = lambda output: None
+
+    def fake_sync(plex_item, **kwargs):
+        if plex_item["id"] == 1:
+            raise LookupError("'First' is no longer in Plex")
+        return {"title": plex_item["title"], "year": None, "add_remove": {"kids": "add"}}
+
+    m.sync_to_plex = fake_sync
+
+    m.run()
+
+    assert sent == [[{"title": "Second", "year": None, "add_remove": {"kids": "add"}}]]
+    assert any("First" in e for e in m.logger.errors)
+
+
 def _adhoc_module(plex_instances):
     media_row = {
         "id": 1,
