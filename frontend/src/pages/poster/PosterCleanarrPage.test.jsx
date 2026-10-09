@@ -635,3 +635,40 @@ describe('Poster Cleanarr — stale and orphan lists stay current', () => {
         });
     });
 });
+
+describe('Poster Cleanarr — variant delete re-check', () => {
+    const anchored = { ...GHOST_A, rating_key: 4242, title: 'Real Movie' };
+
+    const deleteTheSelectedVariant = async user => {
+        render(<PosterCleanarrPage />);
+        await user.click(screen.getByText('Real Movie'));
+        await screen.findByAltText('only_a');
+        await user.click(screen.getByRole('button', { name: 'Select variant' }));
+        await user.click(screen.getByRole('button', { name: /Delete selected/i }));
+        await user.click(screen.getByRole('button', { name: 'Delete 1' }));
+    };
+
+    it('keeps a variant Plex uses now, says so, and rescans', async () => {
+        const user = userEvent.setup();
+        scanPayload = payload([anchored]);
+        mockPostersAPI.deletePlexMetadataVariant.mockRejectedValue({ status: 409, data: {} });
+
+        await deleteTheSelectedVariant(user);
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith('Deleted 0, 1 in use by Plex')
+        );
+        expect(mockPostersAPI.enqueuePlexMetadataScan).toHaveBeenCalled();
+    });
+
+    it('counts other failures as failed without a rescan', async () => {
+        const user = userEvent.setup();
+        scanPayload = payload([anchored]);
+        mockPostersAPI.deletePlexMetadataVariant.mockRejectedValue({ status: 503, data: {} });
+
+        await deleteTheSelectedVariant(user);
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Deleted 0, 1 failed'));
+        expect(mockPostersAPI.enqueuePlexMetadataScan).not.toHaveBeenCalled();
+    });
+});

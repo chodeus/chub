@@ -100,6 +100,35 @@ const ORPHAN_DELETE_ERRORS = {
     503: 'Orphan check unavailable — nothing was deleted',
 };
 
+const VARIANT_DELETE_ERRORS = {
+    409: 'Plex is using this variant now — it was not deleted',
+    503: 'Could not check Plex — nothing was deleted',
+};
+
+// Delete variants one at a time; the server keeps (409) any that Plex uses now.
+async function deleteVariants(paths) {
+    const deleted = new Set();
+    let inUse = 0;
+    let failed = 0;
+    for (const path of paths) {
+        try {
+            await postersAPI.deletePlexMetadataVariant(path);
+            deleted.add(path);
+        } catch (err) {
+            if (err?.status === 409) inUse += 1;
+            else failed += 1;
+        }
+    }
+    return { deleted, inUse, failed };
+}
+
+function variantDeleteSummary(prefix, { deleted, inUse, failed }) {
+    const parts = [`${prefix}${deleted.size}`];
+    if (inUse) parts.push(`${inUse} in use by Plex`);
+    if (failed) parts.push(`${failed} failed`);
+    return parts.join(', ');
+}
+
 // Poll a background job's log-tail until it reaches a terminal status. Resolves
 // with the final status (or undefined once `token.cancelled` flips, e.g. on
 // unmount or a superseding scan). Shared by the metadata-scan and kometa-scan
@@ -1035,8 +1064,10 @@ const PosterCleanarrPage = () => {
                 next.add(variant.path);
                 return next;
             });
-        } catch {
-            toast.error('Failed to delete variant');
+        } catch (err) {
+            toast.error(VARIANT_DELETE_ERRORS[err?.status] || 'Failed to delete variant');
+            // The tile's "active" flag came from a cached scan that Plex has moved past
+            if (err?.status === 409) refreshScan();
         }
     };
 
@@ -1048,16 +1079,8 @@ const PosterCleanarrPage = () => {
     const deleteSelected = async () => {
         if (bulkBusy || selectedPaths.size === 0) return;
         setBulkBusy(true);
-        const succeeded = new Set();
-        let failed = 0;
-        for (const path of selectedPaths) {
-            try {
-                await postersAPI.deletePlexMetadataVariant(path);
-                succeeded.add(path);
-            } catch {
-                failed += 1;
-            }
-        }
+        const result = await deleteVariants([...selectedPaths]);
+        const succeeded = result.deleted;
         setBulkBusy(false);
         setSelectedPaths(new Set());
         if (succeeded.size > 0) {
@@ -1067,8 +1090,9 @@ const PosterCleanarrPage = () => {
                 return next;
             });
         }
-        if (failed) toast.error(`Deleted ${succeeded.size}, ${failed} failed`);
+        if (result.inUse || result.failed) toast.error(variantDeleteSummary('Deleted ', result));
         else toast.success(`Deleted ${succeeded.size} variant${succeeded.size === 1 ? '' : 's'}`);
+        if (result.inUse) refreshScan();
     };
 
     // "Make active & delete rest": user ticks exactly one bloat variant, we
@@ -1096,19 +1120,12 @@ const PosterCleanarrPage = () => {
         const toDelete = detail.variants
             .filter(v => v.path !== keepPath && (v.cls?.source || 'uploads') !== 'plex')
             .map(v => v.path);
-        let ok = 0;
-        let failed = 0;
-        for (const path of toDelete) {
-            try {
-                await postersAPI.deletePlexMetadataVariant(path);
-                ok += 1;
-            } catch {
-                failed += 1;
-            }
-        }
+        const result = await deleteVariants(toDelete);
+        const ok = result.deleted.size;
         setBulkBusy(false);
         setSelectedPaths(new Set());
-        if (failed) toast.error(`Promoted active; deleted ${ok}, ${failed} failed`);
+        if (result.inUse || result.failed)
+            toast.error(variantDeleteSummary('Promoted active; deleted ', result));
         else toast.success(`Promoted active; deleted ${ok} variant${ok === 1 ? '' : 's'}`);
         refreshScan();
     };

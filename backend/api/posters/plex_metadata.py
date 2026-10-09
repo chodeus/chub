@@ -303,8 +303,22 @@ async def delete_plex_metadata_variant(
             return error(
                 "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
             )
-        ok_ = delete_variant(path, plex_path=plex_path)
-        if not ok_:
+        outcome = delete_variant(path, plex_path=plex_path)
+        if outcome == "in_use":
+            logger.info(f"UI delete refused, Plex uses it now: {path}")
+            return error(
+                "Plex is using this variant now; it was not deleted",
+                code="VARIANT_IN_USE",
+                status_code=409,
+            )
+        if outcome == "unverified":
+            logger.warning(f"UI delete refused, Plex's database could not be read: {path}")
+            return error(
+                "Could not check whether Plex uses this variant; nothing was deleted",
+                code="VARIANT_CHECK_FAILED",
+                status_code=503,
+            )
+        if outcome != "deleted":
             logger.warning(
                 f"UI delete rejected (outside metadata or I/O error): {path}"
             )
