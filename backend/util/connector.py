@@ -1379,3 +1379,70 @@ def build_sync_instance_map(config: ChubConfig, logger: Any = None) -> Dict[str,
             elif getattr(detail, "enabled_libraries", None) != []:
                 plex[name] = []
     return {"arrs": arrs, "plex": plex}
+
+
+ARR_KINDS = ("radarr", "sonarr", "lidarr")
+
+
+def resync_media(
+    db: ChubDB,
+    logger: Any,
+    names: List[str],
+    include_collections: bool = False,
+    purpose: str = "this check",
+) -> bool:
+    """Re-sync media_cache (and Plex collections) for `names` now; False = do not trust the cache."""
+    from backend.util.config import load_config  # call-time lookup, so tests can patch it
+
+    try:
+        known = load_config().instances
+    except Exception as e:
+        logger.error(f"Cannot load the config to refresh media for {purpose} ({e}).")
+        return False
+    arr_defs = {
+        name: detail
+        for kind in ARR_KINDS
+        for name, detail in (getattr(known, kind, None) or {}).items()
+    }
+    plex_defs = known.plex or {}
+    arrs = [name for name in names if name in arr_defs]
+    plex = (
+        {name: [] for name in names if name in plex_defs} if include_collections else {}
+    )
+    # Cached rows of a name that cannot be re-synced (renamed, removed or disabled
+    # instance) stay stale, so a check built on them would act on old data
+    stuck = [name for name in names if name not in arr_defs and name not in plex_defs]
+    stuck += [
+        name
+        for name in arrs + list(plex)
+        if not getattr(arr_defs.get(name) or plex_defs.get(name), "enabled", True)
+    ]
+    if stuck:
+        logger.error(
+            f"Cannot refresh {', '.join(stuck)}: not a configured, enabled instance. "
+            f"Skipping {purpose} rather than using stale data."
+        )
+        return False
+    if not arrs and not plex:
+        return True
+    try:
+        with Connector(
+            db=db, logger=logger, instance_map={"arrs": arrs, "plex": plex}
+        ) as connector:
+            results = connector.update_arr_database() if arrs else []
+            if plex:
+                results += connector.update_collections_database()
+    except Exception as e:
+        logger.error(
+            f"Could not refresh {', '.join(arrs + list(plex))} for {purpose} ({e}); "
+            "skipping it rather than using stale data."
+        )
+        return False
+    failed = sorted({r.instance_name for r in results if not r.success})
+    if failed:
+        logger.error(
+            f"Could not refresh {', '.join(failed)} for {purpose}; "
+            "skipping it rather than using stale data."
+        )
+        return False
+    return True
