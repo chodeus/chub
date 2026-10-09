@@ -835,7 +835,8 @@ class UnmatchedAssets(ChubModule):
                 f"{summary['grand_total']['percent_complete']:.2f}%",
             ],
         ]
-        return {"unmatched_dict": unmatched_dict, "summary": table}
+        last_match = (db.run_state.get_run_state("poster_renamerr") or {}).get("last_run")
+        return {"unmatched_dict": unmatched_dict, "summary": table, "last_match": last_match}
 
     def send_notification(self, db: ChubDB) -> None:
         manager = NotificationManager(

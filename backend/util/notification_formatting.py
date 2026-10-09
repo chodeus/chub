@@ -810,6 +810,23 @@ def format_for_discord(
             fields = [{"name": "No assets were applied.", "value": ""}]
         return fields
 
+    def fmt_unmatched_assets(o: Any) -> List[Dict[str, Any]]:
+        """Format unmatched_assets output for Discord embeds — counts only, it changes nothing."""
+        rows = (o.get("summary") if isinstance(o, dict) else None) or []
+        lines = [
+            f"{row[0]}: {row[2]} of {row[1]} unmatched ({row[3]} complete)"
+            for row in rows[1:]
+            if isinstance(row, (list, tuple)) and len(row) >= 4
+        ]
+        if not lines:
+            return [{"name": "Summary", "value": "No media to check yet."}]
+        last = o.get("last_match")
+        source = f"Poster Renamerr's last match ({last})" if last else "Poster Renamerr's last match"
+        return [
+            {"name": "Summary", "value": "```" + "\n".join(lines) + "```"},
+            {"name": "Based on", "value": source},
+        ]
+
     registry: Dict[str, Dict[str, Any]] = {
         "poster_renamerr": {"formatter": fmt_poster_renamerr, "type": "embedded"},
         "asset_renamerr": {"formatter": fmt_asset_renamerr, "type": "embedded"},
@@ -826,6 +843,7 @@ def format_for_discord(
         "sync_gdrive": {"formatter": fmt_sync_gdrive, "type": "embedded"},
         "version_check": {"formatter": fmt_version_check, "type": "embedded"},
         "error_notify": {"formatter": fmt_error_notify, "type": "embedded"},
+        "unmatched_assets": {"formatter": fmt_unmatched_assets, "type": "embedded"},
     }
     # Extension modules contribute their own formatters (empty on main). Lazy
     # import: this module loads during core init, before extensions are ready.
