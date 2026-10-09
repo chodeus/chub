@@ -26,6 +26,9 @@ vi.mock('react-router', () => ({
 
 const toast = { success: vi.fn(), error: vi.fn() };
 vi.mock('../../contexts/ToastContext.jsx', () => ({ useToast: () => toast }));
+const mockModulesAPI = { fetchRunStates: vi.fn() };
+vi.mock('../../utils/api/modules.js', () => ({ modulesAPI: mockModulesAPI }));
+let runStatesPayload = null;
 
 // The page calls useApiData three times; only the first (unmatched details)
 // carries the fixture. Keyed on apiFunction so order changes don't break this.
@@ -36,7 +39,9 @@ vi.mock('../../hooks/useApiData.js', () => ({
         data:
             apiFunction === mockPostersAPI.fetchUnmatchedDetails
                 ? { data: unmatchedPayload }
-                : null,
+                : apiFunction === mockModulesAPI.fetchRunStates
+                  ? { data: runStatesPayload }
+                  : null,
         isLoading: false,
         error: null,
         refresh,
@@ -365,5 +370,28 @@ describe('Unmatched tab — poster picker targets', () => {
         expect(
             screen.queryByText(/No candidate posters found in your cache/i)
         ).not.toBeInTheDocument();
+    });
+});
+
+describe('UnmatchedAssetsPage — where the results come from', () => {
+    beforeEach(() => {
+        unmatchedPayload = null;
+        runStatesPayload = null;
+    });
+
+    it('says the list is Poster Renamerr’s last match, and when that ran', () => {
+        unmatchedPayload = payload({ movies: [A_MOVIE] });
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        runStatesPayload = { poster_renamerr: { last_run: twoHoursAgo } };
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/Based on Poster Renamerr’s last match, .+/)).toBeInTheDocument();
+    });
+
+    it('points at Poster Renamerr when there is no match data yet', () => {
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/run Poster Renamerr to match your assets/)).toBeInTheDocument();
     });
 });

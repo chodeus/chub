@@ -478,3 +478,89 @@ def test_unwrap_proxy_refuses_a_nonart_src_on_a_configured_plex(monkeypatch):
     assert (
         image_fetch._unwrap_proxy(good) == "http://plex:32400/library/metadata/9/thumb/1"
     )
+
+
+# --------------------------------------------------------------------------
+# items added (or re-added) since the last Plex walk
+# --------------------------------------------------------------------------
+
+
+def _fresh_env(monkeypatch, fetch):
+    """Patch PlexServer so fetchItem answers with `fetch(rating_key)`."""
+    import plexapi.server
+
+    class _LiveServer(_Server):
+        def fetchItem(self, rating_key):
+            return fetch(rating_key)
+
+    monkeypatch.setattr(plexapi.server, "PlexServer", _LiveServer)
+
+
+def _main_cfg():
+    return _config({"main": SimpleNamespace(url="http://plex:32400", api="t", enabled=True)})
+
+
+def _movie_row(plex_id, tmdb, library="Films"):
+    return {
+        "asset_type": "movie",
+        "plex_id": plex_id,
+        "library_name": library,
+        "guids": f'{{"tmdb": "{tmdb}"}}',
+    }
+
+
+def test_plex_images_refreshes_the_snapshot_for_an_item_added_since_the_walk(monkeypatch):
+    rows = {"main": [_movie_row("3", 77)]}
+    targets = []
+
+    def refresh(db, cfg, logger, enabled, **kwargs):
+        targets.append(enabled)
+        rows["main"].append(_movie_row("9", 1))
+
+    monkeypatch.setattr("backend.util.plex_refresh.refresh_plex_cache_if_stale", refresh)
+    _fresh_env(monkeypatch, lambda key: _Item())
+
+    res = plex_images(_main_cfg(), _db(rows), _logger(), kind="movie", tmdb_id=1)
+
+    assert res["logos"] and "reason" not in res
+    assert targets == [{"main": ["Films"]}]
+
+
+def test_plex_images_retries_a_rating_key_that_went_stale(monkeypatch):
+    from plexapi.exceptions import NotFound
+
+    rows = {"main": [_movie_row("5", 1)]}
+
+    def refresh(db, cfg, logger, enabled, **kwargs):
+        rows["main"] = [_movie_row("9", 1)]  # Plex re-added the item under a new key
+
+    def fetch(key):
+        if key == 5:
+            raise NotFound("gone")
+        return _Item()
+
+    monkeypatch.setattr("backend.util.plex_refresh.refresh_plex_cache_if_stale", refresh)
+    _fresh_env(monkeypatch, fetch)
+
+    res = plex_images(_main_cfg(), _db(rows), _logger(), kind="movie", tmdb_id=1)
+
+    assert res["logos"] and "reason" not in res
+
+
+def test_plex_images_does_not_refresh_when_plex_is_unreachable(monkeypatch):
+    rows = {"main": [_movie_row("9", 1)]}
+    refreshed = []
+
+    def fetch(key):
+        raise ConnectionError("no route to host")
+
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda *a, **k: refreshed.append(a),
+    )
+    _fresh_env(monkeypatch, fetch)
+
+    res = plex_images(_main_cfg(), _db(rows), _logger(), kind="movie", tmdb_id=1)
+
+    assert res["reason"] == "Could not reach Plex."
+    assert refreshed == []

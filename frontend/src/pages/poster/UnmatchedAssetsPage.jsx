@@ -5,6 +5,9 @@ import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { systemAPI } from '../../utils/api/system.js';
+import { modulesAPI } from '../../utils/api/modules.js';
+import { formatDateTime } from '../../utils/datetime.js';
+import { formatTimeAgo } from '../../utils/schedule.js';
 import { copyText } from '../../utils/clipboard.js';
 import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
 import { extensionCapability } from '../../extensions/index.js';
@@ -2028,6 +2031,12 @@ const UnmatchedAssetsPage = () => {
         options: { showErrorToast: false },
     });
 
+    // Matches are written by Poster Renamerr; this page only reports its last run
+    const { data: runStates } = useApiData({
+        apiFunction: modulesAPI.fetchRunStates,
+        options: { showErrorToast: false },
+    });
+    const lastMatch = runStates?.data?.poster_renamerr?.last_run || null;
     const summary = useMemo(() => data?.data?.summary || {}, [data]);
     const items = useMemo(() => data?.data?.unmatched || {}, [data]);
     const reviewRows = useMemo(() => data?.data?.needs_review || [], [data]);
@@ -2199,11 +2208,18 @@ const UnmatchedAssetsPage = () => {
                 viewMode === 'unmatched' &&
                 (!hasData ? (
                     <p className="text-sm text-fg-muted">
-                        No unmatched-asset data yet. Run &ldquo;Run Unmatched Assets&rdquo; to scan
-                        your library.
+                        No match data yet. This page shows Poster Renamerr&rsquo;s last match: run
+                        Poster Renamerr to match your assets.
                     </p>
                 ) : (
                     <>
+                        <p
+                            className="mb-3 text-sm text-fg-muted"
+                            title={lastMatch ? formatDateTime(lastMatch) : undefined}
+                        >
+                            Based on Poster Renamerr&rsquo;s last match
+                            {lastMatch ? `, ${formatTimeAgo(lastMatch, new Date())}` : ''}.
+                        </p>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {SUMMARY_TYPES.map(({ key, label, icon }) => {
                                 const typeData = summary[key] || {};

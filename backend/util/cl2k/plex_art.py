@@ -1,14 +1,14 @@
 """Plex artwork source for the CL2K maker (:full-image).
 
 Resolves a media item to its Plex ratingKey via the ``plex_media_cache`` (the
-same snapshot asset_renamerr already syncs) and fetches that item's clearLogos,
-art (backgrounds) and posters through plexapi.
+same snapshot asset_renamerr already syncs, refreshed once when the item is
+missing or its key went stale) and fetches that item's clearLogos, art
+(backgrounds) and posters through plexapi.
 
 READ-ONLY by design: it never uploads, selects, or deletes anything — so it
 cannot move an asset into or out of the in-use set and therefore can't trigger
-any Poster Cleanarr bloat removal. Kept here rather than in the shared
-``backend/util/plex.py`` because the CL2K maker is part of the :full image and
-shared files must stay byte-identical with main.
+any Poster Cleanarr bloat removal. Kept here rather than in
+``backend/util/plex.py`` because the CL2K maker is part of the :full image.
 """
 
 from __future__ import annotations
@@ -81,6 +81,32 @@ def _resolve(
     return None, None
 
 
+def _refresh_snapshot(full_config, db, logger, media_type: Optional[str]) -> None:
+    """TTL-guarded walk of each enabled instance's movie (or TV) libraries; logs instead of raising."""
+    from backend.util.plex_refresh import refresh_plex_cache_if_stale
+
+    types = {"movie"} if (media_type or "").lower() == "movie" else _TV_TYPES
+    targets = {}
+    for name, cfg in (getattr(full_config.instances, "plex", {}) or {}).items():
+        if not (getattr(cfg, "enabled", True) and cfg.url and cfg.api):
+            continue
+        # [] (all libraries) only for an instance never walked, so Music isn't re-walked
+        targets[name] = sorted(
+            {
+                row.get("library_name")
+                for row in db.plex.get_by_instance(name) or []
+                if (row.get("asset_type") or "").lower() in types
+                and row.get("library_name")
+            }
+        )
+    if not targets:
+        return
+    try:
+        refresh_plex_cache_if_stale(db, full_config, logger, targets)
+    except Exception as exc:
+        logger.warning(f"cl2k: Plex snapshot refresh failed: {exc}")
+
+
 def _proxy_url(src: str) -> str:
     """Browser-facing URL for a local Plex image: the CL2K proxy fetches it
     server-side (re-minting the token) so the X-Plex-Token never reaches the
@@ -127,25 +153,47 @@ def plex_images(
     if not plex:
         return {**empty, "reason": "No Plex instance is configured."}
 
-    cfg, rating_key = _resolve(
-        full_config,
-        db,
-        media_type=kind,
-        tmdb_id=tmdb_id,
-        tvdb_id=tvdb_id,
-        imdb_id=imdb_id,
-    )
-    if not rating_key:
-        return {**empty, "reason": "Not found in a synced Plex library."}
+    def resolve():
+        return _resolve(
+            full_config,
+            db,
+            media_type=kind,
+            tmdb_id=tmdb_id,
+            tvdb_id=tvdb_id,
+            imdb_id=imdb_id,
+        )
 
-    try:
+    def fetch(cfg, rating_key):
         from plexapi.server import PlexServer
 
         server = PlexServer(cfg.url, cfg.api)
-        item = server.fetchItem(int(rating_key))
-    except Exception as exc:  # connection / fetch failure — degrade gracefully
-        logger.warning(f"cl2k: Plex artwork fetch failed (key={rating_key}): {exc}")
-        return {**empty, "reason": "Could not reach Plex."}
+        return server, server.fetchItem(int(rating_key))
+
+    from plexapi.exceptions import NotFound
+
+    cfg, rating_key = resolve()
+    stale = False
+    if rating_key:
+        try:
+            server, item = fetch(cfg, rating_key)
+        except NotFound:
+            stale = True  # re-added under a new ratingKey since the last walk
+        except Exception as exc:  # connection / fetch failure — degrade gracefully
+            logger.warning(f"cl2k: Plex artwork fetch failed (key={rating_key}): {exc}")
+            return {**empty, "reason": "Could not reach Plex."}
+    if not rating_key or stale:
+        # Added (or re-added) since the last walk: refresh the snapshot, look once more
+        _refresh_snapshot(full_config, db, logger, kind)
+        cfg, rating_key = resolve()
+        if not rating_key:
+            return {**empty, "reason": "Not found in a synced Plex library."}
+        try:
+            server, item = fetch(cfg, rating_key)
+        except NotFound:
+            return {**empty, "reason": "Not found in a synced Plex library."}
+        except Exception as exc:
+            logger.warning(f"cl2k: Plex artwork fetch failed (key={rating_key}): {exc}")
+            return {**empty, "reason": "Could not reach Plex."}
 
     out: Dict[str, Any] = {"logos": [], "backdrops": [], "posters": []}
     # plexapi method -> our bucket. arts() are backgrounds.

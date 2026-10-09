@@ -873,6 +873,22 @@ class PosterRenamerr(ChubModule):
         Instances with no snapshot contribute nothing (the coverage check then
         degrades to today's hash-only skip rather than re-staging everything).
         """
+        enabled = {
+            scope.instance: list(scope.library_names or [])
+            for scope in self.config.plex_scope or []
+            if scope.add_posters
+        }
+        if enabled:
+            # The uploader refreshes later; refresh now so the skip sees the same snapshot
+            from backend.util.plex_refresh import refresh_plex_cache_if_stale
+
+            try:
+                refresh_plex_cache_if_stale(db, self.full_config, self.logger, enabled)
+            except Exception as e:
+                self.logger.warning(
+                    f"Plex refresh before the unchanged-upload check failed ({e}); "
+                    "a new library copy may wait for the next run."
+                )
         indexes: List[PlexMediaIndex] = []
         for scope in self.config.plex_scope or []:
             if not scope.add_posters:
