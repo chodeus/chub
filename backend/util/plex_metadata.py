@@ -41,7 +41,8 @@ import shutil
 import sqlite3
 import threading
 import time
-from typing import Any, Dict, List, Optional, Set
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Set
 from urllib.parse import urlparse
 
 PLEX_DB_NAME = "com.plexapp.plugins.library.db"
@@ -111,6 +112,14 @@ def _is_missing_schema_error(exc: sqlite3.OperationalError) -> bool:
     return msg.startswith("no such column") or msg.startswith("no such table")
 
 
+def _in_use_filename(value: Any) -> Optional[str]:
+    """The file an `upload://` or `metadata://` artwork URL names, else None."""
+    if not isinstance(value, str) or not value.startswith(("upload://", "metadata://")):
+        return None
+    parsed = urlparse(value)
+    return (parsed.path.rsplit("/", 1)[-1] if parsed.path else "") or None
+
+
 def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
     """
     Extract the filenames currently referenced by any of IN_USE_IMAGE_COLUMNS on
@@ -143,12 +152,7 @@ def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
                             f"WHERE {col} LIKE 'upload://%' OR {col} LIKE 'metadata://%'"
                         )
                         for (value,) in cur.fetchall():
-                            if not value:
-                                continue
-                            parsed = urlparse(value)
-                            fname = (
-                                parsed.path.rsplit("/", 1)[-1] if parsed.path else ""
-                            )
+                            fname = _in_use_filename(value)
                             if fname:
                                 in_use.add(fname)
                     except sqlite3.OperationalError as e:
@@ -795,26 +799,66 @@ def get_cached_transcoder(plex_path: str) -> Optional[Dict[str, int]]:
     return {"count": cached["count"], "size_bytes": cached["size_bytes"]}
 
 
-def delete_variant(file_path: str, *, plex_path: str) -> bool:
-    """
-    Delete one variant file from disk.
+def variant_in_use(plex_path: str, filename: str) -> Optional[bool]:
+    """Whether Plex's live DB references `filename` now; None when it can't be read."""
+    db = os.path.join(plex_path, "Plug-in Support", "Databases", PLEX_DB_NAME)
+    if not filename or not os.path.isfile(db):
+        return None
+    escaped = filename.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    try:
+        # mode=ro on the live file: copying an ~800 MB DB per delete is too slow
+        conn = sqlite3.connect(f"{Path(db).as_uri()}?mode=ro", uri=True, timeout=5)
+        try:
+            cur = conn.cursor()
+            checked = False
+            sources = [("metadata_items", IN_USE_IMAGE_COLUMNS)]
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='tags'"
+            )
+            if cur.fetchone():
+                sources.append(("tags", TAG_IN_USE_IMAGE_COLUMNS))
+            for table, columns in sources:
+                for col in columns:
+                    try:
+                        cur.execute(
+                            f"SELECT {col} FROM {table} WHERE {col} LIKE ? ESCAPE '\\'",
+                            (f"%{escaped}%",),
+                        )
+                        values = cur.fetchall()
+                        checked = True
+                    except sqlite3.OperationalError as e:
+                        if not _is_missing_schema_error(e):
+                            raise
+                        continue
+                    if any(_in_use_filename(v) == filename for (v,) in values):
+                        return True
+            # No artwork column could be read: unverified, not "unused"
+            return False if checked else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
 
-    Refuses paths that:
-    - resolve outside Plex's Metadata dir, or
-    - sit under any `.bundle/Contents/` subtree (Plex-managed — deleting
-      these would have no lasting effect because Plex re-downloads them
-      from its metadata agents, and would pollute the scan cache).
-    Returns True on success.
-    """
+
+def delete_variant(
+    file_path: str, *, plex_path: str
+) -> Literal["deleted", "in_use", "unverified", "refused"]:
+    """Delete a variant unless it is outside Metadata, Plex-managed, or in use now."""
     real = resolve_in_metadata_dir(file_path, plex_path)
     if real is None:
-        return False
+        return "refused"
     # Plex-sourced variants sit under `<bundle>/Contents/…`. Refuse.
     if f"{os.sep}Contents{os.sep}" in real:
-        return False
+        return "refused"
+    in_use = variant_in_use(plex_path, os.path.basename(real))
+    if in_use is None:
+        return "unverified"
+    if in_use:
+        invalidate_cache()
+        return "in_use"
     try:
         os.remove(real)
         invalidate_cache()
-        return True
+        return "deleted"
     except Exception:
-        return False
+        return "refused"
