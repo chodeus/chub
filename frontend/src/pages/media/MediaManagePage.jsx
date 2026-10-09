@@ -890,6 +890,7 @@ const MediaManagePage = () => {
                                 'stray_folder',
                                 'stray_file',
                                 'extra_video_in_folder',
+                                'missing_file',
                             ].includes(issue.type);
                             const isNested =
                                 !isUnmatched &&
@@ -916,6 +917,10 @@ const MediaManagePage = () => {
                                 badgeBg = 'bg-error/10';
                             } else if (issue.type === 'extra_video_in_folder') {
                                 badgeLabel = 'Extra Video Files';
+                                badgeColor = 'text-error';
+                                badgeBg = 'bg-error/10';
+                            } else if (issue.type === 'missing_file') {
+                                badgeLabel = 'Missing Files';
                                 badgeColor = 'text-error';
                                 badgeBg = 'bg-error/10';
                             } else if (isNested) {
@@ -1003,10 +1008,17 @@ const MediaManagePage = () => {
                                             </div>
                                             {issue.video_files && issue.video_files.length > 0 && (
                                                 <div className="mt-1.5 font-mono text-xs leading-relaxed text-error/80 break-words">
-                                                    {issue.video_files.length} video files:{' '}
+                                                    Not recorded by {issue.instance}:{' '}
                                                     {issue.video_files.join(' · ')}
                                                 </div>
                                             )}
+                                            {issue.missing_files &&
+                                                issue.missing_files.length > 0 && (
+                                                    <div className="mt-1.5 font-mono text-xs leading-relaxed text-error/80 break-words">
+                                                        Recorded but not on disk:{' '}
+                                                        {issue.missing_files.join(' · ')}
+                                                    </div>
+                                                )}
                                         </>
                                     ) : (
                                         <>

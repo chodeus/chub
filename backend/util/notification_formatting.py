@@ -498,6 +498,7 @@ def format_for_discord(
             "stray_folder": "Stray Folder",
             "stray_file": "Stray File",
             "extra_video_in_folder": "Extra Video Files",
+            "missing_file": "Missing Files",
         }
         grouped: Dict[str, List[Dict[str, Any]]] = {}
         for issue in issues:

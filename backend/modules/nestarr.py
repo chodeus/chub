@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -119,7 +120,22 @@ class _NestScanner:
     nested inside other tracked media items.
     """
 
-    VIDEO_EXTS = frozenset({".mkv", ".mp4", ".avi", ".m4v", ".wmv", ".ts", ".m2ts"})
+    VIDEO_EXTS = frozenset(
+        {".mkv", ".mp4", ".avi", ".m4v", ".wmv", ".ts", ".m2ts", ".mov", ".mpg", ".mpeg",
+         ".webm", ".vob", ".iso", ".flv", ".ogm", ".divx", ".xvid", ".3gp", ".asf", ".wtv"}
+    )
+    # Folders and files Sonarr's disk scan skips (DiskScanService), so never "untracked"
+    SKIPPED_DIR_RE = re.compile(
+        r"^(?:extras|extrafanart|behind the scenes|deleted scenes|featurettes|interviews"
+        r"|other|scenes|samples|shorts|trailers|theme[-_. ]music|backdrops|@eadir"
+        r"|plex versions|\..+)$",
+        re.IGNORECASE,
+    )
+    SKIPPED_FILE_RE = re.compile(
+        r"^\.(?:_|unmanic|DS_Store$)|^Thumbs\.db$"
+        r"|-(?:trailer|other|behindthescenes|deleted|featurette|interview|scene|short)\.[^.]+$",
+        re.IGNORECASE,
+    )
 
     def __init__(
         self,
@@ -137,6 +153,7 @@ class _NestScanner:
         self.library_mappings = library_mappings
         self.path_mapping = path_mapping or []
         self.warnings: List[str] = []
+        self._unread_folders: List[str] = []
         self._cancelled = lambda: False
 
     def set_cancel_check(self, fn):
@@ -233,6 +250,13 @@ class _NestScanner:
                         f"rootFolderPath='{sample.get('rootFolderPath', 'N/A')}'"
                     )
 
+                file_paths = self._file_paths_by_item(app, instance_type, raw_media)
+                unknown = sum(1 for paths in file_paths.values() if paths is None)
+                if unknown:
+                    self._warn(
+                        f"File check skipped for {unknown} item(s) in {instance_name}: "
+                        "their file records could not be loaded."
+                    )
                 media_items = []
                 for item in raw_media:
                     path = item.get("path") or item.get("folderPath") or ""
@@ -270,6 +294,7 @@ class _NestScanner:
                             "instance_type": instance_type,
                             "instance_name": instance_name,
                             "has_file": has_file,
+                            "file_paths": file_paths.get(item.get("id")),
                         }
                     )
 
@@ -718,6 +743,131 @@ class _NestScanner:
         """
         return unicodedata.normalize("NFC", name).strip()
 
+    @staticmethod
+    def _path_key(path: str) -> str:
+        """normpath + NFC, so an NFD name on disk equals the NFC path the ARR API returns."""
+        return unicodedata.normalize("NFC", os.path.normpath(path))
+
+    def _file_paths_by_item(self, app, instance_type: str, raw_media: list) -> Dict[Any, Any]:
+        """ARR file-record paths per media id; None or absent means unknown (file check skipped)."""
+
+        def record_paths(records):
+            if not isinstance(records, list):
+                return None
+            return [r.get("path") for r in records if isinstance(r, dict) and r.get("path")]
+
+        def visible(item):
+            # Only folders Phase 3 can walk are worth a request
+            path = item.get("path") or item.get("folderPath") or ""
+            return bool(path) and os.path.isdir(self._translate_path(path))
+
+        if instance_type == "sonarr":
+            ids = [
+                item["id"]
+                for item in raw_media
+                if item.get("id") is not None and visible(item)
+            ]
+            fetched = app.get_episode_files_by_series(ids) if ids else {}
+            return {sid: record_paths(records) for sid, records in fetched.items()}
+        if instance_type != "radarr":
+            return {}
+        paths: Dict[Any, Any] = {}
+        for item in raw_media:
+            movie_file = item.get("movieFile") or {}
+            if movie_file.get("path"):
+                paths[item.get("id")] = [movie_file["path"]]
+            elif item.get("hasFile") and item.get("id") is not None and visible(item):
+                paths[item["id"]] = record_paths(app.get_movie_data(item["id"]))
+            elif not item.get("hasFile"):
+                paths[item.get("id")] = []
+        return paths
+
+    def _detect_file_mismatches(self, item: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Compare a tracked folder's video files with the ARR's file records, both ways."""
+        records = item.get("file_paths")
+        local_folder = self._translate_path(item["path"])
+        if records is None or not os.path.isdir(local_folder):
+            return []
+
+        walk_errors: List[OSError] = []
+        present: set = set()
+        scannable: Dict[str, str] = {}
+        for dirpath, _dirnames, filenames in os.walk(
+            local_folder, onerror=walk_errors.append
+        ):
+            relative_dir = os.path.relpath(dirpath, local_folder)
+            skipped_dir = relative_dir != "." and any(
+                self.SKIPPED_DIR_RE.match(part) for part in relative_dir.split(os.sep)
+            )
+            for name in filenames:
+                full = os.path.join(dirpath, name)
+                key = self._path_key(full)
+                present.add(key)
+                if skipped_dir or self.SKIPPED_FILE_RE.search(name):
+                    continue
+                if self._is_video_file(name):
+                    scannable[key] = os.path.relpath(full, local_folder)
+        if walk_errors:
+            # A partial walk would report every unread file as missing
+            self.logger.debug(
+                f"[Phase 3] Skipping file check for {item['path']}: {walk_errors[0]}"
+            )
+            self._unread_folders.append(item["path"])
+            return []
+
+        tracked = {
+            self._path_key(self._translate_path(record)): record for record in records
+        }
+        untracked = sorted(rel for key, rel in scannable.items() if key not in tracked)
+        missing = sorted(
+            os.path.relpath(record, item["path"])
+            for key, record in tracked.items()
+            if key not in present and not os.path.exists(self._translate_path(record))
+        )
+
+        issue_key = f"{item['instance_name']}_{item['media_id']}".replace(" ", "_")
+        base = {
+            "name": item["title"],
+            "year": item.get("year"),
+            "path": item["path"],
+            "root_folder": item["root_folder"],
+            "instance": item["instance_name"],
+            "instance_type": item["instance_type"],
+            "parent": {
+                "title": item["title"],
+                "year": item.get("year"),
+                "path": item["path"],
+                "media_id": item["media_id"],
+                "instance": item["instance_name"],
+                "instance_type": item["instance_type"],
+            },
+            "nested": None,
+            "suggested_path": None,
+            "suggested_action": "review",
+        }
+        issues: List[Dict[str, Any]] = []
+        if untracked:
+            self.logger.debug(f"  [UNTRACKED VIDEO] {item['path']}: {untracked}")
+            issues.append(
+                {
+                    **base,
+                    "id": f"extra_video_{issue_key}",
+                    "type": "extra_video_in_folder",
+                    "video_files": untracked,
+                }
+            )
+        if missing:
+            self.logger.debug(f"  [MISSING FILE] {item['path']}: {missing}")
+            issues.append(
+                {
+                    **base,
+                    "id": f"missing_file_{issue_key}",
+                    "type": "missing_file",
+                    "missing_files": missing,
+                }
+            )
+        return issues
+
     def _detect_stray_files(
         self, media_by_type: Dict[str, List[Dict[str, Any]]]
     ) -> List[Dict[str, Any]]:
@@ -725,7 +875,8 @@ class _NestScanner:
         Phase 3: Walk ARR root folders on the filesystem and detect:
         - Directories not tracked by any media item (stray_folder)
         - Video files sitting directly in a root folder (stray_file)
-        - Extra video files inside a tracked media folder (extra_video_in_folder)
+        - Video files in a tracked movie/series folder the ARR has no record of (extra_video_in_folder)
+        - ARR file records whose file is gone from disk (missing_file)
         """
         issues: List[Dict[str, Any]] = []
 
@@ -766,12 +917,9 @@ class _NestScanner:
 
                 # Build set of expected folder basenames for this root
                 expected_folders = set()
-                path_to_item: Dict[str, Dict[str, Any]] = {}
                 for item in items_in_root:
                     basename = self._normalize_fs_name(os.path.basename(item["path"]))
                     expected_folders.add(basename)
-                    local_path = self._translate_path(item["path"])
-                    path_to_item[local_path] = item
 
                 self.logger.debug(
                     f"[Phase 3] Scanning root '{arr_root}' ({media_type}): "
@@ -844,64 +992,21 @@ class _NestScanner:
                             }
                         )
 
-                # Check tracked media folders for extra video files
-                # (only for movies — series/artists legitimately have multiple video files)
-                if media_type == "movie":
-                    for local_path, item in path_to_item.items():
+                if media_type in ("movie", "series"):
+                    for item in items_in_root:
                         if self._cancelled():
                             break
-                        if not os.path.isdir(local_path):
-                            continue
-                        try:
-                            video_files = [
-                                f
-                                for f in os.listdir(local_path)
-                                if os.path.isfile(os.path.join(local_path, f))
-                                and self._is_video_file(f)
-                            ]
-                        except OSError as e:
-                            self.logger.debug(
-                                f"Could not list video files in {local_path}: {e}"
-                            )
-                            continue
-                        if len(video_files) > 1:
-                            stray_count += 1
-                            arr_item_path = item["path"]
-                            issue_id = (
-                                f"extra_video_{item['instance_name']}"
-                                f"_{item['media_id']}"
-                            ).replace(" ", "_")
-                            self.logger.debug(
-                                f"  [EXTRA VIDEO] {arr_item_path} has "
-                                f"{len(video_files)} video files: {video_files}"
-                            )
-                            issues.append(
-                                {
-                                    "id": issue_id,
-                                    "type": "extra_video_in_folder",
-                                    "name": item["title"],
-                                    "year": item.get("year"),
-                                    "path": arr_item_path,
-                                    "root_folder": item["root_folder"],
-                                    "instance": item["instance_name"],
-                                    "instance_type": item["instance_type"],
-                                    "video_files": video_files,
-                                    "parent": {
-                                        "title": item["title"],
-                                        "year": item.get("year"),
-                                        "path": arr_item_path,
-                                        "media_id": item["media_id"],
-                                        "instance": item["instance_name"],
-                                        "instance_type": item["instance_type"],
-                                    },
-                                    "nested": None,
-                                    "suggested_path": None,
-                                    "suggested_action": "review",
-                                }
-                            )
+                        found = self._detect_file_mismatches(item)
+                        stray_count += len(found)
+                        issues.extend(found)
 
                 self.logger.debug(f"[Phase 3] {arr_root}: {stray_count} issues found")
 
+        if self._unread_folders:
+            self._warn(
+                f"File check skipped for {len(self._unread_folders)} folder(s) CHUB "
+                f"could not fully read, e.g. {self._unread_folders[0]}."
+            )
         self.logger.debug(f"[Phase 3] Total filesystem issues: {len(issues)}")
         return issues
 
@@ -1009,6 +1114,7 @@ class Nestarr(ChubModule):
                     "stray_folder",
                     "stray_file",
                     "extra_video_in_folder",
+                    "missing_file",
                 }
                 UNMATCHED_TYPES = {"arr_not_in_plex", "plex_not_in_arr"}
                 arr_not_in_plex = [
@@ -1120,7 +1226,14 @@ class Nestarr(ChubModule):
                             files = issue.get("video_files", [])
                             self.logger.info(f"  [{itype}] {name} — {path}")
                             self.logger.info(
-                                f"    Contains {len(files)} video files: {', '.join(files)}"
+                                f"    {len(files)} video file(s) {issue.get('instance')} has no record of: "
+                                f"{', '.join(files)}"
+                            )
+                        elif issue["type"] == "missing_file":
+                            files = issue.get("missing_files", [])
+                            self.logger.info(f"  [{itype}] {name} — {path}")
+                            self.logger.info(
+                                f"    {len(files)} recorded file(s) not on disk: {', '.join(files)}"
                             )
                         else:
                             self.logger.info(f"  [{itype}] {path}")
