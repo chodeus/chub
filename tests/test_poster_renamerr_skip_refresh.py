@@ -7,7 +7,9 @@ from backend.modules.poster_renamerr import PosterRenamerr
 
 def _module(warnings):
     m = PosterRenamerr.__new__(PosterRenamerr)
-    m.logger = SimpleNamespace(warning=warnings.append, debug=lambda *a, **k: None)
+    m.logger = SimpleNamespace(
+        warning=lambda msg, **k: warnings.append(msg), debug=lambda *a, **k: None
+    )
     m.full_config = SimpleNamespace()
     m.config = SimpleNamespace(
         plex_scope=[

@@ -2036,7 +2036,9 @@ const UnmatchedAssetsPage = () => {
         apiFunction: modulesAPI.fetchRunStates,
         options: { showErrorToast: false },
     });
-    const lastMatch = runStates?.data?.poster_renamerr?.last_run || null;
+    const renamerrState = runStates?.data?.poster_renamerr;
+    const lastMatch = renamerrState?.last_run || null;
+    const renamerrRunning = renamerrState?.status === 'running';
     const summary = useMemo(() => data?.data?.summary || {}, [data]);
     const items = useMemo(() => data?.data?.unmatched || {}, [data]);
     const reviewRows = useMemo(() => data?.data?.needs_review || [], [data]);
@@ -2208,8 +2210,11 @@ const UnmatchedAssetsPage = () => {
                 viewMode === 'unmatched' &&
                 (!hasData ? (
                     <p className="text-sm text-fg-muted">
-                        No match data yet. This page shows Poster Renamerr&rsquo;s last match: run
-                        Poster Renamerr to match your assets.
+                        {renamerrRunning
+                            ? 'Poster Renamerr is running; its matches show here when it finishes.'
+                            : lastMatch
+                              ? `Poster Renamerr last ran ${formatTimeAgo(lastMatch, new Date())} and found no media to check.`
+                              : 'No match data yet. This page shows Poster Renamerr’s last match: run Poster Renamerr to match your assets.'}
                     </p>
                 ) : (
                     <>

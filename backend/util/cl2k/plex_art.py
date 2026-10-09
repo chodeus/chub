@@ -106,7 +106,7 @@ def _refresh_snapshot(full_config, db, logger, media_type: Optional[str]) -> Non
     try:
         refresh_plex_cache_if_stale(db, full_config, logger, targets)
     except Exception as exc:
-        logger.warning(f"cl2k: Plex snapshot refresh failed: {exc}")
+        logger.warning(f"cl2k: Plex snapshot refresh failed: {exc}", exc_info=True)
 
 
 def _proxy_url(src: str) -> str:

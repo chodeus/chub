@@ -887,7 +887,8 @@ class PosterRenamerr(ChubModule):
             except Exception as e:
                 self.logger.warning(
                     f"Plex refresh before the unchanged-upload check failed ({e}); "
-                    "a new library copy may wait for the next run."
+                    "a new library copy may wait for the next run.",
+                    exc_info=True,
                 )
         indexes: List[PlexMediaIndex] = []
         for scope in self.config.plex_scope or []:

@@ -394,4 +394,25 @@ describe('UnmatchedAssetsPage — where the results come from', () => {
 
         expect(screen.getByText(/run Poster Renamerr to match your assets/)).toBeInTheDocument();
     });
+
+    it('says a finished run found no media instead of asking for another run', () => {
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        runStatesPayload = { poster_renamerr: { last_run: twoHoursAgo, status: 'success' } };
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/last ran .+ and found no media to check/)).toBeInTheDocument();
+        expect(screen.queryByText(/run Poster Renamerr to match/)).toBeNull();
+    });
+
+    it('says Poster Renamerr is still running rather than that it found nothing', () => {
+        runStatesPayload = {
+            poster_renamerr: { last_run: new Date().toISOString(), status: 'running' },
+        };
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/Poster Renamerr is running/)).toBeInTheDocument();
+        expect(screen.queryByText(/found no media/)).toBeNull();
+    });
 });
