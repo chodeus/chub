@@ -14,6 +14,7 @@ on:
       - "requirements.txt"
       - "requirements-cl2k.txt"
       - "frontend/package-lock.json"
+      - "frontend/osv-scanner.toml"
       - ".github/workflows/dep-audit.yml"
   # main has required_pr=false, so a manifest can land without ever seeing a PR.
   push:
@@ -22,6 +23,7 @@ on:
       - "requirements.txt"
       - "requirements-cl2k.txt"
       - "frontend/package-lock.json"
+      - "frontend/osv-scanner.toml"
       - ".github/workflows/dep-audit.yml"
 
 permissions: {}
