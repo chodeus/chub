@@ -945,6 +945,52 @@ def test_apply_direct_uses_index_resolved_libraries():
     assert m._direct_target_lib_keys(db, _media(), False) == {"plex1/Films"}
 
 
+def test_apply_direct_searches_live_when_the_snapshot_lacks_the_item():
+    """An item added after the last Plex walk is not in the snapshot: search
+    live instead of failing it as "not found" (the picker would also lock it)."""
+    m = make_module(
+        apply_method="plex",
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1", library_names=["Films", "Films 4K"], add_posters=True
+            )
+        ],
+    )
+    searched = []
+
+    class FakeClient:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            searched.append((library_name, kw.get("plex_id")))
+            return library_name == "Films"  # live search finds it there only
+
+    m._plex_clients = {"plex1": FakeClient()}
+    # The snapshot exists but holds another movie, not _media()'s tmdb 1121330.
+    cache_rows = [
+        {
+            "plex_id": "7",
+            "instance_name": "plex1",
+            "asset_type": "movie",
+            "library_name": "Films",
+            "title": "Some Other Film",
+            "normalized_title": "someotherfilm",
+            "season_number": None,
+            "guids": {"tmdb": "999"},
+        }
+    ]
+    db = _empty_index_db(rows=cache_rows)
+
+    applied, _detail, applied_libs = m._apply_direct(
+        db, _media(), "logo", "/x/l.png", None, False
+    )
+
+    assert applied is True
+    assert searched == [("Films", None), ("Films 4K", None)]
+    assert applied_libs == ["plex1/Films"]
+
+
 def test_apply_direct_uses_plex_title_and_rating_key():
     """Index hit: the upload targets the cached Plex ratingKey and the PLEX
     title/year — NOT the *arr title — so an item whose Plex title differs still
@@ -1411,3 +1457,171 @@ def test_foldered_stem_needs_only_a_year_or_an_id_on_the_parent(folder):
     rec = build_asset_record("logo.png", f"/x/{folder}")
     assert rec["image_type"] == "logo"
     assert rec["normalized_title"] == "someshow"
+
+
+def _remaining_setup():
+    """Films + Films 4K opted in; the snapshot lacks _media(), so both are live-searched."""
+    m = make_module(
+        apply_method="plex",
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1", library_names=["Films", "Films 4K"], add_posters=True
+            )
+        ],
+    )
+    uploaded = []
+
+    class FakeClient:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            uploaded.append(library_name)
+            return library_name == "Films"  # the 4K library does not hold it
+
+    m._plex_clients = {"plex1": FakeClient()}
+    other = [
+        {
+            "plex_id": "7",
+            "instance_name": "plex1",
+            "asset_type": "movie",
+            "library_name": "Films",
+            "title": "Some Other Film",
+            "normalized_title": "someotherfilm",
+            "season_number": None,
+            "guids": {"tmdb": "999"},
+        }
+    ]
+    return m, _empty_index_db(rows=other), uploaded
+
+
+def _prev(url="http://x/l.png", libraries='["plex1/Films"]'):
+    return {
+        "match_status": "applied",
+        "applied_method": "plex",
+        "source": "fanart",
+        "matched_url": url,
+        "applied_libraries": libraries,
+    }
+
+
+def test_scheduled_apply_skips_libraries_the_same_source_already_reached():
+    m, db, uploaded = _remaining_setup()
+
+    applied, detail, libs = m._apply_direct_remaining(
+        db, _media(), "logo", None, "http://x/l.png", False, _prev(), "fanart", None
+    )
+
+    assert uploaded == ["Films 4K"]  # Films already holds this exact asset
+    assert (applied, libs) == (True, ["plex1/Films"])
+    assert detail == "plex1/Films"
+
+
+def test_scheduled_apply_uploads_everywhere_when_the_source_changed():
+    m, db, uploaded = _remaining_setup()
+
+    applied, _detail, libs = m._apply_direct_remaining(
+        db,
+        _media(),
+        "logo",
+        None,
+        "http://x/new.png",
+        False,
+        _prev(url="http://x/old.png"),
+        "fanart",
+        None,
+    )
+
+    assert uploaded == ["Films", "Films 4K"]
+    assert (applied, libs) == (True, ["plex1/Films"])
+
+
+def test_scheduled_apply_drops_a_recorded_library_that_is_no_longer_targeted():
+    m, db, uploaded = _remaining_setup()
+    prev = _prev(libraries='["plex1/Films", "plex1/Old Library"]')
+
+    applied, _detail, libs = m._apply_direct_remaining(
+        db, _media(), "logo", None, "http://x/l.png", False, prev, "fanart", None
+    )
+
+    assert uploaded == ["Films 4K"]
+    assert (applied, libs) == (True, ["plex1/Films"])
+
+
+def test_scheduled_apply_fails_when_only_an_untargeted_library_had_it():
+    m, db, uploaded = _remaining_setup()
+    prev = _prev(libraries='["plex1/Old Library"]')
+
+    class NothingHolds:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            uploaded.append(library_name)
+            return False
+
+    m._plex_clients = {"plex1": NothingHolds()}
+
+    applied, _detail, libs = m._apply_direct_remaining(
+        db, _media(), "logo", None, "http://x/l.png", False, prev, "fanart", None
+    )
+
+    assert uploaded == ["Films", "Films 4K"]
+    assert (applied, libs) == (False, [])
+
+
+def test_recorded_libraries_needs_the_same_unchanged_source():
+    m = make_module(apply_method="plex")
+    local = {
+        "match_status": "applied",
+        "applied_method": "plex",
+        "source": "local",
+        "matched_file": "/a/logo.png",
+        "source_mtime": 100.0,
+        "applied_libraries": '["plex1/Films"]',
+    }
+
+    same = m._recorded_libraries(local, "plex", "local", "/a/logo.png", None, 100.0)
+    touched = m._recorded_libraries(local, "plex", "local", "/a/logo.png", None, 200.0)
+    failed = m._recorded_libraries(
+        {**local, "match_status": "failed"}, "plex", "local", "/a/logo.png", None, 100.0
+    )
+
+    assert (same, touched, failed) == ({"plex1/Films"}, None, None)
+
+
+def test_a_second_run_does_not_reupload_where_the_asset_already_landed(db, monkeypatch):
+    """No snapshot: both libraries are live-searched. The 4K one never holds the
+    item, so each run retries it, but Films already has this exact logo."""
+    m = make_module(
+        sources=["fanart"],
+        apply_method="plex",
+        asset_types=["logo"],
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1", library_names=["Films", "Films 4K"], add_posters=True
+            )
+        ],
+    )
+    uploaded = []
+
+    class FakeClient:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            uploaded.append(library_name)
+            return library_name == "Films"
+
+    m._plex_clients = {"plex1": FakeClient()}
+    monkeypatch.setattr(m, "_gather_media", lambda _db: [_media(id=3)])
+    monkeypatch.setattr(
+        m, "_resolve_source", lambda *a, **k: ("fanart", None, "http://x/logo.png")
+    )
+
+    m.match_and_apply_assets(db)
+    m.match_and_apply_assets(db)
+
+    assert uploaded == ["Films", "Films 4K", "Films 4K"]
+    row = db.media_asset_matches.get_one("media", 3, "logo")
+    assert (row["match_status"], row["applied_libraries"]) == ("applied", '["plex1/Films"]')
