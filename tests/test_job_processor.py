@@ -415,3 +415,27 @@ def test_adhoc_rename_kometa_notifies_on_write(monkeypatch):
         _outcome_renamer(apply_method="kometa"), [{}], _logger(), 1
     )
     assert len(notes) == 1
+
+
+def test_labelarr_bulk_job_reports_a_refused_sync_as_a_failure(monkeypatch):
+    """A bulk sync that refused to run must not be reported as a successful job."""
+
+    class _Labelarr:
+        def __init__(self, logger=None):
+            pass
+
+        def labelarr_bulk_sync_adhoc(self, **kwargs):
+            return {
+                "success": False,
+                "message": "Could not refresh radarr_main; nothing was synced.",
+                "error_code": "ARR_REFRESH_FAILED",
+                "data": {"total": 1, "succeeded": 0, "failed": 1, "changed": 0},
+            }
+
+    monkeypatch.setattr("backend.modules.labelarr.Labelarr", _Labelarr)
+
+    res = jp._process_labelarr_bulk_sync_job(
+        {"source_instance": "radarr_main", "media_cache_ids": [1]}, _logger(), 1
+    )
+
+    assert (res["success"], res["error_code"]) == (False, "ARR_REFRESH_FAILED")

@@ -1093,6 +1093,14 @@ def _process_labelarr_bulk_sync_job(
             notify=notify,
         )
 
+        if not result.get("success", True):
+            return {
+                "status": 500,
+                "success": False,
+                "message": result.get("message", "Bulk labelarr sync failed"),
+                "error_code": result.get("error_code", "LABELARR_BULK_SYNC_FAILED"),
+                "data": result.get("data", {}),
+            }
         return {
             "status": 200,
             "success": True,

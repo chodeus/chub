@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from backend.util.arr import create_arr_client
 from backend.util.base_module import ChubModule
-from backend.util.connector import Connector
+from backend.util.connector import Connector, resync_media
 from backend.util.database import ChubDB
 from backend.util.helper import create_table, print_settings
 from backend.util.logger import Logger
@@ -690,6 +690,15 @@ class Labelarr(ChubModule):
                 labels_lower = {tag.lower(): tag for tag in managed_tags}
 
                 # Execute sync using labelarr's existing business logic (connector-based)
+                # Compare against the labels Plex has now, not the last walk's copy
+                live_labels = plex_client.current_labels(plex_item)
+                if live_labels is None:
+                    return {
+                        "success": False,
+                        "message": f"'{plex_item.get('title')}' was not found in Plex",
+                        "error_code": "PLEX_ITEM_NOT_FOUND",
+                    }
+                plex_item = {**plex_item, "labels": live_labels}
                 sync_result = self.sync_to_plex(
                     plex_client=plex_client,
                     plex_item=plex_item,
@@ -772,6 +781,23 @@ class Labelarr(ChubModule):
         ):
             available_plex = list(self.full_config.instances.plex.keys())
             resolved_plex_instance = available_plex[0] if available_plex else None
+
+        # Tags and the item list come from media_cache: re-sync the source first
+        with ChubDB(logger=self.logger) as db:
+            if not resync_media(
+                db, self.logger, [source_instance], purpose="the Labelarr sync"
+            ):
+                return {
+                    "success": False,
+                    "message": f"Could not refresh {source_instance}; nothing was synced.",
+                    "error_code": "ARR_REFRESH_FAILED",
+                    "data": {
+                        "total": len(media_cache_ids),
+                        "succeeded": 0,
+                        "failed": len(media_cache_ids),
+                        "changed": 0,
+                    },
+                }
 
         # Build the media->Plex mapping ONCE for the whole batch, then resolve
         # every item's plex_mapping_id up front. Previously each per-item

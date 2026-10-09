@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 
 import backend.modules.labelarr as labelarr_mod
 from backend.util.config import (
@@ -341,6 +343,9 @@ def test_adhoc_sync_manages_only_tag_action_tags(monkeypatch):
         def is_connected(self):
             return True
 
+        def current_labels(self, entry):
+            return []
+
     monkeypatch.setattr(labelarr_mod, "PlexClient", _FakePlexClient)
 
     captured = {}
@@ -367,3 +372,122 @@ def test_adhoc_sync_manages_only_tag_action_tags(monkeypatch):
     }
     # The item's unmanaged tag must not be synced.
     assert "unrelated" not in captured["labels_lower"]
+
+
+class _LivePlexClient:
+    """PlexClient double whose live labels differ from the cached row's."""
+
+    live = ["from-plex-now"]
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def is_connected(self):
+        return True
+
+    def current_labels(self, entry):
+        return self.live
+
+
+def test_adhoc_sync_compares_against_the_labels_plex_has_now(monkeypatch):
+    m, db = _adhoc_module(
+        plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}
+    )
+    db.plex._rows[7]["labels"] = ["removed-in-plex-since"]
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+    monkeypatch.setattr(labelarr_mod, "PlexClient", _LivePlexClient)
+    seen = {}
+
+    def fake_sync_to_plex(**kwargs):
+        seen["labels"] = kwargs["plex_item"]["labels"]
+        return None
+
+    m.sync_to_plex = fake_sync_to_plex
+
+    result = m.labelarr_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_id=1,
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        plex_mapping_id=7,
+        dry_run=True,
+    )
+
+    assert result["success"] is True
+    assert seen["labels"] == ["from-plex-now"]
+
+
+def test_adhoc_sync_fails_when_plex_no_longer_has_the_item(monkeypatch):
+    m, db = _adhoc_module(
+        plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}
+    )
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+
+    class _GoneClient(_LivePlexClient):
+        live = None
+
+    monkeypatch.setattr(labelarr_mod, "PlexClient", _GoneClient)
+    m.sync_to_plex = lambda **kwargs: pytest.fail("must not sync a missing item")
+
+    result = m.labelarr_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_id=1,
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        plex_mapping_id=7,
+    )
+
+    assert (result["success"], result["error_code"]) == (False, "PLEX_ITEM_NOT_FOUND")
+
+
+def _bulk_module(monkeypatch, resynced):
+    m, db = _adhoc_module(
+        plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}
+    )
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+    monkeypatch.setattr(labelarr_mod, "Connector", _FakeConnector)
+    calls = SimpleNamespace(resync=[], items=[])
+
+    def fake_resync(_db, _logger, names, **kwargs):
+        calls.resync.append(names)
+        return resynced
+
+    monkeypatch.setattr(labelarr_mod, "resync_media", fake_resync)
+
+    def fake_item(**kwargs):
+        calls.items.append(kwargs["media_cache_id"])
+        return {"success": True, "data": {}}
+
+    m.labelarr_sync_adhoc = fake_item
+    return m, calls
+
+
+def test_bulk_sync_resyncs_the_source_once_before_any_item(monkeypatch):
+    m, calls = _bulk_module(monkeypatch, resynced=True)
+
+    result = m.labelarr_bulk_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_ids=[1, 2, 3],
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        notify=False,
+    )
+
+    assert result["success"] is True
+    assert calls.resync == [["radarr_main"]]
+    assert calls.items == [1, 2, 3]
+
+
+def test_bulk_sync_syncs_nothing_when_the_resync_fails(monkeypatch):
+    m, calls = _bulk_module(monkeypatch, resynced=False)
+
+    result = m.labelarr_bulk_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_ids=[1, 2],
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        notify=False,
+    )
+
+    assert (result["success"], result["error_code"]) == (False, "ARR_REFRESH_FAILED")
+    assert calls.items == []
