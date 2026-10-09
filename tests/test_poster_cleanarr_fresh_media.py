@@ -10,7 +10,7 @@ from backend.modules.poster_cleanarr import (
     invalidate_kometa_assets_cache,
     scan_kometa_assets,
 )
-from backend.util.config import ChubConfig, InstanceDetail
+from backend.util.config import ChubConfig, ConfigError, InstanceDetail
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
 
@@ -157,7 +157,8 @@ def test_scan_fails_when_the_refresh_fails(env):
 def _module(env, **flags):
     m = object.__new__(PosterCleanarr)
     m.logger = _logger()
-    m.full_config = env.cfg
+    # Snapshot from before radarr_main was configured: the run must use the live config
+    m.full_config = ChubConfig()
     m.config = env.cfg.poster_cleanarr
     for key, value in flags.items():
         setattr(m.config, key, value)
@@ -194,6 +195,22 @@ def test_run_skips_both_passes_when_the_refresh_fails(env):
     assert gone.exists()
 
 
+def test_run_skips_both_passes_when_the_live_config_cannot_load(env, monkeypatch):
+    gone = _asset(env, "Gone Movie (2019).jpg")
+
+    def broken():
+        raise ConfigError("unreadable config")
+
+    monkeypatch.setattr("backend.util.config.load_config", broken)
+    m = _module(env, orphan_assets_enabled=True, orphan_assets_mode="remove")
+
+    orphan_stats, _ = m._run_asset_passes()
+
+    assert orphan_stats["count"] == 0
+    assert gone.exists()
+    assert env.maps == []
+
+
 def test_stale_pass_uses_the_folder_name_radarr_has_now(env):
     _seed(env.db, "k3", "Some Film (2024)", tmdb=500, folder="Old Name (2024) {tmdb-500}")
     (env.assets / "New Name (2024) {tmdb-500}").mkdir()
@@ -212,11 +229,11 @@ def test_stale_pass_uses_the_folder_name_radarr_has_now(env):
     assert stale_stats["count"] == 0
 
 
-def test_refresh_scope_is_known_arr_instances_plus_plex_for_collections(env):
+def test_refresh_scope_is_arr_instances_plus_plex_for_collections(env):
     env.cfg.instances.plex["plex_main"] = InstanceDetail(
         url="http://plex:32400", api="token"
     )
-    names = ["radarr_main", "plex_main", "not_configured"]
+    names = ["radarr_main", "plex_main"]
 
     with_collections = PosterCleanarr._refresh_comparison_set(
         env.db, names, True, env.cfg, _logger()
@@ -224,12 +241,35 @@ def test_refresh_scope_is_known_arr_instances_plus_plex_for_collections(env):
     without = PosterCleanarr._refresh_comparison_set(
         env.db, names, False, env.cfg, _logger()
     )
-    nothing_known = PosterCleanarr._refresh_comparison_set(
-        env.db, ["not_configured"], True, env.cfg, _logger()
-    )
 
-    assert (with_collections, without, nothing_known) == (True, True, True)
+    assert (with_collections, without) == (True, True)
     assert env.maps == [
         {"arrs": ["radarr_main"], "plex": {"plex_main": []}},
         {"arrs": ["radarr_main"], "plex": {}},
     ]
+
+
+@pytest.mark.parametrize(
+    "names, disabled",
+    [
+        (["radarr_main", "renamed_radarr"], None),
+        (["not_configured"], None),
+        (["radarr_main"], "radarr_main"),
+        (["radarr_main", "plex_main"], "plex_main"),
+    ],
+)
+def test_refresh_refuses_a_selection_it_cannot_resync(env, names, disabled):
+    env.cfg.instances.plex["plex_main"] = InstanceDetail(
+        url="http://plex:32400", api="token"
+    )
+    if disabled == "radarr_main":
+        env.cfg.instances.radarr["radarr_main"].enabled = False
+    elif disabled:
+        env.cfg.instances.plex[disabled].enabled = False
+
+    refreshed = PosterCleanarr._refresh_comparison_set(
+        env.db, names, True, env.cfg, _logger()
+    )
+
+    assert refreshed is False
+    assert env.maps == []

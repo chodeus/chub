@@ -834,13 +834,18 @@ class PosterCleanarr(ChubModule):
         stale_on = getattr(self.config, "stale_duplicates_enabled", False)
         if not (orphans_on or stale_on):
             return orphan_stats, stale_stats
+        # Selection from this run's config (keeps per-run overrides); instance
+        # definitions from the live config, the same one the Connector loads.
         scope = self._orphan_scope(self.config)
+        live = self._live_config(self.logger)
+        if live is None:
+            return orphan_stats, stale_stats
         with ChubDB(logger=self.logger) as db:
             refreshed = self._refresh_comparison_set(
                 db,
                 scope["instances"],
                 orphans_on and scope["include_collections"],
-                self.full_config,
+                live,
                 self.logger,
             )
             if not refreshed:
@@ -872,16 +877,32 @@ class PosterCleanarr(ChubModule):
     ) -> bool:
         """Re-sync media_cache (and collections) for `instances` from the live apps; False = don't trust it."""
         known = config.instances
-        arrs = [
-            name
-            for name in instances
-            if any(name in (getattr(known, kind, None) or {}) for kind in ARR_KINDS)
-        ]
+        arr_defs = {
+            name: detail
+            for kind in ARR_KINDS
+            for name, detail in (getattr(known, kind, None) or {}).items()
+        }
+        plex_defs = known.plex or {}
+        arrs = [name for name in instances if name in arr_defs]
         plex = (
-            {name: [] for name in instances if name in (known.plex or {})}
+            {name: [] for name in instances if name in plex_defs}
             if include_collections
             else {}
         )
+        # Cached rows of a name that cannot be re-synced (renamed, removed or disabled
+        # instance) are a stale comparison set, and stale sets delete new titles' assets
+        stuck = [name for name in instances if name not in arr_defs and name not in plex_defs]
+        stuck += [
+            name
+            for name in arrs + list(plex)
+            if not getattr(arr_defs.get(name) or plex_defs.get(name), "enabled", True)
+        ]
+        if stuck:
+            logger.error(
+                f"Cannot refresh {', '.join(stuck)}: not a configured, enabled instance. "
+                "Skipping the asset check rather than comparing against stale data."
+            )
+            return False
         if not arrs and not plex:
             return True
         try:
@@ -1172,12 +1193,7 @@ class PosterCleanarr(ChubModule):
         logger: Logger,
         ignore_titles: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Walk `asset_dirs` and report/move/remove files whose title doesn't
-        match any media row cached for the configured `instances`.
-
-        Reads media_cache + collection_cache; callers refresh them first
-        (_refresh_comparison_set) so a newly added title is not taken for an orphan.
-        """
+        """Report/move/remove assets matching no cached media of `instances`; callers refresh the cache first."""
         if mode not in VALID_ORPHAN_MODES:
             logger.error(
                 f"Invalid orphan_assets_mode '{mode}'. "
@@ -1223,7 +1239,7 @@ class PosterCleanarr(ChubModule):
         if not titles:
             logger.warning(
                 "Library title set is empty for the configured instances — check "
-                "that the orphan instances name your Radarr/Sonarr instances. "
+                "that the orphan instances name your Radarr/Sonarr/Lidarr instances. "
                 "Skipping to avoid mass deletion."
             )
             return None
