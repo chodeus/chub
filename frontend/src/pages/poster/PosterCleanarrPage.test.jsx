@@ -16,9 +16,10 @@ const mockPostersAPI = {
     scanKometaAssets: vi.fn(),
     enqueueKometaAssetsScan: vi.fn(),
     deleteKometaOrphan: vi.fn(),
-    tailJobLog: vi.fn(),
 };
 vi.mock('../../utils/api/posters.js', () => ({ postersAPI: mockPostersAPI }));
+const mockJobsAPI = { tailJobLog: vi.fn() };
+vi.mock('../../utils/api/jobs.js', () => ({ jobsAPI: mockJobsAPI }));
 vi.mock('../../hooks/useStreamToken.js', () => ({ useStreamToken: () => null }));
 vi.mock('react-router', () => ({
     Link: ({ children, ...rest }) => <a {...rest}>{children}</a>,
@@ -93,7 +94,7 @@ beforeEach(() => {
     // permanently short-circuited at its `if (!staleItems.length)` early exit.
     mockPostersAPI.scanKometaAssets.mockResolvedValue({ data: { stale: [], orphans: [] } });
     // Every job (cleanup or scan) reports done on its first poll.
-    mockPostersAPI.tailJobLog.mockResolvedValue({
+    mockJobsAPI.tailJobLog.mockResolvedValue({
         data: { status: 'success', lines: '', next_offset: 0 },
     });
 });
@@ -550,7 +551,7 @@ describe('Poster Cleanarr — stale and orphan lists stay current', () => {
         mockPostersAPI.scanKometaAssets.mockResolvedValue({
             data: { stale: [], orphans: [ORPHAN] },
         });
-        mockPostersAPI.tailJobLog.mockResolvedValue({
+        mockJobsAPI.tailJobLog.mockResolvedValue({
             data: { status: 'error', lines: '', next_offset: 0 },
         });
         render(<PosterCleanarrPage />);
@@ -567,7 +568,7 @@ describe('Poster Cleanarr — stale and orphan lists stay current', () => {
     it('refreshes the lists even when the log is hidden before the job ends', async () => {
         const user = userEvent.setup();
         let jobDone = false;
-        mockPostersAPI.tailJobLog.mockImplementation(jobId =>
+        mockJobsAPI.tailJobLog.mockImplementation(jobId =>
             Promise.resolve({
                 data: {
                     status: jobId === 1 && !jobDone ? 'running' : 'success',

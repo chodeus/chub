@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { mediaAPI } from '../../utils/api/media.js';
@@ -12,6 +12,7 @@ import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
 import { downloadBlob } from '../../utils/download.js';
+import { pollJobUntilDone } from '../../utils/jobPoll.js';
 
 const fmtBytes = n => {
     if (!n) return '0 B';
@@ -564,18 +565,35 @@ const MediaManagePage = () => {
         [collectionsData]
     );
 
-    const { execute: runRefreshCache, isLoading: isRefreshing } = useApiMutation(
-        () => mediaAPI.refreshLibrary(),
-        {
-            successMessage: 'Cache refresh initiated',
-            onSuccess: () => {
-                refreshDups();
-            },
-        }
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const refreshRunRef = useRef(null);
+    useEffect(
+        () => () => {
+            if (refreshRunRef.current) refreshRunRef.current.cancelled = true;
+        },
+        []
     );
 
+    // Reload only once the job ends: a reload at enqueue re-caches the old list for 10 min.
     const handleRefreshCache = async () => {
-        await runRefreshCache();
+        const token = { cancelled: false };
+        refreshRunRef.current = token;
+        setIsRefreshing(true);
+        try {
+            const res = await mediaAPI.refreshLibrary();
+            const jobId = res?.data?.job_id;
+            if (!jobId) throw new Error('Cache refresh was not queued');
+            const status = await pollJobUntilDone(jobId, token);
+            if (token.cancelled) return;
+            apiCore.clearCache('/media');
+            refreshDups();
+            if (status === 'success') toast.success('Cache refreshed');
+            else toast.error(`Cache refresh ended: ${status}`);
+        } catch {
+            if (!token.cancelled) toast.error('Cache refresh failed');
+        } finally {
+            if (!token.cancelled) setIsRefreshing(false);
+        }
     };
 
     const handleExport = async () => {

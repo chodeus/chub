@@ -650,7 +650,7 @@ export const postersAPI = {
 
     /** Enqueue a background Plex-metadata scan job (warms the bundle +
      *  transcoder cache off the event loop). Returns {job_id}; poll with
-     *  `tailJobLog`, then re-fetch `listPlexMetadataByMedia`. */
+     *  `jobsAPI.tailJobLog`, then re-fetch `listPlexMetadataByMedia`. */
     enqueuePlexMetadataScan: () => apiCore.post('/posters/plex-metadata/scan', {}),
 
     /** Flat list of bloat variants, largest first (cache-only read). */
@@ -703,15 +703,5 @@ export const postersAPI = {
         params.set('path', path);
         if (token) params.set('token', token);
         return `/api/posters/plex-metadata/variant-thumbnail?${params.toString()}`;
-    },
-
-    /** Poll a job's log file for incremental output. Must bypass the GET
-     *  cache: when the log isn't growing the poll URL never changes, and a
-     *  cached response masks the terminal status for the full TTL. */
-    tailJobLog: (jobId, offset = 0, maxBytes = 65536) => {
-        const qs = new URLSearchParams();
-        qs.set('offset', offset);
-        qs.set('max_bytes', maxBytes);
-        return apiCore.get(`/jobs/${jobId}/log-tail?${qs.toString()}`, { useCache: false });
     },
 };
