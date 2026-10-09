@@ -8,6 +8,7 @@ than propagating out of the worker.
 from types import SimpleNamespace
 
 import backend.util.job_processor as jp
+from backend.util.config import ChubConfig, InstanceDetail
 
 
 def _logger():
@@ -157,17 +158,20 @@ def _cfg_with_plex(plex):
     return SimpleNamespace(instances=SimpleNamespace(plex=plex))
 
 
+def _plex_detail():
+    return SimpleNamespace(enabled=True, url="http://plex:32400", api="token")
+
+
 def test_media_sync_uses_gentle_plex_refresh_not_forced_walk(monkeypatch):
     """Media sync takes the stale-gated plex refresh, never the forced full walk."""
     calls = []
     refresh_args = []
     monkeypatch.setattr("backend.util.connector.Connector", _media_sync_conn(calls))
-    monkeypatch.setattr("backend.util.connector.build_instance_map", lambda cfg: {})
     monkeypatch.setattr(
         "backend.util.plex_refresh.refresh_plex_cache_if_stale",
         lambda db, cfg, logger, enabled, **k: refresh_args.append(enabled) or True,
     )
-    cfg = _cfg_with_plex({"Chodeus": SimpleNamespace(enabled=True)})
+    cfg = _cfg_with_plex({"plex_main": _plex_detail()})
     monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: cfg)
 
     res = jp._process_media_sync_job({}, _logger(), 1, db=object())
@@ -177,7 +181,7 @@ def test_media_sync_uses_gentle_plex_refresh_not_forced_walk(monkeypatch):
     assert "plex_FORCED" not in calls, (
         "must use the TTL-guarded refresh, not the forced walk"
     )
-    assert refresh_args == [{"Chodeus": []}], (
+    assert refresh_args == [{"plex_main": []}], (
         "gentle Plex refresh called for the enabled instance"
     )
     assert calls[-1] == "close"
@@ -188,7 +192,6 @@ def test_media_sync_skips_plex_refresh_when_none_configured(monkeypatch):
     calls = []
     refresh_args = []
     monkeypatch.setattr("backend.util.connector.Connector", _media_sync_conn(calls))
-    monkeypatch.setattr("backend.util.connector.build_instance_map", lambda cfg: {})
     monkeypatch.setattr(
         "backend.util.plex_refresh.refresh_plex_cache_if_stale",
         lambda db, cfg, logger, enabled, **k: refresh_args.append(enabled) or True,
@@ -202,6 +205,36 @@ def test_media_sync_skips_plex_refresh_when_none_configured(monkeypatch):
     assert res["success"] is True
     assert "arr" in calls
     assert refresh_args == [], "no Plex instances -> no refresh call"
+
+
+def test_media_sync_syncs_every_configured_instance(monkeypatch):
+    """The job hands the connector every enabled, configured instance from the full config."""
+    maps = []
+
+    class _Conn(_media_sync_conn([])):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            maps.append(k.get("instance_map"))
+
+    monkeypatch.setattr("backend.util.connector.Connector", _Conn)
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale", lambda *a, **k: True
+    )
+    cfg = ChubConfig()
+    cfg.instances.radarr["radarr_main"] = InstanceDetail(url="http://radarr:7878", api="key")
+    cfg.instances.sonarr["sonarr_off"] = InstanceDetail(
+        url="http://sonarr:8989", api="key", enabled=False
+    )
+    cfg.instances.lidarr["lidarr_nokey"] = InstanceDetail(url="http://lidarr:8686", api="")
+    cfg.instances.plex["plex_main"] = InstanceDetail(url="http://plex:32400", api="token")
+    cfg.instances.plex["plex_optout"] = InstanceDetail(
+        url="http://plex2:32400", api="token", enabled_libraries=[]
+    )
+    monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: cfg)
+
+    jp._process_media_sync_job({}, _logger(), 1, db=object())
+
+    assert maps == [{"arrs": ["radarr_main"], "plex": {"plex_main": []}}]
 
 
 # --- plex-path upload failure: surfaced instead of swallowed ---

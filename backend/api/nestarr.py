@@ -78,7 +78,7 @@ def _scan_nested_media_sync(logger, db: ChubDB):
         path_mapping = (
             config.nestarr.path_mapping if config.nestarr.path_mapping else None
         )
-        issues = Nestarr.scan_instances(
+        issues, warnings = Nestarr.scan_instances(
             config.instances,
             logger,
             db=db,
@@ -90,17 +90,23 @@ def _scan_nested_media_sync(logger, db: ChubDB):
         sorted_instances = enabled_arr_instances(config.instances)
         config_hash = nestarr_config_fingerprint(config.nestarr)
         save_scan_results(
-            db, issues, sorted_instances, logger=logger, config_hash=config_hash
+            db,
+            issues,
+            sorted_instances,
+            logger=logger,
+            config_hash=config_hash,
+            warnings=warnings,
         )
 
         return ok(
-            message=f"Scan complete. Found {len(issues)} nesting issue(s).",
+            message=f"Scan complete. Found {len(issues)} issue(s).",
             data={
                 "issues": issues,
                 "total": len(issues),
                 "instances_checked": sorted_instances,
                 "scanned_at": datetime.now(timezone.utc).isoformat(),
                 "unmatched_enabled": bool(config.nestarr.library_mappings),
+                "warnings": warnings,
             },
         )
     except ConfigError:

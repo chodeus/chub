@@ -5,14 +5,16 @@ import json
 import os
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from backend.util.arr import create_arr_client
+from backend.util.arr import create_arr_client, normalize_arr_media
 from backend.util.base_module import ChubModule
+from backend.util.connector import Connector
 from backend.util.database import ChubDB
 from backend.util.helper import create_table, print_settings, progress
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+from backend.util.plex_refresh import walk_plex_libraries
 
 SCAN_TYPE = "nestarr"
 
@@ -39,6 +41,7 @@ def save_scan_results(
     instances_checked: list,
     logger=None,
     config_hash: Optional[str] = None,
+    warnings: Optional[List[str]] = None,
 ) -> None:
     """Persist Nestarr scan results to the scan_cache table so both the
     module run path and the UI scan endpoint hydrate the same cache."""
@@ -50,6 +53,7 @@ def save_scan_results(
                 "total": len(issues),
                 "instances_checked": instances_checked,
                 "config_hash": config_hash,
+                "warnings": warnings or [],
             },
             default=str,
         )
@@ -108,8 +112,8 @@ class _NestScanner:
     """
     Scans for media mismatches and path nesting:
 
-    Phase 1 — Database comparison: finds media in ARR but not in Plex
-    (and vice versa) using the media_cache and plex_media_cache tables.
+    Phase 1 — Live comparison: finds media in ARR but not in Plex (and vice
+    versa) by matching live ARR items against a fresh walk of the mapped Plex libraries.
 
     Phase 2 — Path nesting: detects tracked media items whose paths are
     nested inside other tracked media items.
@@ -132,10 +136,15 @@ class _NestScanner:
         self.instance_filter = instance_filter
         self.library_mappings = library_mappings
         self.path_mapping = path_mapping or []
+        self.warnings: List[str] = []
         self._cancelled = lambda: False
 
     def set_cancel_check(self, fn):
         self._cancelled = fn
+
+    def _warn(self, message: str) -> None:
+        self.warnings.append(message)
+        self.logger.warning(message)
 
     def scan(self) -> List[Dict[str, Any]]:
         issues: List[Dict[str, Any]] = []
@@ -143,11 +152,16 @@ class _NestScanner:
         radarr_media: List[Dict[str, Any]] = []
         sonarr_media: List[Dict[str, Any]] = []
         lidarr_media: List[Dict[str, Any]] = []
+        # Phase 1 inputs: normalized live rows per mapped instance, and the pulls that failed
+        arr_rows: Dict[str, List[Dict[str, Any]]] = {}
+        loaded_instances: set = set()
+        failed_instances: set = set()
+
+        arr_to_libraries, mapped_libraries = self._build_mapping_lookups()
 
         # Derive effective instance filter from valid library_mappings if configured
         effective_filter = self.instance_filter
         if self.library_mappings and not effective_filter:
-            arr_to_libraries, mapped_libraries = self._build_mapping_lookups()
             if mapped_libraries:
                 effective_filter = sorted(arr_to_libraries.keys())
             else:
@@ -180,9 +194,17 @@ class _NestScanner:
                     self.logger.warning(
                         f"[{instance_type}] '{instance_name}': connection failed."
                     )
+                    failed_instances.add(instance_name)
                     continue
 
                 raw_media = app.get_media()
+                if raw_media is None:
+                    self.logger.warning(
+                        f"[{instance_type}] '{instance_name}': could not load media."
+                    )
+                    failed_instances.add(instance_name)
+                    continue
+                loaded_instances.add(instance_name)
                 if not raw_media:
                     self.logger.debug(
                         f"[{instance_type}] '{instance_name}': no media found."
@@ -230,6 +252,14 @@ class _NestScanner:
                         has_file = (stats.get("trackFileCount") or 0) > 0
                     else:
                         has_file = True
+                    if instance_name in arr_to_libraries:
+                        row = normalize_arr_media(item, [], arr_type=instance_type)
+                        row.update(
+                            instance_name=instance_name,
+                            instance_type=instance_type,
+                            has_file=has_file,
+                        )
+                        arr_rows.setdefault(instance_name, []).append(row)
                     media_items.append(
                         {
                             "media_id": item.get("id"),
@@ -250,22 +280,15 @@ class _NestScanner:
                 elif instance_type == "lidarr":
                     lidarr_media.extend(media_items)
 
-        # Phase 1: Database comparison — ARR vs Plex.
+        # Phase 1: Live comparison — ARR vs Plex.
         # Opt-in only: runs when valid library_mappings scope the comparison
         # to specific Plex libraries. Without that scope the diff would flag
         # the entire library as unmatched, so it stays off until configured.
         if self.db and not self._cancelled():
-            _, mapped_libraries = self._build_mapping_lookups()
             if mapped_libraries:
-                # Build set of (instance_name, arr_id) for items that actually
-                # have a file on disk. Monitored-but-not-downloaded items get
-                # skipped from ARR→Plex comparison (they can't be in Plex).
-                live_with_file = {
-                    (m["instance_name"], m["media_id"])
-                    for m in (*radarr_media, *sonarr_media, *lidarr_media)
-                    if m.get("has_file") and m.get("media_id") is not None
-                }
-                issues.extend(self._detect_unmatched(live_with_file))
+                issues.extend(
+                    self._detect_unmatched(arr_rows, loaded_instances, failed_instances)
+                )
             else:
                 self.logger.info(
                     "[Phase 1] Skipping ARR/Plex unmatched comparison — no "
@@ -312,7 +335,7 @@ class _NestScanner:
         return issues
 
     # ------------------------------------------------------------------
-    # Phase 1: Database comparison — ARR media vs Plex media
+    # Phase 1: Live comparison — ARR media vs Plex media
     # ------------------------------------------------------------------
 
     def _build_mapping_lookups(self):
@@ -368,265 +391,140 @@ class _NestScanner:
         return arr_to_libraries, mapped_libraries
 
     def _detect_unmatched(
-        self, live_with_file: Optional[set] = None
+        self,
+        arr_rows: Dict[str, List[Dict[str, Any]]],
+        loaded_instances: set,
+        failed_instances: set,
     ) -> List[Dict[str, Any]]:
-        """
-        Compare media_cache against plex_media_cache to find:
-        - Items in ARR with no Plex match (plex_mapping_id is NULL/invalid)
-        - Items in Plex with no ARR entry pointing to them
-
-        When library_mappings is configured, only mapped libraries are
-        compared and unmapped libraries (e.g. Music) are excluded entirely.
-
-        If live_with_file is provided, ARR→Plex comparison skips media_cache
-        rows whose (instance_name, arr_id) is not in the set — i.e. items
-        that are monitored in the ARR but have no file on disk yet. Those
-        can't be in Plex, so they're not real mismatches.
-        """
+        """Match live ARR rows against a fresh walk of their mapped Plex libraries, both ways."""
         issues: List[Dict[str, Any]] = []
+        arr_to_libraries, mapped_libraries = self._build_mapping_lookups()
 
-        # Build mapping lookups if configured. Blank/incomplete mappings are
-        # ignored so an accidental empty row cannot turn Plex filtering into
-        # "compare against zero libraries".
-        arr_to_libraries = {}
-        mapped_libraries = set()
-        has_mappings = False
-        if self.library_mappings:
-            arr_to_libraries, mapped_libraries = self._build_mapping_lookups()
-            has_mappings = bool(mapped_libraries)
-        if has_mappings:
-            effective_instance_filter = set(arr_to_libraries.keys())
-            self.logger.debug(
-                f"[Phase 1] Library mappings active — "
-                f"ARR instances: {sorted(arr_to_libraries.keys())}"
+        libraries_by_plex: Dict[str, List[str]] = {}
+        for plex_inst, lib_name in sorted(mapped_libraries):
+            libraries_by_plex.setdefault(plex_inst, []).append(lib_name)
+        try:
+            usable = walk_plex_libraries(self.db, self.logger, libraries_by_plex)
+        except Exception as e:
+            self.logger.error(f"[Phase 1] Plex walk failed: {e}")
+            usable = set()
+        for plex_inst, lib_name in sorted(mapped_libraries - usable):
+            self._warn(
+                f"Unmatched check skipped for {plex_inst}/{lib_name}: "
+                "Plex could not be refreshed."
             )
-            for arr_inst, libs in arr_to_libraries.items():
-                self.logger.debug(
-                    f"  {arr_inst} → {len(libs)} Plex libraries: "
-                    f"{sorted(f'{inst}/{lib}' for inst, lib in libs)}"
+        # A library whose ARR pull failed would report every Plex item as "Not in ARR"
+        for arr_inst in sorted(failed_instances & arr_to_libraries.keys()):
+            for plex_inst, lib_name in sorted(arr_to_libraries[arr_inst] & usable):
+                self._warn(
+                    f"Unmatched check skipped for {plex_inst}/{lib_name}: "
+                    f"{arr_inst} could not be loaded."
                 )
-        else:
-            effective_instance_filter = (
-                set(self.instance_filter) if self.instance_filter else None
-            )
-            if self.library_mappings:
-                self.logger.warning(
-                    "[Phase 1] No valid library mappings found; falling back to "
-                    "unmapped ARR/Plex comparison."
-                )
-            self.logger.debug(
-                f"[Phase 1] No library mappings — "
-                f"instance filter: {sorted(effective_instance_filter) if effective_instance_filter else 'ALL'}"
-            )
-
-        # Get all Plex items
-        plex_items_raw = self.db.plex.get_all() or []
-
-        # When mappings exist, filter Plex items to only mapped libraries
-        if has_mappings:
-            plex_items = [
-                item
-                for item in plex_items_raw
-                if (item.get("instance_name"), item.get("library_name"))
-                in mapped_libraries
-            ]
-        else:
-            plex_items = plex_items_raw
-
-        self.logger.debug(
-            f"[Phase 1] Plex items: {len(plex_items_raw)} total, "
-            f"{len(plex_items)} after filtering"
-        )
-
-        valid_plex_ids = {item.get("id") for item in plex_items if item.get("id")}
-
-        # Pre-build plex_id -> (instance_name, library_name) lookup for O(n) performance
-        plex_lookup = {}
-        for p in plex_items_raw:
-            pid = p.get("id")
-            if pid is not None:
-                plex_lookup[pid] = (p.get("instance_name"), p.get("library_name"))
-
-        # Get all media cache items (used for both directions of comparison)
-        all_media_unfiltered = self.db.media.get_all() or []
-
-        # Filter by effective instances for ARR-not-in-Plex direction
-        if effective_instance_filter:
-            all_media = [
-                m
-                for m in all_media_unfiltered
-                if m.get("instance_name") in effective_instance_filter
-            ]
-        else:
-            all_media = all_media_unfiltered
-
-        self.logger.debug(
-            f"[Phase 1] Media cache: {len(all_media_unfiltered)} total, "
-            f"{len(all_media)} after instance filtering"
-        )
-
-        if self._cancelled():
+            usable -= arr_to_libraries[arr_inst]
+        if not usable or self._cancelled():
             return issues
 
-        # Build set of plex IDs referenced by ANY media_cache entry
-        # (used for Plex-not-in-ARR direction — unfiltered so we don't
-        # report Plex items matched by a different ARR instance)
-        matched_plex_ids = set()
-        for item in all_media_unfiltered:
-            mid = item.get("plex_mapping_id")
-            if mid is not None:
-                matched_plex_ids.add(mid)
-
-        self.logger.debug(
-            f"[Phase 1] {len(matched_plex_ids)} Plex IDs referenced by media_cache entries"
-        )
-
-        # Find ARR items not matched to Plex
+        plex_rows = [
+            row
+            for row in self.db.plex.get_all()
+            if (row.get("instance_name"), row.get("library_name")) in usable
+        ]
+        # logger=None keeps the matcher's per-item lines out of the Nestarr log
+        matcher = Connector(db=self.db, logger=None, instance_map={})
+        live_instances = loaded_instances & arr_to_libraries.keys()
+        indexes: Dict[frozenset, tuple] = {}
+        referenced: set = set()
         arr_matched = 0
-        arr_unmatched = 0
-        arr_skipped_no_file = 0
-        for item in all_media:
-            if self._cancelled():
-                return issues
 
-            # Skip items the live ARR pull says have no file on disk.
-            # They can't possibly be in Plex, so reporting them as
-            # "ARR→Plex unmatched" is noise.
-            if live_with_file is not None:
-                arr_id = item.get("arr_id")
-                inst_name = item.get("instance_name", "")
-                if arr_id is not None and (inst_name, arr_id) not in live_with_file:
-                    arr_skipped_no_file += 1
-                    continue
-
-            mapping_id = item.get("plex_mapping_id")
-
-            if has_mappings:
-                # With mappings: check if mapping_id points to a Plex item
-                # from a library mapped to THIS specific ARR instance
-                inst_name = item.get("instance_name", "")
-                mapped_libs_for_arr = arr_to_libraries.get(inst_name, set())
-
-                if mapping_id is not None:
-                    plex_pair = plex_lookup.get(mapping_id)
-                    if plex_pair and plex_pair in mapped_libs_for_arr:
-                        arr_matched += 1
-                        continue  # Matched within a mapped library
-                    # Unmatched — log reason
-                    reason = (
-                        f"plex_mapping_id={mapping_id} not in plex_lookup"
-                        if plex_pair is None
-                        else f"plex_mapping_id={mapping_id} maps to {plex_pair[0]}/{plex_pair[1]} "
-                        f"which is not in mapped libraries for {inst_name}"
-                    )
-                else:
-                    reason = "plex_mapping_id is NULL"
-            else:
-                # Without mappings: original behavior
-                if mapping_id is not None and mapping_id in valid_plex_ids:
-                    arr_matched += 1
-                    continue  # Already matched
-                reason = (
-                    "plex_mapping_id is NULL"
-                    if mapping_id is None
-                    else f"plex_mapping_id={mapping_id} not in {len(valid_plex_ids)} valid Plex IDs"
-                )
-
-            # Skip season entries to avoid duplicating show-level issues
-            if item.get("season_number") is not None:
+        for arr_inst in sorted(live_instances):
+            libs = frozenset(arr_to_libraries[arr_inst] & usable)
+            if not libs:
                 continue
+            if libs not in indexes:
+                candidates = [
+                    row
+                    for row in plex_rows
+                    if (row.get("instance_name"), row.get("library_name")) in libs
+                ]
+                indexes[libs] = (candidates, matcher._prepare_plex_index(candidates))
+            candidates, index = indexes[libs]
+            for row in arr_rows.get(arr_inst, []):
+                if self._cancelled():
+                    return issues
+                plex_row_id = matcher._find_plex_match(row, candidates, index)
+                if plex_row_id is not None:
+                    referenced.add(plex_row_id)
+                    arr_matched += 1
+                elif row.get("has_file"):  # no file yet = can't be in Plex
+                    issues.append(self._arr_not_in_plex_issue(row))
 
-            arr_unmatched += 1
-            instance_name = item.get("instance_name", "unknown")
-            media_id = item.get("id", 0)
-
-            self.logger.debug(
-                f"  [ARR→Plex] UNMATCHED: {instance_name} "
-                f"'{item.get('title', '?')}' ({item.get('year', '?')}) "
-                f"id={media_id} — {reason}"
-            )
-
-            issue_id = f"arr_unmatched_{instance_name}_{media_id}".replace(" ", "_")
-
-            issues.append(
-                {
-                    "id": issue_id,
-                    "type": "arr_not_in_plex",
-                    "name": item.get("title", "Unknown"),
-                    "year": item.get("year"),
-                    "path": item.get("folder", ""),
-                    "instance": instance_name,
-                    "instance_type": item.get("source", ""),
-                    "parent": None,
-                    "nested": None,
-                    "suggested_path": None,
-                    "suggested_action": "review",
-                }
-            )
-
-        self.logger.debug(
-            f"[Phase 1] ARR→Plex: {arr_matched} matched, {arr_unmatched} unmatched, "
-            f"{arr_skipped_no_file} skipped (no file on disk)"
+        # Instances not pulled live still own Plex items: count their stored links too
+        referenced.update(
+            row["plex_mapping_id"]
+            for row in self.db.media.get_all()
+            if row.get("plex_mapping_id") is not None
+            and row.get("instance_name") not in live_instances
         )
 
-        if self._cancelled():
-            return issues
-
-        # Find Plex items not matched to ARR
-        # plex_items already filtered to mapped libraries when mappings exist
-        plex_matched = 0
-        plex_unmatched = 0
-        for plex_item in plex_items:
-            if self._cancelled():
-                return issues
-
-            # Internal plex_media_cache row id — matched_plex_ids holds these
-            # (from media_cache.plex_mapping_id), NOT Plex ratingKeys.
-            row_id = plex_item.get("id")
-            if row_id in matched_plex_ids:
-                plex_matched += 1
-                continue  # An ARR item points to this Plex item
-
-            # Skip season entries
+        arr_unmatched = len(issues)
+        for plex_item in plex_rows:
+            if plex_item.get("id") in referenced:
+                continue
             if plex_item.get("season_number") is not None:
                 continue
-
-            plex_unmatched += 1
-            instance_name = plex_item.get("instance_name", "unknown")
-
-            self.logger.debug(
-                f"  [Plex→ARR] UNMATCHED: {instance_name} "
-                f"[{plex_item.get('library_name', '?')}] "
-                f"'{plex_item.get('title', '?')}' ({plex_item.get('year', '?')}) "
-                f"plex_id={plex_item.get('plex_id', '?')} (cache row {row_id}) "
-                f"— no media_cache entry references this item"
-            )
-
-            issue_id = f"plex_unmatched_{instance_name}_{row_id}".replace(" ", "_")
-
-            issues.append(
-                {
-                    "id": issue_id,
-                    "type": "plex_not_in_arr",
-                    "name": plex_item.get("title", "Unknown"),
-                    "year": plex_item.get("year"),
-                    "instance": instance_name,
-                    "instance_type": "plex",
-                    "library_name": plex_item.get("library_name", ""),
-                    "path": None,
-                    "parent": None,
-                    "nested": None,
-                    "suggested_path": None,
-                    "suggested_action": "review",
-                }
-            )
+            issues.append(self._plex_not_in_arr_issue(plex_item))
 
         self.logger.debug(
-            f"[Phase 1] Plex→ARR: {plex_matched} matched, {plex_unmatched} unmatched"
+            f"[Phase 1] ARR→Plex: {arr_matched} matched, {arr_unmatched} unmatched; "
+            f"Plex→ARR: {len(issues) - arr_unmatched} unmatched "
+            f"across {len(usable)} refreshed libraries"
         )
-        self.logger.debug(f"[Phase 1] Total unmatched issues: {len(issues)}")
-
         return issues
+
+    def _arr_not_in_plex_issue(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        instance_name = row.get("instance_name", "unknown")
+        self.logger.debug(
+            f"  [ARR→Plex] UNMATCHED: {instance_name} "
+            f"'{row.get('title', '?')}' ({row.get('year', '?')}) "
+            f"arr_id={row.get('arr_id')}"
+        )
+        return {
+            "id": f"arr_unmatched_{instance_name}_{row.get('arr_id')}".replace(" ", "_"),
+            "type": "arr_not_in_plex",
+            "name": row.get("title") or "Unknown",
+            "year": row.get("year"),
+            "path": row.get("folder", ""),
+            "instance": instance_name,
+            "instance_type": row.get("instance_type", ""),
+            "parent": None,
+            "nested": None,
+            "suggested_path": None,
+            "suggested_action": "review",
+        }
+
+    def _plex_not_in_arr_issue(self, plex_item: Dict[str, Any]) -> Dict[str, Any]:
+        instance_name = plex_item.get("instance_name", "unknown")
+        row_id = plex_item.get("id")
+        self.logger.debug(
+            f"  [Plex→ARR] UNMATCHED: {instance_name} "
+            f"[{plex_item.get('library_name', '?')}] "
+            f"'{plex_item.get('title', '?')}' ({plex_item.get('year', '?')}) "
+            f"plex_id={plex_item.get('plex_id', '?')} (cache row {row_id})"
+        )
+        return {
+            "id": f"plex_unmatched_{instance_name}_{row_id}".replace(" ", "_"),
+            "type": "plex_not_in_arr",
+            "name": plex_item.get("title", "Unknown"),
+            "year": plex_item.get("year"),
+            "instance": instance_name,
+            "instance_type": "plex",
+            "library_name": plex_item.get("library_name", ""),
+            "path": None,
+            "parent": None,
+            "nested": None,
+            "suggested_path": None,
+            "suggested_action": "review",
+        }
 
     # ------------------------------------------------------------------
     # Phase 2: Path nesting among tracked items
@@ -1098,6 +996,7 @@ class Nestarr(ChubModule):
                         enabled_arr_instances(self.full_config.instances),
                         logger=self.logger,
                         config_hash=nestarr_config_fingerprint(self.config),
+                        warnings=scanner.warnings,
                     )
 
             if self.is_cancelled():
@@ -1230,6 +1129,10 @@ class Nestarr(ChubModule):
                     self.full_config, self.logger, module_name="nestarr"
                 )
                 manager.send_notification(all_issues)
+            elif scanner.warnings:
+                self.logger.warning(
+                    "No issues found, but some checks were skipped (see warnings above)."
+                )
             else:
                 self.logger.info("No unmatched or nesting issues found.")
 
@@ -1270,10 +1173,10 @@ class Nestarr(ChubModule):
         instance_filter: Optional[List[str]] = None,
         library_mappings=None,
         path_mapping=None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
         Static scan method for use by the API layer.
-        Returns a list of all issues (unmatched + nesting + filesystem).
+        Returns (issues, warnings): unmatched + nesting + filesystem issues, and skipped checks.
         """
         scanner = _NestScanner(
             instances_config,
@@ -1283,4 +1186,4 @@ class Nestarr(ChubModule):
             library_mappings=library_mappings,
             path_mapping=path_mapping,
         )
-        return scanner.scan()
+        return scanner.scan(), scanner.warnings
