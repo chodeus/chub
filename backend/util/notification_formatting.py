@@ -1,3 +1,4 @@
+import datetime
 import os
 from typing import Any, Dict, List, Tuple
 
@@ -811,7 +812,7 @@ def format_for_discord(
         return fields
 
     def fmt_unmatched_assets(o: Any) -> List[Dict[str, Any]]:
-        """Format unmatched_assets output for Discord embeds — counts only, it changes nothing."""
+        """Discord fields for unmatched_assets: counts only, it changes nothing."""
         rows = (o.get("summary") if isinstance(o, dict) else None) or []
         lines = [
             f"{row[0]}: {row[2]} of {row[1]} unmatched ({row[3]} complete)"
@@ -820,8 +821,15 @@ def format_for_discord(
         ]
         if not lines:
             return [{"name": "Summary", "value": "No media to check yet."}]
+        source = "Poster Renamerr's last match"
         last = o.get("last_match")
-        source = f"Poster Renamerr's last match ({last})" if last else "Poster Renamerr's last match"
+        if last:
+            try:
+                when = datetime.datetime.fromisoformat(last).astimezone()
+                last = when.strftime("%Y-%m-%d %H:%M %Z")
+            except (TypeError, ValueError):
+                pass
+            source += f" ({last})"
         return [
             {"name": "Summary", "value": "```" + "\n".join(lines) + "```"},
             {"name": "Based on", "value": source},
