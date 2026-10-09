@@ -31,7 +31,9 @@ def test_returns_the_live_item_labels():
 
 
 def test_none_when_plex_no_longer_has_the_item():
-    assert _client(lambda *a, **k: []).current_labels(ENTRY) is None
+    labels = _client(lambda *a, **k: []).current_labels(ENTRY)
+
+    assert labels is None
 
 
 def test_a_failed_lookup_raises_rather_than_reading_as_gone():

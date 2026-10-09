@@ -474,16 +474,19 @@ def _bulk_module(monkeypatch, resynced):
     )
     monkeypatch.setattr(labelarr_mod, "ChubDB", db)
     monkeypatch.setattr(labelarr_mod, "Connector", _FakeConnector)
-    calls = SimpleNamespace(resync=[], items=[])
+    calls = SimpleNamespace(events=[], failing=set())
 
     def fake_resync(_db, _logger, names, **kwargs):
-        calls.resync.append(names)
+        calls.events.append(("resync", names))
         return resynced
 
     monkeypatch.setattr(labelarr_mod, "resync_media", fake_resync)
 
     def fake_item(**kwargs):
-        calls.items.append(kwargs["media_cache_id"])
+        mid = kwargs["media_cache_id"]
+        calls.events.append(("item", mid))
+        if mid in calls.failing:
+            return {"success": False, "error_code": "PLEX_ITEM_NOT_FOUND"}
         return {"success": True, "data": {}}
 
     m.labelarr_sync_adhoc = fake_item
@@ -502,8 +505,12 @@ def test_bulk_sync_resyncs_the_source_once_before_any_item(monkeypatch):
     )
 
     assert result["success"] is True
-    assert calls.resync == [["radarr_main"]]
-    assert calls.items == [1, 2, 3]
+    assert calls.events == [
+        ("resync", ["radarr_main"]),
+        ("item", 1),
+        ("item", 2),
+        ("item", 3),
+    ]
 
 
 def test_bulk_sync_syncs_nothing_when_the_resync_fails(monkeypatch):
@@ -518,4 +525,20 @@ def test_bulk_sync_syncs_nothing_when_the_resync_fails(monkeypatch):
     )
 
     assert (result["success"], result["error_code"]) == (False, "ARR_REFRESH_FAILED")
-    assert calls.items == []
+    assert calls.events == [("resync", ["radarr_main"])]
+
+
+def test_bulk_sync_fails_when_any_item_fails(monkeypatch):
+    m, calls = _bulk_module(monkeypatch, resynced=True)
+    calls.failing = {2}
+
+    result = m.labelarr_bulk_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_ids=[1, 2, 3],
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        notify=False,
+    )
+
+    assert (result["success"], result["error_code"]) == (False, "LABELARR_ITEMS_FAILED")
+    assert (result["data"]["succeeded"], result["data"]["failed"]) == (2, 1)

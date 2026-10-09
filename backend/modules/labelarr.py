@@ -870,8 +870,8 @@ class Labelarr(ChubModule):
             except Exception as e:
                 log.debug(f"labelarr bulk notification failed: {e}")
 
-        return {
-            "success": True,
+        result = {
+            "success": failed == 0,
             "message": (
                 f"Bulk labelarr sync complete: "
                 f"{succeeded} succeeded, {failed} failed, "
@@ -884,3 +884,6 @@ class Labelarr(ChubModule):
                 "changed": len(output),
             },
         }
+        if failed:
+            result["error_code"] = "LABELARR_ITEMS_FAILED"
+        return result

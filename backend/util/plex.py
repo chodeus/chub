@@ -502,14 +502,19 @@ class PlexClient:
         """Fetch the exact Plex item by ratingKey (the stable per-item id).
 
         Returns ``[item]``, or — when a *show* ratingKey arrives together with a
-        season_number — the matching ``[season]``. Returns ``None`` when the key
-        can't be fetched (e.g. a stale ratingKey after the item was re-added),
-        so the caller falls back to a live title+year search. Our index stores a
-        season's own ratingKey, so seasons normally fetch directly.
+        season_number — the matching ``[season]``. Returns ``None`` when Plex has
+        no such key (e.g. a stale ratingKey after the item was re-added), so the
+        caller falls back to a live title+year search. Any other fetch error
+        raises. Our index stores a season's own ratingKey, so seasons normally
+        fetch directly.
         """
         try:
-            item = self.plex.fetchItem(int(plex_id))
-        except Exception:
+            rating_key = int(plex_id)
+        except (TypeError, ValueError):
+            return None
+        try:
+            item = self.plex.fetchItem(rating_key)
+        except NotFound:
             return None
         if item is None:
             return None
@@ -583,8 +588,9 @@ class PlexClient:
         Plex ratingKey from a guid-matched index hit), fetch that exact item —
         no title search, no same-title ambiguity, and it works even when the
         *arr title differs from Plex's. If the ratingKey is stale (item deleted
-        + re-added since the cache snapshot, so fetchItem fails), we fall
+        + re-added since the cache snapshot, so fetchItem 404s), we fall
         through to the live title+year search below, which self-heals the miss.
+        Any other fetch error raises rather than searching.
 
         Without a ``plex_id`` (lazy/fresh items, collections) the shared
         title-based rules apply: collections by title; movies/shows by

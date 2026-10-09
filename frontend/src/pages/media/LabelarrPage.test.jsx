@@ -1,5 +1,4 @@
-/** "Sync now" must start a full Labelarr run: the per-item /labelarr/sync endpoint
- *  needs a source instance and media id, so posting it bare could only ever 422. */
+/** "Sync now" queues a full Labelarr module run, and reports a disabled module. */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const modules = {
