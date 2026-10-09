@@ -19,7 +19,7 @@ from backend.modules.poster_cleanarr import (
     invalidate_kometa_assets_cache,
     scan_kometa_assets,
 )
-from backend.util.config import ChubConfig, ConfigError
+from backend.util.config import ChubConfig, ConfigError, InstanceDetail
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
 from backend.util.path_safety import resolve_confined
@@ -50,8 +50,14 @@ def _live(monkeypatch, *allowed_roots):
     """Point load_config at a config whose allowed roots are `allowed_roots`."""
     cfg = ChubConfig()
     cfg.poster_renamerr.source_dirs = [str(r) for r in allowed_roots]
+    cfg.instances.radarr["radarr1"] = InstanceDetail(url="http://radarr:7878", api="key")
     monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
     return cfg
+
+
+@pytest.fixture(autouse=True)
+def _media_resync_succeeds(noop_media_resync):
+    """delete_orphan_asset and scan_kometa_assets re-sync radarr1 before checking."""
 
 
 def _collecting_logger():

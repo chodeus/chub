@@ -1,7 +1,7 @@
 import os
 from types import SimpleNamespace
 
-from backend.util.config import ChubConfig
+from backend.util.config import ChubConfig, InstanceDetail
 from backend.util.database import ChubDB
 
 
@@ -216,7 +216,9 @@ def test_orphan_delete_route_rejects_a_missing_path_before_scanning(
     assert called == []
 
 
-def test_orphan_delete_route_deletes_a_real_orphan(tmp_path, monkeypatch):
+def test_orphan_delete_route_deletes_a_real_orphan(
+    tmp_path, monkeypatch, noop_media_resync
+):
     """End to end through the threadpool hop, with the real scan behind it."""
     from backend.modules.poster_cleanarr import invalidate_kometa_assets_cache
     from backend.util.normalization import normalize_titles
@@ -231,6 +233,7 @@ def test_orphan_delete_route_deletes_a_real_orphan(tmp_path, monkeypatch):
     cfg.poster_renamerr.source_dirs = [str(tmp_path)]
     cfg.poster_cleanarr.asset_dirs = [str(assets)]
     cfg.poster_cleanarr.orphan_instances = ["radarr1"]
+    cfg.instances.radarr["radarr1"] = InstanceDetail(url="http://radarr:7878", api="key")
     monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
     invalidate_kometa_assets_cache()
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:

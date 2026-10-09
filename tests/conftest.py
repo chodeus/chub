@@ -2,6 +2,7 @@
 
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -107,3 +108,34 @@ def instances_config():
             "plex_main": InstanceDetail(url="http://plex:32400", api="token"),
         },
     )
+
+
+class _NoopConnector:
+    """Connector double: every sync succeeds and changes nothing."""
+
+    def __init__(self, db=None, logger=None, instance_map=None):
+        self.instance_map = instance_map or {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def update_arr_database(self):
+        return [
+            SimpleNamespace(instance_name=name, success=True)
+            for name in self.instance_map.get("arrs", [])
+        ]
+
+    def update_collections_database(self):
+        return [
+            SimpleNamespace(instance_name=name, success=True)
+            for name in self.instance_map.get("plex", {})
+        ]
+
+
+@pytest.fixture
+def noop_media_resync(monkeypatch):
+    """Poster Cleanarr's pre-check re-sync succeeds without contacting any app."""
+    monkeypatch.setattr("backend.modules.poster_cleanarr.Connector", _NoopConnector)

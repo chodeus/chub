@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.modules.poster_cleanarr import ORPHAN_RESTORE_DIR_NAME, PosterCleanarr
-from backend.util.config import ChubConfig, ConfigError
+from backend.util.config import ChubConfig, ConfigError, InstanceDetail
 from backend.util.database import ChubDB
 from backend.util.path_safety import resolve_confined
 
@@ -509,7 +509,7 @@ def test_execute_stale_remove_rmtrees_through_a_parent_descriptor(
     assert errors
 
 
-def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
+def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path, noop_media_resync):
     """run() with mode='nothing' (skips Plex/bloat) must still invoke BOTH the
     orphan and stale passes when their config flags are set — the path a
     SCHEDULED job takes, reading saved config. Proves all three cleaners are
@@ -540,7 +540,10 @@ def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
     m.logger = _sched_logger()
     m.mode = "nothing"
     m.plex_path = ""
-    m.full_config = SimpleNamespace()
+    m.full_config = ChubConfig()
+    live = ChubConfig()
+    live.instances.sonarr["sonarr"] = InstanceDetail(url="http://sonarr:8989", api="key")
+    monkeypatch.setattr("backend.util.config.load_config", lambda: live)
     m.config = SimpleNamespace(
         local_db=True,
         orphan_assets_enabled=True,
