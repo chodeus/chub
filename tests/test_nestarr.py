@@ -1,6 +1,7 @@
 """Focused tests for Nestarr scanner and API safety behavior."""
 
 import json
+import os
 import unicodedata
 from types import SimpleNamespace
 
@@ -627,20 +628,30 @@ def test_file_check_skips_unknown_records(stub_logger, tmp_path):
     assert _file_issues(issues) == {}
 
 
-def test_file_check_skips_a_folder_it_cannot_fully_read(stub_logger, tmp_path):
+def test_file_check_skips_a_folder_it_cannot_fully_read(
+    monkeypatch, stub_logger, tmp_path
+):
     root = tmp_path / "tv"
     folder = root / "Some Show"
     unreadable = folder / "Season 02"
     recorded = _touch(unreadable / "Some Show - S02E01.mkv")
     _touch(folder / "Season 01" / "Untracked.mkv")
-    unreadable.chmod(0)
-    try:
-        scanner = _NestScanner(None, stub_logger)
-        issues = scanner._detect_stray_files(
-            {"series": [_tracked(folder, root, file_paths=[recorded], kind="sonarr")]}
-        )
-    finally:
-        unreadable.chmod(0o755)
+    real_walk = os.walk
+
+    def walk(top, onerror=None, **kwargs):
+        # What os.walk does for a directory it cannot list (chmod 0 does not stop root)
+        for dirpath, dirnames, filenames in real_walk(top, onerror=onerror, **kwargs):
+            if dirpath == str(unreadable):
+                onerror(PermissionError(13, "Permission denied", dirpath))
+                continue
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(os, "walk", walk)
+    scanner = _NestScanner(None, stub_logger)
+
+    issues = scanner._detect_stray_files(
+        {"series": [_tracked(folder, root, file_paths=[recorded], kind="sonarr")]}
+    )
 
     assert _file_issues(issues) == {}
     assert scanner.warnings == [
