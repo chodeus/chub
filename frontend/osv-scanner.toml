@@ -1,0 +1,4 @@
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-07T00:00:00Z
+reason = "braces <= 3.0.3 has no fixed release. It reaches CHUB only as stylelint -> micromatch -> braces, a dev-only linter run on our own CSS globs, and is not in the shipped image. Re-check when this expires."
