@@ -14,6 +14,7 @@ from PIL import Image, UnidentifiedImageError
 
 from backend.util.base_module import ChubModule
 from backend.util.config import ChubConfig
+from backend.util.connector import Connector
 from backend.util.constants import (
     ASSET_IMAGE_EXTENSIONS,
     asset_type_regex,
@@ -41,6 +42,9 @@ _kometa_cache_lock = threading.Lock()
 _kometa_cache: Dict[str, Any] = {}
 # Bumped by every invalidation: a scan that straddles one must not repopulate.
 _kometa_cache_generation = 0
+
+
+ARR_KINDS = ("radarr", "sonarr", "lidarr")
 
 
 def _first_int_id(regex, names: Tuple[str, ...]) -> Optional[int]:
@@ -296,28 +300,8 @@ class PosterCleanarr(ChubModule):
             elif self.mode == "clear":
                 bloat_stats = self._execute_clear(restore_dir)
 
-            # === Orphan asset cleanup ===
-            orphan_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
-            if getattr(self.config, "orphan_assets_enabled", False):
-                with ChubDB(logger=self.logger) as db:
-                    orphan_stats = self._run_orphan_pass(
-                        db=db,
-                        mode=getattr(self.config, "orphan_assets_mode", "report"),
-                        logger=self.logger,
-                        **self._orphan_scope(self.config),
-                    )
-
-            # === Stale-duplicate asset cleanup ===
-            stale_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
-            if getattr(self.config, "stale_duplicates_enabled", False):
-                with ChubDB(logger=self.logger) as db:
-                    stale_stats = self._run_stale_pass(
-                        db=db,
-                        instances=self._resolve_orphan_instances(self.config),
-                        asset_dirs=list(getattr(self.config, "asset_dirs", []) or []),
-                        mode=getattr(self.config, "stale_duplicates_mode", "report"),
-                        logger=self.logger,
-                    )
+            # === Orphan + stale-duplicate asset cleanup ===
+            orphan_stats, stale_stats = self._run_asset_passes()
 
             # === Clean empty directories ===
             empty_dirs = 0
@@ -842,6 +826,86 @@ class PosterCleanarr(ChubModule):
     # Orphan asset cleanup
     # =========================================================================
 
+    def _run_asset_passes(self) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Orphan and stale-duplicate passes, after refreshing the media they compare against."""
+        orphan_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
+        stale_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
+        orphans_on = getattr(self.config, "orphan_assets_enabled", False)
+        stale_on = getattr(self.config, "stale_duplicates_enabled", False)
+        if not (orphans_on or stale_on):
+            return orphan_stats, stale_stats
+        scope = self._orphan_scope(self.config)
+        with ChubDB(logger=self.logger) as db:
+            refreshed = self._refresh_comparison_set(
+                db,
+                scope["instances"],
+                orphans_on and scope["include_collections"],
+                self.full_config,
+                self.logger,
+            )
+            if not refreshed:
+                return orphan_stats, stale_stats
+            if orphans_on:
+                orphan_stats = self._run_orphan_pass(
+                    db=db,
+                    mode=getattr(self.config, "orphan_assets_mode", "report"),
+                    logger=self.logger,
+                    **scope,
+                )
+            if stale_on:
+                stale_stats = self._run_stale_pass(
+                    db=db,
+                    instances=scope["instances"],
+                    asset_dirs=scope["asset_dirs"],
+                    mode=getattr(self.config, "stale_duplicates_mode", "report"),
+                    logger=self.logger,
+                )
+        return orphan_stats, stale_stats
+
+    @staticmethod
+    def _refresh_comparison_set(
+        db: ChubDB,
+        instances: List[str],
+        include_collections: bool,
+        config: ChubConfig,
+        logger: Logger,
+    ) -> bool:
+        """Re-sync media_cache (and collections) for `instances` from the live apps; False = don't trust it."""
+        known = config.instances
+        arrs = [
+            name
+            for name in instances
+            if any(name in (getattr(known, kind, None) or {}) for kind in ARR_KINDS)
+        ]
+        plex = (
+            {name: [] for name in instances if name in (known.plex or {})}
+            if include_collections
+            else {}
+        )
+        if not arrs and not plex:
+            return True
+        try:
+            with Connector(
+                db=db, logger=logger, instance_map={"arrs": arrs, "plex": plex}
+            ) as connector:
+                results = connector.update_arr_database() if arrs else []
+                if plex:
+                    results += connector.update_collections_database()
+        except Exception as e:
+            logger.error(
+                f"Could not refresh {', '.join(arrs + list(plex))} before the asset "
+                f"check ({e}); skipping it rather than comparing against stale data."
+            )
+            return False
+        failed = sorted({r.instance_name for r in results if not r.success})
+        if failed:
+            logger.error(
+                f"Could not refresh {', '.join(failed)} before the asset check; "
+                "skipping it rather than comparing against stale data."
+            )
+            return False
+        return True
+
     @staticmethod
     def _resolve_orphan_instances(config: Any) -> List[str]:
         """ARR instances whose libraries form the orphan comparison set.
@@ -1111,8 +1175,8 @@ class PosterCleanarr(ChubModule):
         """Walk `asset_dirs` and report/move/remove files whose title doesn't
         match any media row cached for the configured `instances`.
 
-        The comparison set is whatever poster_renamerr's last sync wrote to
-        media_cache + collection_cache — no live Plex/*arr calls here.
+        Reads media_cache + collection_cache; callers refresh them first
+        (_refresh_comparison_set) so a newly added title is not taken for an orphan.
         """
         if mode not in VALID_ORPHAN_MODES:
             logger.error(
@@ -1158,9 +1222,9 @@ class PosterCleanarr(ChubModule):
         titles = self._build_library_title_set(db, instances, include_collections)
         if not titles:
             logger.warning(
-                "Library title set is empty for the configured instances — "
-                "run poster_renamerr at least once to populate media_cache "
-                "before enabling orphan cleanup. Skipping to avoid mass deletion."
+                "Library title set is empty for the configured instances — check "
+                "that the orphan instances name your Radarr/Sonarr instances. "
+                "Skipping to avoid mass deletion."
             )
             return None
 
@@ -1440,8 +1504,8 @@ class PosterCleanarr(ChubModule):
         canonical = self._build_canonical_folder_map(db, instances)
         if not canonical:
             logger.warning(
-                "No canonical folders for the configured instances — run "
-                "poster_renamerr to populate media_cache before stale cleanup."
+                "No canonical folders for the configured instances — check that "
+                "the orphan instances name your Radarr/Sonarr instances."
             )
             return {"count": 0, "total_size": 0, "mode": mode}
         dupes = self._scan_stale_duplicates(valid_dirs, canonical)
@@ -1914,12 +1978,17 @@ def scan_kometa_assets(
 
     with _kometa_cache_lock:
         started_generation = _kometa_cache_generation
-    cfg = load_config().poster_cleanarr
-    scope = PosterCleanarr._orphan_scope(cfg)
+    full_config = load_config()
+    scope = PosterCleanarr._orphan_scope(full_config.poster_cleanarr)
     instances = scope["instances"]
     asset_dirs = scope["asset_dirs"]
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
+    # The page keeps its old lists on a failed scan; an empty one would read as "all cleaned up"
+    if not ca._refresh_comparison_set(
+        db, instances, scope["include_collections"], full_config, logger
+    ):
+        raise RuntimeError("Could not refresh the media the Kometa scan compares against")
 
     canonical = ca._build_canonical_folder_map(db, instances)
     stale_raw = ca._scan_stale_duplicates(asset_dirs, canonical)
@@ -1993,6 +2062,10 @@ def delete_orphan_asset(
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
     scope = PosterCleanarr._orphan_scope(config.poster_cleanarr)
+    if not ca._refresh_comparison_set(
+        db, scope["instances"], scope["include_collections"], config, logger
+    ):
+        return "unavailable", None
     orphans = ca._find_orphans(db, logger=logger, **scope)
     # An untrusted comparison set gives no verdict and no list: an empty one would
     # read as "nothing left" and wipe the page's list.

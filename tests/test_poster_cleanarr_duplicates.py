@@ -540,7 +540,7 @@ def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
     m.logger = _sched_logger()
     m.mode = "nothing"
     m.plex_path = ""
-    m.full_config = SimpleNamespace()
+    m.full_config = ChubConfig()
     m.config = SimpleNamespace(
         local_db=True,
         orphan_assets_enabled=True,
