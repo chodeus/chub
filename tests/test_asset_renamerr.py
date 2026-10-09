@@ -945,6 +945,52 @@ def test_apply_direct_uses_index_resolved_libraries():
     assert m._direct_target_lib_keys(db, _media(), False) == {"plex1/Films"}
 
 
+def test_apply_direct_searches_live_when_the_snapshot_lacks_the_item():
+    """An item added after the last Plex walk is not in the snapshot: search
+    live instead of failing it as "not found" (the picker would also lock it)."""
+    m = make_module(
+        apply_method="plex",
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1", library_names=["Films", "Films 4K"], add_posters=True
+            )
+        ],
+    )
+    searched = []
+
+    class FakeClient:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            searched.append((library_name, kw.get("plex_id")))
+            return library_name == "Films"  # live search finds it there only
+
+    m._plex_clients = {"plex1": FakeClient()}
+    # The snapshot exists but holds another movie, not _media()'s tmdb 1121330.
+    cache_rows = [
+        {
+            "plex_id": "7",
+            "instance_name": "plex1",
+            "asset_type": "movie",
+            "library_name": "Films",
+            "title": "Some Other Film",
+            "normalized_title": "someotherfilm",
+            "season_number": None,
+            "guids": {"tmdb": "999"},
+        }
+    ]
+    db = _empty_index_db(rows=cache_rows)
+
+    applied, _detail, applied_libs = m._apply_direct(
+        db, _media(), "logo", "/x/l.png", None, False
+    )
+
+    assert applied is True
+    assert searched == [("Films", None), ("Films 4K", None)]
+    assert applied_libs == ["plex1/Films"]
+
+
 def test_apply_direct_uses_plex_title_and_rating_key():
     """Index hit: the upload targets the cached Plex ratingKey and the PLEX
     title/year — NOT the *arr title — so an item whose Plex title differs still

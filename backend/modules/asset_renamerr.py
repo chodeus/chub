@@ -158,9 +158,9 @@ class AssetRenamerr(ChubModule):
         title, which often differs from Plex's (e.g. Radarr 'Aliens vs Predator:
         Requiem' vs Plex 'AVPR: Aliens vs Predator - Requiem').
 
-        Returns a list of entries (one per library, possibly empty = "indexed,
-        not here"), or None when the index is unavailable (no snapshot) so the
-        caller can fall back to a live type-filtered search.
+        Returns a list of entries (one per library, possibly empty = "not in
+        the snapshot"), or None when no snapshot exists; the caller searches
+        live in either case.
         """
         index = self._get_plex_index(db, instance_name)
         if index is None:
@@ -202,8 +202,9 @@ class AssetRenamerr(ChubModule):
         which frequently differs from Plex's (e.g. Radarr 'Aliens vs Predator:
         Requiem' vs Plex 'AVPR: Aliens vs Predator - Requiem'). Fall back
         per-instance to a live type-filtered search (by *arr title, no plex_id)
-        when the index has no snapshot. Single source of truth for both the
-        upload loop and the per-library idempotency key-set, so they can't drift.
+        when the index has no snapshot or does not hold the item yet. Single
+        source of truth for both the upload loop and the per-library
+        idempotency key-set, so they can't drift.
         """
         media_title = media.get("title")
         media_year = self._media_year(media)
@@ -226,8 +227,8 @@ class AssetRenamerr(ChubModule):
         out: List[Tuple[str, List[dict]]] = []
         for instance_name, opted_libs in self._enabled_plex_instances():
             resolved = self._index_resolved_targets(db, instance_name, media)
-            if resolved is None:
-                # No index snapshot → live type-filtered fallback (by *arr title).
+            if not resolved:
+                # No snapshot, or the snapshot predates this item: live type-filtered search.
                 client = self._plex_client_for(instance_name)
                 getter = getattr(client, "section_type", None) if client else None
                 targets: List[dict] = []
@@ -515,7 +516,7 @@ class AssetRenamerr(ChubModule):
         season_number = media.get("season_number")
 
         # Index-first (guid-matched, only libraries that actually hold the item);
-        # lazy live type-filtered fallback when no cache snapshot exists.
+        # live type-filtered fallback when the snapshot is missing or lacks the item.
         targets = self._resolve_apply_targets(db, media, is_collection)
 
         # Upload to EVERY matching library, not just the first — an item that
