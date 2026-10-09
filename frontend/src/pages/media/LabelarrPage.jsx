@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
-import { labelarrAPI } from '../../utils/api/labelarr.js';
 import { modulesAPI } from '../../utils/api/modules.js';
 import { configAPI } from '../../utils/api/config.js';
 import { instancesAPI } from '../../utils/api';
@@ -118,10 +117,20 @@ const LabelarrPage = () => {
     );
     useUnsavedChangesWarning(isDirty);
 
-    const { execute: runSync, isLoading: isSyncing } = useApiMutation(() => labelarrAPI.sync(), {
-        successMessage: 'Label sync initiated',
-        onSuccess: () => refreshStatus(),
-    });
+    // A full Labelarr run: it refreshes Radarr/Sonarr and Plex before syncing labels.
+    const { execute: runSync, isLoading: isSyncing } = useApiMutation(
+        async () => {
+            const res = await modulesAPI.runModule('labelarr');
+            if (res?.data?.disabled || res?.disabled) {
+                throw new Error('Labelarr is disabled — enable it on the Modules page first');
+            }
+            return res;
+        },
+        {
+            successMessage: 'Label sync queued',
+            onSuccess: () => refreshStatus(),
+        }
+    );
 
     // ─── ARR / Plex instance options for the editor dropdowns ──────────
     const arrOptions = useMemo(() => {
