@@ -462,9 +462,10 @@ class AssetRenamerr(ChubModule):
         """
         if self.config.dry_run:
             return False
-        if not prev or prev.get("match_status") != "applied":
-            return False
-        if prev.get("applied_method") != apply_method or prev.get("source") != source:
+        recorded = self._recorded_libraries(
+            prev, apply_method, source, file, url, src_mtime
+        )
+        if recorded is None:
             return False
         # For the kometa path, the destination file must still exist.
         if apply_method == "kometa":
@@ -477,26 +478,69 @@ class AssetRenamerr(ChubModule):
         # uploaded_libraries logic).
         if apply_method == "plex" and media is not None:
             expected = self._direct_target_lib_keys(db, media, is_collection)
-            try:
-                recorded = set(json.loads(prev.get("applied_libraries") or "[]"))
-            except (ValueError, TypeError):
-                self.logger.debug(
-                    "Could not parse applied_libraries "
-                    f"{prev.get('applied_libraries')!r}; treating as unapplied"
-                )
-                recorded = set()
             if not expected.issubset(recorded):
                 return False
+        return True
+
+    def _recorded_libraries(
+        self,
+        prev: Optional[dict],
+        apply_method: str,
+        source: str,
+        file: Optional[str],
+        url: Optional[str],
+        src_mtime: Optional[float],
+    ) -> Optional[Set[str]]:
+        """Libraries an earlier apply of this same, unchanged source reached; None if there was none."""
+        if not prev or prev.get("match_status") != "applied":
+            return None
+        if prev.get("applied_method") != apply_method or prev.get("source") != source:
+            return None
         if source == "fanart":
-            return bool(url) and prev.get("matched_url") == url
-        # local: same file + unchanged mtime
-        return (
-            bool(file)
-            and prev.get("matched_file") == file
-            and prev.get("source_mtime") is not None
-            and src_mtime is not None
-            and float(prev.get("source_mtime")) == float(src_mtime)
+            same = bool(url) and prev.get("matched_url") == url
+        else:  # local: same file + unchanged mtime
+            same = (
+                bool(file)
+                and prev.get("matched_file") == file
+                and prev.get("source_mtime") is not None
+                and src_mtime is not None
+                and float(prev.get("source_mtime")) == float(src_mtime)
+            )
+        if not same:
+            return None
+        try:
+            return set(json.loads(prev.get("applied_libraries") or "[]"))
+        except (ValueError, TypeError):
+            self.logger.debug(
+                "Could not parse applied_libraries "
+                f"{prev.get('applied_libraries')!r}; treating as unapplied"
+            )
+            return set()
+
+    def _apply_direct_remaining(
+        self,
+        db: ChubDB,
+        media: dict,
+        image_type: str,
+        file: Optional[str],
+        url: Optional[str],
+        is_collection: bool,
+        prev: Optional[dict],
+        source: str,
+        src_mtime: Optional[float],
+    ) -> Tuple[bool, str, List[str]]:
+        """_apply_direct, skipping libraries this same unchanged source already reached; records the union."""
+        done = (
+            self._recorded_libraries(prev, "plex", source, file, url, src_mtime) or set()
         )
+        applied, detail, new = self._apply_direct(
+            db, media, image_type, file, url, is_collection, skip_libs=done
+        )
+        if not done:
+            return applied, detail, new
+        libs = sorted(done | set(new))
+        # The libraries reached before still hold it, so the asset stays applied
+        return True, ", ".join(libs), libs
 
     def _apply_direct(
         self,
@@ -506,6 +550,7 @@ class AssetRenamerr(ChubModule):
         file: Optional[str],
         url: Optional[str],
         is_collection: bool,
+        skip_libs: Optional[Set[str]] = None,
     ) -> Tuple[bool, str, List[str]]:
         method_name = IMAGE_TYPE_TO_PLEX_METHOD.get(image_type)
         if not method_name:
@@ -531,7 +576,7 @@ class AssetRenamerr(ChubModule):
                 continue
             for tgt in lib_targets:
                 lib = tgt.get("library_name")
-                if not lib:
+                if not lib or f"{instance_name}/{lib}" in (skip_libs or ()):
                     continue
                 ok = getattr(client, method_name)(
                     lib,
@@ -967,8 +1012,16 @@ class AssetRenamerr(ChubModule):
 
                 applied_libs: Optional[List[str]] = None
                 if apply_method == "plex":
-                    applied, detail, applied_libs = self._apply_direct(
-                        db, media, image_type, file, url, is_collection
+                    applied, detail, applied_libs = self._apply_direct_remaining(
+                        db,
+                        media,
+                        image_type,
+                        file,
+                        url,
+                        is_collection,
+                        prev,
+                        source,
+                        src_mtime,
                     )
                 else:
                     applied, detail = self._apply_kometa(
