@@ -7,8 +7,8 @@ export const nestarrAPI = {
     /** Last run's cached results; persists across page navigations. */
     getResults: () => apiCore.get('/nestarr/results', { useCache: false }),
 
-    /** Scan every instance for nested-media issues. */
-    scan: () => apiCore.post('/nestarr/scan', {}, { timeout: 120000 }),
+    /** Scan every instance; the unmatched check re-walks the mapped Plex libraries first. */
+    scan: () => apiCore.post('/nestarr/scan', {}, { timeout: 300000 }),
 
     /** Dry-run a fix: current/target paths and rename info. Same params as `fix`. */
     preview: params => apiCore.post('/nestarr/preview', params),

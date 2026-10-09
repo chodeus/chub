@@ -1,4 +1,4 @@
-"""Shared, TTL-guarded refresh of CHUB's ``plex_media_cache`` snapshot.
+"""Shared refresh of CHUB's ``plex_media_cache`` snapshot: TTL-guarded, or forced per library.
 
 The "plex" apply paths (poster upload, asset_renamerr direct apply) resolve
 artwork targets from ``plex_media_cache`` via :class:`PlexMediaIndex`. That cache
@@ -14,7 +14,8 @@ on the per-library freshness check so a never-walked library is always refreshed
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 def refresh_plex_cache_if_stale(
@@ -79,3 +80,24 @@ def refresh_plex_cache_if_stale(
     if logger:
         logger.debug("plex_media_cache refreshed from Plex")
     return True
+
+
+def walk_plex_libraries(
+    db: Any, logger: Any, libraries: Dict[str, List[str]]
+) -> Set[Tuple[str, str]]:
+    """Walk ``libraries`` now, ignoring the TTL; return the (instance, library) pairs it refreshed."""
+    from backend.util.connector import Connector
+
+    started = time.monotonic()
+    with Connector(db=db, logger=logger, instance_map={"plex": libraries}) as connector:
+        connector.update_plex_database()
+    # update_plex_database reports success even when a library fails, but a walked
+    # library has every row stamped with this walk's updated_at.
+    window = time.monotonic() - started + 1
+    refreshed = set()
+    for name, names in libraries.items():
+        for library in names:
+            age = db.plex.last_synced_age_seconds(name, library)
+            if age is not None and age <= window:
+                refreshed.add((name, library))
+    return refreshed

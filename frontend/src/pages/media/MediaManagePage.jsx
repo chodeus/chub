@@ -411,6 +411,7 @@ const MediaManagePage = () => {
     const [nestedIssues, setNestedIssues] = useState([]);
     const [lastScanTime, setLastScanTime] = useState(null);
     const [unmatchedEnabled, setUnmatchedEnabled] = useState(true);
+    const [scanWarnings, setScanWarnings] = useState([]);
     const [fixTarget, setFixTarget] = useState(null);
     const [fixPreview, setFixPreview] = useState(null);
     const [previewLoading, setPreviewLoading] = useState(false);
@@ -492,6 +493,7 @@ const MediaManagePage = () => {
             setNestedIssues(result?.data?.issues || []);
             setLastScanTime(result?.data?.scanned_at || null);
             setUnmatchedEnabled(result?.data?.unmatched_enabled !== false);
+            setScanWarnings(result?.data?.warnings || []);
             return result;
         },
         {
@@ -515,6 +517,7 @@ const MediaManagePage = () => {
                 }
                 if (data) {
                     setUnmatchedEnabled(data.unmatched_enabled !== false);
+                    setScanWarnings(data.warnings || []);
                 }
             })
             .catch(() => {});
@@ -863,6 +866,18 @@ const MediaManagePage = () => {
                             library mappings in Nestarr settings
                         </a>{' '}
                         to enable it. Nested and stray-file detection still run.
+                    </div>
+                )}
+                {scanWarnings.length > 0 && (
+                    <div className="mb-3 p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm text-fg-muted">
+                        {scanWarnings.map(warning => (
+                            <div key={warning}>
+                                <span className="material-symbols-outlined text-warning align-middle mr-1 text-base">
+                                    warning
+                                </span>
+                                {warning}
+                            </div>
+                        ))}
                     </div>
                 )}
                 {nestedIssues.length > 0 ? (
