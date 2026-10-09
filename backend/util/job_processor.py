@@ -725,12 +725,12 @@ def _process_media_sync_job(
         }
     try:
         from backend.util.config import load_config
-        from backend.util.connector import Connector, build_instance_map
+        from backend.util.connector import Connector, build_sync_instance_map
         from backend.util.plex_refresh import refresh_plex_cache_if_stale
 
         start = time.time()
         cfg = load_config()
-        instance_map = build_instance_map(cfg)
+        instance_map = build_sync_instance_map(cfg, log)
         log.info("Media-cache reconciliation starting (arr + plex + collections)")
 
         owns_db = db is None
@@ -744,24 +744,12 @@ def _process_media_sync_job(
 
                 # Plex: gentle, TTL-guarded refresh (walks only stale libraries,
                 # one instance at a time) — NOT the forced full walk, so a daily
-                # cadence can't hammer a large library. Empty list = all
-                # libraries of that instance.
-                # Empty list == all OPTED-IN libraries (the connector applies the
-                # instance's enabled_libraries allow-list). Skip instances that are
-                # fully opted out (enabled_libraries == []) so they aren't walked or
-                # connected; a None allow-list (legacy) stays in and gets seeded on
-                # first walk.
-                enabled_plex = {
-                    name: []
-                    for name, detail in (
-                        getattr(cfg.instances, "plex", {}) or {}
-                    ).items()
-                    if getattr(detail, "enabled", True)
-                    and getattr(detail, "enabled_libraries", None) != []
-                }
-                if enabled_plex:
+                # cadence can't hammer a large library.
+                if instance_map["plex"]:
                     try:
-                        refresh_plex_cache_if_stale(db_ctx, cfg, logger, enabled_plex)
+                        refresh_plex_cache_if_stale(
+                            db_ctx, cfg, logger, instance_map["plex"]
+                        )
                     except Exception as exc:
                         log.warning(f"Plex refresh failed: {exc}")
 

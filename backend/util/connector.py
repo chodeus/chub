@@ -1358,3 +1358,24 @@ def build_instance_map(config: Any) -> Dict[str, Any]:
     for scope in getattr(config, "plex_scope", []) or []:
         plex[scope.instance] = list(scope.library_names or [])
     return {"arrs": arrs, "plex": plex}
+
+
+def build_sync_instance_map(config: ChubConfig, logger: Any = None) -> Dict[str, Any]:
+    """instance_map of every enabled, configured instance in the FULL config; Plex gets all opted-in libraries."""
+    instances = config.instances
+    arrs: List[str] = []
+    plex: Dict[str, list] = {}
+    for kind in ("radarr", "sonarr", "lidarr", "plex"):
+        for name, detail in (getattr(instances, kind, {}) or {}).items():
+            if not getattr(detail, "enabled", True):
+                continue
+            if not detail.url or not detail.api:
+                # InstanceParser raises on these, which would abort the whole sync
+                if logger:
+                    logger.warning(f"Skipping {kind} '{name}': missing URL or API key")
+                continue
+            if kind != "plex":
+                arrs.append(name)
+            elif getattr(detail, "enabled_libraries", None) != []:
+                plex[name] = []
+    return {"arrs": arrs, "plex": plex}
