@@ -530,9 +530,10 @@ class AssetRenamerr(ChubModule):
         src_mtime: Optional[float],
     ) -> Tuple[bool, str, List[str]]:
         """_apply_direct, skipping libraries this same unchanged source already reached; records the union."""
+        # Only libraries still targeted count: a library dropped from plex_scope must not linger
         done = (
             self._recorded_libraries(prev, "plex", source, file, url, src_mtime) or set()
-        )
+        ) & self._direct_target_lib_keys(db, media, is_collection)
         applied, detail, new = self._apply_direct(
             db, media, image_type, file, url, is_collection, skip_libs=done
         )

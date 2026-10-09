@@ -1536,6 +1536,40 @@ def test_scheduled_apply_uploads_everywhere_when_the_source_changed():
     assert (applied, libs) == (True, ["plex1/Films"])
 
 
+def test_scheduled_apply_drops_a_recorded_library_that_is_no_longer_targeted():
+    m, db, uploaded = _remaining_setup()
+    prev = _prev(libraries='["plex1/Films", "plex1/Old Library"]')
+
+    applied, _detail, libs = m._apply_direct_remaining(
+        db, _media(), "logo", None, "http://x/l.png", False, prev, "fanart", None
+    )
+
+    assert uploaded == ["Films 4K"]
+    assert (applied, libs) == (True, ["plex1/Films"])
+
+
+def test_scheduled_apply_fails_when_only_an_untargeted_library_had_it():
+    m, db, uploaded = _remaining_setup()
+    prev = _prev(libraries='["plex1/Old Library"]')
+
+    class NothingHolds:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            uploaded.append(library_name)
+            return False
+
+    m._plex_clients = {"plex1": NothingHolds()}
+
+    applied, _detail, libs = m._apply_direct_remaining(
+        db, _media(), "logo", None, "http://x/l.png", False, prev, "fanart", None
+    )
+
+    assert uploaded == ["Films", "Films 4K"]
+    assert (applied, libs) == (False, [])
+
+
 def test_recorded_libraries_needs_the_same_unchanged_source():
     m = make_module(apply_method="plex")
     local = {
