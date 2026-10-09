@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from backend.util.arr import create_arr_client
 from backend.util.base_module import ChubModule
-from backend.util.connector import Connector
+from backend.util.connector import Connector, resync_media
 from backend.util.database import ChubDB
 from backend.util.helper import create_table, print_settings
 from backend.util.logger import Logger
@@ -120,6 +120,22 @@ class Labelarr(ChubModule):
                 inst: sorted(list(libs)) for inst, libs in plex_map.items()
             }
         return result
+
+    def _sync_item_or_skip(
+        self, plex_client, plex_item, labels_lower, db, plex_mapping_index
+    ) -> Optional[Dict[str, Any]]:
+        """sync_to_plex for one full-run item; a failed write is logged and skipped."""
+        try:
+            return self.sync_to_plex(
+                plex_client=plex_client,
+                plex_item=plex_item,
+                labels_lower=labels_lower,
+                db=db,
+                plex_mapping_index=plex_mapping_index,
+            )
+        except Exception as e:
+            self.logger.error(f"Label sync failed for '{plex_item.get('title')}': {e}")
+            return None
 
     def sync_to_plex(
         self,
@@ -472,12 +488,12 @@ class Labelarr(ChubModule):
                                     "Cancellation requested, stopping label sync"
                                 )
                                 break
-                            result = self.sync_to_plex(
-                                plex_client=plex_client,
-                                plex_item=plex_item,
-                                labels_lower=labels_lower,
-                                db=db,
-                                plex_mapping_index=plex_mapping_index,
+                            result = self._sync_item_or_skip(
+                                plex_client,
+                                plex_item,
+                                labels_lower,
+                                db,
+                                plex_mapping_index,
                             )
                             if result:
                                 output.append(result)
@@ -603,6 +619,16 @@ class Labelarr(ChubModule):
                         "message": f"Failed to connect to Plex instance '{plex_instance}'",
                         "error_code": "PLEX_CONNECTION_FAILED",
                     }
+
+                # Compare against the labels Plex has now, before any ARR tag write
+                live_labels = plex_client.current_labels(plex_item)
+                if live_labels is None:
+                    return {
+                        "success": False,
+                        "message": f"'{plex_item.get('title')}' was not found in Plex",
+                        "error_code": "PLEX_ITEM_NOT_FOUND",
+                    }
+                plex_item = {**plex_item, "labels": live_labels}
 
                 # Apply tag actions to media item
                 current_tags = self._parse_tags(media_item.get("tags", []))
@@ -773,6 +799,25 @@ class Labelarr(ChubModule):
             available_plex = list(self.full_config.instances.plex.keys())
             resolved_plex_instance = available_plex[0] if available_plex else None
 
+        # Tags and the item list come from media_cache: re-sync the source first
+        with ChubDB(logger=self.logger) as db:
+            if not resync_media(
+                db, self.logger, [source_instance], purpose="the Labelarr sync"
+            ):
+                return {
+                    "success": False,
+                    "message": (
+                        f"Could not refresh {source_instance}; nothing was synced."
+                    ),
+                    "error_code": "ARR_REFRESH_FAILED",
+                    "data": {
+                        "total": len(media_cache_ids),
+                        "succeeded": 0,
+                        "failed": len(media_cache_ids),
+                        "changed": 0,
+                    },
+                }
+
         # Build the media->Plex mapping ONCE for the whole batch, then resolve
         # every item's plex_mapping_id up front. Previously each per-item
         # labelarr_sync_adhoc call (no mapping id) opened a fresh ChubDB +
@@ -843,8 +888,8 @@ class Labelarr(ChubModule):
             except Exception as e:
                 log.debug(f"labelarr bulk notification failed: {e}")
 
-        return {
-            "success": True,
+        result = {
+            "success": failed == 0,
             "message": (
                 f"Bulk labelarr sync complete: "
                 f"{succeeded} succeeded, {failed} failed, "
@@ -857,3 +902,6 @@ class Labelarr(ChubModule):
                 "changed": len(output),
             },
         }
+        if failed:
+            result["error_code"] = "LABELARR_ITEMS_FAILED"
+        return result

@@ -11,7 +11,6 @@ import { logsAPI } from './logs.js';
 import { systemAPI } from './system.js';
 import { scheduleAPI } from './schedule.js';
 import { notificationsAPI } from './notifications.js';
-import { labelarrAPI } from './labelarr.js';
 import { nestarrAPI } from './nestarr.js';
 import { webhooksAPI } from './webhooks.js';
 
@@ -28,7 +27,6 @@ export { logsAPI };
 export { systemAPI };
 export { scheduleAPI };
 export { notificationsAPI };
-export { labelarrAPI };
 export { nestarrAPI };
 export { webhooksAPI };
 
@@ -45,7 +43,6 @@ export const api = {
     system: systemAPI,
     schedule: scheduleAPI,
     notifications: notificationsAPI,
-    labelarr: labelarrAPI,
     nestarr: nestarrAPI,
     webhooks: webhooksAPI,
 };

@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 
 import backend.modules.labelarr as labelarr_mod
 from backend.util.config import (
@@ -289,6 +291,82 @@ def test_run_skips_unconfigured_plex_instance(monkeypatch):
     assert m.logger.errors == []
 
 
+def test_a_failed_label_write_raises_and_leaves_the_cache_alone():
+    m = make_module(config=SimpleNamespace(mappings=[], dry_run=False, log_level="info"))
+    m.logger = _RecordingLogger()
+    db = _FakeDB(
+        media_rows=[{"id": 1, "tags": ["kids"], "plex_mapping_id": 7}],
+        plex_rows=[{"id": 7, "title": "Movie", "asset_type": "movie", "labels": []}],
+    )
+    db.plex.upsert = lambda *a, **k: pytest.fail("a failed write must not be cached")
+
+    class _FailingClient:
+        def batch_update_labels(self, *a, **k):
+            raise LookupError("gone")
+
+    with pytest.raises(LookupError):
+        m.sync_to_plex(
+            plex_client=_FailingClient(),
+            plex_item=db.plex.get_by_id(7),
+            labels_lower={"kids": "kids"},
+            db=db,
+        )
+
+
+def test_run_skips_an_item_whose_label_write_fails(monkeypatch):
+    import backend.util.plex_refresh as plex_refresh_mod
+
+    mappings = [
+        LabelarrMapping(
+            app_instance="radarr_main",
+            labels=["kids"],
+            plex_instances=[
+                LabelarrPlexInstance(instance="plex_main", library_names=["Films"])
+            ],
+        )
+    ]
+    m = make_module(
+        config=SimpleNamespace(mappings=mappings, dry_run=False, log_level="info"),
+        full_config=ChubConfig(
+            instances=InstancesConfig(
+                plex={"plex_main": InstanceDetail(url="http://p", api="k")}
+            )
+        ),
+    )
+    m.logger = _RecordingLogger()
+    db = _FakeDB()
+    rows = [
+        {"id": 1, "plex_id": "1", "title": "First", "asset_type": "movie"},
+        {"id": 2, "plex_id": "2", "title": "Second", "asset_type": "movie"},
+    ]
+    db.plex.get_by_instance_and_library = lambda instance, library: rows
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+    monkeypatch.setattr(labelarr_mod, "Connector", _FakeConnector)
+    monkeypatch.setattr(labelarr_mod, "PlexClient", _LivePlexClient)
+    monkeypatch.setattr(
+        plex_refresh_mod, "refresh_plex_cache_if_stale", lambda *a, **k: None
+    )
+    sent = []
+    monkeypatch.setattr(
+        labelarr_mod,
+        "NotificationManager",
+        lambda *a, **k: SimpleNamespace(send_notification=sent.append),
+    )
+    m.handle_messages = lambda output: None
+
+    def fake_sync(plex_item, **kwargs):
+        if plex_item["id"] == 1:
+            raise LookupError("'First' is no longer in Plex")
+        return {"title": plex_item["title"], "year": None, "add_remove": {"kids": "add"}}
+
+    m.sync_to_plex = fake_sync
+
+    m.run()
+
+    assert sent == [[{"title": "Second", "year": None, "add_remove": {"kids": "add"}}]]
+    assert any("First" in e for e in m.logger.errors)
+
+
 def _adhoc_module(plex_instances):
     media_row = {
         "id": 1,
@@ -341,6 +419,9 @@ def test_adhoc_sync_manages_only_tag_action_tags(monkeypatch):
         def is_connected(self):
             return True
 
+        def current_labels(self, entry):
+            return []
+
     monkeypatch.setattr(labelarr_mod, "PlexClient", _FakePlexClient)
 
     captured = {}
@@ -367,3 +448,173 @@ def test_adhoc_sync_manages_only_tag_action_tags(monkeypatch):
     }
     # The item's unmanaged tag must not be synced.
     assert "unrelated" not in captured["labels_lower"]
+
+
+class _LivePlexClient:
+    """PlexClient double whose live labels differ from the cached row's."""
+
+    live = ["from-plex-now"]
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def is_connected(self):
+        return True
+
+    def current_labels(self, entry):
+        return self.live
+
+
+def test_adhoc_sync_compares_against_the_labels_plex_has_now(monkeypatch):
+    m, db = _adhoc_module(
+        plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}
+    )
+    db.plex._rows[7]["labels"] = ["removed-in-plex-since"]
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+    monkeypatch.setattr(labelarr_mod, "PlexClient", _LivePlexClient)
+    seen = {}
+
+    def fake_sync_to_plex(**kwargs):
+        seen["labels"] = kwargs["plex_item"]["labels"]
+        return None
+
+    m.sync_to_plex = fake_sync_to_plex
+
+    result = m.labelarr_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_id=1,
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        plex_mapping_id=7,
+        dry_run=True,
+    )
+
+    assert result["success"] is True
+    assert seen["labels"] == ["from-plex-now"]
+
+
+def test_adhoc_sync_fails_when_plex_no_longer_has_the_item(monkeypatch):
+    m, db = _adhoc_module(
+        plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}
+    )
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+
+    class _GoneClient(_LivePlexClient):
+        live = None
+
+    monkeypatch.setattr(labelarr_mod, "PlexClient", _GoneClient)
+    m.sync_to_plex = lambda **kwargs: pytest.fail("must not sync a missing item")
+    db.media.upsert = lambda *a, **k: pytest.fail("must not retag a missing item")
+
+    result = m.labelarr_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_id=1,
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        plex_mapping_id=7,
+    )
+
+    assert (result["success"], result["error_code"]) == (False, "PLEX_ITEM_NOT_FOUND")
+
+
+def test_adhoc_sync_reports_a_failed_plex_read_as_a_failure_not_a_missing_item(
+    monkeypatch,
+):
+    m, db = _adhoc_module(
+        plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}
+    )
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+
+    class _BrokenClient(_LivePlexClient):
+        def current_labels(self, entry):
+            raise RuntimeError("Plex timed out")
+
+    monkeypatch.setattr(labelarr_mod, "PlexClient", _BrokenClient)
+    m.sync_to_plex = lambda **kwargs: pytest.fail("must not sync without live labels")
+    db.media.upsert = lambda *a, **k: pytest.fail("must not retag before Plex is read")
+
+    result = m.labelarr_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_id=1,
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        plex_mapping_id=7,
+    )
+
+    assert (result["success"], result["error_code"]) == (False, "LABELARR_SYNC_FAILED")
+
+
+def _bulk_module(monkeypatch, resynced):
+    m, db = _adhoc_module(
+        plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}
+    )
+    monkeypatch.setattr(labelarr_mod, "ChubDB", db)
+    monkeypatch.setattr(labelarr_mod, "Connector", _FakeConnector)
+    calls = SimpleNamespace(events=[], failing=set())
+
+    def fake_resync(_db, _logger, names, **kwargs):
+        calls.events.append(("resync", names))
+        return resynced
+
+    monkeypatch.setattr(labelarr_mod, "resync_media", fake_resync)
+
+    def fake_item(**kwargs):
+        mid = kwargs["media_cache_id"]
+        calls.events.append(("item", mid))
+        if mid in calls.failing:
+            return {"success": False, "error_code": "PLEX_ITEM_NOT_FOUND"}
+        return {"success": True, "data": {}}
+
+    m.labelarr_sync_adhoc = fake_item
+    return m, calls
+
+
+def test_bulk_sync_resyncs_the_source_once_before_any_item(monkeypatch):
+    m, calls = _bulk_module(monkeypatch, resynced=True)
+
+    result = m.labelarr_bulk_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_ids=[1, 2, 3],
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        notify=False,
+    )
+
+    assert result["success"] is True
+    assert calls.events == [
+        ("resync", ["radarr_main"]),
+        ("item", 1),
+        ("item", 2),
+        ("item", 3),
+    ]
+
+
+def test_bulk_sync_syncs_nothing_when_the_resync_fails(monkeypatch):
+    m, calls = _bulk_module(monkeypatch, resynced=False)
+
+    result = m.labelarr_bulk_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_ids=[1, 2],
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        notify=False,
+    )
+
+    assert (result["success"], result["error_code"]) == (False, "ARR_REFRESH_FAILED")
+    assert calls.events == [("resync", ["radarr_main"])]
+
+
+def test_bulk_sync_fails_when_any_item_fails(monkeypatch):
+    m, calls = _bulk_module(monkeypatch, resynced=True)
+    calls.failing = {2}
+
+    result = m.labelarr_bulk_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_ids=[1, 2, 3],
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        notify=False,
+    )
+
+    assert (result["success"], result["error_code"]) == (False, "LABELARR_ITEMS_FAILED")
+    assert (result["data"]["succeeded"], result["data"]["failed"]) == (2, 1)

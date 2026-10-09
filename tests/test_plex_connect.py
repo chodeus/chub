@@ -1,6 +1,8 @@
 """Tests for backend.util.plex.connect_plex_with_retry — the shared
 server-level connect-with-retry used by poster_cleanarr and plex_maintenance."""
 
+import pytest
+
 from backend.util import plex as plex_mod
 from backend.util.plex import connect_plex_with_retry
 
@@ -257,12 +259,34 @@ def test_locate_targets_fetches_by_rating_key():
 
 
 def test_locate_targets_stale_rating_key_falls_back_to_search():
-    """A stale ratingKey (fetchItem raises) self-heals via the title+year search."""
+    """A stale ratingKey (fetchItem 404s) self-heals via the title+year search."""
+    from plexapi.exceptions import NotFound
+
     found = _FakeMovie(2007)
     counter = {"n": 0, "results": [found]}
-    client = _client_with_fetchitem(RuntimeError("404 not found"), counter)
+    client = _client_with_fetchitem(NotFound("404 not found"), counter)
     targets = client._locate_targets(
         "Films", "AVPR", year=2007, plex_id="999999"
     )
     assert targets == [found]  # fell back to the live search
     assert counter["n"] >= 1
+
+
+def test_locate_targets_raises_on_a_failed_rating_key_fetch():
+    """A Plex error other than 404 must not fall back to a title search that may match another item."""
+    counter = {"n": 0, "results": [_FakeMovie(2007)]}
+    client = _client_with_fetchitem(ConnectionError("Plex timed out"), counter)
+
+    with pytest.raises(ConnectionError):
+        client._locate_targets("Films", "AVPR", year=2007, plex_id="999999")
+    assert counter["n"] == 0
+
+
+def test_locate_targets_non_numeric_rating_key_falls_back_to_search():
+    found = _FakeMovie(2007)
+    counter = {"n": 0, "results": [found]}
+    client = _client_with_fetchitem(AssertionError("must not fetch"), counter)
+
+    targets = client._locate_targets("Films", "AVPR", year=2007, plex_id="not-a-key")
+
+    assert targets == [found]
