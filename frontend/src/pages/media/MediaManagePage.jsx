@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { mediaAPI } from '../../utils/api/media.js';
@@ -12,6 +12,7 @@ import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
 import { downloadBlob } from '../../utils/download.js';
+import { POLL_UNREACHABLE, pollJobUntilDone } from '../../utils/jobPoll.js';
 
 const fmtBytes = n => {
     if (!n) return '0 B';
@@ -181,6 +182,10 @@ const DuplicateGroup = ({
                                 variant="ghost"
                                 size="small"
                                 icon="auto_fix_high"
+                                disabled={!onResolve}
+                                title={
+                                    onResolve ? undefined : 'Wait for the cache refresh to finish'
+                                }
                                 onClick={() => onResolve(dup)}
                             >
                                 Resolve manually
@@ -211,18 +216,34 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [filter, setFilter] = useState('');
+    const listRef = useRef(duplicates);
+    useEffect(() => {
+        listRef.current = duplicates;
+    }, [duplicates]);
+    // A reloaded list can keep a group's key with different copies: drop what was loaded for it
+    const [shownDuplicates, setShownDuplicates] = useState(duplicates);
+    if (shownDuplicates !== duplicates) {
+        setShownDuplicates(duplicates);
+        setMembersByKey({});
+        setExpanded({});
+        setSelected({});
+    }
 
     const toggleExpand = async dup => {
         const k = dupKey(dup);
         const willOpen = !expanded[k];
         setExpanded(e => ({ ...e, [k]: willOpen }));
         if (willOpen && !membersByKey[k]) {
+            const list = duplicates;
             setLoadingKeys(s => new Set(s).add(k));
             try {
                 const res = await mediaAPI.fetchDuplicateMembers(dupIds(dup));
-                setMembersByKey(m => ({ ...m, [k]: res?.data?.members || [] }));
+                // A reload since the request started: these copies may be out of date
+                if (listRef.current === list) {
+                    setMembersByKey(m => ({ ...m, [k]: res?.data?.members || [] }));
+                }
             } catch {
-                setMembersByKey(m => ({ ...m, [k]: [] }));
+                if (listRef.current === list) setMembersByKey(m => ({ ...m, [k]: [] }));
             } finally {
                 setLoadingKeys(s => {
                     const n = new Set(s);
@@ -564,18 +585,40 @@ const MediaManagePage = () => {
         [collectionsData]
     );
 
-    const { execute: runRefreshCache, isLoading: isRefreshing } = useApiMutation(
-        () => mediaAPI.refreshLibrary(),
-        {
-            successMessage: 'Cache refresh initiated',
-            onSuccess: () => {
-                refreshDups();
-            },
-        }
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const refreshRunRef = useRef(null);
+    useEffect(
+        () => () => {
+            if (refreshRunRef.current) refreshRunRef.current.cancelled = true;
+        },
+        []
     );
 
+    // Reload only once the job ends: a reload at enqueue re-caches the old list for 10 min.
     const handleRefreshCache = async () => {
-        await runRefreshCache();
+        if (refreshRunRef.current) refreshRunRef.current.cancelled = true;
+        const token = { cancelled: false };
+        refreshRunRef.current = token;
+        setIsRefreshing(true);
+        try {
+            const res = await mediaAPI.refreshLibrary();
+            const jobId = res?.data?.job_id;
+            if (!jobId) throw new Error('Cache refresh was not queued');
+            const status = await pollJobUntilDone(jobId, token);
+            if (token.cancelled) return;
+            apiCore.clearCache('/media');
+            // Stay "refreshing" until the new list is in, so Resolve can't open on the old one
+            await refreshDups();
+            if (token.cancelled) return;
+            if (status === 'success') toast.success('Cache refreshed');
+            else if (status === POLL_UNREACHABLE)
+                toast.error('Lost track of the cache refresh job; the list may be out of date');
+            else toast.error(`Cache refresh ended: ${status}`);
+        } catch {
+            if (!token.cancelled) toast.error('Cache refresh failed');
+        } finally {
+            if (!token.cancelled) setIsRefreshing(false);
+        }
     };
 
     const handleExport = async () => {
@@ -714,7 +757,8 @@ const MediaManagePage = () => {
 
             <DuplicatesSection
                 duplicates={duplicates}
-                onResolve={setResolveTarget}
+                // No resolving mid-refresh: the reload would leave the modal on old copies
+                onResolve={isRefreshing ? null : setResolveTarget}
                 onRefresh={refreshDups}
             />
 
@@ -787,6 +831,12 @@ const MediaManagePage = () => {
                                             <Button
                                                 variant="ghost"
                                                 icon="auto_fix_high"
+                                                disabled={isRefreshing}
+                                                title={
+                                                    isRefreshing
+                                                        ? 'Wait for the cache refresh to finish'
+                                                        : undefined
+                                                }
                                                 onClick={() => setResolveTarget(dup)}
                                             >
                                                 Resolve

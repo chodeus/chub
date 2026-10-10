@@ -44,6 +44,14 @@ export const jobsAPI = {
         });
     },
 
+    /** A job's log from `offset`, uncached so a stalled log can't hide its status. */
+    tailJobLog: (jobId, offset = 0, maxBytes = 65536) => {
+        const qs = new URLSearchParams();
+        qs.set('offset', offset);
+        qs.set('max_bytes', maxBytes);
+        return apiCore.get(`/jobs/${jobId}/log-tail?${qs.toString()}`, { useCache: false });
+    },
+
     /** Requeue a job. The endpoint accepts only error or success jobs. */
     retryJob: (jobId, options = {}) => {
         return apiCore.post(`/jobs/${jobId}/retry`, {}, options);

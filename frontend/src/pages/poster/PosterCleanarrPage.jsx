@@ -4,6 +4,8 @@ import { useApiData } from '../../hooks/useApiData.js';
 import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
+import { jobsAPI } from '../../utils/api/jobs.js';
+import { TERMINAL_STATUSES, pollJobUntilDone } from '../../utils/jobPoll.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, IconButton, LoadingButton } from '../../components/ui/index.js';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -92,9 +94,6 @@ const formatBytes = bytes => {
     return `${n.toFixed(1)} ${u[i]}`;
 };
 
-// Module-level so reference is stable across renders (fixes exhaustive-deps warning).
-const TERMINAL_STATUSES = ['success', 'error', 'cancelled'];
-
 const ORPHAN_DELETE_ERRORS = {
     409: 'No longer an orphan — list refreshed',
     503: 'Orphan check unavailable — nothing was deleted',
@@ -127,32 +126,6 @@ function variantDeleteSummary(prefix, { deleted, inUse, failed }) {
     if (inUse) parts.push(`${inUse} in use by Plex`);
     if (failed) parts.push(`${failed} failed`);
     return parts.join(', ');
-}
-
-// Poll a background job's log-tail until it reaches a terminal status. Resolves
-// with the final status (or undefined once `token.cancelled` flips, e.g. on
-// unmount or a superseding scan). Shared by the metadata-scan and kometa-scan
-// flows so neither walks the filesystem on the server's event loop.
-function pollJobUntilDone(jobId, token) {
-    return new Promise(resolve => {
-        let offset = 0;
-        const poll = () => {
-            if (token.cancelled) return resolve();
-            postersAPI
-                .tailJobLog(jobId, offset)
-                .then(res => {
-                    if (token.cancelled) return resolve();
-                    const data = res?.data || {};
-                    if (typeof data.next_offset === 'number') offset = data.next_offset;
-                    if (TERMINAL_STATUSES.includes(data.status)) return resolve(data.status);
-                    setTimeout(poll, 1500);
-                })
-                .catch(() => {
-                    if (!token.cancelled) setTimeout(poll, 3000);
-                });
-        };
-        poll();
-    });
 }
 
 // The Kometa stale/orphan scan, or null once `token` is cancelled. `force` rescans
@@ -430,7 +403,7 @@ const LiveLogModal = ({ jobId, onClose }) => {
         let timer = null;
         offsetRef.current = 0;
         const poll = () =>
-            postersAPI
+            jobsAPI
                 .tailJobLog(jobId, offsetRef.current)
                 .then(res => {
                     if (cancelled) return;
@@ -657,7 +630,8 @@ const PosterCleanarrPage = () => {
     const watchCleanupJob = useCallback(
         (jobId, targets) =>
             pollJobUntilDone(jobId, pageAliveRef.current).then(status => {
-                if (!status) return;
+                // No end state (cancelled, or polling gave up): the run may still be going
+                if (!TERMINAL_STATUSES.includes(status)) return;
                 // Any terminal status: a run that failed part-way may still
                 // have moved or removed stale and orphaned assets.
                 loadKometaAssets(true);
