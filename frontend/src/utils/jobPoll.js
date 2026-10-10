@@ -19,7 +19,8 @@ export function pollJobUntilDone(jobId, token) {
                     setTimeout(poll, 1500);
                 })
                 .catch(() => {
-                    if (!token.cancelled) setTimeout(poll, 3000);
+                    if (token.cancelled) return resolve();
+                    setTimeout(poll, 3000);
                 });
         };
         poll();

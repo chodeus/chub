@@ -576,6 +576,7 @@ const MediaManagePage = () => {
 
     // Reload only once the job ends: a reload at enqueue re-caches the old list for 10 min.
     const handleRefreshCache = async () => {
+        if (refreshRunRef.current) refreshRunRef.current.cancelled = true;
         const token = { cancelled: false };
         refreshRunRef.current = token;
         setIsRefreshing(true);
