@@ -26,19 +26,31 @@ vi.mock('react-router', () => ({
 
 const toast = { success: vi.fn(), error: vi.fn() };
 vi.mock('../../contexts/ToastContext.jsx', () => ({ useToast: () => toast }));
+const mockModulesAPI = { fetchRunStates: vi.fn() };
+vi.mock('../../utils/api/modules.js', () => ({ modulesAPI: mockModulesAPI }));
+let runStatesPayload = null;
 
 // The page calls useApiData three times; only the first (unmatched details)
 // carries the fixture. Keyed on apiFunction so order changes don't break this.
 let unmatchedPayload = null;
+let detailsError = null;
+let runStatesError = null;
 const refresh = vi.fn();
 vi.mock('../../hooks/useApiData.js', () => ({
     useApiData: ({ apiFunction }) => ({
         data:
             apiFunction === mockPostersAPI.fetchUnmatchedDetails
                 ? { data: unmatchedPayload }
-                : null,
+                : apiFunction === mockModulesAPI.fetchRunStates
+                  ? { data: runStatesPayload }
+                  : null,
         isLoading: false,
-        error: null,
+        error:
+            apiFunction === mockPostersAPI.fetchUnmatchedDetails
+                ? detailsError
+                : apiFunction === mockModulesAPI.fetchRunStates
+                  ? runStatesError
+                  : null,
         refresh,
     }),
 }));
@@ -365,5 +377,81 @@ describe('Unmatched tab — poster picker targets', () => {
         expect(
             screen.queryByText(/No candidate posters found in your cache/i)
         ).not.toBeInTheDocument();
+    });
+});
+
+describe('UnmatchedAssetsPage — where the results come from', () => {
+    beforeEach(() => {
+        unmatchedPayload = null;
+        runStatesPayload = null;
+        detailsError = null;
+        runStatesError = null;
+    });
+
+    it('does not ask for a run when the run status could not be loaded', () => {
+        runStatesError = new Error('500');
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/run status could not be loaded/)).toBeInTheDocument();
+        expect(screen.queryByText(/run Poster Renamerr to match/)).toBeNull();
+    });
+
+    it('says the list is Poster Renamerr’s last match, and when that ran', () => {
+        unmatchedPayload = payload({ movies: [A_MOVIE] });
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        runStatesPayload = { poster_renamerr: { last_run: twoHoursAgo } };
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/Based on Poster Renamerr’s last match, .+/)).toBeInTheDocument();
+    });
+
+    it('points at Poster Renamerr when there is no match data yet', () => {
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/run Poster Renamerr to match your assets/)).toBeInTheDocument();
+    });
+
+    it('says a finished run found no media instead of asking for another run', () => {
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        runStatesPayload = { poster_renamerr: { last_run: twoHoursAgo, status: 'success' } };
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/last ran .+ and found no media to check/)).toBeInTheDocument();
+        expect(screen.queryByText(/run Poster Renamerr to match/)).toBeNull();
+    });
+
+    it('says the list failed to load rather than that the run found nothing', () => {
+        detailsError = new Error('500');
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        runStatesPayload = { poster_renamerr: { last_run: twoHoursAgo, status: 'success' } };
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/Could not load the unmatched list/)).toBeInTheDocument();
+        expect(screen.queryByText(/found no media/)).toBeNull();
+    });
+
+    it('names no run when none is recorded', () => {
+        unmatchedPayload = payload({ movies: [A_MOVIE] });
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.queryByText(/Based on Poster Renamer/)).toBeNull();
+    });
+
+    it('says Poster Renamerr is still running rather than that it found nothing', () => {
+        runStatesPayload = {
+            poster_renamerr: { last_run: new Date().toISOString(), status: 'running' },
+        };
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(
+            screen.getByText(/Poster Renamerr is running; reload this page/)
+        ).toBeInTheDocument();
+        expect(screen.queryByText(/found no media/)).toBeNull();
     });
 });

@@ -81,6 +81,39 @@ def _resolve(
     return None, None
 
 
+# A miss can mean the item was added after a fresh walk; re-walk at most once a minute
+_MISS_REFRESH_TTL_SECONDS = 60
+
+
+def _refresh_snapshot(full_config, db, logger, media_type: Optional[str]) -> None:
+    """Re-walk each instance's movie (or TV) libraries for a miss; never raises."""
+    from plexapi.server import PlexServer
+
+    from backend.util.plex_refresh import refresh_plex_cache_if_stale
+
+    section_type = "movie" if (media_type or "").lower() == "movie" else "show"
+    targets = {}
+    for name, cfg in (getattr(full_config.instances, "plex", {}) or {}).items():
+        if not (getattr(cfg, "enabled", True) and cfg.url and cfg.api):
+            continue
+        try:
+            sections = PlexServer(cfg.url, cfg.api).library.sections()
+        except Exception as exc:
+            logger.warning(f"cl2k: could not list Plex '{name}' libraries: {exc}")
+            continue
+        libraries = sorted(s.title for s in sections if s.type == section_type)
+        if libraries:
+            targets[name] = libraries
+    if not targets:
+        return
+    try:
+        refresh_plex_cache_if_stale(
+            db, full_config, logger, targets, ttl_seconds=_MISS_REFRESH_TTL_SECONDS
+        )
+    except Exception as exc:
+        logger.warning(f"cl2k: Plex snapshot refresh failed: {exc}", exc_info=True)
+
+
 def _proxy_url(src: str) -> str:
     """Browser-facing URL for a local Plex image: the CL2K proxy fetches it
     server-side (re-minting the token) so the X-Plex-Token never reaches the
@@ -127,25 +160,51 @@ def plex_images(
     if not plex:
         return {**empty, "reason": "No Plex instance is configured."}
 
-    cfg, rating_key = _resolve(
-        full_config,
-        db,
-        media_type=kind,
-        tmdb_id=tmdb_id,
-        tvdb_id=tvdb_id,
-        imdb_id=imdb_id,
-    )
-    if not rating_key:
-        return {**empty, "reason": "Not found in a synced Plex library."}
+    def resolve():
+        return _resolve(
+            full_config,
+            db,
+            media_type=kind,
+            tmdb_id=tmdb_id,
+            tvdb_id=tvdb_id,
+            imdb_id=imdb_id,
+        )
 
-    try:
-        from plexapi.server import PlexServer
+    from plexapi.exceptions import NotFound
+    from plexapi.server import PlexServer
 
-        server = PlexServer(cfg.url, cfg.api)
-        item = server.fetchItem(int(rating_key))
-    except Exception as exc:  # connection / fetch failure — degrade gracefully
-        logger.warning(f"cl2k: Plex artwork fetch failed (key={rating_key}): {exc}")
-        return {**empty, "reason": "Could not reach Plex."}
+    unreachable = {**empty, "reason": "Could not reach Plex."}
+    not_found = {**empty, "reason": "Not found in a synced Plex library."}
+
+    def fetch(cfg, rating_key):
+        """(server, item); item None if Plex lacks the ratingKey; other errors raise."""
+        server = PlexServer(cfg.url, cfg.api)  # NotFound here = server, not item
+        try:
+            return server, server.fetchItem(int(rating_key))
+        except NotFound:
+            return server, None
+
+    cfg, rating_key = resolve()
+    item = None
+    if rating_key:
+        try:
+            server, item = fetch(cfg, rating_key)
+        except Exception as exc:  # connection / fetch failure — degrade gracefully
+            logger.warning(f"cl2k: Plex artwork fetch failed (key={rating_key}): {exc}")
+            return unreachable
+    if item is None:
+        # Added (or re-added with a new ratingKey) since the last walk: refresh, retry
+        _refresh_snapshot(full_config, db, logger, kind)
+        cfg, rating_key = resolve()
+        if not rating_key:
+            return not_found
+        try:
+            server, item = fetch(cfg, rating_key)
+        except Exception as exc:
+            logger.warning(f"cl2k: Plex artwork fetch failed (key={rating_key}): {exc}")
+            return unreachable
+        if item is None:
+            return not_found
 
     out: Dict[str, Any] = {"logos": [], "backdrops": [], "posters": []}
     # plexapi method -> our bucket. arts() are backgrounds.

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 import backend.util.cl2k.image_fetch as image_fetch
-from backend.util.cl2k.plex_art import _matches, _resolve, plex_images
+from backend.util.cl2k.plex_art import _matches, _refresh_snapshot, _resolve, plex_images
 
 
 # --------------------------------------------------------------------------
@@ -60,9 +60,15 @@ class _Item:
 
 
 class _Server:
+    sections = [
+        SimpleNamespace(title="Films", type="movie"),
+        SimpleNamespace(title="Music", type="artist"),
+    ]
+
     def __init__(self, url, token):
         self.url_base = url
         self.token = token
+        self.library = SimpleNamespace(sections=lambda: list(self.sections))
 
     def fetchItem(self, rating_key):
         assert rating_key == 9
@@ -185,12 +191,19 @@ def test_plex_images_no_instance_returns_reason():
     assert res["logos"] == [] and res["reason"]
 
 
-def test_plex_images_not_in_library_returns_reason():
+def test_plex_images_not_in_library_returns_reason(monkeypatch):
+    _patch_plexserver(monkeypatch)
+    walked = []
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda db, cfg, logger, enabled, **k: walked.append(enabled),
+    )
     cfg = _config(
         {"main": SimpleNamespace(url="http://plex:32400", api="t", enabled=True)}
     )
     res = plex_images(cfg, _db({"main": []}), _logger(), kind="movie", tmdb_id=999)
     assert res["backdrops"] == [] and "synced Plex library" in res["reason"]
+    assert walked == [{"main": ["Films"]}]
 
 
 # --------------------------------------------------------------------------
@@ -478,3 +491,152 @@ def test_unwrap_proxy_refuses_a_nonart_src_on_a_configured_plex(monkeypatch):
     assert (
         image_fetch._unwrap_proxy(good) == "http://plex:32400/library/metadata/9/thumb/1"
     )
+
+
+# Items added (or re-added) since the last Plex walk
+
+
+def _fresh_env(monkeypatch, fetch):
+    """Patch PlexServer so fetchItem answers with `fetch(rating_key)`."""
+    import plexapi.server
+
+    class _LiveServer(_Server):
+        def fetchItem(self, rating_key):
+            return fetch(rating_key)
+
+    monkeypatch.setattr(plexapi.server, "PlexServer", _LiveServer)
+
+
+def _main_cfg():
+    return _config({"main": SimpleNamespace(url="http://plex:32400", api="t", enabled=True)})
+
+
+def _movie_row(plex_id, tmdb, library="Films"):
+    return {
+        "asset_type": "movie",
+        "plex_id": plex_id,
+        "library_name": library,
+        "guids": f'{{"tmdb": "{tmdb}"}}',
+    }
+
+
+def test_plex_images_refreshes_the_snapshot_for_an_item_added_since_the_walk(monkeypatch):
+    rows = {"main": [_movie_row("3", 77)]}
+    targets = []
+
+    def refresh(db, cfg, logger, enabled, **kwargs):
+        targets.append(enabled)
+        rows["main"].append(_movie_row("9", 1))
+
+    monkeypatch.setattr("backend.util.plex_refresh.refresh_plex_cache_if_stale", refresh)
+    _fresh_env(monkeypatch, lambda key: _Item())
+
+    res = plex_images(_main_cfg(), _db(rows), _logger(), kind="movie", tmdb_id=1)
+
+    assert res["logos"] and "reason" not in res
+    assert targets == [{"main": ["Films"]}]
+
+
+def test_plex_images_retries_a_rating_key_that_went_stale(monkeypatch):
+    from plexapi.exceptions import NotFound
+
+    rows = {"main": [_movie_row("5", 1)]}
+
+    def refresh(db, cfg, logger, enabled, **kwargs):
+        rows["main"] = [_movie_row("9", 1)]  # Plex re-added the item under a new key
+
+    def fetch(key):
+        if key == 5:
+            raise NotFound("gone")
+        return _Item()
+
+    monkeypatch.setattr("backend.util.plex_refresh.refresh_plex_cache_if_stale", refresh)
+    _fresh_env(monkeypatch, fetch)
+
+    res = plex_images(_main_cfg(), _db(rows), _logger(), kind="movie", tmdb_id=1)
+
+    assert res["logos"] and "reason" not in res
+
+
+def test_plex_images_does_not_refresh_when_plex_is_unreachable(monkeypatch):
+    rows = {"main": [_movie_row("9", 1)]}
+    refreshed = []
+
+    def fetch(key):
+        raise ConnectionError("no route to host")
+
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda *a, **k: refreshed.append(a),
+    )
+    _fresh_env(monkeypatch, fetch)
+
+    res = plex_images(_main_cfg(), _db(rows), _logger(), kind="movie", tmdb_id=1)
+
+    assert res["reason"] == "Could not reach Plex."
+    assert refreshed == []
+
+
+def test_refresh_walks_the_live_libraries_of_the_wanted_type(monkeypatch):
+    import plexapi.server
+
+    class _Libs(_Server):
+        def __init__(self, url, token):
+            super().__init__(url, token)
+            if url == "http://down":
+                raise ConnectionError("unreachable")
+            if url == "http://b":
+                self.library = SimpleNamespace(sections=lambda: [])
+
+    monkeypatch.setattr(plexapi.server, "PlexServer", _Libs)
+    cfg = _config(
+        {
+            "films": SimpleNamespace(url="http://a", api="t", enabled=True),
+            "empty": SimpleNamespace(url="http://b", api="t", enabled=True),
+            "down": SimpleNamespace(url="http://down", api="t", enabled=True),
+        }
+    )
+    calls = []
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda db, cfg, logger, enabled, **k: calls.append((enabled, k)),
+    )
+
+    _refresh_snapshot(cfg, _db({}), _logger(), "movie")
+
+    assert calls == [({"films": ["Films"]}, {"ttl_seconds": 60})]
+
+
+def test_a_server_404_on_connect_reads_as_unreachable_not_missing(monkeypatch):
+    import plexapi.server
+    from plexapi.exceptions import NotFound
+
+    class _NoServer:
+        def __init__(self, url, token):
+            raise NotFound("server root 404")
+
+    monkeypatch.setattr(plexapi.server, "PlexServer", _NoServer)
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda *a, **k: pytest.fail("a server failure must not trigger a walk"),
+    )
+    rows = {"main": [_movie_row("9", 1)]}
+
+    res = plex_images(_main_cfg(), _db(rows), _logger(), kind="movie", tmdb_id=1)
+
+    assert res["reason"] == "Could not reach Plex."
+
+
+def test_refresh_never_raises_when_the_walk_fails(monkeypatch):
+    _patch_plexserver(monkeypatch)
+    warned = []
+    logger = SimpleNamespace(warning=lambda msg, **k: warned.append(msg))
+
+    def broken(*a, **k):
+        raise RuntimeError("db locked")
+
+    monkeypatch.setattr("backend.util.plex_refresh.refresh_plex_cache_if_stale", broken)
+
+    _refresh_snapshot(_main_cfg(), _db({}), logger, "movie")
+
+    assert len(warned) == 1

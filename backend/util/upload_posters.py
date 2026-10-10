@@ -16,6 +16,23 @@ from backend.util.plex_index import PlexMediaIndex, _coerce_year
 from backend.util.plex import PlexClient
 
 
+def upload_enabled_instances(plex_scope) -> Dict[str, List[str]]:
+    """add_posters scopes merged per instance; [] (all libraries) wins over a list."""
+    enabled: Dict[str, List[str]] = {}
+    for scope in plex_scope or []:
+        if not scope.add_posters:
+            continue
+        libraries = list(scope.library_names or [])
+        current = enabled.get(scope.instance)
+        if current is None:
+            enabled[scope.instance] = libraries
+        elif not current or not libraries:
+            enabled[scope.instance] = []
+        else:
+            current.extend(lib for lib in libraries if lib not in current)
+    return enabled
+
+
 class PosterUploadError(Exception):
     """Base exception for poster upload operations"""
 
@@ -139,14 +156,12 @@ class PosterUploader:
 
     def _get_enabled_instances(self) -> Dict[str, List[str]]:
         """Get enabled Plex instances with their library names"""
-        enabled_instances = {}
-        disabled_instances = []
-
-        for scope in self.config.plex_scope or []:
-            if scope.add_posters:
-                enabled_instances[scope.instance] = list(scope.library_names or [])
-            else:
-                disabled_instances.append(scope.instance)
+        enabled_instances = upload_enabled_instances(self.config.plex_scope)
+        disabled_instances = [
+            scope.instance
+            for scope in self.config.plex_scope or []
+            if not scope.add_posters
+        ]
 
         # Log disabled instances once, concisely
         if disabled_instances:
