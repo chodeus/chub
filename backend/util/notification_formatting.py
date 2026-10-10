@@ -35,6 +35,15 @@ def capped_lines(entries: list, tally: str) -> list:
     return lines
 
 
+def _local_time(iso: Any) -> str:
+    """An ISO timestamp in the server's zone (YYYY-MM-DD HH:MM TZ), else as given."""
+    try:
+        when = datetime.datetime.fromisoformat(iso).astimezone()
+    except (TypeError, ValueError):
+        return str(iso)
+    return when.strftime("%Y-%m-%d %H:%M %Z")
+
+
 def _collapse_large_notification(
     parts: Dict[int, List[Dict[str, Any]]],
     fields: List[Dict[str, Any]],
@@ -824,12 +833,7 @@ def format_for_discord(
         source = "Poster Renamerr's last match"
         last = o.get("last_match")
         if last:
-            try:
-                when = datetime.datetime.fromisoformat(last).astimezone()
-                last = when.strftime("%Y-%m-%d %H:%M %Z")
-            except (TypeError, ValueError):
-                pass
-            source += f" ({last})"
+            source += f" ({_local_time(last)})"
         return [
             {"name": "Summary", "value": "```" + "\n".join(lines) + "```"},
             {"name": "Based on", "value": source},
