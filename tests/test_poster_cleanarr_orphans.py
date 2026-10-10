@@ -1324,3 +1324,28 @@ def test_an_unavailable_check_keeps_the_cached_scan(
 
     assert outcome == "unavailable"
     assert get_cached_kometa_assets() is not None
+
+
+def test_kometa_scan_heals_case_variants_and_leftover_names(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    cfg.poster_cleanarr.orphan_instances = ["RADARR1", "oldradarr"]
+    (assets / "Gone Movie (2019).jpg").write_bytes(b"x")
+    (assets / "Keeper (2020).jpg").write_bytes(b"x")
+
+    listed = _listed_orphans(db)
+
+    assert listed == [str(assets / "Gone Movie (2019).jpg")]
+
+
+def test_kometa_scan_refuses_a_removed_instance_that_still_has_media(
+    db, tmp_path, monkeypatch, no_kometa_cache
+):
+    assets, cfg = _asset_dir(db, tmp_path, monkeypatch)
+    cfg.poster_cleanarr.orphan_instances = ["radarr1", "oldradarr"]
+    _seed_media(db, "k2", "oldradarr", normalize_titles("Old Film (2001)"))
+
+    with pytest.raises(RuntimeError, match="oldradarr.*Remove it from that list"):
+        scan_kometa_assets(db, _logger(), force=True)
+

@@ -1,5 +1,5 @@
 import json
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from .db_base import DatabaseBase
 
@@ -83,6 +83,13 @@ class CollectionCache(DatabaseBase):
             norm_str(item.get("library_name")),
             norm_str(item.get("instance_name")),
         )
+
+    def instance_names(self) -> List[str]:
+        """Every instance_name that has collections cached."""
+        rows = self.execute_query(
+            "SELECT DISTINCT instance_name FROM collections_cache", fetch_all=True
+        )
+        return [row["instance_name"] for row in rows or []]
 
     def get_by_instance(self, instance_name: str) -> list:
         """Return all collection rows for the given instance."""

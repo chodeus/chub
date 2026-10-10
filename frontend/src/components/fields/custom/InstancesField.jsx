@@ -112,6 +112,40 @@ const ArrInstancePills = React.memo(
 
 ArrInstancePills.displayName = 'ArrInstancePills';
 
+const selectionName = item =>
+    typeof item === 'string'
+        ? item
+        : item?.instance || item?.name || Object.keys(item || {})[0] || '';
+
+/** Saved names no configured instance claims (renamed or removed), each removable. */
+const UnconfiguredSelections = ({ entries, onRemove, disabled }) => (
+    <div className="flex flex-wrap items-center gap-2">
+        <span className="text-dense text-fg-subtle">Not configured:</span>
+        {entries.map(({ item, index }) => {
+            const name = selectionName(item);
+            return (
+                <span
+                    key={index}
+                    className="inline-flex items-center gap-1 min-h-11 pl-3 pr-1 rounded-full text-dense font-medium border border-dashed border-warning text-fg-muted"
+                >
+                    {name}
+                    <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => onRemove(index)}
+                        aria-label={`Remove ${name}`}
+                        className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-surface-inset cursor-pointer disabled:opacity-50"
+                    >
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                            close
+                        </span>
+                    </button>
+                </span>
+            );
+        })}
+    </div>
+);
+
 /**
  * Plex Library Selector - Component for selecting libraries within a Plex instance
  * Handles library loading and selection for Plex instances
@@ -1195,6 +1229,19 @@ export const InstancesField = React.memo(
             return selections;
         }, [value, instanceTypes, instances]);
 
+        // Entries of any shape that no configured instance claims (renamed or removed), by position
+        const unrecognizedEntries = useMemo(() => {
+            const recognized = instanceTypes.flatMap(type => serviceSelections[type] || []);
+            const safeValue = Array.isArray(value) ? value : [];
+            return safeValue
+                .map((item, index) => ({ item, index }))
+                .filter(({ item }) => !recognized.includes(item));
+        }, [instanceTypes, serviceSelections, value]);
+        const unrecognized = useMemo(
+            () => unrecognizedEntries.map(({ item }) => item),
+            [unrecognizedEntries]
+        );
+
         // Update selection for a specific service type
         const updateServiceSelection = useCallback(
             (serviceType, newSelection) => {
@@ -1202,15 +1249,15 @@ export const InstancesField = React.memo(
                     .filter(type => type !== serviceType)
                     .flatMap(type => serviceSelections[type] || []);
 
-                // Keep entries of any shape that no configured instance claims (renamed or
-                // removed in Settings→Instances), so an unrelated toggle can't drop them.
-                const recognized = instanceTypes.flatMap(type => serviceSelections[type] || []);
-                const safeValue = Array.isArray(value) ? value : [];
-                const unrecognized = safeValue.filter(item => !recognized.includes(item));
-
+                // Unrecognized entries survive an unrelated toggle; only their own × removes them
                 onChange([...otherSelections, ...newSelection, ...unrecognized]);
             },
-            [instanceTypes, serviceSelections, onChange, value]
+            [instanceTypes, serviceSelections, onChange, unrecognized]
+        );
+
+        const removeUnrecognized = useCallback(
+            index => onChange((Array.isArray(value) ? value : []).filter((_, i) => i !== index)),
+            [onChange, value]
         );
 
         // Toggle a single ARR instance pill — recompute that service type's
@@ -1319,6 +1366,14 @@ export const InstancesField = React.memo(
                             arrTypes={arrTypes}
                             selectedByType={serviceSelections}
                             onToggle={handleArrToggle}
+                            disabled={disabled}
+                        />
+                    )}
+
+                    {unrecognizedEntries.length > 0 && (
+                        <UnconfiguredSelections
+                            entries={unrecognizedEntries}
+                            onRemove={removeUnrecognized}
                             disabled={disabled}
                         />
                     )}
