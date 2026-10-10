@@ -90,15 +90,26 @@ def test_nothing_left_is_refused(db, configured):
 
 
 def test_an_empty_list_stays_empty(db, configured):
-    assert resolve_instance_names(db, _logger(), [], "the scan") == ([], None)
+    result = resolve_instance_names(db, _logger(), [], "the scan")
+
+    assert result == ([], None)
 
 
-def test_an_ambiguous_case_match_is_not_guessed(db, configured):
+def test_an_ambiguous_case_match_is_refused_even_beside_a_valid_name(db, configured):
     configured.instances.radarr["RADARR"] = InstanceDetail(url="http://r2:7878", api="k")
 
-    names, refusal = resolve_instance_names(db, _logger(), ["radarr"], "the scan")
+    names, refusal = resolve_instance_names(db, _logger(), ["Sonarr", "radarr"], "the scan")
 
-    assert names == [] and "None of the instances" in refusal
+    assert names == []
+    assert "matches more than one" in refusal and "RADARR" in refusal
+
+
+def test_an_exact_name_wins_over_case_variants(db, configured):
+    configured.instances.radarr["RADARR"] = InstanceDetail(url="http://r2:7878", api="k")
+
+    names, refusal = resolve_instance_names(db, _logger(), ["RADARR"], "the scan")
+
+    assert (names, refusal) == (["RADARR"], None)
 
 
 def test_an_unreadable_config_is_refused(db, monkeypatch):

@@ -229,7 +229,7 @@ def test_stale_pass_uses_the_folder_name_radarr_has_now(env):
     assert stale_stats["count"] == 0
 
 
-# A list saved before an instance was renamed to new capitals still names the old case
+# The saved list names radarr_main in a different case (RADARR_MAIN)
 def test_delete_resolves_a_case_variant_before_refreshing_and_comparing(env):
     env.cfg.poster_cleanarr.orphan_instances = ["RADARR_MAIN"]
     new = _asset(env, "New Movie (2024).jpg")

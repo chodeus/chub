@@ -1416,6 +1416,12 @@ def resolve_instance_names(
             if matches[0] not in resolved:
                 resolved.append(matches[0])
             continue
+        if len(matches) > 1:
+            return [], (
+                f"{name} in the instance list for {purpose} matches more than one "
+                f"configured instance ({', '.join(matches)}). Pick the exact one in "
+                "Settings."
+            )
         try:
             cached = db.media.count_by_instance(name) or db.collection.get_by_instance(
                 name
@@ -1435,8 +1441,8 @@ def resolve_instance_names(
     if removed:
         return [], (
             f"{', '.join(removed)} in the instance list for {purpose} is not a "
-            "configured instance, but CHUB still has media cached for it. Remove it "
-            "from that list in Settings, or add the instance back."
+            "configured instance, but CHUB still has media or collections cached "
+            "for it. Remove it from that list in Settings, or add the instance back."
         )
     if names and not resolved:
         return [], f"None of the instances listed for {purpose} is configured."
