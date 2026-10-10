@@ -630,7 +630,8 @@ const PosterCleanarrPage = () => {
     const watchCleanupJob = useCallback(
         (jobId, targets) =>
             pollJobUntilDone(jobId, pageAliveRef.current).then(status => {
-                if (!status) return;
+                // No end state (cancelled, or polling gave up): the run may still be going
+                if (!TERMINAL_STATUSES.includes(status)) return;
                 // Any terminal status: a run that failed part-way may still
                 // have moved or removed stale and orphaned assets.
                 loadKometaAssets(true);

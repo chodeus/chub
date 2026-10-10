@@ -648,9 +648,7 @@ export const postersAPI = {
         return apiCore.get(`/posters/plex-metadata/by-media?${qs.toString()}`);
     },
 
-    /** Enqueue a background Plex-metadata scan job (warms the bundle +
-     *  transcoder cache off the event loop). Returns {job_id}; poll with
-     *  `jobsAPI.tailJobLog`, then re-fetch `listPlexMetadataByMedia`. */
+    /** Enqueue a Plex-metadata scan job; poll its {job_id} with `jobsAPI.tailJobLog`. */
     enqueuePlexMetadataScan: () => apiCore.post('/posters/plex-metadata/scan', {}),
 
     /** Flat list of bloat variants, largest first (cache-only read). */

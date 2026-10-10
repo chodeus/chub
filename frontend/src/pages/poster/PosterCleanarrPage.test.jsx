@@ -592,6 +592,34 @@ describe('Poster Cleanarr — stale and orphan lists stay current', () => {
         });
     });
 
+    it('starts no rescan when it loses track of the cleanup job', async () => {
+        const user = userEvent.setup();
+        const realNow = Date.now();
+        let dateSpy = null;
+        mockJobsAPI.tailJobLog.mockImplementation(() => {
+            // After the first failed poll, jump past the one-minute give-up window
+            if (!dateSpy) dateSpy = vi.spyOn(Date, 'now').mockReturnValue(realNow + 61_000);
+            return Promise.reject(new Error('502'));
+        });
+        scansReturn({ stale: [], orphans: [ORPHAN] }, { stale: [], orphans: [] });
+        render(<PosterCleanarrPage />);
+        try {
+            await user.click(await screen.findByRole('button', { name: 'Delete all' }));
+            await user.click(
+                within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' })
+            );
+            await user.click(
+                await screen.findByRole('button', { name: 'Hide (job keeps running)' })
+            );
+            await new Promise(r => setTimeout(r, 3500));
+
+            expect(mockJobsAPI.tailJobLog.mock.calls.length).toBeGreaterThanOrEqual(2);
+            expect(mockPostersAPI.enqueueKometaAssetsScan).not.toHaveBeenCalled();
+        } finally {
+            dateSpy?.mockRestore();
+        }
+    }, 8000);
+
     it('warns when Delete all collapses onto a run already in flight', async () => {
         const user = userEvent.setup();
         mockPostersAPI.scanKometaAssets.mockResolvedValue({

@@ -212,6 +212,10 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [filter, setFilter] = useState('');
+    const listRef = useRef(duplicates);
+    useEffect(() => {
+        listRef.current = duplicates;
+    }, [duplicates]);
     // A reloaded list can keep a group's key with different copies: drop what was loaded for it
     const [shownDuplicates, setShownDuplicates] = useState(duplicates);
     if (shownDuplicates !== duplicates) {
@@ -226,12 +230,16 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
         const willOpen = !expanded[k];
         setExpanded(e => ({ ...e, [k]: willOpen }));
         if (willOpen && !membersByKey[k]) {
+            const list = duplicates;
             setLoadingKeys(s => new Set(s).add(k));
             try {
                 const res = await mediaAPI.fetchDuplicateMembers(dupIds(dup));
-                setMembersByKey(m => ({ ...m, [k]: res?.data?.members || [] }));
+                // A reload since the request started: these copies may be out of date
+                if (listRef.current === list) {
+                    setMembersByKey(m => ({ ...m, [k]: res?.data?.members || [] }));
+                }
             } catch {
-                setMembersByKey(m => ({ ...m, [k]: [] }));
+                if (listRef.current === list) setMembersByKey(m => ({ ...m, [k]: [] }));
             } finally {
                 setLoadingKeys(s => {
                     const n = new Set(s);

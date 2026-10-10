@@ -1,5 +1,4 @@
-/** "Refresh cache" must reload the duplicate list only after the refresh job ends:
- *  a reload at enqueue re-caches the pre-refresh list for its whole TTL. */
+/** "Refresh cache" reloads the duplicate list only after the refresh job ends. */
 import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
 import { UIStateProvider } from '../../contexts/UIStateContext.jsx';
 import { apiCore } from '../../utils/api/core.js';
@@ -107,6 +106,25 @@ describe('MediaManagePage Refresh cache', () => {
         job.resolve('success');
         await waitFor(() => expect(media.fetchDuplicates).toHaveBeenCalledTimes(2));
         await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Cache refreshed'));
+        fireEvent.click(await screen.findByRole('button', { name: /Same Film/ }));
+
+        await waitFor(() => expect(media.fetchDuplicateMembers).toHaveBeenCalledTimes(2));
+    });
+
+    it('drops a copies request that returns after the list reloaded', async () => {
+        const group = { normalized_title: 'samefilm', title: 'Same Film', count: 2, ids: '1,2' };
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [group] } });
+        let answerOld;
+        media.fetchDuplicateMembers.mockReturnValueOnce(new Promise(r => (answerOld = r)));
+        render(<MediaManagePage />);
+        fireEvent.click(await screen.findByRole('button', { name: /Same Film/ }));
+
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [{ ...group }] } });
+        fireEvent.click(screen.getByRole('button', { name: /refresh cache/i }));
+        job.resolve('success');
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Cache refreshed'));
+        answerOld({ data: { members: [{ id: 1, path: '/old/copy' }] } });
+        media.fetchDuplicateMembers.mockResolvedValue({ data: { members: [] } });
         fireEvent.click(await screen.findByRole('button', { name: /Same Film/ }));
 
         await waitFor(() => expect(media.fetchDuplicateMembers).toHaveBeenCalledTimes(2));

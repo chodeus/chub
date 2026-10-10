@@ -40,20 +40,53 @@ describe('pollJobUntilDone', () => {
         expect(jobs.tailJobLog).toHaveBeenCalledTimes(1);
     });
 
-    it('gives up after a run of failed requests, counting only consecutive ones', async () => {
+    const settled = promise => {
+        const state = { value: 'pending' };
+        promise.then(v => (state.value = v));
+        return state;
+    };
+
+    it('gives up after a minute of fast failures, not before', async () => {
+        vi.useFakeTimers();
+        jobs.tailJobLog.mockRejectedValue(new Error('502'));
+
+        const state = settled(pollJobUntilDone(1, { cancelled: false }));
+        await vi.advanceTimersByTimeAsync(57_000);
+        const early = state.value;
+        await vi.advanceTimersByTimeAsync(4_000);
+
+        expect(early).toBe('pending');
+        expect(state.value).toBe(POLL_UNREACHABLE);
+    });
+
+    it('counts the minute from the start of a failing request, so timeouts count', async () => {
+        vi.useFakeTimers();
+        jobs.tailJobLog.mockImplementation(
+            () => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 30_000))
+        );
+
+        const state = settled(pollJobUntilDone(1, { cancelled: false }));
+        await vi.advanceTimersByTimeAsync(64_000);
+
+        expect(state.value).toBe(POLL_UNREACHABLE);
+        expect(jobs.tailJobLog).toHaveBeenCalledTimes(2);
+    });
+
+    it('a successful poll restarts the minute', async () => {
         vi.useFakeTimers();
         let calls = 0;
         jobs.tailJobLog.mockImplementation(() => {
             calls += 1;
-            // Call 10 succeeds and restarts the count: 20 more failures make 30 calls
             if (calls === 10) return Promise.resolve({ data: { status: 'running' } });
             return Promise.reject(new Error('502'));
         });
 
-        const done = pollJobUntilDone(1, { cancelled: false });
-        await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+        const state = settled(pollJobUntilDone(1, { cancelled: false }));
+        await vi.advanceTimersByTimeAsync(80_000);
+        const afterReset = state.value;
+        await vi.advanceTimersByTimeAsync(20_000);
 
-        await expect(done).resolves.toBe(POLL_UNREACHABLE);
-        expect(calls).toBe(30);
+        expect(afterReset).toBe('pending');
+        expect(state.value).toBe(POLL_UNREACHABLE);
     });
 });
