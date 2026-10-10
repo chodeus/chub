@@ -480,9 +480,7 @@ def test_unwrap_proxy_refuses_a_nonart_src_on_a_configured_plex(monkeypatch):
     )
 
 
-# --------------------------------------------------------------------------
-# items added (or re-added) since the last Plex walk
-# --------------------------------------------------------------------------
+# Items added (or re-added) since the last Plex walk
 
 
 def _fresh_env(monkeypatch, fetch):
@@ -587,4 +585,38 @@ def test_refresh_walks_only_libraries_of_the_wanted_type(monkeypatch):
     _refresh_snapshot(cfg, _db(rows), _logger(), "movie")
 
     assert targets == [{"films": ["Films"], "new": []}]
+
+
+def test_a_server_404_on_connect_reads_as_unreachable_not_missing(monkeypatch):
+    import plexapi.server
+    from plexapi.exceptions import NotFound
+
+    class _NoServer:
+        def __init__(self, url, token):
+            raise NotFound("server root 404")
+
+    monkeypatch.setattr(plexapi.server, "PlexServer", _NoServer)
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda *a, **k: pytest.fail("a server failure must not trigger a walk"),
+    )
+    rows = {"main": [_movie_row("9", 1)]}
+
+    res = plex_images(_main_cfg(), _db(rows), _logger(), kind="movie", tmdb_id=1)
+
+    assert res["reason"] == "Could not reach Plex."
+
+
+def test_refresh_never_raises_even_when_picking_targets_fails():
+    warned = []
+    logger = SimpleNamespace(warning=lambda msg, **k: warned.append(msg))
+
+    def broken(name):
+        raise RuntimeError("db locked")
+
+    db = SimpleNamespace(plex=SimpleNamespace(get_by_instance=broken))
+
+    _refresh_snapshot(_main_cfg(), db, logger, "movie")
+
+    assert len(warned) == 1
 

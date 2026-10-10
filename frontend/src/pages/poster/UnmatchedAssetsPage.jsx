@@ -2026,7 +2026,12 @@ const ResetControl = ({ assetClass, onComplete }) => {
 
 const UnmatchedAssetsPage = () => {
     useStreamToken(); // re-render thumbnails once the stream token is ready
-    const { data, isLoading, refresh } = useApiData({
+    const {
+        data,
+        isLoading,
+        error: detailsError,
+        refresh,
+    } = useApiData({
         apiFunction: postersAPI.fetchUnmatchedDetails,
         options: { showErrorToast: false },
     });
@@ -2210,21 +2215,25 @@ const UnmatchedAssetsPage = () => {
                 viewMode === 'unmatched' &&
                 (!hasData ? (
                     <p className="text-sm text-fg-muted">
-                        {renamerrRunning
-                            ? 'Poster Renamerr is running; its matches show here when it finishes.'
-                            : lastMatch
-                              ? `Poster Renamerr last ran ${formatTimeAgo(lastMatch, new Date())} and found no media to check.`
-                              : 'No match data yet. This page shows Poster Renamerr’s last match: run Poster Renamerr to match your assets.'}
+                        {detailsError
+                            ? 'Could not load the unmatched list. Try again shortly.'
+                            : renamerrRunning
+                              ? 'Poster Renamerr is running; reload this page when it finishes.'
+                              : lastMatch
+                                ? `Poster Renamerr last ran ${formatTimeAgo(lastMatch, new Date())} and found no media to check.`
+                                : 'No match data yet. This page shows Poster Renamerr’s last match: run Poster Renamerr to match your assets.'}
                     </p>
                 ) : (
                     <>
-                        <p
-                            className="mb-3 text-sm text-fg-muted"
-                            title={lastMatch ? formatDateTime(lastMatch) : undefined}
-                        >
-                            Based on Poster Renamerr&rsquo;s last match
-                            {lastMatch ? `, ${formatTimeAgo(lastMatch, new Date())}` : ''}.
-                        </p>
+                        {lastMatch && (
+                            <p
+                                className="mb-3 text-sm text-fg-muted"
+                                title={formatDateTime(lastMatch)}
+                            >
+                                Based on Poster Renamerr&rsquo;s last match,{' '}
+                                {formatTimeAgo(lastMatch, new Date())}.
+                            </p>
+                        )}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {SUMMARY_TYPES.map(({ key, label, icon }) => {
                                 const typeData = summary[key] || {};

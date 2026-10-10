@@ -86,25 +86,24 @@ def _refresh_snapshot(full_config, db, logger, media_type: Optional[str]) -> Non
     from backend.util.plex_refresh import refresh_plex_cache_if_stale
 
     types = {"movie"} if (media_type or "").lower() == "movie" else _TV_TYPES
-    targets = {}
-    for name, cfg in (getattr(full_config.instances, "plex", {}) or {}).items():
-        if not (getattr(cfg, "enabled", True) and cfg.url and cfg.api):
-            continue
-        rows = db.plex.get_by_instance(name) or []
-        libraries = {
-            row.get("library_name")
-            for row in rows
-            if row.get("library_name")
-            and (row.get("asset_type") or "").lower() in types
-        }
-        if rows and not libraries:
-            continue  # walked before and holds no library of this type
-        # [] (all libraries) only for an instance never walked, so Music isn't re-walked
-        targets[name] = sorted(libraries)
-    if not targets:
-        return
     try:
-        refresh_plex_cache_if_stale(db, full_config, logger, targets)
+        targets = {}
+        for name, cfg in (getattr(full_config.instances, "plex", {}) or {}).items():
+            if not (getattr(cfg, "enabled", True) and cfg.url and cfg.api):
+                continue
+            rows = db.plex.get_by_instance(name) or []
+            libraries = {
+                row.get("library_name")
+                for row in rows
+                if row.get("library_name")
+                and (row.get("asset_type") or "").lower() in types
+            }
+            if rows and not libraries:
+                continue  # walked before and holds no library of this type
+            # [] (all libraries) only for a never-walked instance: Music isn't re-walked
+            targets[name] = sorted(libraries)
+        if targets:
+            refresh_plex_cache_if_stale(db, full_config, logger, targets)
     except Exception as exc:
         logger.warning(f"cl2k: Plex snapshot refresh failed: {exc}", exc_info=True)
 
@@ -165,37 +164,41 @@ def plex_images(
             imdb_id=imdb_id,
         )
 
-    def fetch(cfg, rating_key):
-        from plexapi.server import PlexServer
-
-        server = PlexServer(cfg.url, cfg.api)
-        return server, server.fetchItem(int(rating_key))
-
     from plexapi.exceptions import NotFound
+    from plexapi.server import PlexServer
+
+    unreachable = {**empty, "reason": "Could not reach Plex."}
+    not_found = {**empty, "reason": "Not found in a synced Plex library."}
+
+    def fetch(cfg, rating_key):
+        """(server, item); item None if Plex lacks the ratingKey; other errors raise."""
+        server = PlexServer(cfg.url, cfg.api)  # NotFound here = server, not item
+        try:
+            return server, server.fetchItem(int(rating_key))
+        except NotFound:
+            return server, None
 
     cfg, rating_key = resolve()
-    stale = False
+    item = None
     if rating_key:
         try:
             server, item = fetch(cfg, rating_key)
-        except NotFound:
-            stale = True  # re-added under a new ratingKey since the last walk
         except Exception as exc:  # connection / fetch failure — degrade gracefully
             logger.warning(f"cl2k: Plex artwork fetch failed (key={rating_key}): {exc}")
-            return {**empty, "reason": "Could not reach Plex."}
-    if not rating_key or stale:
-        # Added (or re-added) since the last walk: refresh the snapshot, look once more
+            return unreachable
+    if item is None:
+        # Added (or re-added with a new ratingKey) since the last walk: refresh, retry
         _refresh_snapshot(full_config, db, logger, kind)
         cfg, rating_key = resolve()
         if not rating_key:
-            return {**empty, "reason": "Not found in a synced Plex library."}
+            return not_found
         try:
             server, item = fetch(cfg, rating_key)
-        except NotFound:
-            return {**empty, "reason": "Not found in a synced Plex library."}
         except Exception as exc:
             logger.warning(f"cl2k: Plex artwork fetch failed (key={rating_key}): {exc}")
-            return {**empty, "reason": "Could not reach Plex."}
+            return unreachable
+        if item is None:
+            return not_found
 
     out: Dict[str, Any] = {"logos": [], "backdrops": [], "posters": []}
     # plexapi method -> our bucket. arts() are backgrounds.

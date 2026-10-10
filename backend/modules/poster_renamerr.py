@@ -42,7 +42,7 @@ from backend.util.normalization import parse_asset_filename
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
-from backend.util.upload_posters import PosterUploader
+from backend.util.upload_posters import PosterUploader, upload_enabled_instances
 
 # Process-global lock serializing the destructive poster_cache clear()+rebuild.
 # The scheduled run() and the webhook-driven run_poster_rename_adhoc() run on
@@ -873,11 +873,7 @@ class PosterRenamerr(ChubModule):
         Instances with no snapshot contribute nothing (the coverage check then
         degrades to today's hash-only skip rather than re-staging everything).
         """
-        enabled = {
-            scope.instance: list(scope.library_names or [])
-            for scope in self.config.plex_scope or []
-            if scope.add_posters
-        }
+        enabled = upload_enabled_instances(self.config.plex_scope)
         if enabled:
             # The uploader refreshes later; refresh now so the skip sees that snapshot
             from backend.util.plex_refresh import refresh_plex_cache_if_stale
