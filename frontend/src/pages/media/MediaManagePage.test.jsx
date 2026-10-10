@@ -130,6 +130,29 @@ describe('MediaManagePage Refresh cache', () => {
         await waitFor(() => expect(media.fetchDuplicateMembers).toHaveBeenCalledTimes(2));
     });
 
+    it('keeps Resolve unavailable while a refresh is running', async () => {
+        const group = { normalized_title: 'samefilm', title: 'Same Film', count: 2, ids: '1,2' };
+        const copy = { id: 1, path: '/films/Same Film', live: { size_bytes: 1 } };
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [group] } });
+        media.fetchDuplicateMembers.mockResolvedValue({ data: { members: [copy] } });
+        render(<MediaManagePage />);
+        const openGroup = async () => {
+            fireEvent.click(await screen.findByRole('button', { name: /Same Film/ }));
+            return screen.findByRole('button', { name: /Resolve manually/ });
+        };
+        expect(await openGroup()).toBeEnabled();
+
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [{ ...group }] } });
+        fireEvent.click(screen.getByRole('button', { name: /refresh cache/i }));
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /Resolve manually/ })).toBeDisabled()
+        );
+        job.resolve('success');
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Cache refreshed'));
+
+        expect(await openGroup()).toBeEnabled();
+    });
+
     it('says it lost track of the job when polling gives up, and still reloads', async () => {
         await clickRefresh();
         job.resolve('unreachable');

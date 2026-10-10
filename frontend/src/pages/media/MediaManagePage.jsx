@@ -182,6 +182,10 @@ const DuplicateGroup = ({
                                 variant="ghost"
                                 size="small"
                                 icon="auto_fix_high"
+                                disabled={!onResolve}
+                                title={
+                                    onResolve ? undefined : 'Wait for the cache refresh to finish'
+                                }
                                 onClick={() => onResolve(dup)}
                             >
                                 Resolve manually
@@ -751,7 +755,8 @@ const MediaManagePage = () => {
 
             <DuplicatesSection
                 duplicates={duplicates}
-                onResolve={setResolveTarget}
+                // No resolving mid-refresh: the reload would leave the modal on old copies
+                onResolve={isRefreshing ? null : setResolveTarget}
                 onRefresh={refreshDups}
             />
 
