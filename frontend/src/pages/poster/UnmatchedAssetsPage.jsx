@@ -2037,7 +2037,7 @@ const UnmatchedAssetsPage = () => {
     });
 
     // Matches are written by Poster Renamerr; this page only reports its last run
-    const { data: runStates } = useApiData({
+    const { data: runStates, error: runStatesError } = useApiData({
         apiFunction: modulesAPI.fetchRunStates,
         options: { showErrorToast: false },
     });
@@ -2221,7 +2221,9 @@ const UnmatchedAssetsPage = () => {
                               ? 'Poster Renamerr is running; reload this page when it finishes.'
                               : lastMatch
                                 ? `Poster Renamerr last ran ${formatTimeAgo(lastMatch, new Date())} and found no media to check.`
-                                : 'No match data yet. This page shows Poster Renamerr’s last match: run Poster Renamerr to match your assets.'}
+                                : runStatesError
+                                  ? 'No match data to show, and Poster Renamerr’s run status could not be loaded.'
+                                  : 'No match data yet. This page shows Poster Renamerr’s last match: run Poster Renamerr to match your assets.'}
                     </p>
                 ) : (
                     <>

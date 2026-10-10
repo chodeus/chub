@@ -81,29 +81,35 @@ def _resolve(
     return None, None
 
 
+# A miss can mean the item was added after a fresh walk; re-walk at most once a minute
+_MISS_REFRESH_TTL_SECONDS = 60
+
+
 def _refresh_snapshot(full_config, db, logger, media_type: Optional[str]) -> None:
-    """TTL-guarded walk of each instance's movie (or TV) libraries; never raises."""
+    """Re-walk each instance's movie (or TV) libraries for a miss; never raises."""
+    from plexapi.server import PlexServer
+
     from backend.util.plex_refresh import refresh_plex_cache_if_stale
 
-    types = {"movie"} if (media_type or "").lower() == "movie" else _TV_TYPES
+    section_type = "movie" if (media_type or "").lower() == "movie" else "show"
+    targets = {}
+    for name, cfg in (getattr(full_config.instances, "plex", {}) or {}).items():
+        if not (getattr(cfg, "enabled", True) and cfg.url and cfg.api):
+            continue
+        try:
+            sections = PlexServer(cfg.url, cfg.api).library.sections()
+        except Exception as exc:
+            logger.warning(f"cl2k: could not list Plex '{name}' libraries: {exc}")
+            continue
+        libraries = sorted(s.title for s in sections if s.type == section_type)
+        if libraries:
+            targets[name] = libraries
+    if not targets:
+        return
     try:
-        targets = {}
-        for name, cfg in (getattr(full_config.instances, "plex", {}) or {}).items():
-            if not (getattr(cfg, "enabled", True) and cfg.url and cfg.api):
-                continue
-            rows = db.plex.get_by_instance(name) or []
-            libraries = {
-                row.get("library_name")
-                for row in rows
-                if row.get("library_name")
-                and (row.get("asset_type") or "").lower() in types
-            }
-            if rows and not libraries:
-                continue  # walked before and holds no library of this type
-            # [] (all libraries) only for a never-walked instance: Music isn't re-walked
-            targets[name] = sorted(libraries)
-        if targets:
-            refresh_plex_cache_if_stale(db, full_config, logger, targets)
+        refresh_plex_cache_if_stale(
+            db, full_config, logger, targets, ttl_seconds=_MISS_REFRESH_TTL_SECONDS
+        )
     except Exception as exc:
         logger.warning(f"cl2k: Plex snapshot refresh failed: {exc}", exc_info=True)
 

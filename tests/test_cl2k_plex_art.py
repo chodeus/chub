@@ -60,9 +60,15 @@ class _Item:
 
 
 class _Server:
+    sections = [
+        SimpleNamespace(title="Films", type="movie"),
+        SimpleNamespace(title="Music", type="artist"),
+    ]
+
     def __init__(self, url, token):
         self.url_base = url
         self.token = token
+        self.library = SimpleNamespace(sections=lambda: list(self.sections))
 
     def fetchItem(self, rating_key):
         assert rating_key == 9
@@ -185,12 +191,19 @@ def test_plex_images_no_instance_returns_reason():
     assert res["logos"] == [] and res["reason"]
 
 
-def test_plex_images_not_in_library_returns_reason():
+def test_plex_images_not_in_library_returns_reason(monkeypatch):
+    _patch_plexserver(monkeypatch)
+    walked = []
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda db, cfg, logger, enabled, **k: walked.append(enabled),
+    )
     cfg = _config(
         {"main": SimpleNamespace(url="http://plex:32400", api="t", enabled=True)}
     )
     res = plex_images(cfg, _db({"main": []}), _logger(), kind="movie", tmdb_id=999)
     assert res["backdrops"] == [] and "synced Plex library" in res["reason"]
+    assert walked == [{"main": ["Films"]}]
 
 
 # --------------------------------------------------------------------------
@@ -564,27 +577,34 @@ def test_plex_images_does_not_refresh_when_plex_is_unreachable(monkeypatch):
     assert refreshed == []
 
 
-def test_refresh_walks_only_libraries_of_the_wanted_type(monkeypatch):
+def test_refresh_walks_the_live_libraries_of_the_wanted_type(monkeypatch):
+    import plexapi.server
+
+    class _Libs(_Server):
+        def __init__(self, url, token):
+            super().__init__(url, token)
+            if url == "http://down":
+                raise ConnectionError("unreachable")
+            if url == "http://b":
+                self.library = SimpleNamespace(sections=lambda: [])
+
+    monkeypatch.setattr(plexapi.server, "PlexServer", _Libs)
     cfg = _config(
         {
             "films": SimpleNamespace(url="http://a", api="t", enabled=True),
-            "music": SimpleNamespace(url="http://b", api="t", enabled=True),
-            "new": SimpleNamespace(url="http://c", api="t", enabled=True),
+            "empty": SimpleNamespace(url="http://b", api="t", enabled=True),
+            "down": SimpleNamespace(url="http://down", api="t", enabled=True),
         }
     )
-    rows = {
-        "films": [_movie_row("1", 7), {"asset_type": "artist", "library_name": "Music"}],
-        "music": [{"asset_type": "artist", "library_name": "Music"}],
-    }
-    targets = []
+    calls = []
     monkeypatch.setattr(
         "backend.util.plex_refresh.refresh_plex_cache_if_stale",
-        lambda db, cfg, logger, enabled, **k: targets.append(enabled),
+        lambda db, cfg, logger, enabled, **k: calls.append((enabled, k)),
     )
 
-    _refresh_snapshot(cfg, _db(rows), _logger(), "movie")
+    _refresh_snapshot(cfg, _db({}), _logger(), "movie")
 
-    assert targets == [{"films": ["Films"], "new": []}]
+    assert calls == [({"films": ["Films"]}, {"ttl_seconds": 60})]
 
 
 def test_a_server_404_on_connect_reads_as_unreachable_not_missing(monkeypatch):
@@ -607,16 +627,16 @@ def test_a_server_404_on_connect_reads_as_unreachable_not_missing(monkeypatch):
     assert res["reason"] == "Could not reach Plex."
 
 
-def test_refresh_never_raises_even_when_picking_targets_fails():
+def test_refresh_never_raises_when_the_walk_fails(monkeypatch):
+    _patch_plexserver(monkeypatch)
     warned = []
     logger = SimpleNamespace(warning=lambda msg, **k: warned.append(msg))
 
-    def broken(name):
+    def broken(*a, **k):
         raise RuntimeError("db locked")
 
-    db = SimpleNamespace(plex=SimpleNamespace(get_by_instance=broken))
+    monkeypatch.setattr("backend.util.plex_refresh.refresh_plex_cache_if_stale", broken)
 
-    _refresh_snapshot(_main_cfg(), db, logger, "movie")
+    _refresh_snapshot(_main_cfg(), _db({}), logger, "movie")
 
     assert len(warned) == 1
-

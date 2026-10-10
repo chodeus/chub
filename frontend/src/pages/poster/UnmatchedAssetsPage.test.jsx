@@ -34,6 +34,7 @@ let runStatesPayload = null;
 // carries the fixture. Keyed on apiFunction so order changes don't break this.
 let unmatchedPayload = null;
 let detailsError = null;
+let runStatesError = null;
 const refresh = vi.fn();
 vi.mock('../../hooks/useApiData.js', () => ({
     useApiData: ({ apiFunction }) => ({
@@ -44,7 +45,12 @@ vi.mock('../../hooks/useApiData.js', () => ({
                   ? { data: runStatesPayload }
                   : null,
         isLoading: false,
-        error: apiFunction === mockPostersAPI.fetchUnmatchedDetails ? detailsError : null,
+        error:
+            apiFunction === mockPostersAPI.fetchUnmatchedDetails
+                ? detailsError
+                : apiFunction === mockModulesAPI.fetchRunStates
+                  ? runStatesError
+                  : null,
         refresh,
     }),
 }));
@@ -379,6 +385,16 @@ describe('UnmatchedAssetsPage — where the results come from', () => {
         unmatchedPayload = null;
         runStatesPayload = null;
         detailsError = null;
+        runStatesError = null;
+    });
+
+    it('does not ask for a run when the run status could not be loaded', () => {
+        runStatesError = new Error('500');
+
+        render(<UnmatchedAssetsPage />);
+
+        expect(screen.getByText(/run status could not be loaded/)).toBeInTheDocument();
+        expect(screen.queryByText(/run Poster Renamerr to match/)).toBeNull();
     });
 
     it('says the list is Poster Renamerr’s last match, and when that ran', () => {
