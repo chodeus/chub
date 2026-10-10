@@ -110,3 +110,26 @@ def test_an_unreadable_config_is_refused(db, monkeypatch):
     names, refusal = resolve_instance_names(db, _logger(), ["Radarr"], "the scan")
 
     assert names == [] and "Cannot load the config" in refusal
+
+
+def test_a_name_shared_by_two_kinds_still_resolves_by_case(db, configured):
+    configured.instances.plex["Radarr"] = InstanceDetail(url="http://p:32400", api="k")
+
+    names, refusal = resolve_instance_names(db, _logger(), ["radarr"], "the scan")
+
+    assert (names, refusal) == (["Radarr"], None)
+
+
+def test_a_cache_lookup_error_is_a_refusal(configured):
+    def boom(name):
+        raise RuntimeError("database is locked")
+
+    db = SimpleNamespace(
+        media=SimpleNamespace(count_by_instance=boom),
+        collection=SimpleNamespace(get_by_instance=boom),
+    )
+
+    names, refusal = resolve_instance_names(db, _logger(), ["Radarr", "oldradarr"], "the scan")
+
+    assert names == [] and "database is locked" in refusal
+

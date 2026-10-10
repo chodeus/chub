@@ -54,6 +54,22 @@ describe('InstancesField', () => {
         expect(onChange).toHaveBeenCalledWith(['radarr_1']);
     });
 
+    it('removes one copy of a name saved twice', async () => {
+        const onChange = vi.fn();
+        render(
+            <InstancesField
+                field={libraryField}
+                value={['old_radarr', 'radarr_1', 'old_radarr']}
+                onChange={onChange}
+            />
+        );
+
+        const [first] = await screen.findAllByRole('button', { name: 'Remove old_radarr' });
+        fireEvent.click(first);
+
+        expect(onChange).toHaveBeenCalledWith(['radarr_1', 'old_radarr']);
+    });
+
     it('lists nothing extra when every saved name is configured', async () => {
         render(<InstancesField field={libraryField} value={['radarr_1']} onChange={() => {}} />);
 

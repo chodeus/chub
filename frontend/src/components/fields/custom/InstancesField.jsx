@@ -118,21 +118,21 @@ const selectionName = item =>
         : item?.instance || item?.name || Object.keys(item || {})[0] || '';
 
 /** Saved names no configured instance claims (renamed or removed), each removable. */
-const UnconfiguredSelections = ({ items, onRemove, disabled }) => (
+const UnconfiguredSelections = ({ entries, onRemove, disabled }) => (
     <div className="flex flex-wrap items-center gap-2">
         <span className="text-dense text-fg-subtle">Not configured:</span>
-        {items.map((item, i) => {
+        {entries.map(({ item, index }) => {
             const name = selectionName(item);
             return (
                 <span
-                    key={`${name}-${i}`}
+                    key={index}
                     className="inline-flex items-center gap-1 min-h-11 pl-3 pr-1 rounded-full text-dense font-medium border border-dashed border-warning text-fg-muted"
                 >
                     {name}
                     <button
                         type="button"
                         disabled={disabled}
-                        onClick={() => onRemove(item)}
+                        onClick={() => onRemove(index)}
                         aria-label={`Remove ${name}`}
                         className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-surface-inset cursor-pointer disabled:opacity-50"
                     >
@@ -1229,12 +1229,18 @@ export const InstancesField = React.memo(
             return selections;
         }, [value, instanceTypes, instances]);
 
-        // Entries of any shape that no configured instance claims (renamed or removed)
-        const unrecognized = useMemo(() => {
+        // Entries of any shape that no configured instance claims (renamed or removed), by position
+        const unrecognizedEntries = useMemo(() => {
             const recognized = instanceTypes.flatMap(type => serviceSelections[type] || []);
             const safeValue = Array.isArray(value) ? value : [];
-            return safeValue.filter(item => !recognized.includes(item));
+            return safeValue
+                .map((item, index) => ({ item, index }))
+                .filter(({ item }) => !recognized.includes(item));
         }, [instanceTypes, serviceSelections, value]);
+        const unrecognized = useMemo(
+            () => unrecognizedEntries.map(({ item }) => item),
+            [unrecognizedEntries]
+        );
 
         // Update selection for a specific service type
         const updateServiceSelection = useCallback(
@@ -1250,7 +1256,7 @@ export const InstancesField = React.memo(
         );
 
         const removeUnrecognized = useCallback(
-            item => onChange((Array.isArray(value) ? value : []).filter(v => v !== item)),
+            index => onChange((Array.isArray(value) ? value : []).filter((_, i) => i !== index)),
             [onChange, value]
         );
 
@@ -1364,9 +1370,9 @@ export const InstancesField = React.memo(
                         />
                     )}
 
-                    {unrecognized.length > 0 && (
+                    {unrecognizedEntries.length > 0 && (
                         <UnconfiguredSelections
-                            items={unrecognized}
+                            entries={unrecognizedEntries}
                             onRemove={removeUnrecognized}
                             disabled={disabled}
                         />

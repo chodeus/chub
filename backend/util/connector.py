@@ -1394,11 +1394,14 @@ def resolve_instance_names(
         known = load_config().instances
     except Exception as e:
         return [], f"Cannot load the config to check the instances for {purpose} ({e})."
-    configured = [
-        name
-        for kind in (*ARR_KINDS, "plex")
-        for name in (getattr(known, kind, None) or {})
-    ]
+    # dict.fromkeys: a Radarr and a Plex instance may share a name
+    configured = list(
+        dict.fromkeys(
+            name
+            for kind in (*ARR_KINDS, "plex")
+            for name in (getattr(known, kind, None) or {})
+        )
+    )
     by_folded: Dict[str, List[str]] = {}
     for name in configured:
         by_folded.setdefault(name.casefold(), []).append(name)
@@ -1412,7 +1415,14 @@ def resolve_instance_names(
         if len(matches) == 1:
             if matches[0] not in resolved:
                 resolved.append(matches[0])
-        elif db.media.count_by_instance(name) or db.collection.get_by_instance(name):
+            continue
+        try:
+            cached = db.media.count_by_instance(name) or db.collection.get_by_instance(
+                name
+            )
+        except Exception as e:
+            return [], f"Cannot check what CHUB has cached for {name} ({e})."
+        if cached:
             removed.append(name)
         else:
             ignored.append(name)  # matches nothing and holds nothing: leftover config
