@@ -1409,6 +1409,7 @@ def resolve_instance_names(
     resolved: List[str] = []
     ignored: List[str] = []
     removed: List[str] = []
+    cached_folded: Optional[set] = None  # read once, only for an unmatched name
     for name in names:
         folded = by_folded.get(str(name).casefold(), [])
         matches = [name] if name in configured else folded
@@ -1422,13 +1423,14 @@ def resolve_instance_names(
                 f"configured instance ({', '.join(matches)}). Pick the exact one in "
                 "Settings."
             )
-        try:
-            cached = db.media.count_by_instance(name) or db.collection.get_by_instance(
-                name
-            )
-        except Exception as e:
-            return [], f"Cannot check what CHUB has cached for {name} ({e})."
-        if cached:
+        if cached_folded is None:
+            try:
+                cached = db.media.instance_names() + db.collection.instance_names()
+            except Exception as e:
+                return [], f"Cannot check what CHUB has cached for {name} ({e})."
+            cached_folded = {str(n).casefold() for n in cached}
+        # Ignoring case: "OldRadarr" rows belong to a listed "oldradarr"
+        if str(name).casefold() in cached_folded:
             removed.append(name)
         else:
             ignored.append(name)  # matches nothing and holds nothing: leftover config

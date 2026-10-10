@@ -132,15 +132,31 @@ def test_a_name_shared_by_two_kinds_still_resolves_by_case(db, configured):
 
 
 def test_a_cache_lookup_error_is_a_refusal(configured):
-    def boom(name):
+    def boom():
         raise RuntimeError("database is locked")
 
     db = SimpleNamespace(
-        media=SimpleNamespace(count_by_instance=boom),
-        collection=SimpleNamespace(get_by_instance=boom),
+        media=SimpleNamespace(instance_names=boom),
+        collection=SimpleNamespace(instance_names=boom),
     )
 
     names, refusal = resolve_instance_names(db, _logger(), ["Radarr", "oldradarr"], "the scan")
 
     assert names == [] and "database is locked" in refusal
+
+
+def test_media_cached_under_another_case_still_blocks_a_removed_name(db, configured):
+    _seed_media(db, "OldRadarr")
+
+    names, refusal = resolve_instance_names(db, _logger(), ["Radarr", "oldradarr"], "the scan")
+
+    assert names == [] and "oldradarr" in refusal
+
+
+def test_collections_cached_under_another_case_still_block_a_removed_name(db, configured):
+    db.collection.upsert({"title": "Some Saga", "library_name": "Films"}, "OldPlex")
+
+    names, refusal = resolve_instance_names(db, _logger(), ["Radarr", "oldplex"], "the scan")
+
+    assert names == [] and "oldplex" in refusal
 

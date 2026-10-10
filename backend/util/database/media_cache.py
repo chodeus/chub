@@ -315,6 +315,13 @@ class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, Databa
             or []
         )
 
+    def instance_names(self) -> List[str]:
+        """Every instance_name that has rows cached."""
+        rows = self.execute_query(
+            "SELECT DISTINCT instance_name FROM media_cache", fetch_all=True
+        )
+        return [row["instance_name"] for row in rows or []]
+
     def count_by_instance(self, instance_name: str) -> int:
         """Count rows for one instance without loading them (libraries are large)."""
         row = self.execute_query(
