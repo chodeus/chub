@@ -44,9 +44,7 @@ export const jobsAPI = {
         });
     },
 
-    /** Poll a job's log file for incremental output. Must bypass the GET
-     *  cache: when the log isn't growing the poll URL never changes, and a
-     *  cached response masks the terminal status for the full TTL. */
+    /** A job's log from `offset`, uncached so a stalled log can't hide its status. */
     tailJobLog: (jobId, offset = 0, maxBytes = 65536) => {
         const qs = new URLSearchParams();
         qs.set('offset', offset);

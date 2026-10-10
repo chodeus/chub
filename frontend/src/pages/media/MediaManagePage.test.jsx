@@ -6,12 +6,13 @@ import { apiCore } from '../../utils/api/core.js';
 
 const media = {
     fetchDuplicates: vi.fn(),
+    fetchDuplicateMembers: vi.fn(),
     fetchCollections: vi.fn(),
     refreshLibrary: vi.fn(),
     fetchOrphaned: vi.fn(),
     fetchIncompleteMetadata: vi.fn(),
 };
-const poll = { pollJobUntilDone: vi.fn() };
+const poll = { pollJobUntilDone: vi.fn(), POLL_UNREACHABLE: 'unreachable' };
 const toast = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
 
 vi.mock('../../utils/api/media.js', () => ({ mediaAPI: media }));
@@ -91,6 +92,34 @@ describe('MediaManagePage Refresh cache', () => {
         expect(poll.pollJobUntilDone.mock.calls[0][1].cancelled).toBe(true);
         expect(toast.success).not.toHaveBeenCalled();
         expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('reloads a group’s copies after a refresh, even under the same key', async () => {
+        const group = { normalized_title: 'samefilm', title: 'Same Film', count: 2, ids: '1,2' };
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [group] } });
+        media.fetchDuplicateMembers.mockResolvedValue({ data: { members: [] } });
+        render(<MediaManagePage />);
+        fireEvent.click(await screen.findByRole('button', { name: /Same Film/ }));
+        await waitFor(() => expect(media.fetchDuplicateMembers).toHaveBeenCalledTimes(1));
+
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [{ ...group }] } });
+        fireEvent.click(screen.getByRole('button', { name: /refresh cache/i }));
+        job.resolve('success');
+        await waitFor(() => expect(media.fetchDuplicates).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Cache refreshed'));
+        fireEvent.click(await screen.findByRole('button', { name: /Same Film/ }));
+
+        await waitFor(() => expect(media.fetchDuplicateMembers).toHaveBeenCalledTimes(2));
+    });
+
+    it('says it lost track of the job when polling gives up, and still reloads', async () => {
+        await clickRefresh();
+        job.resolve('unreachable');
+
+        await waitFor(() => expect(media.fetchDuplicates).toHaveBeenCalledTimes(2));
+        expect(toast.error).toHaveBeenCalledWith(
+            'Lost track of the cache refresh job; the list may be out of date'
+        );
     });
 
     it('reports a refresh that was never queued', async () => {

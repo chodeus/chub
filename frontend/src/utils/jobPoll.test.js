@@ -1,7 +1,7 @@
 const jobs = { tailJobLog: vi.fn() };
 vi.mock('./api/jobs.js', () => ({ jobsAPI: jobs }));
 
-const { pollJobUntilDone } = await import('./jobPoll.js');
+const { POLL_UNREACHABLE, pollJobUntilDone } = await import('./jobPoll.js');
 
 describe('pollJobUntilDone', () => {
     afterEach(() => {
@@ -38,5 +38,22 @@ describe('pollJobUntilDone', () => {
 
         await expect(done).resolves.toBeUndefined();
         expect(jobs.tailJobLog).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives up after a run of failed requests, counting only consecutive ones', async () => {
+        vi.useFakeTimers();
+        let calls = 0;
+        jobs.tailJobLog.mockImplementation(() => {
+            calls += 1;
+            // Call 10 succeeds and restarts the count: 20 more failures make 30 calls
+            if (calls === 10) return Promise.resolve({ data: { status: 'running' } });
+            return Promise.reject(new Error('502'));
+        });
+
+        const done = pollJobUntilDone(1, { cancelled: false });
+        await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+
+        await expect(done).resolves.toBe(POLL_UNREACHABLE);
+        expect(calls).toBe(30);
     });
 });

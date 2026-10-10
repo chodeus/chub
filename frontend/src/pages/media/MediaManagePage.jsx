@@ -12,7 +12,7 @@ import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
 import { downloadBlob } from '../../utils/download.js';
-import { pollJobUntilDone } from '../../utils/jobPoll.js';
+import { POLL_UNREACHABLE, pollJobUntilDone } from '../../utils/jobPoll.js';
 
 const fmtBytes = n => {
     if (!n) return '0 B';
@@ -212,6 +212,14 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [filter, setFilter] = useState('');
+    // A reloaded list can keep a group's key with different copies: drop what was loaded for it
+    const [shownDuplicates, setShownDuplicates] = useState(duplicates);
+    if (shownDuplicates !== duplicates) {
+        setShownDuplicates(duplicates);
+        setMembersByKey({});
+        setExpanded({});
+        setSelected({});
+    }
 
     const toggleExpand = async dup => {
         const k = dupKey(dup);
@@ -589,6 +597,8 @@ const MediaManagePage = () => {
             apiCore.clearCache('/media');
             refreshDups();
             if (status === 'success') toast.success('Cache refreshed');
+            else if (status === POLL_UNREACHABLE)
+                toast.error('Lost track of the cache refresh job; the list may be out of date');
             else toast.error(`Cache refresh ended: ${status}`);
         } catch {
             if (!token.cancelled) toast.error('Cache refresh failed');
