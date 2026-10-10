@@ -4,7 +4,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from backend.util.arr import (
     ARRAuthenticationError,
@@ -1382,6 +1382,55 @@ def build_sync_instance_map(config: ChubConfig, logger: Any = None) -> Dict[str,
 
 
 ARR_KINDS = ("radarr", "sonarr", "lidarr")
+
+
+def resolve_instance_names(
+    db: ChubDB, logger: Any, names: List[str], purpose: str = "this check"
+) -> Tuple[List[str], Optional[str]]:
+    """Listed names mapped to configured instances: (names, None), or ([], why not)."""
+    from backend.util.config import load_config  # call-time lookup: tests patch it
+
+    try:
+        known = load_config().instances
+    except Exception as e:
+        return [], f"Cannot load the config to check the instances for {purpose} ({e})."
+    configured = [
+        name
+        for kind in (*ARR_KINDS, "plex")
+        for name in (getattr(known, kind, None) or {})
+    ]
+    by_folded: Dict[str, List[str]] = {}
+    for name in configured:
+        by_folded.setdefault(name.casefold(), []).append(name)
+
+    resolved: List[str] = []
+    ignored: List[str] = []
+    removed: List[str] = []
+    for name in names:
+        folded = by_folded.get(str(name).casefold(), [])
+        matches = [name] if name in configured else folded
+        if len(matches) == 1:
+            if matches[0] not in resolved:
+                resolved.append(matches[0])
+        elif db.media.count_by_instance(name) or db.collection.get_by_instance(name):
+            removed.append(name)
+        else:
+            ignored.append(name)  # matches nothing and holds nothing: leftover config
+
+    if ignored:
+        logger.warning(
+            f"Ignoring {', '.join(ignored)} for {purpose}: not a configured instance, "
+            "and CHUB has nothing cached for it."
+        )
+    if removed:
+        return [], (
+            f"{', '.join(removed)} in the instance list for {purpose} is not a "
+            "configured instance, but CHUB still has media cached for it. Remove it "
+            "from that list in Settings, or add the instance back."
+        )
+    if names and not resolved:
+        return [], f"None of the instances listed for {purpose} is configured."
+    return resolved, None
 
 
 def resync_media(

@@ -14,7 +14,7 @@ from PIL import Image, UnidentifiedImageError
 
 from backend.util.base_module import ChubModule
 from backend.util.config import ChubConfig
-from backend.util.connector import resync_media
+from backend.util.connector import resolve_instance_names, resync_media
 from backend.util.constants import (
     ASSET_IMAGE_EXTENSIONS,
     asset_type_regex,
@@ -834,14 +834,14 @@ class PosterCleanarr(ChubModule):
         # Selection from this run's config, so per-run overrides survive
         scope = self._orphan_scope(self.config)
         with ChubDB(logger=self.logger) as db:
-            refreshed = resync_media(
+            scope, _ = _refresh_orphan_scope(
                 db,
                 self.logger,
-                scope["instances"],
+                scope,
                 include_collections=orphans_on and scope["include_collections"],
                 purpose="the asset check",
             )
-            if not refreshed:
+            if scope is None:
                 return orphan_stats, stale_stats
             if orphans_on:
                 orphan_stats = self._run_orphan_pass(
@@ -1908,6 +1908,28 @@ def _stale_plex_match_map(db: ChubDB, ids: list) -> dict:
     return out
 
 
+def _refresh_orphan_scope(
+    db: ChubDB,
+    logger: Logger,
+    scope: Dict[str, Any],
+    include_collections: bool,
+    purpose: str,
+) -> Tuple[Optional[Dict[str, Any]], str]:
+    """`scope` with instances resolved and re-synced, or (None, why not)."""
+    names, refusal = resolve_instance_names(db, logger, scope["instances"], purpose)
+    if refusal:
+        logger.error(refusal)
+        return None, refusal
+    if not resync_media(
+        db, logger, names, include_collections=include_collections, purpose=purpose
+    ):
+        return None, (
+            f"Could not refresh {', '.join(names)} for {purpose}; check that each "
+            "instance is enabled and reachable."
+        )
+    return {**scope, "instances": names}, ""
+
+
 def scan_kometa_assets(
     db: ChubDB, logger: Logger, *, force: bool = False
 ) -> Dict[str, Any]:
@@ -1928,19 +1950,20 @@ def scan_kometa_assets(
     with _kometa_cache_lock:
         started_generation = _kometa_cache_generation
     scope = PosterCleanarr._orphan_scope(load_config().poster_cleanarr)
+    # The page keeps its old lists on a failed scan; an empty one would read as "all cleaned up"
+    scope, why = _refresh_orphan_scope(
+        db,
+        logger,
+        scope,
+        include_collections=scope["include_collections"],
+        purpose="the Kometa scan",
+    )
+    if scope is None:
+        raise RuntimeError(why)
     instances = scope["instances"]
     asset_dirs = scope["asset_dirs"]
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
-    # The page keeps its old lists on a failed scan; an empty one would read as "all cleaned up"
-    if not resync_media(
-        db,
-        logger,
-        instances,
-        include_collections=scope["include_collections"],
-        purpose="the Kometa scan",
-    ):
-        raise RuntimeError("Could not refresh the media the Kometa scan compares against")
 
     canonical = ca._build_canonical_folder_map(db, instances)
     stale_raw = ca._scan_stale_duplicates(asset_dirs, canonical)
@@ -2014,13 +2037,14 @@ def delete_orphan_asset(
     ca = PosterCleanarr.__new__(PosterCleanarr)
     ca.logger = logger
     scope = PosterCleanarr._orphan_scope(config.poster_cleanarr)
-    if not resync_media(
+    scope, _ = _refresh_orphan_scope(
         db,
         logger,
-        scope["instances"],
+        scope,
         include_collections=scope["include_collections"],
         purpose="the orphan delete",
-    ):
+    )
+    if scope is None:
         return "unavailable", None
     orphans = ca._find_orphans(db, logger=logger, **scope)
     # An untrusted comparison set gives no verdict and no list: an empty one would

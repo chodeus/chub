@@ -1,4 +1,4 @@
-/** Guards orphaned Plex entries, the help tooltip, and single-control checkbox rows. */
+/** Guards orphaned entries (kept, shown, removable), the help tooltip, and checkbox rows. */
 import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('../../../contexts/ToastContext.jsx', () => ({
@@ -30,7 +30,38 @@ const posterField = {
     add_posters_option: true,
 };
 
+const libraryField = {
+    key: 'orphan_instances',
+    label: 'Library Instances',
+    type: 'instances',
+    instance_types: ['radarr', 'sonarr'],
+    valueFormat: 'string',
+};
+
 describe('InstancesField', () => {
+    it('shows a saved name no instance claims, and removes only that one', async () => {
+        const onChange = vi.fn();
+        render(
+            <InstancesField
+                field={libraryField}
+                value={['radarr_1', 'old_radarr']}
+                onChange={onChange}
+            />
+        );
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Remove old_radarr' }));
+
+        expect(onChange).toHaveBeenCalledWith(['radarr_1']);
+    });
+
+    it('lists nothing extra when every saved name is configured', async () => {
+        render(<InstancesField field={libraryField} value={['radarr_1']} onChange={() => {}} />);
+
+        await screen.findByRole('button', { pressed: true });
+
+        expect(screen.queryByText('Not configured:')).toBeNull();
+    });
+
     it('keeps an orphaned object-shaped Plex entry when another instance is toggled', async () => {
         const orphan = { plex_old: { library_names: ['Movies'], add_posters: true } };
         const onChange = vi.fn();

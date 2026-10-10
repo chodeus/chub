@@ -227,3 +227,28 @@ def test_stale_pass_uses_the_folder_name_radarr_has_now(env):
     _, stale_stats = m._run_asset_passes()
 
     assert stale_stats["count"] == 0
+
+
+# A list saved before an instance was renamed to new capitals still names the old case
+def test_delete_resolves_a_case_variant_before_refreshing_and_comparing(env):
+    env.cfg.poster_cleanarr.orphan_instances = ["RADARR_MAIN"]
+    new = _asset(env, "New Movie (2024).jpg")
+    env.sync = _new_title_added
+
+    outcome, _ = delete_orphan_asset(env.db, str(new), env.cfg, _logger())
+
+    assert outcome == "not_orphan"
+    assert env.maps == [{"arrs": ["radarr_main"], "plex": {}}]
+
+
+def test_run_resolves_a_case_variant_before_refreshing_and_comparing(env):
+    env.cfg.poster_cleanarr.orphan_instances = ["RADARR_MAIN"]
+    gone = _asset(env, "Gone Movie (2019).jpg")
+    new = _asset(env, "New Movie (2024).jpg")
+    env.sync = _new_title_added
+    m = _module(env, orphan_assets_enabled=True, orphan_assets_mode="remove")
+
+    orphan_stats, _ = m._run_asset_passes()
+
+    assert env.maps[0]["arrs"] == ["radarr_main"]
+    assert (orphan_stats["count"], gone.exists(), new.exists()) == (1, False, True)
