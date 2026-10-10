@@ -2,6 +2,72 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.52.0](https://github.com/chodeus/chub/compare/v2.51.0...v2.52.0) (2026-10-10)
+
+
+### Features
+
+* **auth:** let the login be turned off ([d1cfd3b](https://github.com/chodeus/chub/commit/d1cfd3b368ea9b99b0d2042ddcafd2f12b0cf148))
+* **auth:** login choice in the wizard and an Access card in Settings ([f92b387](https://github.com/chodeus/chub/commit/f92b387622b1b7e4cb156913b160ac490725dfa3))
+* **nestarr:** compare tracked folders with Sonarr/Radarr file records ([#706](https://github.com/chodeus/chub/issues/706)) ([eb97b62](https://github.com/chodeus/chub/commit/eb97b62d2a4e16b1f0656727a465d4afa4f41ba7))
+
+
+### Bug Fixes
+
+* **asset-renamerr:** count only still-targeted libraries as already reached ([473794e](https://github.com/chodeus/chub/commit/473794edd9417b109de9cab14f82363fbc651000))
+* **asset-renamerr:** retry only the libraries an unchanged asset has not reached ([4a4cee1](https://github.com/chodeus/chub/commit/4a4cee1e7fed9f4d4715b744eff28b4abfaa0682))
+* **asset-renamerr:** search Plex live when the snapshot lacks the item ([208af1c](https://github.com/chodeus/chub/commit/208af1cee169305b3fe8fe43dcfbf39cab65a86d))
+* **asset-renamerr:** search Plex live when the snapshot lacks the item ([01206f1](https://github.com/chodeus/chub/commit/01206f12186d422f64bc12eacd74af3ed4fa3547))
+* **auth:** re-learn the stream-token state when the login changes; a failed status check is unknown, not off ([7eb728f](https://github.com/chodeus/chub/commit/7eb728fc49710fd253fc52d52b42339fb40c42e7))
+* CL2K miss walks Plex's live library list within a minute; say when run status failed ([fbd45f9](https://github.com/chodeus/chub/commit/fbd45f9cec21477f815e81738ac1722db648c44d))
+* **cl2k:** skip instances already walked with no library of the wanted type ([157230a](https://github.com/chodeus/chub/commit/157230a78b2183680e86260cc9f8cac6415e8c4f))
+* **deps:** update all non-major dependencies ([3935ef5](https://github.com/chodeus/chub/commit/3935ef56d2c8d28b5991077901830c6b7ef72829))
+* **deps:** update all non-major dependencies ([4cbc8ad](https://github.com/chodeus/chub/commit/4cbc8ad01bff4fb9b84441269493a56bc840b9a7))
+* **deps:** update all non-major dependencies ([#719](https://github.com/chodeus/chub/issues/719)) ([4cbc8ad](https://github.com/chodeus/chub/commit/4cbc8ad01bff4fb9b84441269493a56bc840b9a7))
+* **deps:** update all non-major dependencies ([#721](https://github.com/chodeus/chub/issues/721)) ([3935ef5](https://github.com/chodeus/chub/commit/3935ef56d2c8d28b5991077901830c6b7ef72829))
+* **deps:** update dependency cronstrue to ^3.29.0 ([#701](https://github.com/chodeus/chub/issues/701)) ([e963d4d](https://github.com/chodeus/chub/commit/e963d4d1b8d371bc11909efa6f5f123918055cd4))
+* **jobs:** give up polling after a minute of failures, timeouts included ([bbc1546](https://github.com/chodeus/chub/commit/bbc1546e2452294ccf0eac195beb3b466a3cc4e7))
+* **jobs:** settle the job poll when a request fails after cancellation ([725f6b2](https://github.com/chodeus/chub/commit/725f6b2c990afe4fb4fee3fa8cefdb051e10ba1c))
+* **labelarr:** fall back to a title search only on a 404, and fail a bulk sync with failed items ([0049b95](https://github.com/chodeus/chub/commit/0049b957bda634806961158c738317dde51f57d0))
+* **labelarr:** make Sync now start a Labelarr run ([bd6a7bc](https://github.com/chodeus/chub/commit/bd6a7bc2593b127521401290bbebf108c19157d9))
+* **labelarr:** make Sync now work and sync from live data ([cd52f53](https://github.com/chodeus/chub/commit/cd52f534d4302ebfc21d5a8d8179703072074d5d))
+* **labelarr:** re-sync and read live labels for per-item syncs ([b8f6168](https://github.com/chodeus/chub/commit/b8f616885bec11261e62fab35ecc7848773050ad))
+* **labelarr:** read and write labels on the same exact Plex item ([1d020a1](https://github.com/chodeus/chub/commit/1d020a1d2a6fd4d4ee69d5f7ab12f9cf695839c4))
+* **labelarr:** read Plex before retagging, and tell a failed read from a missing item ([58305e4](https://github.com/chodeus/chub/commit/58305e481042ccaa070efa7200806dcfc283c4f8))
+* **manage:** drop loaded copies when the duplicate list reloads; stop polling a lost job ([bc46487](https://github.com/chodeus/chub/commit/bc464872bdae8e0ba47ad4f8e9793999463ac7ce))
+* **manage:** keep Resolve unavailable while a cache refresh is running ([94739c9](https://github.com/chodeus/chub/commit/94739c9134d5991c3ed42e5d2a7708aaa009408c))
+* **manage:** reload duplicates after the cache refresh job ends ([5867a1b](https://github.com/chodeus/chub/commit/5867a1bbca5142da22ed62f4bbee6f208f24be22))
+* **manage:** reload duplicates after the cache refresh job ends ([1a9b5c9](https://github.com/chodeus/chub/commit/1a9b5c9998feda780dd8d82b2d2a578ca33e580a))
+* **manage:** stay refreshing until the reloaded list is in; cover folder collisions ([1fbc162](https://github.com/chodeus/chub/commit/1fbc162208e0f6cc9557ce7606f9bc3757bbdb96))
+* merge upload scopes per instance; tighten the CL2K and Unmatched Assets reads ([85316fd](https://github.com/chodeus/chub/commit/85316fd22a7e8c23a75fd9edc41a8e1a25d969ed))
+* **nestarr:** match live ARR media against a fresh Plex walk ([#705](https://github.com/chodeus/chub/issues/705)) ([d5f5e55](https://github.com/chodeus/chub/commit/d5f5e5561a193479bf47d2aa4a334e88b918d440))
+* **poster-cleanarr:** harden the instance-name resolver and the picker's remove ([883447a](https://github.com/chodeus/chub/commit/883447ae9c83e91f2d782f8e3863658833d22796))
+* **poster-cleanarr:** match cached instance names ignoring case before dropping a name ([f63570e](https://github.com/chodeus/chub/commit/f63570e43eea03c260946811800a274749c48458))
+* **poster-cleanarr:** re-check Plex's live DB before deleting a variant ([dd7569f](https://github.com/chodeus/chub/commit/dd7569f48dce9baa65f55aee8331939f3d6207cc))
+* **poster-cleanarr:** re-check Plex's live DB before deleting a variant ([522a353](https://github.com/chodeus/chub/commit/522a35353907e2e65c2bfcffe033974135533267))
+* **poster-cleanarr:** refresh Radarr/Sonarr media before judging orphans ([a01c8b1](https://github.com/chodeus/chub/commit/a01c8b1805c97fdf84c992fdfdee7fac69de1b25))
+* **poster-cleanarr:** refresh Radarr/Sonarr media before judging orphans ([55ae7e4](https://github.com/chodeus/chub/commit/55ae7e4f98268c7df001945c2d9622cd332f9bb8))
+* **poster-cleanarr:** refuse a comparison set that cannot be re-synced ([ff028c1](https://github.com/chodeus/chub/commit/ff028c1f263fe9581318d3a7acff42f614acc397))
+* **poster-cleanarr:** refuse an instance name that matches two configured ones ([5a9559e](https://github.com/chodeus/chub/commit/5a9559e30f065c1fa37c5f277bd44767adb853f8))
+* **poster-cleanarr:** self-heal stale names in the Library Instances list ([dcf83b7](https://github.com/chodeus/chub/commit/dcf83b7800c9b686b3e94f752f4cf7ba7bd89a25))
+* **poster-cleanarr:** self-heal stale names in the Library Instances list ([1675c6b](https://github.com/chodeus/chub/commit/1675c6bce95e3f1f18424ecbd7cb5bb77153f93a))
+* **poster-cleanarr:** treat a DB with no readable artwork column as unverified ([b139479](https://github.com/chodeus/chub/commit/b139479d4104d5fcaa4c63bb6c3379f9c194ed49))
+* **poster-self-heal:** pick the instances to re-sync from the live config ([e4967be](https://github.com/chodeus/chub/commit/e4967be400276cafa647450443359c6ce7c75ecc))
+* **poster-self-heal:** re-sync media before matching posters ([f30da3c](https://github.com/chodeus/chub/commit/f30da3c36edfe9888ee6a2686d53ac5f6242a7ef))
+* **poster-self-heal:** re-sync media before matching posters ([8be2efb](https://github.com/chodeus/chub/commit/8be2efb6dc6cf5a4646baad54eb78b64b02ce0dd))
+* stop three read-only views working from a stale snapshot ([9279987](https://github.com/chodeus/chub/commit/9279987b9f917dd148f02d3d5cdd0b308b7ca426))
+* stop three read-only views working from a stale snapshot ([f2cbf46](https://github.com/chodeus/chub/commit/f2cbf46f87a725138503fc45c74dfa58089c7cbc))
+* **unmatched-assets:** give its notification a Discord formatter ([de726e1](https://github.com/chodeus/chub/commit/de726e15b7d16f894f2fb63e80949226f37d0c62))
+* **unmatched-assets:** give its notification a Discord formatter ([b416efc](https://github.com/chodeus/chub/commit/b416efce957a84795f7315141624e69ce210fbc3))
+* **unmatched-assets:** parse the last-match time in a helper with no empty except ([a5350f3](https://github.com/chodeus/chub/commit/a5350f37c7e12e173ee7bddb713862838e6c8220))
+* **unmatched-assets:** show Poster Renamerr's last run as a local time, not raw ISO ([9e755af](https://github.com/chodeus/chub/commit/9e755afeb31eb57b11269eb93922bca1edba49ce))
+* **unmatched-assets:** tell a finished empty run and a running one from no run ([680af40](https://github.com/chodeus/chub/commit/680af4046eba588915467804136c7d787d70e133))
+
+
+### Refactoring
+
+* **connector:** share the re-sync-before-check step as resync_media ([2700aaf](https://github.com/chodeus/chub/commit/2700aafa94ff30b497524c91c9538e4319c6d2cd))
+
 ## [2.51.0](https://github.com/chodeus/chub/compare/v2.50.0...v2.51.0) (2026-10-01)
 
 
