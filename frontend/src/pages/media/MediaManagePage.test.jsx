@@ -87,8 +87,11 @@ describe('MediaManagePage Refresh cache', () => {
         unmount();
         job.resolve('success');
         await job.promise;
+        await new Promise(r => setTimeout(r, 50));
 
         expect(poll.pollJobUntilDone.mock.calls[0][1].cancelled).toBe(true);
+        expect(clearCache).not.toHaveBeenCalledWith('/media');
+        expect(media.fetchDuplicates).toHaveBeenCalledTimes(1);
         expect(toast.success).not.toHaveBeenCalled();
         expect(toast.error).not.toHaveBeenCalled();
     });
