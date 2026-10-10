@@ -607,7 +607,9 @@ const MediaManagePage = () => {
             const status = await pollJobUntilDone(jobId, token);
             if (token.cancelled) return;
             apiCore.clearCache('/media');
-            refreshDups();
+            // Stay "refreshing" until the new list is in, so Resolve can't open on the old one
+            await refreshDups();
+            if (token.cancelled) return;
             if (status === 'success') toast.success('Cache refreshed');
             else if (status === POLL_UNREACHABLE)
                 toast.error('Lost track of the cache refresh job; the list may be out of date');
@@ -829,6 +831,12 @@ const MediaManagePage = () => {
                                             <Button
                                                 variant="ghost"
                                                 icon="auto_fix_high"
+                                                disabled={isRefreshing}
+                                                title={
+                                                    isRefreshing
+                                                        ? 'Wait for the cache refresh to finish'
+                                                        : undefined
+                                                }
                                                 onClick={() => setResolveTarget(dup)}
                                             >
                                                 Resolve

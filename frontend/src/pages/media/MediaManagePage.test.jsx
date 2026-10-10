@@ -153,6 +153,44 @@ describe('MediaManagePage Refresh cache', () => {
         expect(await openGroup()).toBeEnabled();
     });
 
+    it('keeps folder-collision Resolve unavailable until the reloaded list is in', async () => {
+        const collision = { id: 9, normalized_title: 'clashfilm', count: 2, folders: '[]' };
+        media.fetchDuplicates.mockResolvedValue({
+            data: { duplicates: [], folder_collisions: [collision] },
+        });
+        render(<MediaManagePage />);
+        const resolve = () => screen.getByRole('button', { name: /^Resolve$/ });
+        await waitFor(() => expect(resolve()).toBeEnabled());
+
+        let finishReload;
+        media.fetchDuplicates.mockReturnValue(new Promise(r => (finishReload = r)));
+        fireEvent.click(screen.getByRole('button', { name: /refresh cache/i }));
+        await waitFor(() => expect(resolve()).toBeDisabled());
+        job.resolve('success');
+        await waitFor(() => expect(media.fetchDuplicates).toHaveBeenCalledTimes(2));
+        const midReload = resolve().disabled;
+        finishReload({ data: { duplicates: [], folder_collisions: [{ ...collision }] } });
+
+        await waitFor(() => expect(resolve()).toBeEnabled());
+        expect(midReload).toBe(true);
+    });
+
+    it('stays quiet when the page is left while the list reloads', async () => {
+        const { unmount } = render(<MediaManagePage />);
+        await waitFor(() => expect(media.fetchDuplicates).toHaveBeenCalledTimes(1));
+        let finishReload;
+        media.fetchDuplicates.mockReturnValue(new Promise(r => (finishReload = r)));
+        fireEvent.click(screen.getByRole('button', { name: /refresh cache/i }));
+        job.resolve('success');
+        await waitFor(() => expect(media.fetchDuplicates).toHaveBeenCalledTimes(2));
+
+        unmount();
+        finishReload({ data: { duplicates: [] } });
+        await new Promise(r => setTimeout(r, 50));
+
+        expect(toast.success).not.toHaveBeenCalled();
+    });
+
     it('says it lost track of the job when polling gives up, and still reloads', async () => {
         await clickRefresh();
         job.resolve('unreachable');
