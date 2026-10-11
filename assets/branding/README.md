@@ -47,7 +47,8 @@ for consumers that require a raster image.
 ## Re-exporting
 
 Install Python 3.10+, [Pillow](https://pillow.readthedocs.io/), and
-[librsvg](https://gitlab.gnome.org/GNOME/librsvg) (`rsvg-convert`):
+[librsvg](https://gitlab.gnome.org/GNOME/librsvg) (`rsvg-convert`), then run these
+commands from the repository root:
 
 ```sh
 python -m pip install Pillow
