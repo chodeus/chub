@@ -7,14 +7,14 @@ import { useApiData } from '../hooks/useApiData';
 import { systemAPI } from '../utils/api/system';
 import { NAV_SECTIONS } from './navSections.js';
 
-// Brand mark — the real CHUB logo.
+// Brand mark — the CHUB media bot.
 const BrandMark = () => (
     <img
-        src="/img/chub-logo.png"
+        src="/img/chub-logo.svg"
         alt="CHUB"
         width="34"
         height="34"
-        className="w-[34px] h-[34px] shrink-0 rounded-[8px]"
+        className="w-[34px] h-[34px] shrink-0"
     />
 );
 
