@@ -1,10 +1,9 @@
 <div align="center">
 
-<img src="assets/chub-logo.png" alt="CHUB logo" width="128" />
-
-# ![CHUB](https://img.shields.io/badge/CHUB-463fbc?style=for-the-badge&labelColor=463fbc)
-
-### Chodeus' Media Script Hub
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/branding/chub-github-header.png" />
+  <img src="assets/branding/chub-github-header-light.png" alt="CHUB — Chodeus' Media Script Hub. Media management for Plex + ARR." width="900" />
+</picture>
 
 A self-hosted, all-in-one media asset manager for your Plex/ARR stack.
 
@@ -126,6 +125,8 @@ I write large portions of CHUB's source, tests, and documentation with the help 
 
 CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by **Drazzilb08** — thank you for the scripts and inspiration that made this possible.
 
-Logo and background artwork is sourced from [fanart.tv](https://fanart.tv) — images and metadata are provided by fanart.tv and its contributors.
+Media title logos and background artwork are sourced from [fanart.tv](https://fanart.tv) — images and metadata are provided by fanart.tv and its contributors.
+
+CHUB's media-bot logo, vector variants, GitHub headers, and favicon sources are included in the [brand assets](assets/branding/README.md).
 
 Licensed under the [MIT License](LICENSE).

@@ -252,7 +252,7 @@ const SetupWizardPage = () => {
             <div className="sw-card">
                 <aside className="sw-rail">
                     <div className="sw-brand">
-                        <img src="/img/favicon-64x64.png" alt="CHUB" className="sw-logo" />
+                        <img src="/img/chub-logo.svg" alt="CHUB" className="sw-logo" />
                         <div>
                             <div className="sw-name">CHUB</div>
                             <div className="sw-sub">First-run setup</div>
