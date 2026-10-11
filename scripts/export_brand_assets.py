@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Export the CHUB vector artwork to the app's PNG and ICO assets.
-
-Requires rsvg-convert (librsvg) and Pillow. Run from any directory:
-    python scripts/export_brand_assets.py
-"""
+"""Export brand assets; run this script from the repository root."""
 
 from __future__ import annotations
 
