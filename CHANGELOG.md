@@ -2,6 +2,12 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Changed
+
+- Replace the application logo with the CHUB media bot, including SVG artwork, light/dark GitHub headers, favicons, and the Apple touch icon.
+
 ## [2.52.0](https://github.com/chodeus/chub/compare/v2.51.0...v2.52.0) (2026-10-10)
 
 
