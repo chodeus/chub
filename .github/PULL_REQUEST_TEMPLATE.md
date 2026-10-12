@@ -28,4 +28,4 @@
 - [ ] Frontend builds cleanly (`cd frontend && npm run build`)
 - [ ] No new `DAPS` references introduced (except intentional Drazzilb08 credit lines)
 - [ ] Docs / wiki drafts updated if behavior or shape changed
-- [ ] CHANGELOG entry added for user-visible changes
+- [ ] Title follows Conventional Commits (`feat: …`, `fix: …`); release-please writes the CHANGELOG from it, so leave `CHANGELOG.md` alone
