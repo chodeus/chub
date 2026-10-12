@@ -78,12 +78,12 @@ const LoginPage = () => {
                 {/* Brand */}
                 <div className="flex flex-col items-center gap-3.5">
                     <img
-                        src="/img/chub-logo.png"
+                        src="/img/chub-logo.svg"
                         alt="CHUB"
                         width={52}
                         height={52}
-                        className="w-[52px] h-[52px] rounded-[14px]"
-                        style={{ boxShadow: '0 6px 26px rgba(255,201,68,.34)' }}
+                        className="w-[52px] h-[52px]"
+                        style={{ filter: 'drop-shadow(0 6px 13px rgba(255,201,68,.34))' }}
                     />
                     <div className="text-center leading-tight">
                         <div className="font-display text-title font-bold tracking-[0.5px] text-fg">

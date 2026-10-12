@@ -136,7 +136,7 @@ const LayoutHeader = React.memo(() => {
                         aria-label="CHUB — Media Manager"
                     >
                         <img
-                            src="/img/chub-logo.png"
+                            src="/img/chub-logo.svg"
                             alt="CHUB"
                             className="md:hidden h-9 w-9"
                             width="36"
