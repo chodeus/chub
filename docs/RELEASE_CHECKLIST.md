@@ -45,7 +45,7 @@ Working directory: current CHUB clone (what is currently `chodeus/daps` experime
 ## Repo configuration
 
 - [ ] Add LICENSE if not already present (MIT, copyright `chodeus` and `Drazzilb08`)
-- [ ] Upload `assets/chub-social-preview.png` as the repo social preview (Settings → General → Social preview)
+- [ ] Upload `assets/branding/chub-social-preview.png` as the repo social preview (Settings → General → Social preview)
 - [ ] Enable **Dependabot alerts** (Settings → Security)
 - [ ] Enable **secret scanning** + **push protection**
 - [ ] Enable **CodeQL** (Settings → Security → Code scanning)
