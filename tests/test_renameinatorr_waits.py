@@ -331,13 +331,22 @@ def test_skips_the_refresh_when_the_renames_do_not_finish():
     assert after_rename == ["rename_media", "wait:RenameSeries"]
 
 
-def test_does_not_wait_when_nothing_was_renamed():
+def test_waits_but_does_not_refresh_when_the_preview_showed_no_renames():
     app = _RenameApp(files_to_rename=False)
 
     _run(app, rename_folders=False)
 
     after_rename = app.calls[app.calls.index("rename_media") :]
-    assert after_rename == ["rename_media"]
+    assert after_rename == ["rename_media", "wait:RenameSeries"]
+
+
+def test_skips_the_folder_refresh_when_unpreviewed_renames_do_not_finish():
+    app = _RenameApp(files_to_rename=False, renames_finish=False)
+
+    _run(app, rename_folders=True)
+
+    assert "rename_folders" in app.calls
+    assert "refresh_items" not in app.calls
 
 
 def test_skips_the_folder_refresh_when_the_renames_do_not_finish():

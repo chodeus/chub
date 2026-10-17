@@ -328,10 +328,12 @@ class Renameinatorr(ChubModule):
                     if media_ids:
                         earlier_renames = app.command_ids(app.RENAME_COMMAND)
                         app.rename_media(media_ids)
-                        if any_renamed:
-                            renames_finished = self._refresh_after_renames(
-                                app, media_ids, logger, earlier_renames
-                            )
+                        # rename_media can post even when the first preview was empty, so always wait
+                        renames_finished = self._wait_for_renames(
+                            app, logger, earlier_renames
+                        )
+                        if any_renamed and renames_finished:
+                            self._refresh_media(app, media_ids, logger)
                     else:
                         logger.info(f"No media to rename on {app.instance_name}...")
                     # Tagging after rename
@@ -412,26 +414,26 @@ class Renameinatorr(ChubModule):
         return trimmed
 
     @staticmethod
-    def _refresh_after_renames(
-        app: BaseARRClient,
-        media_ids: List[int],
-        logger: Logger,
-        earlier_renames: Optional[set],
+    def _wait_for_renames(
+        app: BaseARRClient, logger: Logger, earlier_renames: Optional[set]
     ) -> bool:
-        """Refresh once the file renames finish; False, with no refresh, when they didn't."""
+        """Wait for the file renames this run queued; False, with a warning, when they didn't finish."""
         # A refresh beside the renames rescans files mid-rename, and the *arr drops the record of any file it can't find
-        if not app.wait_for_commands_to_finish(
+        if app.wait_for_commands_to_finish(
             [app.RENAME_COMMAND], "rename files", ignore_ids=earlier_renames or set()
         ):
-            logger.warning(
-                f"Renames on {app.instance_name} did not finish, so they were not refreshed."
-            )
-            return False
+            return True
+        logger.warning(
+            f"Renames on {app.instance_name} did not finish, so they were not refreshed."
+        )
+        return False
+
+    @staticmethod
+    def _refresh_media(app: BaseARRClient, media_ids: List[int], logger: Logger) -> None:
         logger.info(f"Refreshing {app.instance_name}...")
         response = app.refresh_items(media_ids)
         if response and "id" in response and app.wait_for_command(response["id"]):
             logger.info(f"Media refreshed on {app.instance_name}...")
-        return True
 
     @staticmethod
     def _refresh_after_folder_moves(
