@@ -57,8 +57,8 @@ def _client(responses, monkeypatch, cls=BaseARRClient):
     return client, clock
 
 
-def _move(status):
-    return [{"name": "BulkMoveSeries", "status": status}]
+def _move(status, command_id=1):
+    return [{"id": command_id, "name": "BulkMoveSeries", "status": status}]
 
 
 def test_waits_until_the_move_has_finished(monkeypatch):
@@ -70,6 +70,22 @@ def test_waits_until_the_move_has_finished(monkeypatch):
 
     assert finished is True
     assert clock.now == 2 * COMMAND_POLL_SECONDS
+
+
+def test_a_failed_move_is_not_a_finished_one(monkeypatch):
+    client, _ = _client([_move("started"), _move("failed")], monkeypatch)
+
+    finished = client.wait_for_commands_to_finish(["BulkMoveSeries"])
+
+    assert finished is False
+
+
+def test_an_older_failed_move_does_not_spoil_the_newest(monkeypatch):
+    client, _ = _client([_move("failed", 1) + _move("completed", 2)], monkeypatch)
+
+    finished = client.wait_for_commands_to_finish(["BulkMoveSeries"])
+
+    assert finished is True
 
 
 def test_other_commands_do_not_hold_it_up(monkeypatch):
@@ -181,10 +197,18 @@ def _folder_cfg():
     )
 
 
-def _run(app):
+class _Recorder(_Silent):
+    def __init__(self):
+        self.infos = []
+
+    def info(self, message, *_a, **_k):
+        self.infos.append(message)
+
+
+def _run(app, logger=None):
     m = object.__new__(Renameinatorr)
     m._cancel_event = None
-    m.process_instance(app, "sonarr", _folder_cfg(), _Silent())
+    m.process_instance(app, "sonarr", _folder_cfg(), logger or _Silent())
 
 
 def test_refreshes_only_after_the_folder_moves_finish():
@@ -198,8 +222,18 @@ def test_refreshes_only_after_the_folder_moves_finish():
 
 def test_skips_the_refresh_when_the_folder_moves_do_not_finish():
     app = _FolderRenameApp(moves_finish=False)
+    logger = _Recorder()
 
-    _run(app)
+    _run(app, logger)
 
     after_move = app.calls[app.calls.index("rename_folders") :]
     assert after_move == ["rename_folders", "wait_for_folder_moves"]
+    assert not [m for m in logger.infos if m.startswith("Folders renamed")]
+
+
+def test_reports_folders_renamed_once_the_moves_finish():
+    logger = _Recorder()
+
+    _run(_FolderRenameApp(), logger)
+
+    assert [m for m in logger.infos if m.startswith("Folders renamed")]

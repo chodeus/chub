@@ -346,6 +346,13 @@ class BaseARRClient:
         Returns None when the command list can't be read — 0 is reserved for a
         genuinely empty list, so callers must treat None as "not ready" rather
         than launching searches into an unknown state."""
+        commands = self._commands(names)
+        if commands is None:
+            return None
+        return sum(1 for c in commands if c.get("status") in ("queued", "started"))
+
+    def _commands(self, names: Sequence[str]) -> Optional[List[Dict[str, Any]]]:
+        """The listed commands named in `names`, or None when the list can't be read."""
         response = self.make_get_request(f"{self.api_base}/command")
         if not isinstance(response, list):
             self.logger.warning(
@@ -354,13 +361,11 @@ class BaseARRClient:
             )
             return None
         wanted = {n.lower() for n in names}
-        return sum(
-            1
+        return [
+            c
             for c in response
-            if isinstance(c, dict)
-            and str(c.get("name", "")).lower() in wanted
-            and c.get("status") in ("queued", "started")
-        )
+            if isinstance(c, dict) and str(c.get("name", "")).lower() in wanted
+        ]
 
     def wait_for_commands_to_finish(self, names: Sequence[str], label: str = "") -> bool:
         """Poll until none of `names` is queued or running. False on timeout or an unreadable command list."""
@@ -370,10 +375,19 @@ class BaseARRClient:
         unreadable = 0
 
         while True:
-            count = self.count_queued_commands(names)
-            if count == 0:
+            commands = self._commands(names)
+            if commands is not None and not any(
+                c.get("status") in ("queued", "started") for c in commands
+            ):
+                # The newest one is the command just queued; an older failure isn't this run's
+                newest = max(commands, key=lambda c: c.get("id") or 0, default=None)
+                if newest and newest.get("status") in COMMAND_TERMINAL_FAILURES:
+                    self.logger.warning(
+                        f"{tag}{newest.get('name')} on {who} ended '{newest.get('status')}'."
+                    )
+                    return False
                 return True
-            unreadable = unreadable + 1 if count is None else 0
+            unreadable = unreadable + 1 if commands is None else 0
             if unreadable >= COMMAND_MAX_POLL_ERRORS:
                 self.logger.error(
                     f"{tag}Could not read {who}'s command list {unreadable} times in a row — giving up waiting."

@@ -358,7 +358,6 @@ class Renameinatorr(ChubModule):
                         ready = self._refresh_after_folder_moves(
                             app, media_ids, logger
                         )
-                        logger.info(f"Folders renamed in {app.instance_name}...")
                         # Update items with new path names if changed
                         if ready:
                             logger.info(
@@ -422,6 +421,7 @@ class Renameinatorr(ChubModule):
                 f"Folder moves on {app.instance_name} did not finish, so they were not refreshed."
             )
             return False
+        logger.info(f"Folders renamed in {app.instance_name}...")
         logger.info(f"Refreshing {app.instance_name}...")
         response = app.refresh_items(media_ids)
         logger.info(f"Waiting for {app.instance_name} to refresh...")
