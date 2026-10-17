@@ -96,6 +96,16 @@ def test_any_failed_move_from_this_run_fails_the_wait(monkeypatch):
     assert finished is False
 
 
+def test_a_failure_dropped_from_the_list_still_fails_the_wait(monkeypatch):
+    client, _ = _client(
+        [_move("failed", 1) + _move("started", 2), _move("completed", 2)], monkeypatch
+    )
+
+    finished = client.wait_for_commands_to_finish(["BulkMoveSeries"])
+
+    assert finished is False
+
+
 def test_lists_the_move_commands_already_known(monkeypatch):
     client, _ = _client(
         [_move("completed", 3) + [{"id": 4, "name": "RefreshSeries", "status": "started"}]],
@@ -264,7 +274,7 @@ def test_skips_the_refresh_when_a_folder_move_request_fails(roots, failed_roots)
     _run(app, logger)
 
     assert "refresh_items" not in app.calls
-    assert not [m for m in logger.infos if m.startswith("Folders renamed")]
+    assert not [m for m in logger.infos if m.startswith("Folder moves finished")]
 
 
 def test_skips_the_refresh_when_the_folder_moves_do_not_finish():
@@ -275,12 +285,12 @@ def test_skips_the_refresh_when_the_folder_moves_do_not_finish():
 
     after_move = app.calls[app.calls.index("rename_folders") :]
     assert after_move == ["rename_folders", "wait_for_folder_moves"]
-    assert not [m for m in logger.infos if m.startswith("Folders renamed")]
+    assert not [m for m in logger.infos if m.startswith("Folder moves finished")]
 
 
-def test_reports_folders_renamed_once_the_moves_finish():
+def test_reports_the_folder_moves_finished_once_they_do():
     logger = _Recorder()
 
     _run(_FolderRenameApp(), logger)
 
-    assert [m for m in logger.infos if m.startswith("Folders renamed")]
+    assert [m for m in logger.infos if m.startswith("Folder moves finished")]

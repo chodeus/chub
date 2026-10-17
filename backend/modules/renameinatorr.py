@@ -433,7 +433,8 @@ class Renameinatorr(ChubModule):
                 f"Folder moves on {app.instance_name} did not finish, so they were not refreshed."
             )
             return False
-        logger.info(f"Folders renamed in {app.instance_name}...")
+        # Finished isn't moved: the *arr logs a folder it couldn't move and carries on; the chunk summary counts real changes
+        logger.info(f"Folder moves finished in {app.instance_name}...")
         logger.info(f"Refreshing {app.instance_name}...")
         response = app.refresh_items(media_ids)
         logger.info(f"Waiting for {app.instance_name} to refresh...")

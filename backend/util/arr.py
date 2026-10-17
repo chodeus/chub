@@ -391,6 +391,7 @@ class BaseARRClient:
         who = self.instance_name or "instance"
         deadline = time.monotonic() + COMMAND_RUN_TIMEOUT_SECONDS
         unreadable = 0
+        failed: Dict[Any, Dict[str, Any]] = {}
 
         while True:
             commands = self._commands(names)
@@ -399,13 +400,20 @@ class BaseARRClient:
                 if commands is None
                 else [c for c in commands if c.get("id") not in (ignore_ids or set())]
             )
+            if current is not None:
+                # The *arr drops a command from the list 5 min after it ends, so keep each failure as it shows up
+                failed.update(
+                    (c.get("id"), c)
+                    for c in current
+                    if c.get("status") in COMMAND_TERMINAL_FAILURES
+                )
             if current is not None and not any(
                 c.get("status") in ("queued", "started") for c in current
             ):
-                failed = [c for c in current if c.get("status") in COMMAND_TERMINAL_FAILURES]
                 if failed:
+                    first = next(iter(failed.values()))
                     self.logger.warning(
-                        f"{tag}{failed[0].get('name')} on {who} ended '{failed[0].get('status')}'."
+                        f"{tag}{first.get('name')} on {who} ended '{first.get('status')}'."
                     )
                     return False
                 return True
