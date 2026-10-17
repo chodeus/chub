@@ -362,6 +362,31 @@ class BaseARRClient:
             and c.get("status") in ("queued", "started")
         )
 
+    def wait_for_commands_to_finish(self, names: Sequence[str], label: str = "") -> bool:
+        """Poll until none of `names` is queued or running. False on timeout or an unreadable command list."""
+        tag = f"[{label}] " if label else ""
+        who = self.instance_name or "instance"
+        deadline = time.monotonic() + COMMAND_RUN_TIMEOUT_SECONDS
+        unreadable = 0
+
+        while True:
+            count = self.count_queued_commands(names)
+            if count == 0:
+                return True
+            unreadable = unreadable + 1 if count is None else 0
+            if unreadable >= COMMAND_MAX_POLL_ERRORS:
+                self.logger.error(
+                    f"{tag}Could not read {who}'s command list {unreadable} times in a row — giving up waiting."
+                )
+                return False
+            if time.monotonic() >= deadline:
+                self.logger.error(
+                    f"{tag}{', '.join(names)} still running on {who} after "
+                    f"{COMMAND_RUN_TIMEOUT_SECONDS // 60} min — giving up waiting."
+                )
+                return False
+            time.sleep(COMMAND_POLL_SECONDS)
+
     def create_tag(self, tag: str) -> int:
         """
         Create a new tag.
@@ -1009,6 +1034,10 @@ class RadarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/movie/editor"
         return self.make_put_request(endpoint, json=payload)
 
+    def wait_for_folder_moves(self) -> bool:
+        """Wait for the BulkMoveMovie command that rename_folders queues to finish."""
+        return self.wait_for_commands_to_finish(["BulkMoveMovie"], "rename folders")
+
     def refresh_items(self, media_ids: Union[int, List[int]]) -> Any:
         """
         Refresh one or more movies.
@@ -1335,6 +1364,10 @@ class SonarrClient(BaseARRClient):
         self.logger.debug(f"Rename Folder Payload: {payload}")
         endpoint = f"{self.api_base}/series/editor"
         return self.make_put_request(endpoint, json=payload)
+
+    def wait_for_folder_moves(self) -> bool:
+        """Wait for the BulkMoveSeries command that rename_folders queues to finish."""
+        return self.wait_for_commands_to_finish(["BulkMoveSeries"], "rename folders")
 
     def refresh_items(self, media_ids: Union[int, List[int]]) -> Any:
         """
@@ -2009,6 +2042,10 @@ class LidarrClient(BaseARRClient):
         self.logger.debug(f"Rename Folder Payload: {payload}")
         endpoint = f"{self.api_base}/artist/editor"
         return self.make_put_request(endpoint, json=payload)
+
+    def wait_for_folder_moves(self) -> bool:
+        """Wait for the BulkMoveArtist command that rename_folders queues to finish."""
+        return self.wait_for_commands_to_finish(["BulkMoveArtist"], "rename folders")
 
 
 def create_arr_client(

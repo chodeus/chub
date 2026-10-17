@@ -1,0 +1,205 @@
+"""Renameinatorr's folder rename refreshes only once the *arr's bulk move has finished."""
+
+from types import SimpleNamespace
+
+import pytest
+
+from backend.modules.renameinatorr import Renameinatorr
+from backend.util import arr as arr_mod
+from backend.util.arr import (
+    COMMAND_MAX_POLL_ERRORS,
+    COMMAND_POLL_SECONDS,
+    COMMAND_RUN_TIMEOUT_SECONDS,
+    BaseARRClient,
+    LidarrClient,
+    RadarrClient,
+    SonarrClient,
+)
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def time(self) -> float:
+        return self.now
+
+
+class _Silent:
+    def _noop(self, *_a, **_k):
+        return None
+
+    debug = info = warning = error = exception = _noop
+
+
+def _client(responses, monkeypatch, cls=BaseARRClient):
+    clock = _Clock()
+    monkeypatch.setattr(arr_mod, "time", clock)
+
+    client = cls.__new__(cls)
+    client.url = "http://arr.test"
+    client.api_version = "v3"
+    client.logger = _Silent()
+    client.instance_name = "sonarr_main"
+
+    seq = list(responses)
+
+    def fake_get(_endpoint):
+        return seq.pop(0) if len(seq) > 1 else seq[0]
+
+    client.make_get_request = fake_get
+    return client, clock
+
+
+def _move(status):
+    return [{"name": "BulkMoveSeries", "status": status}]
+
+
+def test_waits_until_the_move_has_finished(monkeypatch):
+    client, clock = _client(
+        [_move("queued"), _move("started"), _move("completed")], monkeypatch
+    )
+
+    finished = client.wait_for_commands_to_finish(["BulkMoveSeries"])
+
+    assert finished is True
+    assert clock.now == 2 * COMMAND_POLL_SECONDS
+
+
+def test_other_commands_do_not_hold_it_up(monkeypatch):
+    client, clock = _client(
+        [[{"name": "RefreshSeries", "status": "started"}]], monkeypatch
+    )
+
+    finished = client.wait_for_commands_to_finish(["BulkMoveSeries"])
+
+    assert finished is True
+    assert clock.now == 0
+
+
+def test_gives_up_when_the_command_list_cannot_be_read(monkeypatch):
+    client, clock = _client(["<html>proxy error</html>"], monkeypatch)
+
+    finished = client.wait_for_commands_to_finish(["BulkMoveSeries"])
+
+    assert finished is False
+    assert clock.now == (COMMAND_MAX_POLL_ERRORS - 1) * COMMAND_POLL_SECONDS
+
+
+def test_gives_up_after_the_run_timeout(monkeypatch):
+    client, clock = _client([_move("started")], monkeypatch)
+
+    finished = client.wait_for_commands_to_finish(["BulkMoveSeries"])
+
+    assert finished is False
+    assert COMMAND_RUN_TIMEOUT_SECONDS <= clock.now < COMMAND_RUN_TIMEOUT_SECONDS + COMMAND_POLL_SECONDS
+
+
+@pytest.mark.parametrize(
+    "cls, command",
+    [
+        (SonarrClient, "BulkMoveSeries"),
+        (RadarrClient, "BulkMoveMovie"),
+        (LidarrClient, "BulkMoveArtist"),
+    ],
+)
+def test_each_client_waits_for_its_own_bulk_move(monkeypatch, cls, command):
+    client, _ = _client([[]], monkeypatch, cls)
+    waited = []
+    client.wait_for_commands_to_finish = lambda names, label="": waited.append(
+        list(names)
+    ) or True
+
+    finished = client.wait_for_folder_moves()
+
+    assert finished is True
+    assert waited == [[command]]
+
+
+class _FolderRenameApp:
+    instance_name = "sonarr_main"
+
+    def __init__(self, moves_finish=True):
+        self.calls = []
+        self._moves_finish = moves_finish
+
+    def get_all_media(self):
+        self.calls.append("get_all_media")
+        return [
+            {
+                "media_id": 13,
+                "tags": [],
+                "title": "Series",
+                "year": 2011,
+                "path_name": "Series (2011)",
+                "root_folder": "/data/media/tv",
+            }
+        ]
+
+    def get_all_tags(self):
+        return []
+
+    def get_rename_list(self, media_id, threadsafe=False):
+        return []
+
+    def rename_media(self, ids):
+        self.calls.append("rename_media")
+
+    def rename_folders(self, ids, root_folder):
+        self.calls.append("rename_folders")
+
+    def wait_for_folder_moves(self):
+        self.calls.append("wait_for_folder_moves")
+        return self._moves_finish
+
+    def refresh_items(self, ids):
+        self.calls.append("refresh_items")
+        return {"id": 1}
+
+    def wait_for_command(self, command_id):
+        self.calls.append("wait_for_command")
+        return True
+
+
+def _folder_cfg():
+    return SimpleNamespace(
+        count=0,
+        radarr_count=0,
+        sonarr_count=0,
+        tag_name="",
+        ignore_tags="",
+        enable_batching=False,
+        dry_run=False,
+        rename_folders=True,
+        refresh_before_rename=False,
+    )
+
+
+def _run(app):
+    m = object.__new__(Renameinatorr)
+    m._cancel_event = None
+    m.process_instance(app, "sonarr", _folder_cfg(), _Silent())
+
+
+def test_refreshes_only_after_the_folder_moves_finish():
+    app = _FolderRenameApp()
+
+    _run(app)
+
+    after_move = app.calls[app.calls.index("rename_folders") :]
+    assert after_move[:3] == ["rename_folders", "wait_for_folder_moves", "refresh_items"]
+
+
+def test_skips_the_refresh_when_the_folder_moves_do_not_finish():
+    app = _FolderRenameApp(moves_finish=False)
+
+    _run(app)
+
+    after_move = app.calls[app.calls.index("rename_folders") :]
+    assert after_move == ["rename_folders", "wait_for_folder_moves"]
