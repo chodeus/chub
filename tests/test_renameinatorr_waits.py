@@ -113,7 +113,7 @@ def test_lists_the_move_commands_already_known(monkeypatch):
         SonarrClient,
     )
 
-    known = client.folder_move_command_ids()
+    known = client.command_ids(client.FOLDER_MOVE_COMMAND)
 
     assert known == {3}
 
@@ -155,28 +155,41 @@ def test_gives_up_after_the_run_timeout(monkeypatch):
         (LidarrClient, "BulkMoveArtist"),
     ],
 )
-def test_each_client_waits_for_its_own_bulk_move(monkeypatch, cls, command):
+def test_each_client_names_its_own_bulk_move(cls, command):
+    assert cls.FOLDER_MOVE_COMMAND == command
+
+
+@pytest.mark.parametrize("cls", [SonarrClient, RadarrClient, LidarrClient])
+def test_each_client_waits_for_the_rename_command_it_posts(monkeypatch, cls):
     client, _ = _client([[]], monkeypatch, cls)
-    waited = []
-    client.wait_for_commands_to_finish = lambda names, label="", ignore_ids=None: waited.append(
-        (list(names), ignore_ids)
-    ) or True
+    posted = []
+    client.get_rename_list = lambda media_id, threadsafe=False: [{"trackFileId": 1}]
+    client.make_post_request = lambda endpoint, json=None: posted.append(json) or {"id": 2}
 
-    finished = client.wait_for_folder_moves({5})
+    client.rename_media([13])
 
-    assert finished is True
-    assert waited == [([command], {5})]
+    assert [p["name"] for p in posted] == [cls.RENAME_COMMAND]
 
 
-class _FolderRenameApp:
+class _RenameApp:
     instance_name = "sonarr_main"
+    RENAME_COMMAND = "RenameSeries"
+    FOLDER_MOVE_COMMAND = "BulkMoveSeries"
 
-    def __init__(self, moves_finish=True, failed_roots=(), roots=("/data/media/tv",)):
+    def __init__(
+        self,
+        moves_finish=True,
+        failed_roots=(),
+        roots=("/data/media/tv",),
+        files_to_rename=False,
+        renames_finish=True,
+    ):
         self.calls = []
-        self.waited_ignoring = None
-        self._moves_finish = moves_finish
+        self.ignored = {}
+        self._finishes = {self.FOLDER_MOVE_COMMAND: moves_finish, self.RENAME_COMMAND: renames_finish}
         self._failed_roots = set(failed_roots)
         self._roots = roots
+        self._files_to_rename = files_to_rename
 
     def get_all_media(self):
         self.calls.append("get_all_media")
@@ -192,14 +205,16 @@ class _FolderRenameApp:
             for i, root in enumerate(self._roots)
         ]
 
-    def folder_move_command_ids(self):
-        return {7}
+    def command_ids(self, name):
+        return {7} if name == self.FOLDER_MOVE_COMMAND else {8}
 
     def get_all_tags(self):
         return []
 
     def get_rename_list(self, media_id, threadsafe=False):
-        return []
+        if not self._files_to_rename:
+            return []
+        return [{"existingPath": "Series 0 - S01E01.mkv", "newPath": "Series 0 - S01E01 - Pilot.mkv"}]
 
     def rename_media(self, ids):
         self.calls.append("rename_media")
@@ -208,10 +223,11 @@ class _FolderRenameApp:
         self.calls.append("rename_folders")
         return None if root_folder in self._failed_roots else []
 
-    def wait_for_folder_moves(self, earlier_ids):
-        self.calls.append("wait_for_folder_moves")
-        self.waited_ignoring = earlier_ids
-        return self._moves_finish
+    def wait_for_commands_to_finish(self, names, label="", ignore_ids=None):
+        (name,) = names
+        self.calls.append(f"wait:{name}")
+        self.ignored[name] = ignore_ids
+        return self._finishes[name]
 
     def refresh_items(self, ids):
         self.calls.append("refresh_items")
@@ -222,7 +238,7 @@ class _FolderRenameApp:
         return True
 
 
-def _folder_cfg():
+def _cfg(rename_folders=True):
     return SimpleNamespace(
         count=0,
         radarr_count=0,
@@ -231,7 +247,7 @@ def _folder_cfg():
         ignore_tags="",
         enable_batching=False,
         dry_run=False,
-        rename_folders=True,
+        rename_folders=rename_folders,
         refresh_before_rename=False,
     )
 
@@ -244,20 +260,20 @@ class _Recorder(_Silent):
         self.infos.append(message)
 
 
-def _run(app, logger=None):
+def _run(app, logger=None, rename_folders=True):
     m = object.__new__(Renameinatorr)
     m._cancel_event = None
-    m.process_instance(app, "sonarr", _folder_cfg(), logger or _Silent())
+    m.process_instance(app, "sonarr", _cfg(rename_folders), logger or _Silent())
 
 
 def test_refreshes_only_after_the_folder_moves_finish():
-    app = _FolderRenameApp()
+    app = _RenameApp()
 
     _run(app)
 
     after_move = app.calls[app.calls.index("rename_folders") :]
-    assert after_move[:3] == ["rename_folders", "wait_for_folder_moves", "refresh_items"]
-    assert app.waited_ignoring == {7}
+    assert after_move[:3] == ["rename_folders", "wait:BulkMoveSeries", "refresh_items"]
+    assert app.ignored["BulkMoveSeries"] == {7}
 
 
 @pytest.mark.parametrize(
@@ -268,7 +284,7 @@ def test_refreshes_only_after_the_folder_moves_finish():
     ],
 )
 def test_skips_the_refresh_when_a_folder_move_request_fails(roots, failed_roots):
-    app = _FolderRenameApp(roots=roots, failed_roots=failed_roots)
+    app = _RenameApp(roots=roots, failed_roots=failed_roots)
     logger = _Recorder()
 
     _run(app, logger)
@@ -278,19 +294,47 @@ def test_skips_the_refresh_when_a_folder_move_request_fails(roots, failed_roots)
 
 
 def test_skips_the_refresh_when_the_folder_moves_do_not_finish():
-    app = _FolderRenameApp(moves_finish=False)
+    app = _RenameApp(moves_finish=False)
     logger = _Recorder()
 
     _run(app, logger)
 
     after_move = app.calls[app.calls.index("rename_folders") :]
-    assert after_move == ["rename_folders", "wait_for_folder_moves"]
+    assert after_move == ["rename_folders", "wait:BulkMoveSeries"]
     assert not [m for m in logger.infos if m.startswith("Folder moves finished")]
 
 
 def test_reports_the_folder_moves_finished_once_they_do():
     logger = _Recorder()
 
-    _run(_FolderRenameApp(), logger)
+    _run(_RenameApp(), logger)
 
     assert [m for m in logger.infos if m.startswith("Folder moves finished")]
+
+
+def test_refreshes_only_after_the_renames_finish():
+    app = _RenameApp(files_to_rename=True)
+
+    _run(app, rename_folders=False)
+
+    after_rename = app.calls[app.calls.index("rename_media") :]
+    assert after_rename[:3] == ["rename_media", "wait:RenameSeries", "refresh_items"]
+    assert app.ignored["RenameSeries"] == {8}
+
+
+def test_skips_the_refresh_when_the_renames_do_not_finish():
+    app = _RenameApp(files_to_rename=True, renames_finish=False)
+
+    _run(app, rename_folders=False)
+
+    after_rename = app.calls[app.calls.index("rename_media") :]
+    assert after_rename == ["rename_media", "wait:RenameSeries"]
+
+
+def test_does_not_wait_when_nothing_was_renamed():
+    app = _RenameApp(files_to_rename=False)
+
+    _run(app, rename_folders=False)
+
+    after_rename = app.calls[app.calls.index("rename_media") :]
+    assert after_rename == ["rename_media"]
