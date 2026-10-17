@@ -6,7 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Union
 
 import requests
 from unidecode import unidecode
@@ -183,6 +183,8 @@ def database_transaction(db_connection):
 
 
 class BaseARRClient:
+    # The command rename_folders queues; each client names its own
+    FOLDER_MOVE_COMMAND: Optional[str] = None
     """Improved base class with better error handling"""
 
     api_version = "v3"  # Override in subclasses (e.g. LidarrClient uses "v1")
@@ -346,6 +348,13 @@ class BaseARRClient:
         Returns None when the command list can't be read — 0 is reserved for a
         genuinely empty list, so callers must treat None as "not ready" rather
         than launching searches into an unknown state."""
+        commands = self._commands(names)
+        if commands is None:
+            return None
+        return sum(1 for c in commands if c.get("status") in ("queued", "started"))
+
+    def _commands(self, names: Sequence[str]) -> Optional[List[Dict[str, Any]]]:
+        """The listed commands named in `names`, or None when the list can't be read."""
         response = self.make_get_request(f"{self.api_base}/command")
         if not isinstance(response, list):
             self.logger.warning(
@@ -354,13 +363,73 @@ class BaseARRClient:
             )
             return None
         wanted = {n.lower() for n in names}
-        return sum(
-            1
+        return [
+            c
             for c in response
-            if isinstance(c, dict)
-            and str(c.get("name", "")).lower() in wanted
-            and c.get("status") in ("queued", "started")
+            if isinstance(c, dict) and str(c.get("name", "")).lower() in wanted
+        ]
+
+    def folder_move_command_ids(self) -> Optional[Set[int]]:
+        """IDs of the folder move commands listed now, so a wait can tell this run's from earlier ones."""
+        commands = self._commands([self.FOLDER_MOVE_COMMAND])
+        return None if commands is None else {c.get("id") for c in commands}
+
+    def wait_for_folder_moves(self, earlier_ids: Optional[Set[int]] = None) -> bool:
+        """Wait for the moves rename_folders queued; False if one of them failed."""
+        return self.wait_for_commands_to_finish(
+            [self.FOLDER_MOVE_COMMAND], "rename folders", ignore_ids=earlier_ids
         )
+
+    def wait_for_commands_to_finish(
+        self,
+        names: Sequence[str],
+        label: str = "",
+        ignore_ids: Optional[Set[int]] = None,
+    ) -> bool:
+        """Poll until none of `names` is queued or running, skipping `ignore_ids`. False on a failure, a timeout or an unreadable command list."""
+        tag = f"[{label}] " if label else ""
+        who = self.instance_name or "instance"
+        deadline = time.monotonic() + COMMAND_RUN_TIMEOUT_SECONDS
+        unreadable = 0
+        failed: Dict[Any, Dict[str, Any]] = {}
+
+        while True:
+            commands = self._commands(names)
+            current = (
+                None
+                if commands is None
+                else [c for c in commands if c.get("id") not in (ignore_ids or set())]
+            )
+            if current is not None:
+                # The *arr drops a command from the list 5 min after it ends, so keep each failure as it shows up
+                failed.update(
+                    (c.get("id"), c)
+                    for c in current
+                    if c.get("status") in COMMAND_TERMINAL_FAILURES
+                )
+            if current is not None and not any(
+                c.get("status") in ("queued", "started") for c in current
+            ):
+                if failed:
+                    first = next(iter(failed.values()))
+                    self.logger.warning(
+                        f"{tag}{first.get('name')} on {who} ended '{first.get('status')}'."
+                    )
+                    return False
+                return True
+            unreadable = unreadable + 1 if commands is None else 0
+            if unreadable >= COMMAND_MAX_POLL_ERRORS:
+                self.logger.error(
+                    f"{tag}Could not read {who}'s command list {unreadable} times in a row — giving up waiting."
+                )
+                return False
+            if time.monotonic() >= deadline:
+                self.logger.error(
+                    f"{tag}{', '.join(names)} still running on {who} after "
+                    f"{COMMAND_RUN_TIMEOUT_SECONDS // 60} min — giving up waiting."
+                )
+                return False
+            time.sleep(COMMAND_POLL_SECONDS)
 
     def create_tag(self, tag: str) -> int:
         """
@@ -837,6 +906,8 @@ class BaseARRClient:
 class RadarrClient(BaseARRClient):
     """Client for interacting with Radarr API."""
 
+    FOLDER_MOVE_COMMAND = "BulkMoveMovie"
+
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 6  # movieFileDeleted
     upgrade_pair_field = "movieId"
@@ -1166,6 +1237,8 @@ class RadarrClient(BaseARRClient):
 
 class SonarrClient(BaseARRClient):
     """Client for interacting with Sonarr API."""
+
+    FOLDER_MOVE_COMMAND = "BulkMoveSeries"
 
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 5  # episodeFileDeleted
@@ -1687,6 +1760,8 @@ class SonarrClient(BaseARRClient):
 
 class LidarrClient(BaseARRClient):
     """Client for interacting with Lidarr API (uses API v1)."""
+
+    FOLDER_MOVE_COMMAND = "BulkMoveArtist"
 
     api_version = "v1"
     # 8 is the album-level import; 3 is trackFileImported, which fires per

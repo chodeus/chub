@@ -349,21 +349,18 @@ class Renameinatorr(ChubModule):
                         and grouped_root_folders
                     ):
                         logger.info(f"Renaming folders in {app.instance_name}...")
+                        earlier_moves = app.folder_move_command_ids()
+                        requested = True
                         for (
                             root_folder,
                             folder_media_ids,
                         ) in grouped_root_folders.items():
                             logger.debug(f"renaming root folder {root_folder}")
-                            app.rename_folders(folder_media_ids, root_folder)
-                        logger.info(f"Refreshing {app.instance_name}...")
-                        response = app.refresh_items(media_ids)
-                        logger.info(f"Waiting for {app.instance_name} to refresh...")
-                        ready = (
-                            response
-                            and "id" in response
-                            and app.wait_for_command(response["id"])
+                            if app.rename_folders(folder_media_ids, root_folder) is None:
+                                requested = False
+                        ready = self._refresh_after_folder_moves(
+                            app, media_ids, logger, requested, earlier_moves
                         )
-                        logger.info(f"Folders renamed in {app.instance_name}...")
                         # Update items with new path names if changed
                         if ready:
                             logger.info(
@@ -415,6 +412,35 @@ class Renameinatorr(ChubModule):
                 }
             )
         return trimmed
+
+    @staticmethod
+    def _refresh_after_folder_moves(
+        app: BaseARRClient,
+        media_ids: List[int],
+        logger: Logger,
+        requested: bool,
+        earlier_moves: Optional[set],
+    ) -> bool:
+        """Refresh once the folder moves finish; False when they didn't or the refresh didn't complete."""
+        if not requested:
+            logger.warning(
+                f"A folder move request to {app.instance_name} failed, so nothing was refreshed."
+            )
+            return False
+        # A refresh running beside the move saves items it read first, putting back the path and pending move it cleared
+        if not app.wait_for_folder_moves(earlier_moves or set()):
+            logger.warning(
+                f"Folder moves on {app.instance_name} did not finish, so they were not refreshed."
+            )
+            return False
+        # Finished isn't moved: the *arr logs a folder it couldn't move and carries on; the chunk summary counts real changes
+        logger.info(f"Folder moves finished in {app.instance_name}...")
+        logger.info(f"Refreshing {app.instance_name}...")
+        response = app.refresh_items(media_ids)
+        logger.info(f"Waiting for {app.instance_name} to refresh...")
+        return bool(
+            response and "id" in response and app.wait_for_command(response["id"])
+        )
 
     def run(self):
         try:
