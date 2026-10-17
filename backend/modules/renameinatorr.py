@@ -324,11 +324,12 @@ class Renameinatorr(ChubModule):
                         )
                 if not getattr(config, "dry_run", False):
                     # Perform file renaming
+                    renames_finished = True
                     if media_ids:
                         earlier_renames = app.command_ids(app.RENAME_COMMAND)
                         app.rename_media(media_ids)
                         if any_renamed:
-                            self._refresh_after_renames(
+                            renames_finished = self._refresh_after_renames(
                                 app, media_ids, logger, earlier_renames
                             )
                     else:
@@ -354,7 +355,8 @@ class Renameinatorr(ChubModule):
                             logger.debug(f"renaming root folder {root_folder}")
                             if app.rename_folders(folder_media_ids, root_folder) is None:
                                 requested = False
-                        ready = self._refresh_after_folder_moves(
+                        # Renames still running would race this refresh the same way
+                        ready = renames_finished and self._refresh_after_folder_moves(
                             app, media_ids, logger, requested, earlier_moves
                         )
                         # Update items with new path names if changed
@@ -415,8 +417,8 @@ class Renameinatorr(ChubModule):
         media_ids: List[int],
         logger: Logger,
         earlier_renames: Optional[set],
-    ) -> None:
-        """Refresh once the file renames finish; skipped when they didn't."""
+    ) -> bool:
+        """Refresh once the file renames finish; False, with no refresh, when they didn't."""
         # A refresh beside the renames rescans files mid-rename, and the *arr drops the record of any file it can't find
         if not app.wait_for_commands_to_finish(
             [app.RENAME_COMMAND], "rename files", ignore_ids=earlier_renames or set()
@@ -424,11 +426,12 @@ class Renameinatorr(ChubModule):
             logger.warning(
                 f"Renames on {app.instance_name} did not finish, so they were not refreshed."
             )
-            return
+            return False
         logger.info(f"Refreshing {app.instance_name}...")
         response = app.refresh_items(media_ids)
         if response and "id" in response and app.wait_for_command(response["id"]):
             logger.info(f"Media refreshed on {app.instance_name}...")
+        return True
 
     @staticmethod
     def _refresh_after_folder_moves(

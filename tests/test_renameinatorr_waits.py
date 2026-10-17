@@ -338,3 +338,22 @@ def test_does_not_wait_when_nothing_was_renamed():
 
     after_rename = app.calls[app.calls.index("rename_media") :]
     assert after_rename == ["rename_media"]
+
+
+def test_skips_the_folder_refresh_when_the_renames_do_not_finish():
+    app = _RenameApp(files_to_rename=True, renames_finish=False)
+
+    _run(app, rename_folders=True)
+
+    assert "rename_folders" in app.calls
+    assert "refresh_items" not in app.calls
+
+
+def test_refreshes_after_both_stages_when_both_finish():
+    app = _RenameApp(files_to_rename=True)
+
+    _run(app, rename_folders=True)
+
+    after_move = app.calls[app.calls.index("rename_folders") :]
+    assert after_move[:3] == ["rename_folders", "wait:BulkMoveSeries", "refresh_items"]
+
