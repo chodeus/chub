@@ -324,17 +324,16 @@ class Renameinatorr(ChubModule):
                         )
                 if not getattr(config, "dry_run", False):
                     # Perform file renaming
+                    renames_finished = True
                     if media_ids:
+                        earlier_renames = app.command_ids(app.RENAME_COMMAND)
                         app.rename_media(media_ids)
-                        if any_renamed:
-                            logger.info(f"Refreshing {app.instance_name}...")
-                            response = app.refresh_items(media_ids)
-                            if response and "id" in response:
-                                ready = app.wait_for_command(response["id"])
-                                if ready:
-                                    logger.info(
-                                        f"Media refreshed on {app.instance_name}..."
-                                    )
+                        # rename_media can post even when the first preview was empty, so always wait
+                        renames_finished = self._wait_for_renames(
+                            app, logger, earlier_renames
+                        )
+                        if any_renamed and renames_finished:
+                            self._refresh_media(app, media_ids, logger)
                     else:
                         logger.info(f"No media to rename on {app.instance_name}...")
                     # Tagging after rename
@@ -349,7 +348,7 @@ class Renameinatorr(ChubModule):
                         and grouped_root_folders
                     ):
                         logger.info(f"Renaming folders in {app.instance_name}...")
-                        earlier_moves = app.folder_move_command_ids()
+                        earlier_moves = app.command_ids(app.FOLDER_MOVE_COMMAND)
                         requested = True
                         for (
                             root_folder,
@@ -358,7 +357,8 @@ class Renameinatorr(ChubModule):
                             logger.debug(f"renaming root folder {root_folder}")
                             if app.rename_folders(folder_media_ids, root_folder) is None:
                                 requested = False
-                        ready = self._refresh_after_folder_moves(
+                        # Renames still running would race this refresh the same way
+                        ready = renames_finished and self._refresh_after_folder_moves(
                             app, media_ids, logger, requested, earlier_moves
                         )
                         # Update items with new path names if changed
@@ -414,6 +414,28 @@ class Renameinatorr(ChubModule):
         return trimmed
 
     @staticmethod
+    def _wait_for_renames(
+        app: BaseARRClient, logger: Logger, earlier_renames: Optional[set]
+    ) -> bool:
+        """Wait for the file renames this run queued; False, with a warning, when they didn't finish."""
+        # A refresh beside the renames rescans files mid-rename, and the *arr drops the record of any file it can't find
+        if app.wait_for_commands_to_finish(
+            [app.RENAME_COMMAND], "rename files", ignore_ids=earlier_renames or set()
+        ):
+            return True
+        logger.warning(
+            f"Renames on {app.instance_name} did not finish, so they were not refreshed."
+        )
+        return False
+
+    @staticmethod
+    def _refresh_media(app: BaseARRClient, media_ids: List[int], logger: Logger) -> None:
+        logger.info(f"Refreshing {app.instance_name}...")
+        response = app.refresh_items(media_ids)
+        if response and "id" in response and app.wait_for_command(response["id"]):
+            logger.info(f"Media refreshed on {app.instance_name}...")
+
+    @staticmethod
     def _refresh_after_folder_moves(
         app: BaseARRClient,
         media_ids: List[int],
@@ -428,7 +450,9 @@ class Renameinatorr(ChubModule):
             )
             return False
         # A refresh running beside the move saves items it read first, putting back the path and pending move it cleared
-        if not app.wait_for_folder_moves(earlier_moves or set()):
+        if not app.wait_for_commands_to_finish(
+            [app.FOLDER_MOVE_COMMAND], "rename folders", ignore_ids=earlier_moves or set()
+        ):
             logger.warning(
                 f"Folder moves on {app.instance_name} did not finish, so they were not refreshed."
             )
