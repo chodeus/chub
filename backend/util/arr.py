@@ -183,7 +183,8 @@ def database_transaction(db_connection):
 
 
 class BaseARRClient:
-    # The command rename_folders queues; each client names its own
+    # The commands rename_media and rename_folders queue; each client names its own
+    RENAME_COMMAND: Optional[str] = None
     FOLDER_MOVE_COMMAND: Optional[str] = None
     """Improved base class with better error handling"""
 
@@ -369,16 +370,10 @@ class BaseARRClient:
             if isinstance(c, dict) and str(c.get("name", "")).lower() in wanted
         ]
 
-    def folder_move_command_ids(self) -> Optional[Set[int]]:
-        """IDs of the folder move commands listed now, so a wait can tell this run's from earlier ones."""
-        commands = self._commands([self.FOLDER_MOVE_COMMAND])
+    def command_ids(self, name: Optional[str]) -> Optional[Set[int]]:
+        """IDs of the `name` commands listed now, so a wait can tell this run's from earlier ones."""
+        commands = self._commands([name])
         return None if commands is None else {c.get("id") for c in commands}
-
-    def wait_for_folder_moves(self, earlier_ids: Optional[Set[int]] = None) -> bool:
-        """Wait for the moves rename_folders queued; False if one of them failed."""
-        return self.wait_for_commands_to_finish(
-            [self.FOLDER_MOVE_COMMAND], "rename folders", ignore_ids=earlier_ids
-        )
 
     def wait_for_commands_to_finish(
         self,
@@ -906,6 +901,7 @@ class BaseARRClient:
 class RadarrClient(BaseARRClient):
     """Client for interacting with Radarr API."""
 
+    RENAME_COMMAND = "RenameMovie"
     FOLDER_MOVE_COMMAND = "BulkMoveMovie"
 
     history_import_event = 3  # downloadFolderImported
@@ -1238,6 +1234,7 @@ class RadarrClient(BaseARRClient):
 class SonarrClient(BaseARRClient):
     """Client for interacting with Sonarr API."""
 
+    RENAME_COMMAND = "RenameSeries"
     FOLDER_MOVE_COMMAND = "BulkMoveSeries"
 
     history_import_event = 3  # downloadFolderImported
@@ -1761,6 +1758,7 @@ class SonarrClient(BaseARRClient):
 class LidarrClient(BaseARRClient):
     """Client for interacting with Lidarr API (uses API v1)."""
 
+    RENAME_COMMAND = "RenameFiles"
     FOLDER_MOVE_COMMAND = "BulkMoveArtist"
 
     api_version = "v1"
