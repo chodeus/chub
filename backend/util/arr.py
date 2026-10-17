@@ -6,7 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Union
 
 import requests
 from unidecode import unidecode
@@ -183,6 +183,8 @@ def database_transaction(db_connection):
 
 
 class BaseARRClient:
+    # The command rename_folders queues; each client names its own
+    FOLDER_MOVE_COMMAND: Optional[str] = None
     """Improved base class with better error handling"""
 
     api_version = "v3"  # Override in subclasses (e.g. LidarrClient uses "v1")
@@ -367,8 +369,24 @@ class BaseARRClient:
             if isinstance(c, dict) and str(c.get("name", "")).lower() in wanted
         ]
 
-    def wait_for_commands_to_finish(self, names: Sequence[str], label: str = "") -> bool:
-        """Poll until none of `names` is queued or running. False on timeout or an unreadable command list."""
+    def folder_move_command_ids(self) -> Optional[Set[int]]:
+        """IDs of the folder move commands listed now, so a wait can tell this run's from earlier ones."""
+        commands = self._commands([self.FOLDER_MOVE_COMMAND])
+        return None if commands is None else {c.get("id") for c in commands}
+
+    def wait_for_folder_moves(self, earlier_ids: Optional[Set[int]] = None) -> bool:
+        """Wait for the moves rename_folders queued; False if one of them failed."""
+        return self.wait_for_commands_to_finish(
+            [self.FOLDER_MOVE_COMMAND], "rename folders", ignore_ids=earlier_ids
+        )
+
+    def wait_for_commands_to_finish(
+        self,
+        names: Sequence[str],
+        label: str = "",
+        ignore_ids: Optional[Set[int]] = None,
+    ) -> bool:
+        """Poll until none of `names` is queued or running, skipping `ignore_ids`. False on a failure, a timeout or an unreadable command list."""
         tag = f"[{label}] " if label else ""
         who = self.instance_name or "instance"
         deadline = time.monotonic() + COMMAND_RUN_TIMEOUT_SECONDS
@@ -376,14 +394,18 @@ class BaseARRClient:
 
         while True:
             commands = self._commands(names)
-            if commands is not None and not any(
-                c.get("status") in ("queued", "started") for c in commands
+            current = (
+                None
+                if commands is None
+                else [c for c in commands if c.get("id") not in (ignore_ids or set())]
+            )
+            if current is not None and not any(
+                c.get("status") in ("queued", "started") for c in current
             ):
-                # The newest one is the command just queued; an older failure isn't this run's
-                newest = max(commands, key=lambda c: c.get("id") or 0, default=None)
-                if newest and newest.get("status") in COMMAND_TERMINAL_FAILURES:
+                failed = [c for c in current if c.get("status") in COMMAND_TERMINAL_FAILURES]
+                if failed:
                     self.logger.warning(
-                        f"{tag}{newest.get('name')} on {who} ended '{newest.get('status')}'."
+                        f"{tag}{failed[0].get('name')} on {who} ended '{failed[0].get('status')}'."
                     )
                     return False
                 return True
@@ -876,6 +898,8 @@ class BaseARRClient:
 class RadarrClient(BaseARRClient):
     """Client for interacting with Radarr API."""
 
+    FOLDER_MOVE_COMMAND = "BulkMoveMovie"
+
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 6  # movieFileDeleted
     upgrade_pair_field = "movieId"
@@ -1048,10 +1072,6 @@ class RadarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/movie/editor"
         return self.make_put_request(endpoint, json=payload)
 
-    def wait_for_folder_moves(self) -> bool:
-        """Wait for the BulkMoveMovie command that rename_folders queues to finish."""
-        return self.wait_for_commands_to_finish(["BulkMoveMovie"], "rename folders")
-
     def refresh_items(self, media_ids: Union[int, List[int]]) -> Any:
         """
         Refresh one or more movies.
@@ -1209,6 +1229,8 @@ class RadarrClient(BaseARRClient):
 
 class SonarrClient(BaseARRClient):
     """Client for interacting with Sonarr API."""
+
+    FOLDER_MOVE_COMMAND = "BulkMoveSeries"
 
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 5  # episodeFileDeleted
@@ -1378,10 +1400,6 @@ class SonarrClient(BaseARRClient):
         self.logger.debug(f"Rename Folder Payload: {payload}")
         endpoint = f"{self.api_base}/series/editor"
         return self.make_put_request(endpoint, json=payload)
-
-    def wait_for_folder_moves(self) -> bool:
-        """Wait for the BulkMoveSeries command that rename_folders queues to finish."""
-        return self.wait_for_commands_to_finish(["BulkMoveSeries"], "rename folders")
 
     def refresh_items(self, media_ids: Union[int, List[int]]) -> Any:
         """
@@ -1735,6 +1753,8 @@ class SonarrClient(BaseARRClient):
 class LidarrClient(BaseARRClient):
     """Client for interacting with Lidarr API (uses API v1)."""
 
+    FOLDER_MOVE_COMMAND = "BulkMoveArtist"
+
     api_version = "v1"
     # 8 is the album-level import; 3 is trackFileImported, which fires per
     # track and would report one album as a dozen upgrades.
@@ -2056,10 +2076,6 @@ class LidarrClient(BaseARRClient):
         self.logger.debug(f"Rename Folder Payload: {payload}")
         endpoint = f"{self.api_base}/artist/editor"
         return self.make_put_request(endpoint, json=payload)
-
-    def wait_for_folder_moves(self) -> bool:
-        """Wait for the BulkMoveArtist command that rename_folders queues to finish."""
-        return self.wait_for_commands_to_finish(["BulkMoveArtist"], "rename folders")
 
 
 def create_arr_client(

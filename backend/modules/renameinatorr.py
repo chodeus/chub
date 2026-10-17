@@ -349,14 +349,17 @@ class Renameinatorr(ChubModule):
                         and grouped_root_folders
                     ):
                         logger.info(f"Renaming folders in {app.instance_name}...")
+                        earlier_moves = app.folder_move_command_ids()
+                        requested = True
                         for (
                             root_folder,
                             folder_media_ids,
                         ) in grouped_root_folders.items():
                             logger.debug(f"renaming root folder {root_folder}")
-                            app.rename_folders(folder_media_ids, root_folder)
+                            if app.rename_folders(folder_media_ids, root_folder) is None:
+                                requested = False
                         ready = self._refresh_after_folder_moves(
-                            app, media_ids, logger
+                            app, media_ids, logger, requested, earlier_moves
                         )
                         # Update items with new path names if changed
                         if ready:
@@ -412,11 +415,20 @@ class Renameinatorr(ChubModule):
 
     @staticmethod
     def _refresh_after_folder_moves(
-        app: BaseARRClient, media_ids: List[int], logger: Logger
+        app: BaseARRClient,
+        media_ids: List[int],
+        logger: Logger,
+        requested: bool,
+        earlier_moves: Optional[set],
     ) -> bool:
         """Refresh once the folder moves finish; False when they didn't or the refresh didn't complete."""
+        if not requested:
+            logger.warning(
+                f"A folder move request to {app.instance_name} failed, so nothing was refreshed."
+            )
+            return False
         # A refresh running beside the move saves items it read first, putting back the path and pending move it cleared
-        if not app.wait_for_folder_moves():
+        if not app.wait_for_folder_moves(earlier_moves or set()):
             logger.warning(
                 f"Folder moves on {app.instance_name} did not finish, so they were not refreshed."
             )
