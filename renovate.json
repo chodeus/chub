@@ -21,6 +21,21 @@
       ],
       "enabled": false,
       "description": "CHUB's own image. A digest pin on our own :latest chases every merge to main forever (9 auto-merged bump PRs in 3 days). The compose example stays on bare :latest; do not pin or update it."
+    },
+    {
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "groupName": null,
+      "dependencyDashboardApproval": true,
+      "description": "Python base image. A new 3.x is a minor update to Renovate, but it moves the site-packages path the Dockerfile copies and needs wheels for every dependency, so it broke the grouped non-major PR. Own PR, opened only when approved on the Dependency Dashboard."
     }
   ]
 }
