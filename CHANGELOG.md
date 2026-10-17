@@ -2,6 +2,19 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.53.0](https://github.com/chodeus/chub/compare/v2.52.0...v2.53.0) (2026-10-17)
+
+
+### Features
+
+* **branding:** replace the CHUB logo with the media-bot mascot ([#727](https://github.com/chodeus/chub/issues/727)) ([22019f1](https://github.com/chodeus/chub/commit/22019f18574b0a6f71aa6fc474a94bc0fe77f9bc))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @tanstack/react-virtual to ^3.14.15 ([#723](https://github.com/chodeus/chub/issues/723)) ([79c0c34](https://github.com/chodeus/chub/commit/79c0c344487fa563012505520e9c6c1b8961e13c))
+* **renameinatorr:** wait for the folder move before refreshing ([#728](https://github.com/chodeus/chub/issues/728)) ([a5b8923](https://github.com/chodeus/chub/commit/a5b89232681f655cd52b729bfee0a4f28c2f684c))
+
 ## [2.52.0](https://github.com/chodeus/chub/compare/v2.51.0...v2.52.0) (2026-10-10)
 
 
