@@ -6,13 +6,14 @@ describe('Toggle', () => {
         render(<Toggle checked={false} onChange={() => {}} label="Notify me" />);
 
         // A literal #2a3052 is the dark theme's --border, so it stayed dark in light mode.
-        expect(screen.getByRole('switch')).toHaveStyle({ background: 'var(--border)' });
+        // Inline style, not toHaveStyle: jsdom can't resolve var(), so its computed background is transparent.
+        expect(screen.getByRole('switch').style.background).toBe('var(--border)');
     });
 
     it('fills with the brand colour when on', () => {
         render(<Toggle checked onChange={() => {}} label="Notify me" />);
 
-        expect(screen.getByRole('switch')).toHaveStyle({ background: 'var(--primary)' });
+        expect(screen.getByRole('switch').style.background).toBe('var(--primary)');
     });
 
     it('takes its accessible name from label', () => {
