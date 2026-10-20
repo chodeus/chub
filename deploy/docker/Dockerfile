@@ -190,7 +190,7 @@ COPY deploy/docker/fonts/arial32.exe deploy/docker/fonts/LICENSE-mscorefonts.txt
 
 # Python deps from the full builder — the only place cl2k wheels exist.
 # Must match the FROM lines' Python version (renovate.json holds Python bumps for approval)
-COPY --from=builder-full /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder-full /usr/local/lib/python3.15/site-packages /usr/local/lib/python3.15/site-packages
 COPY --from=builder-full /usr/local/bin /usr/local/bin
 
 # Turns every extension's functional hooks on (backend/extensions/__init__.py).
@@ -203,7 +203,7 @@ FROM runtime-base AS runtime
 
 # Python deps from the lean builder: no cl2k wheels anywhere in this image.
 # Must match the FROM lines' Python version (renovate.json holds Python bumps for approval)
-COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder /usr/local/lib/python3.15/site-packages /usr/local/lib/python3.15/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Extensions' functional hooks off; config/tables stay registered so a config
