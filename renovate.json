@@ -21,6 +21,15 @@
       ],
       "enabled": false,
       "description": "CHUB's own image. A digest pin on our own :latest chases every merge to main forever (9 auto-merged bump PRs in 3 days). The compose example stays on bare :latest; do not pin or update it."
+    },
+    {
+      "matchManagers": [
+        "npm"
+      ],
+      "constraints": {
+        "npm": "<12"
+      },
+      "description": "npm 12 refuses to fetch a registry package that declares bundleDependencies (@tailwindcss/oxide-wasm32-wasi), so lock file maintenance fails with EALLOWREMOTE (npm/cli#9347). Drop this once npm fixes it."
     }
   ]
 }
