@@ -454,7 +454,7 @@ app = FastAPI(
     description="Dynamic Asset and Poster System - Media automation and poster management API",
     version="3.0.0-alpha",
     lifespan=lifespan,
-    tags_metadata=[
+    openapi_tags=[
         {"name": "System", "description": "System-level operations and utilities"},
         {
             "name": "Configuration",
