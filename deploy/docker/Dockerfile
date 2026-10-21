@@ -20,7 +20,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS builder
+FROM python:3.15-slim@sha256:2da676046630d7bf14c6764ae1143dc7fa0377a53f94bf5a642f0b214aca5bce AS builder
 ARG NODE_MAJOR=24
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -87,7 +87,7 @@ RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
 # -------------------------
 # Stage 2: shared runtime base — everything except site-packages
 # -------------------------
-FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS runtime-base
+FROM python:3.15-slim@sha256:2da676046630d7bf14c6764ae1143dc7fa0377a53f94bf5a642f0b214aca5bce AS runtime-base
 
 # Referenced by the apt layer so a new day rebuilds it instead of reusing a cached upgrade.
 ARG PACKAGES_DATE
@@ -190,7 +190,7 @@ COPY deploy/docker/fonts/arial32.exe deploy/docker/fonts/LICENSE-mscorefonts.txt
 
 # Python deps from the full builder — the only place cl2k wheels exist.
 # Must match the FROM lines' Python version (renovate.json holds Python bumps for approval)
-COPY --from=builder-full /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder-full /usr/local/lib/python3.15/site-packages /usr/local/lib/python3.15/site-packages
 COPY --from=builder-full /usr/local/bin /usr/local/bin
 
 # Turns every extension's functional hooks on (backend/extensions/__init__.py).
@@ -203,7 +203,7 @@ FROM runtime-base AS runtime
 
 # Python deps from the lean builder: no cl2k wheels anywhere in this image.
 # Must match the FROM lines' Python version (renovate.json holds Python bumps for approval)
-COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder /usr/local/lib/python3.15/site-packages /usr/local/lib/python3.15/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Extensions' functional hooks off; config/tables stay registered so a config
