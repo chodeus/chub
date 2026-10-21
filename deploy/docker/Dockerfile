@@ -42,9 +42,11 @@ RUN set -eux; \
 
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Copy and install Python dependencies. Upgrade pip here, not in runtime-base:
+# both runtimes copy this stage's site-packages, vendored certifi included.
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --upgrade "pip>=26.2.2" && \
+    pip3 install --no-cache-dir -r requirements.txt
 
 # Install rclone: fetch the current release and verify it against the official
 # SHA256SUMS, instead of piping an unpinned install script into a root shell.
@@ -102,6 +104,10 @@ RUN echo "packages as of ${PACKAGES_DATE}" && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends curl git tzdata jdupes && \
     rm -rf /var/lib/apt/lists/*
+
+# Both runtimes copy the builder's site-packages, its upgraded pip included; drop this
+# stage's own pip so its older dist-info isn't left beside the builder's.
+RUN python3 -m pip uninstall -y pip
 
 # rclone was downloaded and checksum-verified in the builder stage.
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
