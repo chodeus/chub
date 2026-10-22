@@ -79,17 +79,11 @@ def irregular_reasons(current: str, expected: str) -> List[str]:
     return reasons
 
 
-def plan_folder(
-    item: Dict[str, Any],
-    expected: Optional[str],
-    taken: Set[str],
-    siblings: Optional[Set[str]],
-) -> FolderVerdict:
-    """Whether the item's folder should move to `expected`, and why not when it shouldn't."""
-    path = (item.get("path") or "").rstrip("/")
+def _name_verdict(path: str, expected: Optional[str]) -> Optional[FolderVerdict]:
+    """A verdict from the folder names alone; None when the names don't settle it."""
     if "\\" in path or re.match(r"^[A-Za-z]:", path):
         return FolderVerdict(BLOCKED, "folder renames don't support Windows paths")
-    parent, current = posixpath.split(path)
+    current = posixpath.basename(path)
     if not current:
         return FolderVerdict(BLOCKED, "the arr has no folder path for it")
     if expected is None:
@@ -102,6 +96,18 @@ def plan_folder(
         return FolderVerdict(
             BLOCKED, f"the arr gives an unusable folder name ({expected!r})"
         )
+    return None
+
+
+def _place_verdict(
+    item: Dict[str, Any],
+    path: str,
+    expected: str,
+    taken: Set[str],
+    siblings: Optional[Set[str]],
+) -> Optional[FolderVerdict]:
+    """Why the folder can't move where it sits; None when nothing stands in the way."""
+    parent, current = posixpath.split(path)
     root = root_of(item)
     if root is None:
         return FolderVerdict(BLOCKED, "the arr has no root folder for it")
@@ -121,7 +127,23 @@ def plan_folder(
         return FolderVerdict(BLOCKED, "another item already uses that folder")
     if any(fold(name) == fold(expected) for name in siblings if name != current):
         return FolderVerdict(BLOCKED, "a folder with that name already exists")
-    reasons = irregular_reasons(current, expected)
+    return None
+
+
+def plan_folder(
+    item: Dict[str, Any],
+    expected: Optional[str],
+    taken: Set[str],
+    siblings: Optional[Set[str]],
+) -> FolderVerdict:
+    """Whether the item's folder should move to `expected`, and why not when it shouldn't."""
+    path = (item.get("path") or "").rstrip("/")
+    verdict = _name_verdict(path, expected) or _place_verdict(
+        item, path, expected, taken, siblings
+    )
+    if verdict:
+        return verdict
+    reasons = irregular_reasons(posixpath.basename(path), expected)
     if reasons:
         return FolderVerdict(HELD, "; ".join(reasons))
     return FolderVerdict(MOVE)

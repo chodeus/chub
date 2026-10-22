@@ -64,73 +64,60 @@ class Renameinatorr(ChubModule):
 
     @staticmethod
     def print_output(output: Dict[str, Dict[str, Any]], logger: Logger) -> None:
-        for instance, instance_data in output.items():
-            table = [[f"{instance_data['server_name'].capitalize()} Rename List"]]
-            logger.info(create_table(table))
+        for instance_data in output.values():
+            name = instance_data["server_name"]
+            logger.info(create_table([[f"{name.capitalize()} Rename List"]]))
             if instance_data.get("stopped"):
-                logger.warning(
-                    f"Stopped on {instance_data['server_name']}: {instance_data['stopped']}"
-                )
+                logger.warning(f"Stopped on {name}: {instance_data['stopped']}")
             for item in instance_data["data"]:
-                if (
-                    item["file_info"]
-                    or item["new_path_name"]
-                    or item.get("held")
-                    or item.get("blocked")
-                    or item.get("problems")
-                ):
-                    logger.info(f"{item['title']} ({item['year']})")
-                if item["new_path_name"]:
-                    logger.info(
-                        f"\tFolder Renamed: {item['path_name']} -> {item['new_path_name']}"
-                    )
-                if item.get("held"):
-                    logger.info(f"\tFolder Held: {item['path_name']} ({item['held']})")
-                if item.get("blocked"):
-                    logger.info(
-                        f"\tFolder Not Renamed: {item['path_name']} ({item['blocked']})"
-                    )
-                for problem in item.get("problems", []):
-                    logger.warning(f"\tProblem: {problem}")
-                if item["file_info"]:
-                    logger.info("\tFiles:")
-                    for existing_path, new_path in item["file_info"].items():
-                        logger.info(
-                            f"\t\tOriginal: {existing_path}\n\t\tNew: {new_path}\n"
-                        )
+                Renameinatorr._log_item(item, logger)
             logger.info("")
-            data = instance_data["data"]
-            total_items = len(data)
-            total_rename_items = sum(bool(v["file_info"]) for v in data)
-            total_folder_rename = sum(bool(v["new_path_name"]) for v in data)
-            total_held = sum(bool(v.get("held")) for v in data)
-            total_blocked = sum(bool(v.get("blocked")) for v in data)
-            total_problems = sum(bool(v.get("problems")) for v in data)
-            if (
-                total_rename_items
-                or total_folder_rename
-                or total_held
-                or total_blocked
-                or total_problems
-            ):
-                table = [
-                    [f"{instance_data['server_name'].capitalize()} Rename Summary"],
-                    [f"Total Items: {total_items}"],
-                ]
-                if total_rename_items:
-                    table.append([f"Total Renamed Items: {total_rename_items}"])
-                if total_folder_rename:
-                    table.append([f"Total Folder Renames: {total_folder_rename}"])
-                if total_held:
-                    table.append([f"Folder Renames Held: {total_held}"])
-                if total_blocked:
-                    table.append([f"Folders Not Renamed: {total_blocked}"])
-                if total_problems:
-                    table.append([f"Items With Problems: {total_problems}"])
-                logger.info(create_table(table))
-            else:
-                logger.info(f"No items renamed in {instance_data['server_name']}.")
+            Renameinatorr._log_summary(name, instance_data["data"], logger)
             logger.info("")
+
+    @staticmethod
+    def _log_item(item: Dict[str, Any], logger: Logger) -> None:
+        """Log one item's renames, held or blocked folder, and problems."""
+        notes = []
+        if item["new_path_name"]:
+            notes.append(
+                f"\tFolder Renamed: {item['path_name']} -> {item['new_path_name']}"
+            )
+        if item.get("held"):
+            notes.append(f"\tFolder Held: {item['path_name']} ({item['held']})")
+        if item.get("blocked"):
+            notes.append(
+                f"\tFolder Not Renamed: {item['path_name']} ({item['blocked']})"
+            )
+        problems = item.get("problems", [])
+        if not (notes or problems or item["file_info"]):
+            return
+        logger.info(f"{item['title']} ({item['year']})")
+        for note in notes:
+            logger.info(note)
+        for problem in problems:
+            logger.warning(f"\tProblem: {problem}")
+        if item["file_info"]:
+            logger.info("\tFiles:")
+            for existing_path, new_path in item["file_info"].items():
+                logger.info(f"\t\tOriginal: {existing_path}\n\t\tNew: {new_path}\n")
+
+    @staticmethod
+    def _log_summary(name: str, data: List[Dict[str, Any]], logger: Logger) -> None:
+        """Log the instance's rename counts, or that nothing was renamed."""
+        counts = [
+            ("Total Renamed Items", sum(bool(v["file_info"]) for v in data)),
+            ("Total Folder Renames", sum(bool(v["new_path_name"]) for v in data)),
+            ("Folder Renames Held", sum(bool(v.get("held")) for v in data)),
+            ("Folders Not Renamed", sum(bool(v.get("blocked")) for v in data)),
+            ("Items With Problems", sum(bool(v.get("problems")) for v in data)),
+        ]
+        if not any(count for _, count in counts):
+            logger.info(f"No items renamed in {name}.")
+            return
+        table = [[f"{name.capitalize()} Rename Summary"], [f"Total Items: {len(data)}"]]
+        table += [[f"{label}: {count}"] for label, count in counts if count]
+        logger.info(create_table(table))
 
     @staticmethod
     def get_count_for_instance_type(
@@ -408,6 +395,28 @@ class Renameinatorr(ChubModule):
         taken: Set[str],
     ) -> Optional[str]:
         """Rename one chunk's files and folders; returns why the instance should stop, or None."""
+        stop, changes = self._plan_chunk(app, chunk, config, taken, logger)
+        if stop or getattr(config, "dry_run", False):
+            return stop
+        if self.is_cancelled():
+            for item in chunk:
+                item["file_info"] = {}
+            return None
+        if not changes:
+            logger.info(f"No media to rename on {app.instance_name}...")
+            self._tag(app, chunk, config, tag_id, logger)
+            return None
+        return self._apply_changes(app, chunk, changes, config, tag_id, logger)
+
+    def _plan_chunk(
+        self,
+        app: BaseARRClient,
+        chunk: List[Dict[str, Any]],
+        config: Any,
+        taken: Set[str],
+        logger: Logger,
+    ) -> Tuple[Optional[str], List[_Change]]:
+        """Each item's planned renames and folder move, or a stop reason when the plan can't be read."""
         dry_run = getattr(config, "dry_run", False)
         if getattr(config, "refresh_before_rename", False) and not dry_run:
             self._refresh_before_rename(app, chunk, logger)
@@ -419,10 +428,10 @@ class Renameinatorr(ChubModule):
                 new_path_name=None, held=None, blocked=None, problems=[], retry=False
             )
         if expected and all(name is None for name in expected.values()):
-            return "its folder names couldn't be read, so this batch wasn't renamed"
+            return "its folder names couldn't be read, so this batch wasn't renamed", []
         targets = self._plan_moves(app, chunk, expected, taken) if expected else {}
         if targets is None:
-            return "a root folder couldn't be listed, so this batch wasn't renamed"
+            return "a root folder couldn't be listed, so this batch wasn't renamed", []
         changes: List[_Change] = []
         for item in chunk:
             renames = self._renames(item, previews.get(item["media_id"]))
@@ -432,16 +441,18 @@ class Renameinatorr(ChubModule):
                 item["new_path_name"] = target
             if renames or target:
                 changes.append(_Change(item, renames, target))
-        if dry_run:
-            return None
-        if self.is_cancelled():
-            for item in chunk:
-                item["file_info"] = {}
-            return None
-        if not changes:
-            logger.info(f"No media to rename on {app.instance_name}...")
-            self._tag(app, chunk, config, tag_id, logger)
-            return None
+        return None, changes
+
+    def _apply_changes(
+        self,
+        app: BaseARRClient,
+        chunk: List[Dict[str, Any]],
+        changes: List[_Change],
+        config: Any,
+        tag_id: Any,
+        logger: Logger,
+    ) -> Optional[str]:
+        """Rename, move, check and tag one batch; returns why the instance should stop, or None."""
         changes = self._snapshot(app, changes)
         # Just before the rename: a refresh beside a rename or move saves what it read first, undoing the change
         if not app.wait_for_refreshes("before renaming"):
@@ -455,20 +466,23 @@ class Renameinatorr(ChubModule):
             return "the folder moves didn't finish, so this batch wasn't checked"
         verified = self._verify(app, changes, logger)
         request_failed = any(not c.sent or not c.move_sent for c in changes)
-        if not verified:
-            reason = "some renamed items' files need checking (see their problems)"
-        elif request_failed:
-            reason = "a rename or move request to the arr failed, so this batch will be tried again"
-        elif moved == _SKIPPED:
-            reason = (
-                "a refresh was still running, so this batch's folders weren't renamed"
-            )
-        else:
-            reason = None
         # A skipped move or a failed request retries the whole batch next run; an item's own problem waits a cycle
         if moved != _SKIPPED and not request_failed:
             self._tag(app, chunk, config, tag_id, logger)
-        return reason
+        return self._stop_reason(verified, request_failed, moved)
+
+    @staticmethod
+    def _stop_reason(verified: bool, request_failed: bool, moved: str) -> Optional[str]:
+        """Why the instance should stop after a batch that ran, or None."""
+        if not verified:
+            return "some renamed items' files need checking (see their problems)"
+        if request_failed:
+            return "a rename or move request to the arr failed, so this batch will be tried again"
+        if moved == _SKIPPED:
+            return (
+                "a refresh was still running, so this batch's folders weren't renamed"
+            )
+        return None
 
     @staticmethod
     def _refresh_before_rename(

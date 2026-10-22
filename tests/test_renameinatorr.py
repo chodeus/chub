@@ -431,3 +431,28 @@ def test_a_stop_before_any_item_still_reaches_the_report(
     assert bool(sent) is reported
     if reported:
         assert sent[0]["Sonarr"]["stopped"] == stopped
+
+
+def test_the_log_lists_each_item_and_the_counts():
+    logger = StubLogger()
+    held = dict(_reported("Held"), file_info={}, held="the new name drops the year")
+    quiet = dict(_reported("Quiet"), file_info={})
+    output = {
+        "sonarr": {
+            "server_name": "sonarr",
+            "data": [_reported("Show"), held, quiet],
+            "stopped": "why",
+        }
+    }
+
+    Renameinatorr.print_output(output, logger)
+
+    lines = [m[1] for m in logger.msgs]
+    assert ("warning", "Stopped on sonarr: why") in [m[:2] for m in logger.msgs]
+    assert "Show (2011)" in lines and "Held (2011)" in lines
+    assert "Quiet (2011)" not in lines
+    assert "\tFolder Held: Held (the new name drops the year)" in lines
+    assert "\t\tOriginal: a.mkv\n\t\tNew: A.mkv\n" in lines
+    summary = next(line for line in lines if "Rename Summary" in line)
+    assert "Total Renamed Items: 1" in summary
+    assert "Folder Renames Held: 1" in summary
