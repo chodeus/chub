@@ -2,6 +2,19 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.54.1](https://github.com/chodeus/chub/compare/v2.54.0...v2.54.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* honour CONFIG_DIR and LOG_DIR everywhere, skip disabled modules' queued jobs, and close settings gaps ([#741](https://github.com/chodeus/chub/issues/741)) ([bfd51c2](https://github.com/chodeus/chub/commit/bfd51c20a9007a444551fb9a0e4637bf0801e814))
+
+
+### Performance
+
+* **arr:** read from one *arr on 6 threads, not 10 or 8 ([89cfe98](https://github.com/chodeus/chub/commit/89cfe98b65e91d0872e07931ca49a559786b2402))
+* **renameinatorr:** read from the *arr on 4 threads, not 10 ([8ace5d9](https://github.com/chodeus/chub/commit/8ace5d9471d55a7d394f4e2e386daff5a9f84ce6))
+
 ## [2.54.0](https://github.com/chodeus/chub/compare/v2.53.0...v2.54.0) (2026-10-22)
 
 
