@@ -3,7 +3,9 @@
 from copy import deepcopy
 from types import SimpleNamespace
 
+import pytest
 
+import backend.modules.renameinatorr as renameinatorr_module
 from backend.modules.renameinatorr import Renameinatorr
 
 
@@ -370,3 +372,62 @@ def test_an_item_carrying_the_cycle_tag_as_its_id_counts_as_tagged():
     _run_process_instance(app, _reset_cfg())
 
     assert app.fetched_rename_ids == [2]
+
+
+def _reported(title):
+    return {
+        "title": title,
+        "year": 2011,
+        "path_name": title,
+        "new_path_name": None,
+        "file_info": {"a.mkv": "A.mkv"},
+        "held": None,
+        "blocked": None,
+        "problems": [],
+    }
+
+
+class _OutroLogger(StubLogger):
+    def log_outro(self):
+        self.msgs.append(("outro",))
+
+
+@pytest.mark.parametrize(
+    "data, stopped, reported",
+    [
+        ([], "its tags couldn't be read", True),
+        ([_reported("Show")], None, True),
+        ([], None, False),
+    ],
+)
+def test_a_stop_before_any_item_still_reaches_the_report(
+    monkeypatch, data, stopped, reported
+):
+    sent = []
+
+    class _Manager:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def send_notification(self, output):
+            sent.append(output)
+
+    app = SimpleNamespace(connect_status=True, instance_name="Sonarr")
+    monkeypatch.setattr(renameinatorr_module, "create_arr_client", lambda *_a: app)
+    monkeypatch.setattr(renameinatorr_module, "NotificationManager", _Manager)
+    monkeypatch.setattr(Renameinatorr, "process_instance", lambda *_a: (data, stopped))
+    m = object.__new__(Renameinatorr)
+    m._cancel_event = None
+    m.logger = _OutroLogger()
+    m.config = SimpleNamespace(log_level="info", dry_run=False, instances=["Sonarr"])
+    m.full_config = SimpleNamespace(
+        instances=SimpleNamespace(
+            radarr={}, lidarr={}, sonarr={"Sonarr": SimpleNamespace(url="u", api="k")}
+        )
+    )
+
+    m.run()
+
+    assert bool(sent) is reported
+    if reported:
+        assert sent[0]["Sonarr"]["stopped"] == stopped

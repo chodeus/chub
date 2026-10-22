@@ -840,7 +840,7 @@ class Renameinatorr(ChubModule):
                                 "data": data,
                                 "stopped": stopped,
                             }
-            if any(value["data"] for value in output.values()):
+            if any(value["data"] or value["stopped"] for value in output.values()):
                 self.print_output(output, self.logger)
                 manager = NotificationManager(
                     self.full_config, self.logger, module_name="renameinatorr"
