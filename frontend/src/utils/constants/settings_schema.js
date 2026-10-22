@@ -963,7 +963,7 @@ const CORE_SETTINGS_SCHEMA = [
                             api_lookup: 'instances',
                         },
                         description:
-                            'Minimum percentage of monitored seasons required (Sonarr only).',
+                            'Sonarr only: a season is searched only when at least this percentage (0–100) of its episodes are monitored.',
                     },
                 ],
             },
