@@ -43,7 +43,6 @@ def get_db_path() -> str:
         or os.path.realpath(db_path) == os.path.realpath(legacy)
     ):
         return db_path
-    # Bare-metal installs used to ignore CONFIG_DIR for the database.
     if not _warned_legacy_db:
         _warned_legacy_db = True
         _log.warning(

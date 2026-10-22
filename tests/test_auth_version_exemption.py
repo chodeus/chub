@@ -46,12 +46,14 @@ def client(config):
 
 
 def test_version_is_open_without_a_login(client):
-    assert client.get("/api/version").status_code == 200
-    assert client.get("/api/health").status_code == 200
+    version, health = client.get("/api/version"), client.get("/api/health")
+    assert version.status_code == 200
+    assert health.status_code == 200
 
 
 def test_version_check_needs_a_login(client, config):
-    assert client.get("/api/version/check").status_code == 401
+    anonymous = client.get("/api/version/check")
+    assert anonymous.status_code == 401
     token = create_access_token("admin", config.auth.jwt_secret)
     resp = client.get(
         "/api/version/check", headers={"Authorization": f"Bearer {token}"}

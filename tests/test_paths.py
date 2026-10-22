@@ -31,9 +31,14 @@ def bare_metal(tmp_path, monkeypatch):
 
 
 def test_bare_metal_defaults_to_the_repo(bare_metal):
-    assert paths.get_config_dir() == str(bare_metal / "config")
-    assert paths.get_log_base_dir() == str(bare_metal / "logs")
-    assert paths.get_db_path() == str(bare_metal / "config" / "chub.db")
+    config_dir, log_dir, db_path = (
+        paths.get_config_dir(),
+        paths.get_log_base_dir(),
+        paths.get_db_path(),
+    )
+    assert config_dir == str(bare_metal / "config")
+    assert log_dir == str(bare_metal / "logs")
+    assert db_path == str(bare_metal / "config" / "chub.db")
 
 
 def test_bare_metal_honours_config_dir_for_the_database(
@@ -41,18 +46,22 @@ def test_bare_metal_honours_config_dir_for_the_database(
 ):
     conf = tmp_path / "conf"
     monkeypatch.setenv("CONFIG_DIR", str(conf))
-    assert paths.get_config_dir() == str(conf)
-    assert ChubDB(logger=_StubLogger()).db_path == str(conf / "chub.db")
-    assert backup._get_db_path() == str(conf / "chub.db")
-    assert backup._default_backup_dir() == conf / "backups"
+    config_dir = paths.get_config_dir()
+    db_path = ChubDB(logger=_StubLogger()).db_path
+    backup_db, backup_dir = backup._get_db_path(), backup._default_backup_dir()
+    assert config_dir == str(conf)
+    assert db_path == str(conf / "chub.db")
+    assert backup_db == str(conf / "chub.db")
+    assert backup_dir == conf / "backups"
 
 
 def test_docker_defaults(monkeypatch):
     monkeypatch.delenv("CONFIG_DIR", raising=False)
     monkeypatch.delenv("LOG_DIR", raising=False)
     monkeypatch.setenv("DOCKER_ENV", "true")
-    assert paths.get_config_dir() == "/config"
-    assert paths.get_log_base_dir() == "/config/logs"
+    config_dir, log_dir = paths.get_config_dir(), paths.get_log_base_dir()
+    assert config_dir == "/config"
+    assert log_dir == "/config/logs"
 
 
 def test_lone_legacy_database_is_used_with_one_warning(
@@ -63,8 +72,9 @@ def test_lone_legacy_database_is_used_with_one_warning(
     legacy.write_bytes(b"")
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "conf"))
     with caplog.at_level(logging.WARNING, logger="backend.util.paths"):
-        assert paths.get_db_path() == str(legacy)
-        assert backup._get_db_path() == str(legacy)
+        db_path, backup_db = paths.get_db_path(), backup._get_db_path()
+    assert db_path == str(legacy)
+    assert backup_db == str(legacy)
     warnings = [r for r in caplog.records if "move chub.db" in r.getMessage()]
     assert len(warnings) == 1
 
@@ -77,7 +87,8 @@ def test_database_in_config_dir_wins_over_legacy(bare_metal, tmp_path, monkeypat
     conf.mkdir()
     (conf / "chub.db").write_bytes(b"")
     monkeypatch.setenv("CONFIG_DIR", str(conf))
-    assert paths.get_db_path() == str(conf / "chub.db")
+    db_path = paths.get_db_path()
+    assert db_path == str(conf / "chub.db")
 
 
 def test_logs_api_reads_where_the_logger_writes(bare_metal, tmp_path, monkeypatch):
