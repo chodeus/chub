@@ -2,6 +2,20 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.54.0](https://github.com/chodeus/chub/compare/v2.53.0...v2.54.0) (2026-10-22)
+
+
+### Features
+
+* **renameinatorr:** check folder renames before moving them and verify the files after ([#740](https://github.com/chodeus/chub/issues/740)) ([7f080a3](https://github.com/chodeus/chub/commit/7f080a3d2b7f0ce9cb4ad4b225acbf17006a2e71))
+
+
+### Bug Fixes
+
+* **api:** pass the API tag descriptions as openapi_tags ([1d67daf](https://github.com/chodeus/chub/commit/1d67daf7eb955686e0e5e0f7f6b0b29a697e5644))
+* **deps:** update all non-major dependencies ([2709934](https://github.com/chodeus/chub/commit/270993491b7e590f6e056aa71f56a50a18b4994c))
+* **deps:** upgrade pip so its bundled certifi drops the eMudhra roots ([a8780eb](https://github.com/chodeus/chub/commit/a8780eb0373765f0a05764d3702fad4dd7a1f830))
+
 ## [2.53.0](https://github.com/chodeus/chub/compare/v2.52.0...v2.53.0) (2026-10-17)
 
 
