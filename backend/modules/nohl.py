@@ -402,11 +402,7 @@ class Nohl(ChubModule):
                     logger.debug(
                         f" Refreshing movie: '{title}' ({year}) [media_id={item['media_id']}]"
                     )
-                    results = app.refresh_items(item["media_id"])
-                    command_id = (
-                        results.get("id") if isinstance(results, dict) else None
-                    )
-                    ready = bool(command_id and app.wait_for_command(command_id))
+                    ready = app.refresh_and_wait([item["media_id"]])
                     if not ready:
                         logger.warning(
                             f" Refresh for '{title}' ({year}) was not confirmed in "
@@ -470,13 +466,7 @@ class Nohl(ChubModule):
                             logger.debug(
                                 f" Refreshing series: '{title}' ({year}) [media_id={item['media_id']}]"
                             )
-                            results = app.refresh_items(item["media_id"])
-                            command_id = (
-                                results.get("id") if isinstance(results, dict) else None
-                            )
-                            ready = bool(
-                                command_id and app.wait_for_command(command_id)
-                            )
+                            ready = app.refresh_and_wait([item["media_id"]])
                             if not ready:
                                 logger.warning(
                                     f" Refresh for season pack '{title}' ({year}) Season {snum} was not confirmed in time; searching anyway so the deleted files are not left permanently missing."
@@ -511,13 +501,7 @@ class Nohl(ChubModule):
                             logger.debug(
                                 f" Refreshing series: '{title}' ({year}) [media_id={item['media_id']}]"
                             )
-                            results = app.refresh_items(item["media_id"])
-                            command_id = (
-                                results.get("id") if isinstance(results, dict) else None
-                            )
-                            ready = bool(
-                                command_id and app.wait_for_command(command_id)
-                            )
+                            ready = app.refresh_and_wait([item["media_id"]])
                             if not ready:
                                 logger.warning(
                                     f" Refresh for episodes '{title}' ({year}) Season {snum} was not confirmed in time; searching anyway so the deleted files are not left permanently missing."

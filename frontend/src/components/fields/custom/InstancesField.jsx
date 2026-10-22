@@ -6,7 +6,7 @@
  *
  * Supported schema configurations:
  * 1. All services with poster option (poster_renamerr): ['plex', 'radarr', 'sonarr'] + add_posters_option: true
- * 2. ARR services only (renameinatorr, nohl): ['radarr', 'sonarr']
+ * 2. ARR services only (nohl): ['radarr', 'sonarr']; (renameinatorr): ['radarr', 'sonarr', 'lidarr']
  * 3. Plex only (labelarr): ['plex'] + add_posters_option: false
  * 4. Health checks (health_checkarr): ['radarr', 'sonarr'] + add_posters_option: false
  * 5. Mixed configurations with different requirements

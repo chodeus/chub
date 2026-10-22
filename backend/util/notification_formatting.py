@@ -298,10 +298,18 @@ def format_for_discord(
         """Format renameinatorr output for Discord embeds.
 
         Renames are what the run changed, so they stay listed — grouped and
-        capped rather than one embed field per title.
+        capped rather than one embed field per title. Problems are listed too;
+        held and blocked folder renames are only counted.
         """
         grouped: Dict[str, List[str]] = {}
+        problems: List[List[str]] = []
+        summary: List[str] = []
+        held = blocked = 0
         for inst in o.values():
+            if inst.get("stopped"):
+                summary.append(
+                    f"Stopped on {inst.get('server_name')}: {inst['stopped']}"
+                )
             for item in inst.get("data", []):
                 title = item.get("title", "Unknown")
                 year = item.get("year")
@@ -315,16 +323,42 @@ def format_for_discord(
                 for old, new in item.get("file_info", {}).items():
                     lst.append(old.lstrip("/"))
                     lst.append(new.lstrip("/"))
+                if item.get("problems"):
+                    problems.append([name] + [f"    {p}" for p in item["problems"]])
+                held += bool(item.get("held"))
+                blocked += bool(item.get("blocked"))
+        if held:
+            summary.append(
+                f"{held} folder rename(s) held: the new name would drop a year, "
+                "an id or the title, or leave an id empty — see the server log"
+            )
+        if blocked:
+            summary.append(
+                f"{blocked} folder(s) not renamed — see the server log for why"
+            )
         blocks = [
             [name] + [f"    {entry}" for entry in entries]
             for name, entries in grouped.items()
             if entries
         ]
-        if not blocks:
-            return []
-        return chunk_code_fields(
-            "Renamed", "\n".join(capped_lines(blocks, f"{len(blocks)} items renamed"))
-        )
+        fields: List[Dict[str, Any]] = []
+        if summary:
+            fields.append(
+                {"name": "Summary", "value": "```" + "\n".join(summary) + "```"}
+            )
+        if blocks:
+            fields += chunk_code_fields(
+                "Renamed",
+                "\n".join(capped_lines(blocks, f"{len(blocks)} items renamed")),
+            )
+        if problems:
+            fields += chunk_code_fields(
+                "Problems",
+                "\n".join(
+                    capped_lines(problems, f"{len(problems)} items had problems")
+                ),
+            )
+        return fields
 
     def fmt_health_checkarr(o: Any) -> List[Dict[str, Any]]:
         """Format health_checkarr output for Discord embeds.

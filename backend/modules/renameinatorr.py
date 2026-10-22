@@ -1,17 +1,61 @@
 # modules/renameinatorr.py
 
+import posixpath
 import re
 import time
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from backend.util.arr import BaseARRClient, create_arr_client
+from backend.util.arr import BaseARRClient, create_arr_client, relative_to
 from backend.util.base_module import ChubModule
 from backend.util.constants import season_regex
 from backend.util.helper import create_table, print_settings, progress
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+from backend.util.rename_checks import (
+    BLOCKED,
+    HELD,
+    MOVE,
+    FileOutcome,
+    check_files,
+    fold,
+    plan_folders,
+    records_drifted,
+    root_of,
+    taken_paths,
+    untracked,
+)
+
+_DONE = "done"
+_SKIPPED = "skipped"
+_UNFINISHED = "unfinished"
+
+
+def _in_parallel(fn: Callable[[Any], Any], items: List[Any]) -> List[Any]:
+    """`fn` over `items` on up to 10 threads, results in order; `fn` must use threadsafe reads."""
+    if not items:
+        return []
+    with ThreadPoolExecutor(max_workers=min(10, len(items))) as pool:
+        return list(pool.map(fn, items))
+
+
+@dataclass
+class _Change:
+    """An item this chunk renames or moves, with its files before and after."""
+
+    item: Dict[str, Any]
+    renames: Dict[str, str]
+    target: Optional[str] = None
+    disk: Set[str] = field(default_factory=set)
+    records: Dict[int, str] = field(default_factory=dict)
+    sent: bool = True
+    move_sent: bool = True
+    folder: str = ""
+    disk_after: Set[str] = field(default_factory=set)
+    records_after: Dict[int, str] = field(default_factory=dict)
+    outcome: Optional[FileOutcome] = None
 
 
 class Renameinatorr(ChubModule):
@@ -23,13 +67,31 @@ class Renameinatorr(ChubModule):
         for instance, instance_data in output.items():
             table = [[f"{instance_data['server_name'].capitalize()} Rename List"]]
             logger.info(create_table(table))
+            if instance_data.get("stopped"):
+                logger.warning(
+                    f"Stopped on {instance_data['server_name']}: {instance_data['stopped']}"
+                )
             for item in instance_data["data"]:
-                if item["file_info"] or item["new_path_name"]:
+                if (
+                    item["file_info"]
+                    or item["new_path_name"]
+                    or item.get("held")
+                    or item.get("blocked")
+                    or item.get("problems")
+                ):
                     logger.info(f"{item['title']} ({item['year']})")
                 if item["new_path_name"]:
                     logger.info(
                         f"\tFolder Renamed: {item['path_name']} -> {item['new_path_name']}"
                     )
+                if item.get("held"):
+                    logger.info(f"\tFolder Held: {item['path_name']} ({item['held']})")
+                if item.get("blocked"):
+                    logger.info(
+                        f"\tFolder Not Renamed: {item['path_name']} ({item['blocked']})"
+                    )
+                for problem in item.get("problems", []):
+                    logger.warning(f"\tProblem: {problem}")
                 if item["file_info"]:
                     logger.info("\tFiles:")
                     for existing_path, new_path in item["file_info"].items():
@@ -37,26 +99,34 @@ class Renameinatorr(ChubModule):
                             f"\t\tOriginal: {existing_path}\n\t\tNew: {new_path}\n"
                         )
             logger.info("")
-            total_items = len(instance_data["data"])
-            total_rename_items = len(
-                [v["file_info"] for v in instance_data["data"] if v["file_info"]]
-            )
-            total_folder_rename = len(
-                [
-                    v["new_path_name"]
-                    for v in instance_data["data"]
-                    if v["new_path_name"]
-                ]
-            )
-            if any(v["file_info"] or v["new_path_name"] for v in instance_data["data"]):
+            data = instance_data["data"]
+            total_items = len(data)
+            total_rename_items = sum(bool(v["file_info"]) for v in data)
+            total_folder_rename = sum(bool(v["new_path_name"]) for v in data)
+            total_held = sum(bool(v.get("held")) for v in data)
+            total_blocked = sum(bool(v.get("blocked")) for v in data)
+            total_problems = sum(bool(v.get("problems")) for v in data)
+            if (
+                total_rename_items
+                or total_folder_rename
+                or total_held
+                or total_blocked
+                or total_problems
+            ):
                 table = [
                     [f"{instance_data['server_name'].capitalize()} Rename Summary"],
                     [f"Total Items: {total_items}"],
                 ]
-                if any(v["file_info"] for v in instance_data["data"]):
+                if total_rename_items:
                     table.append([f"Total Renamed Items: {total_rename_items}"])
-                if any(v["new_path_name"] for v in instance_data["data"]):
+                if total_folder_rename:
                     table.append([f"Total Folder Renames: {total_folder_rename}"])
+                if total_held:
+                    table.append([f"Folder Renames Held: {total_held}"])
+                if total_blocked:
+                    table.append([f"Folders Not Renamed: {total_blocked}"])
+                if total_problems:
+                    table.append([f"Items With Problems: {total_problems}"])
                 logger.info(create_table(table))
             else:
                 logger.info(f"No items renamed in {instance_data['server_name']}.")
@@ -67,16 +137,12 @@ class Renameinatorr(ChubModule):
         config: Any, instance_type: str, logger: Logger
     ) -> int:
         count = config.count
-        if instance_type == "radarr" and getattr(config, "radarr_count", None):
+        override = getattr(config, f"{instance_type}_count", None)
+        if override:
             logger.debug(
-                f"radarr_count found! overriding count from {config.count} to {config.radarr_count}"
+                f"{instance_type}_count found! overriding count from {config.count} to {override}"
             )
-            count = config.radarr_count
-        elif instance_type == "sonarr" and getattr(config, "sonarr_count", None):
-            logger.debug(
-                f"sonarr_count found! overriding count from {config.count} to {config.sonarr_count}"
-            )
-            count = config.sonarr_count
+            count = override
         logger.info(f"using count= {count} for instance_type= {instance_type}")
         return count
 
@@ -90,15 +156,21 @@ class Renameinatorr(ChubModule):
         return chunks
 
     @staticmethod
+    def _tag_labels(item: Dict[str, Any]) -> Set[str]:
+        """The item's tags in lower case; normalize_arr_media stores labels, not ids."""
+        return {str(tag).lower() for tag in item.get("tags") or []}
+
+    @staticmethod
     def get_untagged_chunks_for_run(
         media_dict: List[Dict[str, Any]],
-        tag_id: int,
+        tag: Set[str],
         chunk_size: int,
         all_in_single_run: bool,
         logger: Logger,
     ) -> List[List[Dict[str, Any]]]:
+        """Chunks of the items carrying none of `tag` (one tag's spellings); with an empty set, of every item."""
         all_items_without_tags = [
-            item for item in media_dict if tag_id not in item["tags"]
+            item for item in media_dict if not tag & Renameinatorr._tag_labels(item)
         ]
         if all_in_single_run or not chunk_size:
             return [all_items_without_tags] if all_items_without_tags else []
@@ -107,35 +179,80 @@ class Renameinatorr(ChubModule):
         )
 
     @staticmethod
-    def resolve_ignore_tag_ids(app: BaseARRClient, config: Any) -> set:
-        """Resolve the configured (comma-separated) ignore tag names to the set
-        of existing tag ids.
-
-        Lookup-only — unlike get_tag_id_from_name this never creates a missing
-        tag; an absent ignore tag simply means there is nothing to skip.
-        """
-        if not getattr(config, "ignore_tags", None):
-            return set()
-        ignore_names = {
-            t.strip().lower() for t in str(config.ignore_tags).split(",") if t.strip()
-        }
-        if not ignore_names:
-            return set()
-        all_tags = app.get_all_tags() or []
-        return {tag["id"] for tag in all_tags if tag["label"] in ignore_names}
+    def ignore_labels(config: Any) -> Set[str]:
+        """The configured (comma-separated) ignore tags, in lower case."""
+        names = str(getattr(config, "ignore_tags", "") or "").split(",")
+        return {name.strip().lower() for name in names if name.strip()}
 
     @staticmethod
     def filter_ignored(
-        media_dict: List[Dict[str, Any]], ignore_tag_ids: set
+        media_dict: List[Dict[str, Any]], ignore_labels: Set[str]
     ) -> List[Dict[str, Any]]:
-        """Drop items carrying any of the ignore tag ids."""
-        if not ignore_tag_ids:
+        """Drop items carrying any of the ignore tags."""
+        if not ignore_labels:
             return media_dict
         return [
             item
             for item in media_dict
-            if not ignore_tag_ids & set(item.get("tags", []))
+            if not ignore_labels & Renameinatorr._tag_labels(item)
         ]
+
+    @staticmethod
+    def _tag_spellings(app: BaseARRClient, labels: Set[str]) -> Optional[Set[str]]:
+        """`labels` plus each one's id as text, which an item carries when its label lookup failed; None when the tags can't be read."""
+        tags = app.get_all_tags()
+        if not isinstance(tags, list):
+            return None
+        ids = {
+            str(tag.get("id"))
+            for tag in tags
+            if isinstance(tag, dict) and str(tag.get("label", "")).lower() in labels
+        }
+        return labels | ids
+
+    @staticmethod
+    def _find_tag_id(app: BaseARRClient, label: str) -> Optional[int]:
+        """The id of the tag called `label`, without creating it; None when there's none."""
+        return next(
+            (
+                tag["id"]
+                for tag in app.get_all_tags() or []
+                if str(tag.get("label", "")).lower() == label
+            ),
+            None,
+        )
+
+    def _cycle_chunks(
+        self,
+        app: BaseARRClient,
+        media_dict: List[Dict[str, Any]],
+        tag_id: int,
+        cycle_tag: Set[str],
+        chunk_size: int,
+        all_in_single_run: bool,
+        ignore_labels: Set[str],
+        dry_run: bool,
+        logger: Logger,
+    ) -> List[List[Dict[str, Any]]]:
+        """The untagged chunks of the tag cycle; once every item is tagged, clears the tags and starts again."""
+        chunks = self.get_untagged_chunks_for_run(
+            media_dict, cycle_tag, chunk_size, all_in_single_run, logger
+        )
+        if chunks and any(chunks):
+            return chunks
+        if dry_run:
+            logger.info(
+                "All media is tagged; a real run would clear the tags and start again."
+            )
+            return self.get_untagged_chunks_for_run(
+                media_dict, set(), chunk_size, all_in_single_run, logger
+            )
+        logger.info("All media is tagged. Removing tags...")
+        app.remove_tags([item["media_id"] for item in media_dict], tag_id)
+        media_dict = self.filter_ignored(app.get_all_media(), ignore_labels)
+        return self.get_untagged_chunks_for_run(
+            media_dict, cycle_tag, chunk_size, all_in_single_run, logger
+        )
 
     def process_instance(
         self,
@@ -143,23 +260,30 @@ class Renameinatorr(ChubModule):
         instance_type: str,
         config: Any,
         logger: Logger,
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        """The instance's rename report, and why it stopped early (None when it didn't)."""
         table = [[f"Processing {app.instance_name}"]]
         logger.debug(create_table(table))
         default_batch_size: int = 100
         instance_start_time: float = time.time()
         media_dict: List[Dict[str, Any]] = app.get_all_media()
+        # Before the ignore filter: ignored items still occupy their folders
+        taken = taken_paths(media_dict)
         count: int = self.get_count_for_instance_type(config, instance_type, logger)
         tag_id: Any = None
+        dry_run = getattr(config, "dry_run", False)
 
-        # Ignore-tag filtering: skip items carrying any of the (comma-
-        # separated) ignore tags. Resolve the tag ids once and re-apply the
-        # filter after every re-fetch below (e.g. the tag-cycle reset) so an
-        # ignored item can never be swept back into processing.
-        ignore_tag_ids = self.resolve_ignore_tag_ids(app, config)
-        if ignore_tag_ids:
+        # Re-applied after every re-fetch below (the tag-cycle reset), so an ignored item never comes back
+        ignore_labels = self.ignore_labels(config)
+        if ignore_labels:
+            ignore_labels = self._tag_spellings(app, ignore_labels)
+            if ignore_labels is None:
+                return (
+                    [],
+                    "its tags couldn't be read, so the ignore tags couldn't be applied",
+                )
             before_count = len(media_dict)
-            media_dict = self.filter_ignored(media_dict, ignore_tag_ids)
+            media_dict = self.filter_ignored(media_dict, ignore_labels)
             skipped_count = before_count - len(media_dict)
             if skipped_count > 0:
                 logger.info(
@@ -168,29 +292,29 @@ class Renameinatorr(ChubModule):
 
         # Tagging logic: filter untagged, clear if all tagged, then chunk
         enable_batching = getattr(config, "enable_batching", False)
-        if getattr(config, "tag_name", None):
-            tag_id = app.get_tag_id_from_name(config.tag_name)
-            if tag_id:
+        tag_label = str(getattr(config, "tag_name", "") or "").strip().lower()
+        if tag_label:
+            # A dry run only looks the tag up: get_tag_id_from_name creates a missing one
+            tag_id = (
+                self._find_tag_id(app, tag_label)
+                if dry_run
+                else app.get_tag_id_from_name(tag_label)
+            )
+            if tag_id is not None:
                 chunk_size = (
                     count if count else (default_batch_size if enable_batching else 0)
                 )
-                all_in_single_run = not enable_batching and not count
-                chunks_to_process_this_run = self.get_untagged_chunks_for_run(
-                    media_dict, tag_id, chunk_size, all_in_single_run, logger
+                chunks_to_process_this_run = self._cycle_chunks(
+                    app,
+                    media_dict,
+                    tag_id,
+                    {tag_label, str(tag_id)},
+                    chunk_size,
+                    not enable_batching and not count,
+                    ignore_labels,
+                    dry_run,
+                    logger,
                 )
-                if not chunks_to_process_this_run or not any(
-                    chunks_to_process_this_run
-                ):
-                    # All tagged — clear tags and re-fetch
-                    media_ids = [item["media_id"] for item in media_dict]
-                    logger.info("All media is tagged. Removing tags...")
-                    app.remove_tags(media_ids, tag_id)
-                    media_dict = self.filter_ignored(
-                        app.get_all_media(), ignore_tag_ids
-                    )
-                    chunks_to_process_this_run = self.get_untagged_chunks_for_run(
-                        media_dict, tag_id, chunk_size, all_in_single_run, logger
-                    )
                 if not enable_batching and chunks_to_process_this_run:
                     # Non-batched: only process the first chunk
                     chunks_to_process_this_run = [chunks_to_process_this_run[0]]
@@ -220,6 +344,7 @@ class Renameinatorr(ChubModule):
                 )
         logger.info(f"num_chunks= {len(chunks_to_process_this_run)}")
         final_media_dict: List[Dict[str, Any]] = []
+        stopped: Optional[str] = None
         chunk_progress_bar = progress(
             chunks_to_process_this_run,
             desc=f"Processing batches for '{app.instance_name}'...",
@@ -230,170 +355,27 @@ class Renameinatorr(ChubModule):
         for chunk in chunk_progress_bar:
             if self.is_cancelled():
                 break
+            if not chunk:
+                continue
             chunk_start_time: float = time.time()
-            media_dict = chunk
-            logger.debug(f"Processing {len(media_dict)} media items in current chunk")
-            if media_dict:
-                logger.info("Processing data... This may take a while.")
-                # Optional pre-rename metadata refresh. When enabled, force a
-                # refresh for every item in the chunk and wait for it to finish
-                # before reading the rename list, so the rename reflects the
-                # latest episode/movie titles from TVDB/TMDB (e.g. a Sonarr
-                # "TBA" episode that has since been named). Unlike the upstream
-                # script, which only sleeps, we wait on the command for
-                # correctness. Skipped on dry runs.
-                if getattr(config, "refresh_before_rename", False) and not getattr(
-                    config, "dry_run", False
-                ):
-                    refresh_ids = [it["media_id"] for it in media_dict]
-                    logger.info(
-                        f"Refreshing metadata for {len(refresh_ids)} item(s) "
-                        f"before rename check..."
-                    )
-                    refresh_resp = app.refresh_items(refresh_ids)
-                    if refresh_resp and "id" in refresh_resp:
-                        if app.wait_for_command(refresh_resp["id"]):
-                            logger.info(
-                                "Metadata refresh complete; checking rename list..."
-                            )
-                        else:
-                            logger.warning(
-                                "Metadata refresh did not complete cleanly; "
-                                "proceeding with rename check anyway."
-                            )
-                progress_bar = progress(
-                    media_dict,
-                    desc=f"Processing single batch for '{app.instance_name}'...",
-                    unit="items",
-                    logger=logger,
-                    leave=True,
+            logger.debug(f"Processing {len(chunk)} media items in current chunk")
+            logger.info("Processing data... This may take a while.")
+            stopped = self._process_chunk(app, chunk, config, logger, tag_id, taken)
+            final_media_dict.extend(chunk)
+            total_renamed = sum(
+                len(i["file_info"]) for i in chunk if i.get("file_info")
+            )
+            total_folder_renamed = sum(bool(i.get("new_path_name")) for i in chunk)
+            logger.info(
+                f"Chunk completed in {time.time() - chunk_start_time:.2f} seconds | "
+                f"Files renamed: {total_renamed} | Folders renamed: {total_folder_renamed}"
+            )
+            if stopped:
+                logger.warning(
+                    f"Stopping {app.instance_name} here, so nothing more is renamed "
+                    f"until this is looked at: {stopped}"
                 )
-                grouped_root_folders: Dict[str, List[int]] = defaultdict(list)
-                media_ids: List[int] = []
-                any_renamed: bool = False
-
-                # Prefetch rename previews concurrently — these are read-only
-                # GETs and were the per-item bottleneck (one blocking call per
-                # item in the chunk). Each runs on a private session
-                # (threadsafe=True); all state mutation stays in the sequential
-                # loop below so no locking is needed.
-                rename_lists: Dict[int, Any] = {}
-                fetch_ids = [it["media_id"] for it in media_dict]
-                if fetch_ids:
-
-                    def _fetch_rename(mid):
-                        return mid, app.get_rename_list(mid, threadsafe=True)
-
-                    with ThreadPoolExecutor(
-                        max_workers=min(10, len(fetch_ids))
-                    ) as pool:
-                        futures = {
-                            pool.submit(_fetch_rename, mid): mid for mid in fetch_ids
-                        }
-                        for future in as_completed(futures):
-                            mid, resp = future.result()
-                            rename_lists[mid] = resp
-
-                for item in progress_bar:
-                    if self.is_cancelled():
-                        break
-                    file_info: Dict[str, str] = {}
-                    rename_response = rename_lists.get(item["media_id"]) or []
-                    for items in rename_response:
-                        existing_path = items.get("existingPath")
-                        new_path = items.get("newPath")
-                        # Remove season info from path if present
-                        if existing_path and re.search(season_regex, existing_path):
-                            existing_path = re.sub(season_regex, "", existing_path)
-                        if new_path and re.search(season_regex, new_path):
-                            new_path = re.sub(season_regex, "", new_path)
-                        if existing_path:
-                            existing_path = existing_path.lstrip("/")
-                        if new_path:
-                            new_path = new_path.lstrip("/")
-                        if existing_path is not None:
-                            file_info[existing_path] = new_path
-                    item["new_path_name"] = None
-                    item["file_info"] = file_info
-                    if file_info:
-                        any_renamed = True
-                    media_ids.append(item["media_id"])
-                    if getattr(config, "rename_folders", False):
-                        grouped_root_folders[item["root_folder"]].append(
-                            item["media_id"]
-                        )
-                if not getattr(config, "dry_run", False):
-                    # Perform file renaming
-                    renames_finished = True
-                    if media_ids:
-                        earlier_renames = app.command_ids(app.RENAME_COMMAND)
-                        app.rename_media(media_ids)
-                        # rename_media can post even when the first preview was empty, so always wait
-                        renames_finished = self._wait_for_renames(
-                            app, logger, earlier_renames
-                        )
-                        if any_renamed and renames_finished:
-                            self._refresh_media(app, media_ids, logger)
-                    else:
-                        logger.info(f"No media to rename on {app.instance_name}...")
-                    # Tagging after rename
-                    if tag_id and getattr(config, "tag_name", None):
-                        logger.info(
-                            f"Adding tag '{config.tag_name}' to items in {app.instance_name}..."
-                        )
-                        app.add_tags(media_ids, tag_id)
-                    # Folder rename steps
-                    if (
-                        getattr(config, "rename_folders", False)
-                        and grouped_root_folders
-                    ):
-                        logger.info(f"Renaming folders in {app.instance_name}...")
-                        earlier_moves = app.command_ids(app.FOLDER_MOVE_COMMAND)
-                        requested = True
-                        for (
-                            root_folder,
-                            folder_media_ids,
-                        ) in grouped_root_folders.items():
-                            logger.debug(f"renaming root folder {root_folder}")
-                            if app.rename_folders(folder_media_ids, root_folder) is None:
-                                requested = False
-                        # Renames still running would race this refresh the same way
-                        ready = renames_finished and self._refresh_after_folder_moves(
-                            app, media_ids, logger, requested, earlier_moves
-                        )
-                        # Update items with new path names if changed
-                        if ready:
-                            logger.info(
-                                f"Fetching updated data for {app.instance_name}..."
-                            )
-                            new_media_dict = app.get_all_media()
-                            old_by_id = {
-                                old_item["media_id"]: old_item
-                                for old_item in media_dict
-                            }
-                            for new_item in new_media_dict:
-                                old_item = old_by_id.get(new_item["media_id"])
-                                if old_item is None:
-                                    continue
-                                logger.debug(
-                                    f"Checking if item {new_item['media_id']} changed..."
-                                )
-                                if new_item["path_name"] != old_item["path_name"]:
-                                    logger.debug(
-                                        f"item {new_item['media_id']} changed from {old_item['path_name']} to {new_item['path_name']}"
-                                    )
-                                    old_item["new_path_name"] = new_item["path_name"]
-                final_media_dict.extend(media_dict)
-                total_renamed = sum(
-                    len(i["file_info"]) for i in media_dict if i.get("file_info")
-                )
-                total_folder_renamed = sum(
-                    bool(i.get("new_path_name")) for i in media_dict
-                )
-                logger.info(
-                    f"Chunk completed in {time.time() - chunk_start_time:.2f} seconds | "
-                    f"Files renamed: {total_renamed} | Folders renamed: {total_folder_renamed}"
-                )
+                break
         logger.info(
             f"Finished processing {app.instance_name} in {time.time() - instance_start_time:.2f} seconds."
         )
@@ -409,62 +391,426 @@ class Renameinatorr(ChubModule):
                     "path_name": item["path_name"],
                     "new_path_name": item.get("new_path_name"),
                     "file_info": sorted_info,
+                    "held": item.get("held"),
+                    "blocked": item.get("blocked"),
+                    "problems": item.get("problems", []),
                 }
             )
-        return trimmed
+        return trimmed, stopped
+
+    def _process_chunk(
+        self,
+        app: BaseARRClient,
+        chunk: List[Dict[str, Any]],
+        config: Any,
+        logger: Logger,
+        tag_id: Any,
+        taken: Set[str],
+    ) -> Optional[str]:
+        """Rename one chunk's files and folders; returns why the instance should stop, or None."""
+        dry_run = getattr(config, "dry_run", False)
+        if getattr(config, "refresh_before_rename", False) and not dry_run:
+            self._refresh_before_rename(app, chunk, logger)
+        previews, expected = self._prefetch(
+            app, chunk, getattr(config, "rename_folders", False)
+        )
+        for item in chunk:
+            item.update(
+                new_path_name=None, held=None, blocked=None, problems=[], retry=False
+            )
+        if expected and all(name is None for name in expected.values()):
+            return "its folder names couldn't be read, so this batch wasn't renamed"
+        targets = self._plan_moves(app, chunk, expected, taken) if expected else {}
+        if targets is None:
+            return "a root folder couldn't be listed, so this batch wasn't renamed"
+        changes: List[_Change] = []
+        for item in chunk:
+            renames = self._renames(item, previews.get(item["media_id"]))
+            target = targets.get(item["media_id"])
+            item["file_info"] = self._display(renames)
+            if dry_run:
+                item["new_path_name"] = target
+            if renames or target:
+                changes.append(_Change(item, renames, target))
+        if dry_run:
+            return None
+        if self.is_cancelled():
+            for item in chunk:
+                item["file_info"] = {}
+            return None
+        if not changes:
+            logger.info(f"No media to rename on {app.instance_name}...")
+            self._tag(app, chunk, config, tag_id, logger)
+            return None
+        changes = self._snapshot(app, changes)
+        # Just before the rename: a refresh beside a rename or move saves what it read first, undoing the change
+        if not app.wait_for_refreshes("before renaming"):
+            for change in changes:
+                change.item["file_info"] = {}
+            return "a refresh was still running, so this batch wasn't renamed"
+        if not self._rename_files(app, changes, logger):
+            return "the file renames didn't finish, so this batch wasn't checked"
+        moved = self._move_folders(app, changes, logger)
+        if moved == _UNFINISHED:
+            return "the folder moves didn't finish, so this batch wasn't checked"
+        verified = self._verify(app, changes, logger)
+        request_failed = any(not c.sent or not c.move_sent for c in changes)
+        if not verified:
+            reason = "some renamed items' files need checking (see their problems)"
+        elif request_failed:
+            reason = "a rename or move request to the arr failed, so this batch will be tried again"
+        elif moved == _SKIPPED:
+            reason = (
+                "a refresh was still running, so this batch's folders weren't renamed"
+            )
+        else:
+            reason = None
+        # A skipped move or a failed request retries the whole batch next run; an item's own problem waits a cycle
+        if moved != _SKIPPED and not request_failed:
+            self._tag(app, chunk, config, tag_id, logger)
+        return reason
+
+    @staticmethod
+    def _refresh_before_rename(
+        app: BaseARRClient, chunk: List[Dict[str, Any]], logger: Logger
+    ) -> None:
+        """Refresh the chunk first, so renames pick up titles that have changed (e.g. Sonarr TBA episodes)."""
+        ids = [item["media_id"] for item in chunk]
+        logger.info(
+            f"Refreshing metadata for {len(ids)} item(s) before rename check..."
+        )
+        if app.refresh_and_wait(ids):
+            logger.info("Metadata refresh complete; checking rename list...")
+        else:
+            logger.warning(
+                "Metadata refresh did not complete cleanly; "
+                "proceeding with rename check anyway."
+            )
+
+    @staticmethod
+    def _prefetch(
+        app: BaseARRClient, chunk: List[Dict[str, Any]], with_folders: bool
+    ) -> Tuple[Dict[int, Any], Optional[Dict[int, Optional[str]]]]:
+        """Each item's rename preview and, with `with_folders`, the folder name the arr wants for it."""
+
+        # Read-only GETs on private sessions (threadsafe=True); every state change stays in the caller
+        def fetch(item):
+            folder = (
+                app.get_expected_folder(item, threadsafe=True) if with_folders else None
+            )
+            return (
+                item["media_id"],
+                app.get_rename_list(item["media_id"], threadsafe=True),
+                folder,
+            )
+
+        previews: Dict[int, Any] = {}
+        expected: Dict[int, Optional[str]] = {}
+        for media_id, preview, folder in _in_parallel(fetch, chunk):
+            previews[media_id] = preview
+            expected[media_id] = folder
+        return previews, expected if with_folders else None
+
+    @staticmethod
+    def _plan_moves(
+        app: BaseARRClient,
+        chunk: List[Dict[str, Any]],
+        expected: Dict[int, Optional[str]],
+        taken: Set[str],
+    ) -> Optional[Dict[int, str]]:
+        """The folder name each item moves to, marking held and blocked items; None when a root folder can't be listed."""
+        roots = {
+            root_of(item)
+            for item in chunk
+            if expected.get(item["media_id"]) not in (None, item["path_name"])
+        } - {None}
+        listings = {root: app.list_folders(root) for root in roots}
+        if any(names is None for names in listings.values()):
+            return None
+        verdicts = plan_folders(chunk, expected, taken, listings)
+        targets: Dict[int, str] = {}
+        for item in chunk:
+            verdict = verdicts[item["media_id"]]
+            if verdict.action == MOVE:
+                targets[item["media_id"]] = expected[item["media_id"]]
+            elif verdict.action == HELD:
+                item["held"] = verdict.reason
+            elif verdict.action == BLOCKED:
+                item["blocked"] = verdict.reason
+            # None is a failed read, so look again next run; "" means the arr has no name for it
+            item["retry"] = expected.get(item["media_id"]) is None
+        return targets
+
+    @staticmethod
+    def _renames(item: Dict[str, Any], preview: Any) -> Dict[str, str]:
+        """The item's previewed renames as {old: new}, relative to its folder."""
+        if not isinstance(preview, list):
+            return {}
+        folder = item.get("path") or ""
+        renames: Dict[str, str] = {}
+        for entry in preview:
+            old = entry.get("existingPath") if isinstance(entry, dict) else None
+            new = entry.get("newPath") if isinstance(entry, dict) else None
+            if isinstance(old, str) and isinstance(new, str):
+                renames[relative_to(old, folder)] = relative_to(new, folder)
+        return renames
+
+    @staticmethod
+    def _display(renames: Dict[str, str]) -> Dict[str, str]:
+        """Renames as the report shows them, without the season folder."""
+        return {
+            re.sub(season_regex, "", old).lstrip("/"): re.sub(
+                season_regex, "", new
+            ).lstrip("/")
+            for old, new in renames.items()
+        }
+
+    @staticmethod
+    def _tag(
+        app: BaseARRClient,
+        chunk: List[Dict[str, Any]],
+        config: Any,
+        tag_id: Any,
+        logger: Logger,
+    ) -> None:
+        """Tag the batch as visited this cycle, except items a failed read kept from being checked."""
+        done = [item["media_id"] for item in chunk if not item["retry"]]
+        if not done or tag_id is None or not getattr(config, "tag_name", None):
+            return
+        logger.info(
+            f"Adding tag '{config.tag_name}' to items in {app.instance_name}..."
+        )
+        app.add_tags(done, tag_id)
+
+    @staticmethod
+    def _snapshot(app: BaseARRClient, changes: List[_Change]) -> List[_Change]:
+        """Read each change's files before anything moves; an item whose files can't be read is left alone."""
+
+        def read(change):
+            path, media_id = change.item.get("path"), change.item["media_id"]
+            if not path:
+                return None, None
+            return (
+                app.get_media_files(path, threadsafe=True),
+                app.get_file_records(media_id, path, threadsafe=True),
+            )
+
+        readable = []
+        for change, (disk, records) in zip(changes, _in_parallel(read, changes)):
+            item = change.item
+            if disk is None or records is None:
+                item["problems"].append(
+                    "its files couldn't be read, so it was left alone"
+                )
+                item["file_info"] = {}
+                item["retry"] = True
+                continue
+            change.disk, change.records = disk, records
+            readable.append(change)
+        return readable
+
+    def _rename_files(
+        self, app: BaseARRClient, changes: List[_Change], logger: Logger
+    ) -> bool:
+        """Rename the previewed files and wait; False when the renames didn't finish."""
+        ids = [change.item["media_id"] for change in changes if change.renames]
+        if not ids:
+            return True
+        earlier_renames = app.command_ids(app.RENAME_COMMAND)
+        if app.rename_media(ids) is None:
+            logger.warning(f"The rename request to {app.instance_name} failed.")
+            for change in changes:
+                if change.renames:
+                    change.sent = False
+        if self._wait_for_renames(app, logger, earlier_renames):
+            return True
+        for change in changes:
+            change.item["file_info"] = {}
+        return False
 
     @staticmethod
     def _wait_for_renames(
         app: BaseARRClient, logger: Logger, earlier_renames: Optional[set]
     ) -> bool:
         """Wait for the file renames this run queued; False, with a warning, when they didn't finish."""
-        # A refresh beside the renames rescans files mid-rename, and the *arr drops the record of any file it can't find
+        # Checking or refreshing beside the renames reads files mid-rename
         if app.wait_for_commands_to_finish(
             [app.RENAME_COMMAND], "rename files", ignore_ids=earlier_renames or set()
         ):
             return True
         logger.warning(
-            f"Renames on {app.instance_name} did not finish, so they were not refreshed."
+            f"Renames on {app.instance_name} did not finish, so nothing more was done or checked."
         )
         return False
 
     @staticmethod
-    def _refresh_media(app: BaseARRClient, media_ids: List[int], logger: Logger) -> None:
-        logger.info(f"Refreshing {app.instance_name}...")
-        response = app.refresh_items(media_ids)
-        if response and "id" in response and app.wait_for_command(response["id"]):
-            logger.info(f"Media refreshed on {app.instance_name}...")
-
-    @staticmethod
-    def _refresh_after_folder_moves(
-        app: BaseARRClient,
-        media_ids: List[int],
-        logger: Logger,
-        requested: bool,
-        earlier_moves: Optional[set],
-    ) -> bool:
-        """Refresh once the folder moves finish; False when they didn't or the refresh didn't complete."""
-        if not requested:
+    def _move_folders(
+        app: BaseARRClient, changes: List[_Change], logger: Logger
+    ) -> str:
+        """Move the planned folders and wait: _DONE, _SKIPPED (nothing sent) or _UNFINISHED."""
+        moving = [change for change in changes if change.target]
+        if not moving:
+            return _DONE
+        if not app.wait_for_refreshes("before moving folders"):
             logger.warning(
-                f"A folder move request to {app.instance_name} failed, so nothing was refreshed."
+                f"A refresh on {app.instance_name} was still running, so no folders were renamed."
             )
-            return False
-        # A refresh running beside the move saves items it read first, putting back the path and pending move it cleared
+            for change in moving:
+                change.target = None
+            return _SKIPPED
+        logger.info(f"Renaming folders in {app.instance_name}...")
+        by_root: Dict[str, List[int]] = defaultdict(list)
+        for change in moving:
+            by_root[change.item["root_folder"]].append(change.item["media_id"])
+        earlier_moves = app.command_ids(app.FOLDER_MOVE_COMMAND)
+        for root_folder, folder_media_ids in by_root.items():
+            logger.debug(f"renaming root folder {root_folder}")
+            if app.rename_folders(folder_media_ids, root_folder) is None:
+                logger.warning(f"A folder move request to {app.instance_name} failed.")
+                for change in moving:
+                    if change.item["root_folder"] == root_folder:
+                        change.move_sent = False
         if not app.wait_for_commands_to_finish(
             [app.FOLDER_MOVE_COMMAND], "rename folders", ignore_ids=earlier_moves or set()
         ):
             logger.warning(
-                f"Folder moves on {app.instance_name} did not finish, so they were not refreshed."
+                f"Folder moves on {app.instance_name} did not finish, so nothing was checked or refreshed."
             )
-            return False
-        # Finished isn't moved: the *arr logs a folder it couldn't move and carries on; the chunk summary counts real changes
+            for change in changes:
+                change.item["file_info"] = {}
+            return _UNFINISHED
+        # Finished isn't moved: the *arr logs a folder it couldn't move and carries on, so _verify checks each one
         logger.info(f"Folder moves finished in {app.instance_name}...")
-        logger.info(f"Refreshing {app.instance_name}...")
-        response = app.refresh_items(media_ids)
-        logger.info(f"Waiting for {app.instance_name} to refresh...")
-        return bool(
-            response and "id" in response and app.wait_for_command(response["id"])
+        return _DONE
+
+    def _verify(
+        self, app: BaseARRClient, changes: List[_Change], logger: Logger
+    ) -> bool:
+        """Check what each change did and refresh the items whose records drifted; False when files need checking."""
+        if not changes:
+            return True
+        logger.info(f"Checking the renamed items in {app.instance_name}...")
+        current = {m["media_id"]: m for m in app.get_all_media() or []}
+
+        def read(change):
+            old = change.item["path"].rstrip("/")
+            now = current.get(change.item["media_id"]) or {}
+            new = (now.get("path") or "").rstrip("/")
+            if not new:
+                return new, None, set(), None
+            return (
+                new,
+                app.get_media_files(new, threadsafe=True),
+                app.get_media_files(old, threadsafe=True) if new != old else set(),
+                app.get_file_records(change.item["media_id"], new, threadsafe=True),
+            )
+
+        healthy = True
+        drifted: List[_Change] = []
+        for change, after in zip(changes, _in_parallel(read, changes)):
+            if not self._check(change, *after, logger):
+                healthy = False
+            elif change.outcome.missing or change.outcome.left_behind:
+                healthy = False
+            elif records_drifted(change.outcome.expected_records, change.records_after):
+                drifted.append(change)
+        if drifted and not self._refresh_drifted(app, drifted, logger):
+            healthy = False
+        return healthy
+
+    @staticmethod
+    def _check(
+        change: _Change,
+        new: str,
+        disk: Optional[Set[str]],
+        left: Optional[Set[str]],
+        records: Optional[Dict[int, str]],
+        logger: Logger,
+    ) -> bool:
+        """Record what the change did to one item's files, read at `new`; False when they couldn't be read."""
+        item = change.item
+        old = item["path"].rstrip("/")
+        # On a case-insensitive disk, a case-only rename's old path still lists the new folder
+        if left and fold(new) == fold(old) and left == disk:
+            left = set()
+        if disk is None or left is None or records is None:
+            item["problems"].append("its files couldn't be read after the change")
+            item["file_info"] = {}
+            item["retry"] = True
+            return False
+        outcome = check_files(change.disk, change.records, change.renames, disk, left)
+        change.folder, change.disk_after, change.records_after = new, disk, records
+        change.outcome = outcome
+        item["file_info"] = Renameinatorr._display(outcome.renamed)
+        new_name = posixpath.basename(new)
+        if new_name != item["path_name"]:
+            item["new_path_name"] = new_name
+        if change.target and new_name != change.target:
+            item["problems"].append(
+                "its folder wasn't renamed (see the arr's logs)"
+                if change.move_sent
+                else "its folder wasn't renamed: the move request failed"
+            )
+        if outcome.not_renamed:
+            count = len(outcome.not_renamed)
+            item["problems"].append(
+                f"{count} file(s) weren't renamed (see the arr's logs)"
+                if change.sent
+                else f"{count} file(s) weren't renamed: the rename request failed"
+            )
+        for files, what in (
+            (outcome.missing, "went missing"),
+            (outcome.left_behind, f"were left behind in {old}"),
+        ):
+            if files:
+                item["problems"].append(
+                    f"{len(files)} file(s) {what}, so it wasn't refreshed"
+                )
+                logger.warning(
+                    f"{item['title']}: these files {what}:\n\t" + "\n\t".join(files)
+                )
+        return True
+
+    @staticmethod
+    def _refresh_drifted(
+        app: BaseARRClient, drifted: List[_Change], logger: Logger
+    ) -> bool:
+        """Refresh the items whose records no longer match their files; False when that didn't put them right."""
+        ids = [change.item["media_id"] for change in drifted]
+        logger.info(
+            f"Refreshing {len(ids)} item(s) on {app.instance_name} whose records don't match their files..."
         )
+        if not app.refresh_and_wait(ids):
+            for change in drifted:
+                change.item["problems"].append(
+                    "its records didn't match its files, and the refresh didn't complete"
+                )
+            return False
+        healthy = True
+        for change in drifted:
+            records = app.get_file_records(change.item["media_id"], change.folder)
+            lost = (
+                None
+                if records is None
+                else untracked(
+                    change.outcome.expected_records, records, change.disk_after
+                )
+            )
+            if lost is None:
+                change.item["problems"].append(
+                    "its records couldn't be read after the refresh"
+                )
+                healthy = False
+            elif lost:
+                change.item["problems"].append(
+                    f"the arr lost track of {len(lost)} file(s)"
+                )
+                logger.warning(
+                    f"{change.item['title']}: the arr has no record of:\n\t"
+                    + "\n\t".join(lost)
+                )
+                healthy = False
+        return healthy
 
     def run(self):
         try:
@@ -486,12 +832,13 @@ class Renameinatorr(ChubModule):
                             self.logger,
                         )
                         if app and app.connect_status:
-                            data = self.process_instance(
+                            data, stopped = self.process_instance(
                                 app, instance_type, self.config, self.logger
                             )
                             output[instance_name] = {
                                 "server_name": app.instance_name,
                                 "data": data,
+                                "stopped": stopped,
                             }
             if any(value["data"] for value in output.values()):
                 self.print_output(output, self.logger)

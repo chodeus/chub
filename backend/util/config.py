@@ -445,6 +445,7 @@ class RenameinatorrConfig(BaseModel):
     count: Union[int, str] = 100
     radarr_count: int = 0
     sonarr_count: int = 0
+    lidarr_count: int = 0
     tag_name: str = ""
     ignore_tags: str = ""
     enable_batching: bool = False

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.modules.nohl import Nohl
+from backend.util.arr import RadarrClient
 from backend.util.config import NohlConfig, NohlSourceDir
 from backend.util.helper import normalize_titles
 
@@ -279,3 +280,44 @@ def test_sonarr_search_limit_counts_seasons_not_series():
             ],
         }
     ]
+
+
+class _SearchingRadarr(RadarrClient):
+    """A RadarrClient with only its HTTP calls faked."""
+
+    def __init__(self, refresh_status):
+        self.url = "http://radarr.test"
+        self.headers = {}
+        self.logger = CapturingLogger()
+        self.instance_name = "radarr"
+        self.calls = []
+        self._status = refresh_status
+
+    def make_post_request(self, endpoint, headers=None, json=None):
+        self.calls.append((json["name"], json.get("movieIds")))
+        return {"id": 5}
+
+    def make_get_request(self, endpoint, headers=None, params=None):
+        return {"id": 5, "status": self._status}
+
+    def delete_movie_file(self, file_ids):
+        self.calls.append(("delete", file_ids))
+
+    def search_media(self, media_ids):
+        self.calls.append(("search", media_ids))
+
+
+@pytest.mark.parametrize("status, warned", [("completed", False), ("failed", True)])
+def test_a_movie_is_refreshed_then_searched_even_when_the_refresh_fails(status, warned):
+    app = _SearchingRadarr(status)
+    logger = CapturingLogger()
+    item = {"title": "Movie", "year": 2024, "media_id": 7, "file_ids": [3]}
+
+    searched = Nohl.handle_searches(
+        app, [item], "radarr", logger, SimpleNamespace(dry_run=False)
+    )
+
+    warnings = [m for level, m in logger.records if level == "warning"]
+    assert app.calls == [("delete", [3]), ("RefreshMovie", [7]), ("search", 7)]
+    assert searched == [item]
+    assert any("not confirmed" in m for m in warnings) is warned

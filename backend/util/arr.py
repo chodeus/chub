@@ -6,7 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Set, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import requests
 from unidecode import unidecode
@@ -56,6 +56,12 @@ QUEUE_STATES_STUCK = {
 def arr_api_version(service: Optional[str]) -> str:
     """API version path segment for an ARR service — Lidarr is still on v1."""
     return "v1" if (service or "").lower() == "lidarr" else "v3"
+
+
+def relative_to(path: str, folder: str) -> str:
+    """`path` relative to `folder` when it lies inside it, with no leading slash."""
+    prefix = folder.rstrip("/") + "/"
+    return (path[len(prefix) :] if path.startswith(prefix) else path).lstrip("/")
 
 
 def classify_queue_row(record: Dict[str, Any]) -> str:
@@ -142,9 +148,15 @@ class RetryHandler:
 
         return delay
 
-    def should_retry(self, attempt: int, exception: Exception) -> bool:
+    def should_retry(
+        self, attempt: int, exception: Exception, method: str = "GET"
+    ) -> bool:
         """Determine if we should retry based on attempt count and exception type"""
         if attempt >= self.config.max_attempts:
+            return False
+
+        # A write that got a server error may already have been applied, so only a 429 retries it
+        if method.upper() != "GET" and not isinstance(exception, ARRRateLimitError):
             return False
 
         # Don't retry permanent errors
@@ -186,6 +198,10 @@ class BaseARRClient:
     # The commands rename_media and rename_folders queue; each client names its own
     RENAME_COMMAND: Optional[str] = None
     FOLDER_MOVE_COMMAND: Optional[str] = None
+    # Commands that save an item's path or file records without waiting for disk access
+    REFRESH_COMMANDS: Sequence[str] = ()
+    # The endpoint and query field that list one item's file records
+    FILE_RECORDS: Optional[Tuple[str, str]] = None
     """Improved base class with better error handling"""
 
     api_version = "v3"  # Override in subclasses (e.g. LidarrClient uses "v1")
@@ -380,8 +396,9 @@ class BaseARRClient:
         names: Sequence[str],
         label: str = "",
         ignore_ids: Optional[Set[int]] = None,
+        require_success: bool = True,
     ) -> bool:
-        """Poll until none of `names` is queued or running, skipping `ignore_ids`. False on a failure, a timeout or an unreadable command list."""
+        """Poll until none of `names` is queued or running, skipping `ignore_ids`. False on a timeout, an unreadable command list or (with `require_success`) a failure."""
         tag = f"[{label}] " if label else ""
         who = self.instance_name or "instance"
         deadline = time.monotonic() + COMMAND_RUN_TIMEOUT_SECONDS
@@ -405,7 +422,7 @@ class BaseARRClient:
             if current is not None and not any(
                 c.get("status") in ("queued", "started") for c in current
             ):
-                if failed:
+                if failed and require_success:
                     first = next(iter(failed.values()))
                     self.logger.warning(
                         f"{tag}{first.get('name')} on {who} ended '{first.get('status')}'."
@@ -425,6 +442,90 @@ class BaseARRClient:
                 )
                 return False
             time.sleep(COMMAND_POLL_SECONDS)
+
+    def wait_for_refreshes(self, label: str = "") -> bool:
+        """Poll until no refresh or rescan is queued or running, however each one ended."""
+        return self.wait_for_commands_to_finish(
+            self.REFRESH_COMMANDS, label, require_success=False
+        )
+
+    def refresh_and_wait(self, media_ids: List[int]) -> bool:
+        """Refresh `media_ids`; True only when the refresh completed."""
+        response = self.refresh_items(media_ids)
+        return bool(
+            isinstance(response, dict)
+            and "id" in response
+            and self.wait_for_command(response["id"])
+        )
+
+    def _read_or_none(
+        self,
+        endpoint: str,
+        params: Optional[dict] = None,
+        threadsafe: bool = False,
+        missing: Any = None,
+    ) -> Any:
+        """GET `endpoint`; `missing` when the *arr says it isn't there (404), None when it can't be read."""
+        try:
+            return self._requester(threadsafe)(
+                endpoint, headers=self.headers, params=params
+            )
+        except ARRPermanentError:
+            return missing
+        except ARRAuthenticationError:
+            return None
+
+    def get_media_files(
+        self, folder: str, threadsafe: bool = False
+    ) -> Optional[Set[str]]:
+        """The media files the *arr sees under `folder`, relative to it; None when unreadable."""
+        endpoint = f"{self.api_base}/filesystem/mediafiles"
+        response = self._read_or_none(
+            endpoint, params={"path": folder}, threadsafe=threadsafe, missing=[]
+        )
+        if not isinstance(response, list):
+            return None
+        # Radarr and Sonarr give relativePath; Lidarr gives only the full path
+        names = (
+            relative_to(f.get("relativePath") or f.get("path") or "", folder)
+            for f in response
+            if isinstance(f, dict)
+        )
+        return {name for name in names if name}
+
+    def list_folders(self, path: str) -> Optional[Set[str]]:
+        """The names of the folders directly inside `path`; None when unreadable."""
+        endpoint = f"{self.api_base}/filesystem"
+        response = self._read_or_none(endpoint, params={"path": path.rstrip("/") + "/"})
+        directories = (
+            response.get("directories") if isinstance(response, dict) else None
+        )
+        if not isinstance(directories, list):
+            return None
+        return {
+            d["name"]
+            for d in directories
+            if isinstance(d, dict) and isinstance(d.get("name"), str)
+        }
+
+    def get_file_records(
+        self, media_id: int, folder: str, threadsafe: bool = False
+    ) -> Optional[Dict[int, str]]:
+        """The *arr's file records for `media_id` as {file id: path relative to `folder`}; None when unreadable."""
+        endpoint, field = self.FILE_RECORDS
+        response = self._read_or_none(
+            f"{self.api_base}/{endpoint}",
+            params={field: media_id},
+            threadsafe=threadsafe,
+            missing=[],
+        )
+        if not isinstance(response, list):
+            return None
+        return {
+            r["id"]: relative_to(r.get("relativePath") or r.get("path") or "", folder)
+            for r in response
+            if isinstance(r, dict) and "id" in r
+        }
 
     def create_tag(self, tag: str) -> int:
         """
@@ -729,7 +830,7 @@ class BaseARRClient:
                 raise
 
             except Exception as e:
-                if not self.retry_handler.should_retry(attempt, e):
+                if not self.retry_handler.should_retry(attempt, e, method):
                     self._log_request_failure(
                         method,
                         endpoint,
@@ -903,6 +1004,8 @@ class RadarrClient(BaseARRClient):
 
     RENAME_COMMAND = "RenameMovie"
     FOLDER_MOVE_COMMAND = "BulkMoveMovie"
+    REFRESH_COMMANDS = ("RefreshMovie", "RescanMovie")
+    FILE_RECORDS = ("moviefile", "movieId")
 
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 6  # movieFileDeleted
@@ -1040,7 +1143,7 @@ class RadarrClient(BaseARRClient):
             Any: API response.
         """
         endpoint = f"{self.api_base}/rename?movieId={media_id}"
-        return self._requester(threadsafe)(endpoint, headers=self.headers)
+        return self._read_or_none(endpoint, threadsafe=threadsafe, missing=[])
 
     def rename_media(self, media_ids: List[int]) -> Any:
         """
@@ -1090,6 +1193,19 @@ class RadarrClient(BaseARRClient):
         self.logger.debug(f"Refresh payload: {payload}")
         endpoint = f"{self.api_base}/command"
         return self.make_post_request(endpoint, headers=self.headers, json=payload)
+
+    def get_expected_folder(
+        self, item: Dict[str, Any], threadsafe: bool = False
+    ) -> Optional[str]:
+        """The folder name Radarr's naming format gives the movie; "" when it has none, None when unreadable."""
+        endpoint = f"{self.api_base}/movie/{item['media_id']}/folder"
+        response = self._read_or_none(
+            endpoint, threadsafe=threadsafe, missing={"folder": ""}
+        )
+        if not isinstance(response, dict):
+            return None
+        folder = response.get("folder")
+        return folder if isinstance(folder, str) else ""
 
     def refresh_media(self) -> Any:
         """
@@ -1236,6 +1352,8 @@ class SonarrClient(BaseARRClient):
 
     RENAME_COMMAND = "RenameSeries"
     FOLDER_MOVE_COMMAND = "BulkMoveSeries"
+    REFRESH_COMMANDS = ("RefreshSeries", "RescanSeries")
+    FILE_RECORDS = ("episodefile", "seriesId")
 
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 5  # episodeFileDeleted
@@ -1370,7 +1488,7 @@ class SonarrClient(BaseARRClient):
             Any: API response.
         """
         endpoint = f"{self.api_base}/rename?seriesId={media_id}"
-        return self._requester(threadsafe)(endpoint, headers=self.headers)
+        return self._read_or_none(endpoint, threadsafe=threadsafe, missing=[])
 
     def rename_media(self, media_ids: List[int]) -> Any:
         """
@@ -1420,6 +1538,19 @@ class SonarrClient(BaseARRClient):
         self.logger.debug(f"Refresh payload: {payload}")
         endpoint = f"{self.api_base}/command"
         return self.make_post_request(endpoint, headers=self.headers, json=payload)
+
+    def get_expected_folder(
+        self, item: Dict[str, Any], threadsafe: bool = False
+    ) -> Optional[str]:
+        """The folder name Sonarr's naming format gives the series; "" when it has none, None when unreadable."""
+        endpoint = f"{self.api_base}/series/{item['media_id']}/folder"
+        response = self._read_or_none(
+            endpoint, threadsafe=threadsafe, missing={"folder": ""}
+        )
+        if not isinstance(response, dict):
+            return None
+        folder = response.get("folder")
+        return folder if isinstance(folder, str) else ""
 
     def refresh_media(self) -> Any:
         """
@@ -1758,8 +1889,11 @@ class SonarrClient(BaseARRClient):
 class LidarrClient(BaseARRClient):
     """Client for interacting with Lidarr API (uses API v1)."""
 
-    RENAME_COMMAND = "RenameFiles"
+    RENAME_COMMAND = "RenameArtist"
     FOLDER_MOVE_COMMAND = "BulkMoveArtist"
+    # RescanFolders takes disk access, so the queue already keeps it off renames and moves
+    REFRESH_COMMANDS = ("RefreshArtist",)
+    FILE_RECORDS = ("trackfile", "artistId")
 
     api_version = "v1"
     # 8 is the album-level import; 3 is trackFileImported, which fires per
@@ -1980,6 +2114,41 @@ class LidarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/command"
         return self.make_post_request(endpoint, json=payload)
 
+    def refresh_and_wait(self, media_ids: List[int]) -> bool:
+        """Refresh `media_ids`, then wait for the folder rescan that refresh queues."""
+        # The refresh completes before the RescanFolders it queues has run
+        earlier_scans = self.command_ids("RescanFolders")
+        if earlier_scans is None or not super().refresh_and_wait(media_ids):
+            return False
+        return self.wait_for_commands_to_finish(
+            ["RescanFolders"], "rescan", ignore_ids=earlier_scans
+        )
+
+    def get_expected_folder(
+        self, item: Dict[str, Any], threadsafe: bool = False
+    ) -> Optional[str]:
+        """The folder name Lidarr's naming format gives the artist; "" when it has none, None when unreadable."""
+        # Lidarr has no artist folder endpoint; a lidarr: lookup returns the library artist with its folder
+        mbid = item.get("musicbrainz_id")
+        if not mbid:
+            return ""
+        endpoint = f"{self.api_base}/artist/lookup"
+        response = self._read_or_none(
+            endpoint,
+            params={"term": f"lidarr:{mbid}"},
+            threadsafe=threadsafe,
+            missing=[],
+        )
+        if not isinstance(response, list):
+            return None
+        matches = [
+            a
+            for a in response
+            if isinstance(a, dict) and a.get("id") == item["media_id"]
+        ]
+        folder = matches[0].get("folder") if len(matches) == 1 else ""
+        return folder if isinstance(folder, str) else ""
+
     def delete_media(
         self,
         media_id: int,
@@ -2021,17 +2190,11 @@ class LidarrClient(BaseARRClient):
                 ``existingPath``/``newPath``.
         """
         endpoint = f"{self.api_base}/rename?artistId={media_id}"
-        return self._requester(threadsafe)(endpoint, headers=self.headers)
+        return self._read_or_none(endpoint, threadsafe=threadsafe, missing=[])
 
     def rename_media(self, media_ids: List[int]) -> Any:
         """
         Trigger renaming of artists' track files.
-
-        Unlike Radarr/Sonarr (which rename by movie/series ID via
-        ``RenameMovie``/``RenameSeries``), Lidarr's ``RenameFiles`` command is
-        per-artist and takes the explicit track-file IDs to rename. We derive
-        those from the rename preview, so passing the same artist-ID list the
-        renameinatorr loop already builds works transparently.
 
         This renames the *library* copy to the existing naming scheme; it never
         edits tags/content and respects hardlinks (the seeded download copy is a
@@ -2040,29 +2203,12 @@ class LidarrClient(BaseARRClient):
         Args:
             media_ids (List[int]): Artist IDs.
         Returns:
-            Any: API response from the last command issued, or None.
+            Any: API response.
         """
+        payload = {"name": "RenameArtist", "artistIds": media_ids}
+        self.logger.debug(f"Rename payload: {payload}")
         endpoint = f"{self.api_base}/command"
-        result = None
-        for artist_id in media_ids:
-            preview = self.get_rename_list(artist_id) or []
-            file_ids = sorted(
-                {
-                    item.get("trackFileId")
-                    for item in preview
-                    if item.get("trackFileId") is not None
-                }
-            )
-            if not file_ids:
-                continue
-            payload = {
-                "name": "RenameFiles",
-                "artistId": artist_id,
-                "files": file_ids,
-            }
-            self.logger.debug(f"Rename payload: {payload}")
-            result = self.make_post_request(endpoint, json=payload)
-        return result
+        return self.make_post_request(endpoint, json=payload)
 
     def rename_folders(self, media_ids: List[int], root_folder_path: str) -> Any:
         """
@@ -2301,6 +2447,7 @@ def normalize_arr_media(
             "root_folder": item.get("rootFolderPath"),
             "quality_profile": item.get("qualityProfileId"),
             "normalized_title": normalize_titles(title_val or ""),
+            "path": item.get("path"),
             "path_name": os.path.basename(item.get("path", "") or ""),
             "original_title": item.get("originalTitle"),
             "secondary_year": item.get("secondaryYear"),
@@ -2389,6 +2536,7 @@ def normalize_arr_media(
             "quality_profile": item.get("qualityProfileId")
             or item.get("metadataProfileId"),
             "normalized_title": normalize_titles(artist_name),
+            "path": item.get("path"),
             "path_name": os.path.basename(item.get("path", "") or ""),
             "original_title": None,
             "secondary_year": None,
@@ -2528,6 +2676,7 @@ def normalize_arr_media(
             "root_folder": item.get("rootFolderPath"),
             "quality_profile": item.get("qualityProfileId"),
             "normalized_title": normalize_titles(title_val or ""),
+            "path": item.get("path"),
             "path_name": os.path.basename(item.get("path", "") or ""),
             "original_title": item.get("originalTitle"),
             "secondary_year": item.get("secondaryYear"),
