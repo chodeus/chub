@@ -955,6 +955,8 @@ const CORE_SETTINGS_SCHEMA = [
                         key: 'season_monitored_threshold',
                         label: 'Season Monitored Threshold',
                         type: 'float',
+                        min: 0,
+                        max: 100,
                         required: true,
                         conditional: {
                             field: 'instance',

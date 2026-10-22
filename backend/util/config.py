@@ -431,6 +431,12 @@ class UpgradinatorrInstance(BaseModel):
     # suppress. Past the cap a forgotten row stops blocking the item forever.
     queue_block_hours: int = 72
 
+    @field_validator("season_monitored_threshold")
+    @classmethod
+    def _clamp_season_threshold(cls, value: Optional[float]) -> Optional[float]:
+        """A 0–100 percentage; clamped, not rejected, so an old value can't block startup."""
+        return None if value is None else min(max(value, 0.0), 100.0)
+
 
 class UpgradinatorrConfig(BaseModel):
     log_level: str = "info"

@@ -6,6 +6,8 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import backend.util.job_processor as jp  # noqa: E402
@@ -67,9 +69,6 @@ def test_orchestrator_immediate_skips_disabled():
         res = orch.run_module_immediate("nohl", "web")
     assert res["success"] is False
     assert res["disabled"] is True
-
-
-# --- job processor: the gate every queued run passes, whatever enqueued it ---
 
 
 def _config_with_disabled(monkeypatch, *names):
@@ -144,3 +143,28 @@ def test_webhook_job_skips_when_config_unreadable(monkeypatch):
     res = jp.process_job(_webhook_job(), StubLogger())
     assert res["disabled"] is True
     assert built == []
+
+
+@pytest.mark.parametrize(
+    "job_type, handler, module",
+    [
+        ("poster_rename", "_process_poster_rename_job", "poster_renamerr"),
+        ("upload_posters", "_process_upload_posters_job", "poster_renamerr"),
+        ("labelarr_bulk_sync", "_process_labelarr_bulk_sync_job", "labelarr"),
+    ],
+)
+@pytest.mark.parametrize("disabled", [True, False])
+def test_module_work_jobs_follow_their_module(
+    monkeypatch, job_type, handler, module, disabled
+):
+    _config_with_disabled(monkeypatch, *([module] if disabled else []))
+    ran = []
+    monkeypatch.setattr(
+        jp, handler, lambda *a, **k: ran.append(True) or {"success": True}
+    )
+    res = jp.process_job({"id": 14, "type": job_type, "payload": "{}"}, StubLogger())
+    if disabled:
+        assert res["disabled"] is True
+        assert ran == []
+    else:
+        assert ran == [True]

@@ -78,6 +78,7 @@ def test_console_log_level_decoupled_from_file_level(tmp_path, monkeypatch):
 def test_plain_logger_writes_heartbeat_lines(tmp_path, monkeypatch):
     """CLI runs hand modules a plain Logger; heartbeat() must not raise there."""
     monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    monkeypatch.delenv("LOG_FILE", raising=False)
     name = "ut_modlog_heartbeat"
     log_file = tmp_path / name / f"{name}.log"
     try:

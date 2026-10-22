@@ -101,6 +101,7 @@ def test_logs_api_reads_where_the_logger_writes(bare_metal, tmp_path, monkeypatc
 
     log_dir = tmp_path / "custom-logs"
     monkeypatch.setenv("LOG_DIR", str(log_dir))
+    monkeypatch.delenv("LOG_FILE", raising=False)
     name = "poster_renamerr"
     log_file = log_dir / name / f"{name}.log"
     try:

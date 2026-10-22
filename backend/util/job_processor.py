@@ -59,6 +59,15 @@ def unregister_cancel_event(job_id: int) -> None:
         _cancel_registry.pop(job_id, None)
 
 
+# Job types that do a module's work; module_run names its module in the payload.
+_JOB_TYPE_MODULE = {
+    "webhook": "poster_renamerr",
+    "poster_rename": "poster_renamerr",
+    "upload_posters": "poster_renamerr",
+    "labelarr_bulk_sync": "labelarr",
+}
+
+
 def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any]:
     """
     Route jobs to appropriate handlers.
@@ -81,6 +90,13 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
     start_time = time.time()
 
     try:
+        module_name = (
+            payload.get("module_name")
+            if job_type == "module_run"
+            else _JOB_TYPE_MODULE.get(job_type)
+        )
+        if module_name and (skipped := _skip_if_disabled(module_name, job_id, log)):
+            return skipped
         if job_type == "webhook":
             return _process_webhook_job(payload, logger, job_id, db)
         elif job_type == "poster_rename":
@@ -152,8 +168,6 @@ def _process_webhook_job(
         dict: Processing result
     """
     log = logger.get_adapter("WEBHOOK_PROCESSOR")
-    if skipped := _skip_if_disabled("poster_renamerr", job_id, log):
-        return skipped
     log.info(f"[JOB:{job_id}] Starting webhook processing")
 
     try:
@@ -839,8 +853,6 @@ def _process_module_run_job(
 
     module_name = payload.get("module_name")
     origin = payload.get("origin", "job")
-    if module_name and (skipped := _skip_if_disabled(module_name, job_id, log)):
-        return skipped
     # The immediate flag was intended to potentially adjust behavior (like priority or timeout), but it's not currently used in the job processing logic.
     # immediate = payload.get("immediate", False)
 
