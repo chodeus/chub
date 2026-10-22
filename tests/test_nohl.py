@@ -283,15 +283,7 @@ def test_sonarr_search_limit_counts_seasons_not_series():
 
 
 class _SearchingRadarr(RadarrClient):
-    """A RadarrClient with only its HTTP calls faked."""
-
-    def __init__(self, refresh_status):
-        self.url = "http://radarr.test"
-        self.headers = {}
-        self.logger = CapturingLogger()
-        self.instance_name = "radarr"
-        self.calls = []
-        self._status = refresh_status
+    """A RadarrClient with only its HTTP calls faked; build it with `_searching_radarr`."""
 
     def make_post_request(self, endpoint, headers=None, json=None):
         self.calls.append((json["name"], json.get("movieIds")))
@@ -307,9 +299,21 @@ class _SearchingRadarr(RadarrClient):
         self.calls.append(("search", media_ids))
 
 
+def _searching_radarr(refresh_status):
+    # Skips RadarrClient.__init__, which connects to a live Radarr
+    app = _SearchingRadarr.__new__(_SearchingRadarr)
+    app.url = "http://radarr.test"
+    app.headers = {}
+    app.logger = CapturingLogger()
+    app.instance_name = "radarr"
+    app.calls = []
+    app._status = refresh_status
+    return app
+
+
 @pytest.mark.parametrize("status, warned", [("completed", False), ("failed", True)])
 def test_a_movie_is_refreshed_then_searched_even_when_the_refresh_fails(status, warned):
-    app = _SearchingRadarr(status)
+    app = _searching_radarr(status)
     logger = CapturingLogger()
     item = {"title": "Movie", "year": 2024, "media_id": 7, "file_ids": [3]}
 
