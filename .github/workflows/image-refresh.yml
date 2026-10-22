@@ -20,24 +20,13 @@ jobs:
       actions: write
     # Pin to an immutable SHA, not @main: a commit to chodeus-ops main would
     # otherwise run in every consumer repo with its GITHUB_TOKEN (actions: write).
-    uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@c36f1a3c7e8108f86b3be0e19c5e0d08502f681f # main
+    uses: chodeus/chodeus-ops/.github/workflows/image-refresh.yml@cbd544d21103cfe854c8e0ec717ee2be4f097ad7 # main
     with:
       # Must accept workflow_dispatch. A cached build must also bust the upgrade layer
       # with a per-build ARG it references, or the rebuild ships the same packages.
       workflow: codeql-lint.yml
       # Only the default branch publishes :latest, so a manual run from another branch still targets it.
       ref: ${{ github.event.repository.default_branch }}
-
-  notify:
-    # Only a dispatch or a failure is worth a message; a clean daily check is not.
-    if: always() && (failure() || needs.refresh.outputs.stale == 'true')
-    needs: refresh
-    permissions: {}
-    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@c36f1a3c7e8108f86b3be0e19c5e0d08502f681f # main
-    with:
-      event_type: workflow
-      status: ${{ needs.refresh.result == 'success' && 'info' || 'failure' }}
-      title: ${{ needs.refresh.result == 'success' && '♻️ Image refresh dispatched' || '❌ Image refresh failed' }}
-      description: ${{ needs.refresh.result == 'success' && format('{0} pending package upgrade(s); the publish workflow was dispatched.', needs.refresh.outputs.pending) || 'The package check or the dispatch failed; see the run.' }}
+    # Posts the package changes, or a failure; a clean check posts nothing.
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

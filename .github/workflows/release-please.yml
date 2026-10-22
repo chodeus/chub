@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   release:
-    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@6e15484f5348c9862408046b962fa7083ceeffeb # main
+    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@cbd544d21103cfe854c8e0ec717ee2be4f097ad7 # main
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
