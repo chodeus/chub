@@ -8,7 +8,7 @@ export const CardImage = React.memo(
         const [hasError, setHasError] = useState(false);
         const [prevSrc, setPrevSrc] = useState(src);
 
-        // Adjust state during render rather than in an effect (see EditMediaModal):
+        // Adjust state during render rather than in an effect:
         // without this, one failed image leaves the fallback showing for every later src.
         if (src !== prevSrc) {
             setPrevSrc(src);

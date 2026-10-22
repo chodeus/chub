@@ -56,18 +56,6 @@ export const mediaAPI = {
         });
     },
 
-    /** Update a media item's metadata. */
-    updateMediaMetadata: (mediaId, metadata) => {
-        return apiCore.put(`/media/${mediaId}/metadata`, metadata);
-    },
-
-    /** Metadata-edit audit trail for one item; the server caps `limit` at 500. */
-    fetchMediaHistory: (mediaId, limit = 50) => {
-        return apiCore.get(`/media/${mediaId}/history?limit=${limit}`, {
-            useCache: false,
-        });
-    },
-
     /** Delete a media item. `options.deleteFiles` also removes it from disk. */
     deleteMediaItem: (mediaId, options = {}) => {
         return apiCore.delete(`/media/${mediaId}`, {
