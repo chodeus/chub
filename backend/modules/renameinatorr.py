@@ -31,13 +31,15 @@ from backend.util.rename_checks import (
 _DONE = "done"
 _SKIPPED = "skipped"
 _UNFINISHED = "unfinished"
+# Past 4 the *arr gets slower: each request's database queries wait on SQLite locks in the *arr
+_THREADS = 4
 
 
 def _in_parallel(fn: Callable[[Any], Any], items: List[Any]) -> List[Any]:
-    """`fn` over `items` on up to 10 threads, results in order; `fn` must use threadsafe reads."""
+    """`fn` over `items` on up to _THREADS threads, results in order; `fn` must use threadsafe reads."""
     if not items:
         return []
-    with ThreadPoolExecutor(max_workers=min(10, len(items))) as pool:
+    with ThreadPoolExecutor(max_workers=min(_THREADS, len(items))) as pool:
         return list(pool.map(fn, items))
 
 

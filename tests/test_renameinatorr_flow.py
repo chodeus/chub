@@ -2,9 +2,10 @@
 
 import posixpath
 import threading
+import time
 from types import SimpleNamespace
 
-from backend.modules.renameinatorr import Renameinatorr
+from backend.modules.renameinatorr import Renameinatorr, _in_parallel
 
 ROOT = "/data/media/tv"
 
@@ -593,3 +594,21 @@ def test_files_unreadable_after_the_change_leave_the_item_untagged():
     ]
     assert stopped is not None
     assert _sent(app, "tag") == [[2]]
+
+
+def test_reads_run_on_at_most_four_threads_in_order():
+    lock = threading.Lock()
+    running = peak = 0
+
+    def read(n):
+        nonlocal running, peak
+        with lock:
+            running += 1
+            peak = max(peak, running)
+        time.sleep(0.05)
+        with lock:
+            running -= 1
+        return n * 2
+
+    assert _in_parallel(read, list(range(20))) == [n * 2 for n in range(20)]
+    assert peak == 4
