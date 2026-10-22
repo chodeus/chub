@@ -6,7 +6,8 @@ from backend.util.config import UpgradinatorrInstance
 
 
 @pytest.mark.parametrize(
-    "given, expected", [(150, 100.0), (-5, 0.0), (50, 50), (0.5, 0.5), (None, None)]
+    "given, expected",
+    [(150, 100.0), (-5, 0.0), (50, 50), (0.5, 0.5), (None, None), (float("nan"), None)],
 )
 def test_threshold_is_clamped_not_rejected(given, expected):
     instance = UpgradinatorrInstance(

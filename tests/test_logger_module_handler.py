@@ -86,7 +86,8 @@ def test_plain_logger_writes_heartbeat_lines(tmp_path, monkeypatch):
         lg.heartbeat("Merged %d / %d assets", 3, 10)
         for h in lg._logger.handlers:
             h.flush()
-        assert "[hb] Merged 3 / 10 assets" in log_file.read_text()
+        log_text = log_file.read_text()
+        assert "[hb] Merged 3 / 10 assets" in log_text
     finally:
         mod_logger = logging.getLogger(name)
         for h in list(mod_logger.handlers):

@@ -1,5 +1,6 @@
 import functools
 import logging
+import math
 import os
 import sys
 import tempfile
@@ -435,7 +436,9 @@ class UpgradinatorrInstance(BaseModel):
     @classmethod
     def _clamp_season_threshold(cls, value: Optional[float]) -> Optional[float]:
         """A 0–100 percentage; clamped, not rejected, so an old value can't block startup."""
-        return None if value is None else min(max(value, 0.0), 100.0)
+        if value is None or math.isnan(value):
+            return None
+        return min(max(value, 0.0), 100.0)
 
 
 class UpgradinatorrConfig(BaseModel):
