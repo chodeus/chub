@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.util.arr import (
+    ARR_READ_THREADS,
     COMMAND_COMPLETED,
     COMMAND_FAILED,
     COMMAND_TIMEOUT,
@@ -1229,7 +1230,7 @@ class Upgradinatorr(ChubModule):
         def fetch(page: int):
             return page, fetch_fn(page=page, page_size=page_size, threadsafe=True)
 
-        workers = min(8, len(remaining_pages))
+        workers = min(ARR_READ_THREADS, len(remaining_pages))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(fetch, p): p for p in remaining_pages}
             for future in as_completed(futures):
