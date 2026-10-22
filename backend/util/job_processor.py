@@ -120,6 +120,22 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
         log.debug(f"[JOB:{job_id}] Completed in {duration:.2f}s")
 
 
+def _skip_if_disabled(module_name: str, job_id: int, log) -> Optional[Dict[str, Any]]:
+    """A skip result when the module is switched off on the Modules page, else None."""
+    from backend.util.config import module_is_disabled
+
+    if not module_is_disabled(module_name):
+        return None
+    log.info(f"[JOB:{job_id}] {module_name} is disabled — skipping this job")
+    return {
+        "status": 200,
+        "success": True,
+        "disabled": True,
+        "message": f"Skipped — {module_name} is disabled",
+        "data": {"module": module_name},
+    }
+
+
 def _process_webhook_job(
     payload: Dict[str, Any], logger, job_id: int, db: ChubDB = None
 ) -> Dict[str, Any]:
@@ -136,6 +152,8 @@ def _process_webhook_job(
         dict: Processing result
     """
     log = logger.get_adapter("WEBHOOK_PROCESSOR")
+    if skipped := _skip_if_disabled("poster_renamerr", job_id, log):
+        return skipped
     log.info(f"[JOB:{job_id}] Starting webhook processing")
 
     try:
@@ -821,6 +839,8 @@ def _process_module_run_job(
 
     module_name = payload.get("module_name")
     origin = payload.get("origin", "job")
+    if module_name and (skipped := _skip_if_disabled(module_name, job_id, log)):
+        return skipped
     # The immediate flag was intended to potentially adjust behavior (like priority or timeout), but it's not currently used in the job processing logic.
     # immediate = payload.get("immediate", False)
 

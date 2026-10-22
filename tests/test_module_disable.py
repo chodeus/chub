@@ -8,7 +8,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backend.util.config import module_is_disabled  # noqa: E402
+import backend.util.job_processor as jp  # noqa: E402
+from backend.util.config import ChubConfig, module_is_disabled  # noqa: E402
 from backend.util.module_orchestrator import ModuleOrchestrator  # noqa: E402
 
 
@@ -66,3 +67,80 @@ def test_orchestrator_immediate_skips_disabled():
         res = orch.run_module_immediate("nohl", "web")
     assert res["success"] is False
     assert res["disabled"] is True
+
+
+# --- job processor: the gate every queued run passes, whatever enqueued it ---
+
+
+def _config_with_disabled(monkeypatch, *names):
+    cfg = ChubConfig(general={"disabled_modules": list(names)})
+    monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: cfg)
+
+
+def _webhook_job():
+    return {"id": 11, "type": "webhook", "payload": '{"webhook_data": {}}'}
+
+
+def _track_webhook_processor(monkeypatch):
+    built = []
+
+    class _Processor:
+        def __init__(self, *_a, **_kw):
+            built.append(True)
+            raise RuntimeError("stop after the gate")
+
+    monkeypatch.setattr("backend.util.webhook_processor.WebhookProcessor", _Processor)
+    return built
+
+
+def test_webhook_job_skips_when_poster_renamerr_disabled(monkeypatch):
+    _config_with_disabled(monkeypatch, "poster_renamerr")
+    built = _track_webhook_processor(monkeypatch)
+    res = jp.process_job(_webhook_job(), StubLogger())
+    assert res["success"] is True
+    assert res["disabled"] is True
+    assert built == []
+
+
+def test_webhook_job_runs_when_poster_renamerr_enabled(monkeypatch):
+    _config_with_disabled(monkeypatch, "nohl")
+    built = _track_webhook_processor(monkeypatch)
+    res = jp.process_job(_webhook_job(), StubLogger())
+    assert built == [True]
+    assert "disabled" not in res
+
+
+def test_module_run_job_skips_disabled_module(monkeypatch):
+    _config_with_disabled(monkeypatch, "unmatched_assets")
+    job = {
+        "id": 12,
+        "type": "module_run",
+        "payload": '{"module_name": "unmatched_assets"}',
+    }
+    res = jp.process_job(job, StubLogger())
+    assert res["success"] is True
+    assert res["disabled"] is True
+
+
+def test_module_run_job_passes_gate_when_enabled(monkeypatch):
+    _config_with_disabled(monkeypatch)
+    job = {
+        "id": 13,
+        "type": "module_run",
+        "payload": '{"module_name": "no_such_module"}',
+    }
+    res = jp.process_job(job, StubLogger())
+    assert "disabled" not in res
+    assert res["success"] is False
+
+
+def test_webhook_job_skips_when_config_unreadable(monkeypatch):
+    def boom(*_a, **_kw):
+        """Stand-in load_config that fails."""
+        raise RuntimeError("config.yml is unparseable")
+
+    monkeypatch.setattr("backend.util.config.load_config", boom)
+    built = _track_webhook_processor(monkeypatch)
+    res = jp.process_job(_webhook_job(), StubLogger())
+    assert res["disabled"] is True
+    assert built == []
