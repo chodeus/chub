@@ -106,17 +106,17 @@ docker run -d \
 
 | Variable | Default | Description |
 |---|---|---|
-| `PUID` | `100` | User ID for file ownership inside the container |
-| `PGID` | `99` | Group ID for file ownership |
+| `PUID` | `99` | User ID for file ownership inside the container |
+| `PGID` | `100` | Group ID for file ownership |
 | `UMASK` | `002` | File-creation umask |
 | `TZ` | `America/Los_Angeles` | Container timezone |
 | `CONFIG_DIR` | `/config` | Config + database directory |
 | `LOG_DIR` | `/config/logs` | Log file directory |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Listen port |
-| `DOCKER_ENV` | `false` | Set to `true` in containers; influences logging banner |
+| `DOCKER_ENV` | `true` | Set by the image; selects the container paths and logging banner |
 | `BRANCH` | `master` | Baked at build time. With `BUILD_NUMBER` it forms the version string (`2.47.0.main1550`) |
-| `BUILD_NUMBER` | *(unset)* | Commit count at build time. The update check compares it against the commit count on GitHub — **not** decoration; removing it disables update notifications |
+| `BUILD_NUMBER` | *(unset)* | Commit count at build time. The update check compares it with the `BUILD_NUMBER` of the newest published image — **not** decoration; removing it disables update notifications |
 
 ---
 
