@@ -61,10 +61,11 @@ AUTH_EXEMPT_PATHS = (
     # /unmatched/status stay behind JWT auth.
     "/api/webhooks/poster/add",
     "/api/webhooks/unmatched/process",
+    # Exact path: /api/version/check makes CHUB fetch from the registry.
+    "/api/version",
 )
 AUTH_EXEMPT_PREFIXES = (
     "/api/health",
-    "/api/version",
     "/assets/",
     "/icons/",
     "/img/",
