@@ -100,6 +100,18 @@ the ignore filter after the cycle reset, so ignored items are never touched.
 ignores the per-run `count` limit and processes the whole untagged set at once. CHUB
 honours the count throttle in this case too.
 
+🟠 **A folder rename can merge two folders.** DAPS sends every item to the *arr's bulk
+move, which merges into a folder that already has the new name and overwrites files with
+the same name. CHUB asks the *arr for each item's folder name first and leaves the folder
+alone when the name is taken, the folder is nested below its root folder, or the new name
+would drop its year, an id or its title. A dry run lists the folder renames too.
+
+🟠 **A refresh can drop the records of renamed files.** DAPS sends its refresh straight
+after the renames and moves, without waiting for them, so the refresh's scan can run while
+files are still being renamed and drop their records. CHUB waits for the renames, the
+moves and any refresh already running, checks every file afterwards, and refreshes only
+the items whose records no longer match — never while a file is missing.
+
 ---
 
 ## labelarr (Plex labels ⇆ *arr tags)

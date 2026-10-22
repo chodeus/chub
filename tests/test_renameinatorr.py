@@ -3,6 +3,7 @@
 from copy import deepcopy
 from types import SimpleNamespace
 
+import pytest
 
 from backend.modules.renameinatorr import Renameinatorr
 
@@ -83,11 +84,11 @@ def test_get_chunks_size_larger_than_list():
 def test_untagged_chunks_filters_tagged_items():
     items = [
         {"id": 1, "tags": []},
-        {"id": 2, "tags": [99]},
-        {"id": 3, "tags": [1, 2]},
+        {"id": 2, "tags": ["renamed"]},
+        {"id": 3, "tags": ["other", "more"]},
     ]
     chunks = Renameinatorr.get_untagged_chunks_for_run(
-        items, 99, 10, False, StubLogger()
+        items, {"renamed"}, 10, False, StubLogger()
     )
     # Only items 1 and 3 are untagged
     assert len(chunks) == 1
@@ -98,11 +99,11 @@ def test_untagged_chunks_filters_tagged_items():
 
 def test_untagged_chunks_returns_empty_when_all_tagged():
     items = [
-        {"id": 1, "tags": [99]},
-        {"id": 2, "tags": [99]},
+        {"id": 1, "tags": ["Renamed"]},
+        {"id": 2, "tags": ["renamed"]},
     ]
     chunks = Renameinatorr.get_untagged_chunks_for_run(
-        items, 99, 10, False, StubLogger()
+        items, {"renamed"}, 10, False, StubLogger()
     )
     assert chunks == []
 
@@ -111,7 +112,7 @@ def test_untagged_chunks_single_run_mode():
     items = [{"id": i, "tags": []} for i in range(50)]
     # all_in_single_run=True returns a single chunk
     chunks = Renameinatorr.get_untagged_chunks_for_run(
-        items, 99, 10, True, StubLogger()
+        items, {"renamed"}, 10, True, StubLogger()
     )
     assert len(chunks) == 1
     assert len(chunks[0]) == 50
@@ -120,7 +121,7 @@ def test_untagged_chunks_single_run_mode():
 def test_untagged_chunks_batches_when_size_set():
     items = [{"id": i, "tags": []} for i in range(25)]
     chunks = Renameinatorr.get_untagged_chunks_for_run(
-        items, 99, 10, False, StubLogger()
+        items, {"renamed"}, 10, False, StubLogger()
     )
     assert len(chunks) == 3
     assert sum(len(c) for c in chunks) == 25
@@ -191,9 +192,9 @@ def _item(media_id, tags):
 
 def test_ignore_tags_comma_separated_skips_any_match():
     media = [
-        _item(1, [1]),
-        _item(2, [2]),
-        _item(3, [3]),
+        _item(1, ["skip-me"]),
+        _item(2, ["also-this"]),
+        _item(3, ["keep"]),
         _item(4, []),
     ]
     tags = [
@@ -210,7 +211,7 @@ def test_ignore_tags_comma_separated_skips_any_match():
 
 def test_ignore_tags_single_tag_still_works():
     media = [
-        _item(1, [1]),
+        _item(1, ["skip-me"]),
         _item(2, []),
     ]
     tags = [{"id": 1, "label": "skip-me"}]
@@ -261,9 +262,10 @@ class ResetFakeApp:
 
     def remove_tags(self, ids, tag_id):
         self.removed_ids.extend(ids)
+        label = next(t["label"] for t in self._tags if t["id"] == tag_id)
         for item in self._media:
-            if item["media_id"] in ids and tag_id in item["tags"]:
-                item["tags"].remove(tag_id)
+            if item["media_id"] in ids and label in item["tags"]:
+                item["tags"].remove(label)
 
     def add_tags(self, ids, tag_id):
         self.tagged_ids.extend(ids)
@@ -285,7 +287,7 @@ class ResetFakeApp:
         return []
 
 
-def _reset_cfg():
+def _reset_cfg(dry_run=False):
     return SimpleNamespace(
         count=0,
         radarr_count=0,
@@ -293,7 +295,7 @@ def _reset_cfg():
         tag_name="renamed",
         ignore_tags="norename",
         enable_batching=False,
-        dry_run=True,
+        dry_run=dry_run,
         rename_folders=False,
         refresh_before_rename=False,
     )
@@ -306,9 +308,152 @@ def test_ignore_tags_survive_tag_cycle_reset():
     # clears tags and re-fetches the whole library. The ignored item must
     # NOT be swept back into processing on that re-fetch.
     tags = [{"id": 50, "label": "renamed"}, {"id": 1, "label": "norename"}]
-    media = [_item(1, [50]), _item(2, [1])]
+    media = [_item(1, ["renamed"]), _item(2, ["norename"])]
     app = ResetFakeApp(media, tags)
     _run_process_instance(app, _reset_cfg())
     # The 'norename' item (id 2) is never processed; the cleared item is.
     assert 2 not in app.fetched_rename_ids
     assert app.fetched_rename_ids == [1]
+    assert app.removed_ids == [1]
+
+
+def test_a_dry_run_leaves_the_cycle_tags_alone():
+    tags = [{"id": 50, "label": "renamed"}]
+    app = ResetFakeApp([_item(1, ["renamed"]), _item(2, ["renamed"])], tags)
+
+    _run_process_instance(app, _reset_cfg(dry_run=True))
+
+    assert app.removed_ids == []
+    assert sorted(app.fetched_rename_ids) == [1, 2]
+
+
+def test_a_dry_run_does_not_create_a_missing_cycle_tag():
+    app = FakeApp([_item(1, [])], tags=[])
+    cfg = _reset_cfg(dry_run=True)
+
+    _run_process_instance(app, cfg)
+
+    assert app.created_tags == []
+    assert app.fetched_rename_ids == [1]
+
+
+def test_a_tag_with_id_zero_still_cycles():
+    tags = [{"id": 0, "label": "renamed"}]
+    app = ResetFakeApp([_item(1, ["renamed"]), _item(2, [])], tags)
+
+    _run_process_instance(app, _reset_cfg())
+
+    assert app.fetched_rename_ids == [2]
+    assert app.tagged_ids == [2]
+
+
+def test_an_item_whose_tag_label_was_not_looked_up_is_still_ignored():
+    tags = [{"id": 1, "label": "skip-me"}]
+    app = FakeApp([_item(1, ["1"]), _item(2, [])], tags)
+
+    _run_process_instance(app, _ignore_cfg("skip-me"))
+
+    assert app.fetched_rename_ids == [2]
+
+
+def test_lidarr_count_overrides_count_for_lidarr():
+    cfg = SimpleNamespace(count=10, radarr_count=0, sonarr_count=5, lidarr_count=3)
+
+    count = Renameinatorr.get_count_for_instance_type(cfg, "lidarr", StubLogger())
+
+    assert count == 3
+
+
+def test_an_item_carrying_the_cycle_tag_as_its_id_counts_as_tagged():
+    tags = [{"id": 50, "label": "renamed"}]
+    app = ResetFakeApp([_item(1, ["50"]), _item(2, [])], tags)
+
+    _run_process_instance(app, _reset_cfg())
+
+    assert app.fetched_rename_ids == [2]
+
+
+def _reported(title):
+    return {
+        "title": title,
+        "year": 2011,
+        "path_name": title,
+        "new_path_name": None,
+        "file_info": {"a.mkv": "A.mkv"},
+        "held": None,
+        "blocked": None,
+        "problems": [],
+    }
+
+
+class _OutroLogger(StubLogger):
+    def log_outro(self):
+        self.msgs.append(("outro",))
+
+
+@pytest.mark.parametrize(
+    "data, stopped, reported",
+    [
+        ([], "its tags couldn't be read", True),
+        ([_reported("Show")], None, True),
+        ([], None, False),
+    ],
+)
+def test_a_stop_before_any_item_still_reaches_the_report(
+    monkeypatch, data, stopped, reported
+):
+    sent = []
+
+    class _Manager:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def send_notification(self, output):
+            sent.append(output)
+
+    app = SimpleNamespace(connect_status=True, instance_name="Sonarr")
+    monkeypatch.setattr(
+        "backend.modules.renameinatorr.create_arr_client", lambda *_a: app
+    )
+    monkeypatch.setattr("backend.modules.renameinatorr.NotificationManager", _Manager)
+    monkeypatch.setattr(Renameinatorr, "process_instance", lambda *_a: (data, stopped))
+    m = object.__new__(Renameinatorr)
+    m._cancel_event = None
+    m.logger = _OutroLogger()
+    m.config = SimpleNamespace(log_level="info", dry_run=False, instances=["Sonarr"])
+    m.full_config = SimpleNamespace(
+        instances=SimpleNamespace(
+            radarr={}, lidarr={}, sonarr={"Sonarr": SimpleNamespace(url="u", api="k")}
+        )
+    )
+
+    m.run()
+
+    assert bool(sent) is reported
+    if reported:
+        assert sent[0]["Sonarr"]["stopped"] == stopped
+
+
+def test_the_log_lists_each_item_and_the_counts():
+    logger = StubLogger()
+    held = dict(_reported("Held"), file_info={}, held="the new name drops the year")
+    quiet = dict(_reported("Quiet"), file_info={})
+    output = {
+        "sonarr": {
+            "server_name": "sonarr",
+            "data": [_reported("Show"), held, quiet],
+            "stopped": "why",
+        }
+    }
+
+    Renameinatorr.print_output(output, logger)
+
+    lines = [m[1] for m in logger.msgs]
+    assert ("warning", "Stopped on sonarr: why") in [m[:2] for m in logger.msgs]
+    assert "Show (2011)" in lines and "Held (2011)" in lines
+    assert "Quiet (2011)" not in lines
+    assert "\tFolder Held: Held (the new name drops the year)" in lines
+    assert "\t\tOriginal: a.mkv\n\t\tNew: A.mkv\n" in lines
+    summary = next(line for line in lines if "Rename Summary" in line)
+    assert "Total Renamed Items: 1" in summary
+    assert "Folder Renames Held: 1" in summary

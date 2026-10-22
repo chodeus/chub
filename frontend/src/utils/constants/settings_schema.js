@@ -991,10 +991,10 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'instances',
                 section: 'Scope',
                 required: true,
-                instance_types: ['radarr', 'sonarr'],
+                instance_types: ['radarr', 'sonarr', 'lidarr'],
                 // Backend: RenameinatorrConfig.instances is List[str].
                 valueFormat: 'string',
-                description: 'List of Radarr and Sonarr instances to rename.',
+                description: 'List of Radarr, Sonarr and Lidarr instances to rename.',
             },
             {
                 key: 'dry_run',
@@ -1045,6 +1045,13 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'number',
                 section: 'Rename behaviour',
                 description: 'Number of Sonarr items to process per run.',
+            },
+            {
+                key: 'lidarr_count',
+                label: 'Lidarr Count',
+                type: 'number',
+                section: 'Rename behaviour',
+                description: 'Number of Lidarr artists to process per run.',
             },
             {
                 key: 'tag_name',
