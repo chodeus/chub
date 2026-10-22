@@ -137,12 +137,14 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
 
 
 def _skip_if_disabled(module_name: str, job_id: int, log) -> Optional[Dict[str, Any]]:
-    """A skip result when the module is switched off on the Modules page, else None."""
+    """A skip result when the module is switched off, or config can't be read; else None."""
     from backend.util.config import module_is_disabled
 
     if not module_is_disabled(module_name):
         return None
-    log.info(f"[JOB:{job_id}] {module_name} is disabled — skipping this job")
+    log.info(
+        f"[JOB:{job_id}] {module_name} is disabled (or config is unreadable) — skipping this job"
+    )
     return {
         "status": 200,
         "success": True,
