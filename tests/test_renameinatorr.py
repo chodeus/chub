@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 
-import backend.modules.renameinatorr as renameinatorr_module
 from backend.modules.renameinatorr import Renameinatorr
 
 
@@ -413,8 +412,10 @@ def test_a_stop_before_any_item_still_reaches_the_report(
             sent.append(output)
 
     app = SimpleNamespace(connect_status=True, instance_name="Sonarr")
-    monkeypatch.setattr(renameinatorr_module, "create_arr_client", lambda *_a: app)
-    monkeypatch.setattr(renameinatorr_module, "NotificationManager", _Manager)
+    monkeypatch.setattr(
+        "backend.modules.renameinatorr.create_arr_client", lambda *_a: app
+    )
+    monkeypatch.setattr("backend.modules.renameinatorr.NotificationManager", _Manager)
     monkeypatch.setattr(Renameinatorr, "process_instance", lambda *_a: (data, stopped))
     m = object.__new__(Renameinatorr)
     m._cancel_event = None
