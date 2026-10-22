@@ -13,11 +13,11 @@ from backend.util.helper import (
     extract_mbid,
     extract_year,
     generate_title_variants,
-    get_config_dir,
     get_log_dir,
     is_match,
     progress,
 )
+from backend.util.paths import get_config_dir
 
 
 # --- classify_match ---

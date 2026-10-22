@@ -24,7 +24,6 @@ from backend.util.constants import (
     year_regex,
 )
 from backend.util.logger import create_bar  # re-exported: callers import it from here
-from backend.util.paths import get_config_dir  # noqa: F401  re-exported for callers
 from backend.util.paths import get_log_base_dir
 from backend.util.normalization import (
     normalize_titles,

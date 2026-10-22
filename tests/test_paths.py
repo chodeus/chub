@@ -26,7 +26,7 @@ def bare_metal(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     monkeypatch.setattr(paths, "_REPO_ROOT", repo)
-    monkeypatch.setattr(paths, "_warned_legacy_db", False)
+    monkeypatch.setattr(paths, "_warned_legacy_dbs", set())
     return repo
 
 
