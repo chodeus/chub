@@ -27,6 +27,7 @@ from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.normalization import normalize_titles, parse_asset_filename
 from backend.util.path_safety import containing_root, resolve_confined
+from backend.util.paths import get_config_dir
 
 # EXIF tag id Kometa writes onto its generated overlay images. Used by the
 # overlays_only mode to skip user-uploaded customs (which lack the tag).
@@ -126,10 +127,7 @@ class PosterCleanarr(ChubModule):
 
     def _get_working_dir(self) -> str:
         """Get working directory for DB storage."""
-        config_dir = os.environ.get("CONFIG_DIR") or os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config"
-        )
-        working = os.path.join(config_dir, "poster_cleanarr")
+        working = os.path.join(get_config_dir(), "poster_cleanarr")
         os.makedirs(working, exist_ok=True)
         return working
 

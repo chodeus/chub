@@ -295,18 +295,9 @@ def get_job_log_tail(
                 {"lines": "", "next_offset": offset, "status": job.get("status")},
             )
 
-        # Match backend/util/logger.py:_get_log_path fallback logic so dev
-        # environments without LOG_DIR still find the right file.
-        log_base = os.environ.get("LOG_DIR")
-        if log_base:
-            log_path = os.path.join(log_base, module_name, f"{module_name}.log")
-        else:
-            repo_root = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..")
-            )
-            log_path = os.path.join(
-                repo_root, "logs", module_name, f"{module_name}.log"
-            )
+        from backend.util.paths import get_log_base_dir
+
+        log_path = os.path.join(get_log_base_dir(), module_name, f"{module_name}.log")
         if not os.path.isfile(log_path):
             return ok(
                 "Log file not yet present",

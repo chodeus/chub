@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from backend.util.log_redaction import attach_redaction_filter, redact
+from backend.util.paths import get_log_base_dir
 from backend.util.version import get_version
 
 # Size cap per log file. Set LOG_MAX_BYTES=0 to disable the cap.
@@ -151,12 +152,7 @@ class Logger:
 
     def _get_log_file_path(self, module_name: str) -> str:
         """Determine the log file path for a module."""
-        log_base = os.getenv("LOG_DIR")
-        if log_base:
-            log_dir = Path(log_base) / module_name
-        else:
-            log_dir = Path(__file__).resolve().parents[2] / "logs" / module_name
-
+        log_dir = Path(get_log_base_dir()) / module_name
         log_dir.mkdir(parents=True, exist_ok=True)
         return str(log_dir / f"{module_name}.log")
 

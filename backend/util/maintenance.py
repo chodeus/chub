@@ -19,14 +19,12 @@ from pathlib import Path
 from backend.util.backup import get_backup_dir, save_backup
 from backend.util.config import load_config
 from backend.util.path_safety import is_path_allowed
+from backend.util.paths import get_log_base_dir
 
 
 def _log_base() -> Path:
-    """Resolve the logs base directory the same way the logger does."""
-    base = os.getenv("LOG_DIR")
-    if base:
-        return Path(base)
-    return Path(__file__).resolve().parents[2] / "logs"
+    """The logs base directory the logger writes to."""
+    return Path(get_log_base_dir())
 
 
 def prune_old_logs(retention_days: int, logger=None) -> int:

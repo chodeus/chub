@@ -1,7 +1,6 @@
 import functools
 import logging
 import os
-import pathlib
 import sys
 import tempfile
 import threading
@@ -18,6 +17,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from backend.util.paths import get_config_dir
 
 # Migrator + loader status messages go through this stdlib logger so callers
 # can attach a handler that routes them into their own logging system. The
@@ -1122,10 +1123,7 @@ class ConfigValidationError(ConfigError):
 
 def get_config_path() -> str:
     """Get configuration file path from environment or default location."""
-    config_dir = os.environ.get("CONFIG_DIR") or str(
-        pathlib.Path(__file__).parent.parent.parent / "config"
-    )
-    config_file_path = os.path.join(config_dir, "config.yml")
+    config_file_path = os.path.join(get_config_dir(), "config.yml")
     return config_file_path
 
 

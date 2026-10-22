@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from backend.util.config import ChubConfig, has_config_file
+from backend.util.paths import get_config_dir
 
 _log = logging.getLogger("chub.path_safety")
 
@@ -75,10 +76,7 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
         roots.append(config.sync_gdrive.gdrive_sa_location)
 
     # App config directory (so users can browse config location)
-    config_dir = os.environ.get("CONFIG_DIR") or str(
-        Path(__file__).parent.parent.parent / "config"
-    )
-    roots.append(config_dir)
+    roots.append(get_config_dir())
 
     # Auto-discover bind-mounted host volumes (Linux containers). On Unraid
     # / docker, the user's template typically binds paths like /kometa,

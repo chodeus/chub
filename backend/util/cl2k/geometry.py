@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
+from backend.util.paths import get_config_dir
+
 # ----- canvas ----------------------------------------------------------------
 CANVAS_W = 1000
 CANVAS_H = 1500
@@ -232,7 +234,7 @@ _ARIAL_BOLD_CANDIDATES = (
 def _unpacked_arial(bold: bool) -> str:
     """Where scripts/install_fonts.sh unpacks Arial in the :full image."""
     name = "arialbd.ttf" if bold else "arial.ttf"
-    return os.path.join(os.environ.get("CONFIG_DIR", "/config"), "fonts", name)
+    return os.path.join(get_config_dir(), "fonts", name)
 
 
 def resolve_font(bold: bool = False) -> Optional[str]:
