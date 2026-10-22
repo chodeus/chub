@@ -1,7 +1,7 @@
 import functools
 import logging
+import math
 import os
-import pathlib
 import sys
 import tempfile
 import threading
@@ -18,6 +18,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from backend.util.paths import get_config_dir
 
 # Migrator + loader status messages go through this stdlib logger so callers
 # can attach a handler that routes them into their own logging system. The
@@ -430,6 +432,14 @@ class UpgradinatorrInstance(BaseModel):
     # suppress. Past the cap a forgotten row stops blocking the item forever.
     queue_block_hours: int = 72
 
+    @field_validator("season_monitored_threshold")
+    @classmethod
+    def _clamp_season_threshold(cls, value: Optional[float]) -> Optional[float]:
+        """A 0–100 percentage; clamped, not rejected, so an old value can't block startup."""
+        if value is None or math.isnan(value):
+            return None
+        return min(max(value, 0.0), 100.0)
+
 
 class UpgradinatorrConfig(BaseModel):
     log_level: str = "info"
@@ -676,8 +686,8 @@ class GeneralConfig(BaseModel):
     # the given order. Empty = show all modules. Drives only which cards the
     # dashboard renders; does not affect scheduling or execution.
     dashboard_modules: List[str] = Field(default_factory=list)
-    # Dashboard section keys (health, modules, scheduler, quick_start) to show,
-    # in the given order. Empty = show all in the default order.
+    # Deprecated: kept so existing config.yml files still load. The redesigned
+    # dashboard has no switchable sections, so nothing reads it.
     dashboard_sections: List[str] = Field(default_factory=list)
     # How often (seconds) the dashboard re-polls when live SSE updates are not
     # connected, and how often its countdowns tick. 0 = no auto-refresh.
@@ -1122,10 +1132,7 @@ class ConfigValidationError(ConfigError):
 
 def get_config_path() -> str:
     """Get configuration file path from environment or default location."""
-    config_dir = os.environ.get("CONFIG_DIR") or str(
-        pathlib.Path(__file__).parent.parent.parent / "config"
-    )
-    config_file_path = os.path.join(config_dir, "config.yml")
+    config_file_path = os.path.join(get_config_dir(), "config.yml")
     return config_file_path
 
 

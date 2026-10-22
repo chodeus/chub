@@ -1,10 +1,9 @@
 # util/database/__init__.py
 
-import os
 import threading
 from typing import List, Optional
 
-from backend.util.helper import get_config_dir
+from backend.util.paths import get_db_path
 from backend.util.logger import Logger
 
 from .border_state import BorderState
@@ -72,8 +71,7 @@ class ChubDB:
         if db_path:
             self.db_path = db_path
         else:
-            config_dir = get_config_dir()
-            self.db_path = os.path.join(config_dir, "chub.db")
+            self.db_path = get_db_path()
 
         # The lock guards the check-then-set in _get_interface: API handlers and
         # worker threads share one ChubDB, and constructing re-runs init_schema.

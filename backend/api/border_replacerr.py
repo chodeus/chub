@@ -42,7 +42,7 @@ from backend.api.utils import error, get_database, get_logger, ok
 from backend.modules.border_replacerr import BorderReplacerr
 from backend.util.config import ChubConfig, load_config
 from backend.util.database import ChubDB
-from backend.util.helper import get_config_dir
+from backend.util.paths import get_config_dir
 
 # Bundled border PNGs live next to the SVG sources after the Docker build
 # rasterizes them (see scripts/rasterize_borders.py + deploy/docker/Dockerfile).

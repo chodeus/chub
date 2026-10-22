@@ -12,9 +12,9 @@
   <ReadMe>https://github.com/chodeus/chub#readme</ReadMe>
   <Overview>CHUB &#x2014; Chodeus' Media Script Hub. Self-hosted, all-in-one media asset manager for your Plex/ARR stack.&#13;
 &#13;
-Bundles a React web UI and a FastAPI backend that orchestrates scheduled modules (poster_renamerr, jduparr, nohl, unmatched_assets, upgradinatorr, labelarr, sync_gdrive, border_replacerr, nestarr, poster_cleanarr, renameinatorr, health_checkarr) against your libraries, poster trees, and cloud drives.&#13;
+Bundles a React web UI and a FastAPI backend that orchestrates scheduled modules (poster_renamerr, asset_renamerr, border_replacerr, poster_cleanarr, sync_gdrive, unmatched_assets, labelarr, jduparr, nohl, upgradinatorr, renameinatorr, health_checkarr, nestarr, plex_maintenance) against your libraries, poster trees, and cloud drives. The :full tag adds the CL2K poster maker and poster self-heal.&#13;
 &#13;
-Web UI on container port 8000; login is bcrypt + JWT with rate limiting (first boot prompts you to create the admin account).&#13;
+Web UI on container port 8000; an optional bcrypt + JWT login with rate limiting (the first-boot setup wizard asks whether to use one).&#13;
 &#13;
 Config help: https://github.com/chodeus/chub/wiki/Configuration</Overview>
   <Category>MediaApp:Other</Category>

@@ -36,11 +36,12 @@ from backend.util.config import (
 from backend.util import plex_library_cache
 from backend.util.database import ChubDB
 from backend.util.arr import arr_api_version
+from backend.util.paths import get_log_base_dir
 
-if os.environ.get("DOCKER_ENV"):
-    LOG_BASE_DIR = "/config/logs"
-else:
-    LOG_BASE_DIR = str((Path(__file__).parents[2] / "logs").resolve())
+
+def _log_base_dir() -> str:
+    """Read per request, so it always matches where the logger writes."""
+    return str(Path(get_log_base_dir()).resolve())
 
 router = APIRouter(
     prefix="/api",
@@ -2005,7 +2006,7 @@ def get_instance_logs(
     try:
         logger.debug(f"Serving GET /api/instances/{instance_id}/logs")
 
-        if not os.path.exists(LOG_BASE_DIR):
+        if not os.path.exists(_log_base_dir()):
             return ok(
                 f"No logs found for instance '{instance_id}'",
                 {"logs": [], "instance": instance_id},
@@ -2014,8 +2015,8 @@ def get_instance_logs(
         # Collect all log lines from all module directories
         all_lines: deque = deque(maxlen=limit)
         total_seen = 0
-        for module_name in os.listdir(LOG_BASE_DIR):
-            module_path = os.path.join(LOG_BASE_DIR, module_name)
+        for module_name in os.listdir(_log_base_dir()):
+            module_path = os.path.join(_log_base_dir(), module_name)
             if not os.path.isdir(module_path) or module_name == "debug":
                 continue
 

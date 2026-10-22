@@ -110,6 +110,14 @@ export const GENERAL_SETTINGS_SCHEMA = [
                     "Reverse-proxy support for webhooks. When CHUB is behind Traefik/nginx/Caddy, the connection's IP is the proxy's — add the proxy here so CHUB honors X-Forwarded-For and identifies the real arr instance. Entries are IPs or CIDRs; the token “private” trusts any LAN/Docker (RFC1918/loopback) proxy. Default: private. Empty = never trust forwarded headers.",
             },
             {
+                key: 'public_url',
+                label: 'CHUB base URL for *arr webhooks',
+                type: 'text',
+                placeholder: 'e.g. http://192.168.1.10:8000',
+                description:
+                    'The address your Radarr/Sonarr containers use to reach CHUB. Webhook auto-setup (Settings → Webhooks) writes it into each *arr. Behind a reverse proxy this is usually a LAN IP or Docker service name, not the public hostname. Empty = detect it from an existing CHUB webhook, else use the browser address.',
+            },
+            {
                 key: 'dashboard_modules',
                 label: 'Dashboard Modules',
                 type: 'multiselect',
@@ -117,20 +125,6 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 placeholder: 'Add a module…',
                 description:
                     'Choose which modules appear on the dashboard, in the order you add them. Leave empty to show all modules.',
-            },
-            {
-                key: 'dashboard_sections',
-                label: 'Dashboard Sections',
-                type: 'multiselect',
-                options: [
-                    { value: 'health', label: 'Health' },
-                    { value: 'modules', label: 'Modules' },
-                    { value: 'scheduler', label: 'Scheduler' },
-                    { value: 'quick_start', label: 'Quick Start' },
-                ],
-                placeholder: 'Add a section…',
-                description:
-                    'Choose which dashboard sections appear, in the order you add them. Leave empty to show all in the default order.',
             },
             {
                 key: 'dashboard_refresh_seconds',

@@ -5,7 +5,6 @@ import { mediaAPI } from '../../utils/api/media.js';
 import { nestarrAPI } from '../../utils/api/nestarr.js';
 import { apiCore } from '../../utils/api/core.js';
 import { Modal } from '../../components/modals/Modal';
-import EditMediaModal from '../../components/modals/EditMediaModal.jsx';
 import { Button, LoadingButton, IconButton } from '../../components/ui/index.js';
 import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
@@ -419,7 +418,6 @@ const MediaManagePage = () => {
     const toast = useToast();
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleteFiles, setDeleteFiles] = useState(false);
-    const [editTarget, setEditTarget] = useState(null);
     const [resolveTarget, setResolveTarget] = useState(null);
     const [resolveKeepId, setResolveKeepId] = useState(null);
     const [resolveDeleteFiles, setResolveDeleteFiles] = useState(false);
@@ -436,16 +434,6 @@ const MediaManagePage = () => {
     const [fixTarget, setFixTarget] = useState(null);
     const [fixPreview, setFixPreview] = useState(null);
     const [previewLoading, setPreviewLoading] = useState(false);
-
-    const { execute: saveMetadata, isLoading: isSaving } = useApiMutation(
-        (id, metadata) => mediaAPI.updateMediaMetadata(id, metadata),
-        {
-            successMessage: 'Metadata updated',
-            onSuccess: () => {
-                setEditTarget(null);
-            },
-        }
-    );
 
     const { data: dupData, refresh: refreshDups } = useApiData({
         apiFunction: mediaAPI.fetchDuplicates,
@@ -1369,13 +1357,6 @@ const MediaManagePage = () => {
                     </Button>
                 </Modal.Footer>
             </Modal>
-            <EditMediaModal
-                isOpen={!!editTarget}
-                onClose={() => setEditTarget(null)}
-                item={editTarget}
-                onSave={(id, metadata) => saveMetadata(id, metadata)}
-                isSaving={isSaving}
-            />
             {/* Create Collection Modal */}
             <Modal
                 isOpen={showCreateCollection}

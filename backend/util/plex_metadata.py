@@ -45,6 +45,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Set
 from urllib.parse import urlparse
 
+from backend.util.paths import get_config_dir
+
 PLEX_DB_NAME = "com.plexapp.plugins.library.db"
 
 # metadata_items columns that reference an *in-use* (currently-applied) image.
@@ -440,8 +442,7 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
     # The sibling-of-plex_path location used to live at `/.chub_plex_db` when
     # plex_path was `/plex`, which is unwritable by the CHUB user. Prefer
     # `$CONFIG_DIR/plex-cache` which is always on a writable mount.
-    config_dir = os.environ.get("CONFIG_DIR") or "/config"
-    working_dir = os.path.join(config_dir, "plex-cache")
+    working_dir = os.path.join(get_config_dir(), "plex-cache")
     try:
         os.makedirs(working_dir, exist_ok=True)
     except OSError:

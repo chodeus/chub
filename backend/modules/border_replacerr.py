@@ -17,7 +17,8 @@ from PIL import Image
 
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
-from backend.util.helper import create_table, get_config_dir, print_settings, progress
+from backend.util.helper import create_table, print_settings, progress
+from backend.util.paths import get_config_dir
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.scheduler import md_range_contains

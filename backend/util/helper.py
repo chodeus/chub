@@ -24,6 +24,7 @@ from backend.util.constants import (
     year_regex,
 )
 from backend.util.logger import create_bar  # re-exported: callers import it from here
+from backend.util.paths import get_log_base_dir
 from backend.util.normalization import (
     normalize_titles,
 )
@@ -48,11 +49,7 @@ def print_json(data: Any, logger: Any, module_name: str, type_: str) -> None:
         module_name: Name of the module (used for directory structure)
         type_: Type/name of the data being written (used for filename)
     """
-    log_base = os.getenv("LOG_DIR")
-    if log_base:
-        debug_dir = Path(log_base) / module_name / "debug"
-    else:
-        debug_dir = Path(__file__).resolve().parents[2] / "logs" / module_name / "debug"
+    debug_dir = Path(get_log_base_dir()) / module_name / "debug"
 
     debug_dir.mkdir(parents=True, exist_ok=True)
 
@@ -301,28 +298,9 @@ def get_log_dir(module_name: str) -> str:
     Returns:
         Absolute path to the module's log directory
     """
-    log_base = os.getenv("LOG_DIR")
-    if log_base:
-        log_dir = Path(log_base) / module_name
-    else:
-        log_dir = Path(__file__).resolve().parents[2] / "logs" / module_name
+    log_dir = Path(get_log_base_dir()) / module_name
     os.makedirs(log_dir, exist_ok=True)
     return str(log_dir)
-
-
-def get_config_dir() -> str:
-    """
-    Get config directory path (Docker: /config, Standard: ../config).
-
-    Returns:
-        Absolute path to the configuration directory
-    """
-    if os.environ.get("DOCKER_ENV"):
-        config_dir = os.getenv("CONFIG_DIR", "/config")
-    else:
-        config_dir = Path(__file__).resolve().parents[2] / "config"
-        Path(config_dir).mkdir(parents=True, exist_ok=True)
-    return str(config_dir)
 
 
 def get_static_dir() -> Path:

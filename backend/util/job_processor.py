@@ -59,6 +59,15 @@ def unregister_cancel_event(job_id: int) -> None:
         _cancel_registry.pop(job_id, None)
 
 
+# Job types that do a module's work; module_run names its module in the payload.
+_JOB_TYPE_MODULE = {
+    "webhook": "poster_renamerr",
+    "poster_rename": "poster_renamerr",
+    "upload_posters": "poster_renamerr",
+    "labelarr_bulk_sync": "labelarr",
+}
+
+
 def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any]:
     """
     Route jobs to appropriate handlers.
@@ -81,6 +90,13 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
     start_time = time.time()
 
     try:
+        module_name = (
+            payload.get("module_name")
+            if job_type == "module_run"
+            else _JOB_TYPE_MODULE.get(job_type)
+        )
+        if module_name and (skipped := _skip_if_disabled(module_name, job_id, log)):
+            return skipped
         if job_type == "webhook":
             return _process_webhook_job(payload, logger, job_id, db)
         elif job_type == "poster_rename":
@@ -118,6 +134,24 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
     finally:
         duration = time.time() - start_time
         log.debug(f"[JOB:{job_id}] Completed in {duration:.2f}s")
+
+
+def _skip_if_disabled(module_name: str, job_id: int, log) -> Optional[Dict[str, Any]]:
+    """A skip result when the module is switched off, or config can't be read; else None."""
+    from backend.util.config import module_is_disabled
+
+    if not module_is_disabled(module_name):
+        return None
+    log.info(
+        f"[JOB:{job_id}] {module_name} is disabled (or config is unreadable) — skipping this job"
+    )
+    return {
+        "status": 200,
+        "success": True,
+        "disabled": True,
+        "message": f"Skipped — {module_name} is disabled",
+        "data": {"module": module_name},
+    }
 
 
 def _process_webhook_job(

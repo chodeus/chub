@@ -14,6 +14,7 @@ from typing import Any
 
 from backend.util.config import get_config_path, load_config
 from backend.util.path_safety import is_path_allowed
+from backend.util.paths import get_config_dir, get_db_path
 
 # Suffixes tried when two backups land in the same second (-1 .. -N).
 _SAVE_COLLISION_RETRIES = 100
@@ -21,18 +22,12 @@ _SAVE_COLLISION_RETRIES = 100
 
 def _get_db_path() -> str:
     """Get the SQLite database path."""
-    config_dir = os.environ.get("CONFIG_DIR") or str(
-        Path(__file__).parents[2] / "config"
-    )
-    return os.path.join(config_dir, "chub.db")
+    return get_db_path()
 
 
 def _default_backup_dir() -> Path:
     """Fallback backup location: CONFIG_DIR/backups."""
-    config_dir = os.environ.get("CONFIG_DIR") or str(
-        Path(__file__).parents[2] / "config"
-    )
-    return Path(config_dir) / "backups"
+    return Path(get_config_dir()) / "backups"
 
 
 def get_backup_dir(logger: Any = None) -> Path:

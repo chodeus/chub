@@ -8,11 +8,12 @@ from fastapi.responses import PlainTextResponse
 from backend.api.utils import error, get_logger, ok
 from backend.extensions import extension_config_fields
 from backend.modules import MODULES
+from backend.util.paths import get_log_base_dir
 
-if os.environ.get("DOCKER_ENV"):
-    LOG_BASE_DIR = "/config/logs"
-else:
-    LOG_BASE_DIR = str((Path(__file__).parents[2] / "logs").resolve())
+
+def _log_base_dir() -> str:
+    """Read per request, so it always matches where the logger writes."""
+    return str(Path(get_log_base_dir()).resolve())
 
 
 # Allow-list of module names accepted by the log-reading endpoints. Anything
@@ -45,9 +46,9 @@ def list_logs(logger: Any = Depends(get_logger)) -> Dict[str, Any]:
     Returns directories in the logs folder that contain module logs.
     """
     try:
-        logger.debug(f"Listing log modules in {LOG_BASE_DIR}")
+        logger.debug(f"Listing log modules in {_log_base_dir()}")
 
-        if not os.path.exists(LOG_BASE_DIR):
+        if not os.path.exists(_log_base_dir()):
             return ok(
                 "No logs directory found",
                 {"modules": []},
@@ -97,7 +98,7 @@ def list_logs_for_module(
                 code="UNKNOWN_MODULE",
                 status_code=404,
             )
-        module_path = os.path.join(LOG_BASE_DIR, module_name)
+        module_path = os.path.join(_log_base_dir(), module_name)
 
         if not os.path.isdir(module_path):
             # Module hasn't run yet — return empty list instead of 404
@@ -159,10 +160,10 @@ def read_log(
             )
         safe_filename = os.path.basename(filename)
 
-        log_path = os.path.join(LOG_BASE_DIR, module, safe_filename)
+        log_path = os.path.join(_log_base_dir(), module, safe_filename)
 
         # Additional security check for debug logs in path
-        if "debug" in os.path.relpath(log_path, LOG_BASE_DIR).split(os.sep):
+        if "debug" in os.path.relpath(log_path, _log_base_dir()).split(os.sep):
             return error(
                 "Log file not found",
                 code="LOG_FILE_NOT_FOUND",
@@ -178,7 +179,7 @@ def read_log(
 
         # Verify the file is within our allowed directory
         resolved_path = os.path.realpath(log_path)
-        resolved_base = os.path.realpath(LOG_BASE_DIR)
+        resolved_base = os.path.realpath(_log_base_dir())
         if (
             not resolved_path.startswith(resolved_base + os.sep)
             and resolved_path != resolved_base

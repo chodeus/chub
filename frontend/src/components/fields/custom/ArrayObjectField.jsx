@@ -595,6 +595,8 @@ export const ArrayObjectField = ({
                             <input
                                 type="number"
                                 step="0.01"
+                                min="0"
+                                max="100"
                                 value={item.season_monitored_threshold ?? ''}
                                 onChange={e =>
                                     set(
