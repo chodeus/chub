@@ -73,3 +73,22 @@ def test_console_log_level_decoupled_from_file_level(tmp_path, monkeypatch):
             h.close()
             ml.removeHandler(h)
         Logger._initialized.discard((name, str(log_file)))
+
+
+def test_plain_logger_writes_heartbeat_lines(tmp_path, monkeypatch):
+    """CLI runs hand modules a plain Logger; heartbeat() must not raise there."""
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    name = "ut_modlog_heartbeat"
+    log_file = tmp_path / name / f"{name}.log"
+    try:
+        lg = Logger(log_level="INFO", module_name=name)
+        lg.heartbeat("Merged %d / %d assets", 3, 10)
+        for h in lg._logger.handlers:
+            h.flush()
+        assert "[hb] Merged 3 / 10 assets" in log_file.read_text()
+    finally:
+        mod_logger = logging.getLogger(name)
+        for h in list(mod_logger.handlers):
+            h.close()
+            mod_logger.removeHandler(h)
+        Logger._initialized.discard((name, str(log_file)))

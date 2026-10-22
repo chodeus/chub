@@ -271,6 +271,10 @@ class Logger:
         module_name = self._logger.name.replace("_", " ").upper()
         self._logger.info(create_bar(f"{module_name} | Run Time: {formatted_duration}"))
 
+    def heartbeat(self, msg, *args, **kwargs) -> None:
+        """Repetitive progress line; CLI runs get this Logger, not the adapter."""
+        self.get_adapter().heartbeat(msg, *args, **kwargs)
+
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying logger."""
         return getattr(self._logger, name)
