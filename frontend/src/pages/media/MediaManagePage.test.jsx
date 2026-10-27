@@ -144,7 +144,9 @@ describe('MediaManagePage Refresh cache', () => {
         media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [{ ...group }] } });
         // Queued at the toast, the answer runs after React's commit task and before its passive-effect task.
         toast.success.mockImplementationOnce(() =>
-            setImmediate(() => answerOld({ data: { members: [{ id: 1, path: '/old/copy' }] } }))
+            setImmediate(() =>
+                answerOld({ data: { members: [{ id: 1, live: { path: '/old/copy' } }] } })
+            )
         );
         fireEvent.click(screen.getByRole('button', { name: /refresh cache/i }));
         job.resolve('success');
