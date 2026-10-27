@@ -28,6 +28,7 @@ jobs:
         id: install
         shell: bash
         env:
+          # renovate: datasource=github-releases depName=rhysd/actionlint extractVersion=^v(?<version>.+)$
           ACTIONLINT_VERSION: 1.7.12
         # Release tarball checked against its published checksums; no remote script runs.
         run: |
