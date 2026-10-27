@@ -124,7 +124,10 @@ jobs:
           cache: 'pip'
 
       - name: Install linting tools
-        run: pip install ruff==0.15.11
+        env:
+          # renovate: datasource=pypi depName=ruff
+          RUFF_VERSION: 0.17.2
+        run: pip install "ruff==${RUFF_VERSION}"
 
       - name: Run Ruff linter
         run: ruff check .
