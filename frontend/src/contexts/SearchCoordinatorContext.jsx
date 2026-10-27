@@ -1,13 +1,6 @@
-import React, {
-    createContext,
-    useContext,
-    useState,
-    useCallback,
-    useEffect,
-    useLayoutEffect,
-    useRef,
-} from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { useLatestRef } from '../hooks/useLatestRef.js';
 
 /**
  * Search Coordinator context for managing unified search state
@@ -120,12 +113,7 @@ export const SearchCoordinatorProvider = ({
     const searchCallbacks = useRef({});
     // The term each type last asked for, written at the call: a result or error for any other term is stale.
     const requestedTerms = useRef({});
-    const searchStatesRef = useRef(searchStates);
-
-    // Mirror latest searchStates into a ref for async callbacks; layout, so it is current from the commit on.
-    useLayoutEffect(() => {
-        searchStatesRef.current = searchStates;
-    }, [searchStates]);
+    const searchStatesRef = useLatestRef(searchStates);
 
     // Note: searchHistory is already lazily initialized from localStorage via useState
     // initializer, so no separate init effect is needed.
@@ -420,11 +408,14 @@ export const SearchCoordinatorProvider = ({
      * Set active search type (for global search coordination)
      * @param {string} searchType - Type to set as active
      */
-    const setActiveSearch = useCallback(searchType => {
-        setActiveSearchType(searchType);
-        const currentState = searchStatesRef.current[searchType];
-        setGlobalSearchTerm(currentState?.term || '');
-    }, []);
+    const setActiveSearch = useCallback(
+        searchType => {
+            setActiveSearchType(searchType);
+            const currentState = searchStatesRef.current[searchType];
+            setGlobalSearchTerm(currentState?.term || '');
+        },
+        [searchStatesRef]
+    );
 
     /**
      * Get suggestions based on search history
