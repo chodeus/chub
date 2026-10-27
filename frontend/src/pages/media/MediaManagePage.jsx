@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { mediaAPI } from '../../utils/api/media.js';
@@ -216,7 +216,8 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
     const [busy, setBusy] = useState(false);
     const [filter, setFilter] = useState('');
     const listRef = useRef(duplicates);
-    useEffect(() => {
+    // Layout, not passive: a members answer landing between the reload's commit and a useEffect would pass as current.
+    useLayoutEffect(() => {
         listRef.current = duplicates;
     }, [duplicates]);
     // A reloaded list can keep a group's key with different copies: drop what was loaded for it

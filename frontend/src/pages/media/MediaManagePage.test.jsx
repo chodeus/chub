@@ -133,6 +133,29 @@ describe('MediaManagePage Refresh cache', () => {
         await waitFor(() => expect(media.fetchDuplicateMembers).toHaveBeenCalledTimes(2));
     });
 
+    it('drops a copies answer that lands between the reload commit and its effects', async () => {
+        const group = { normalized_title: 'samefilm', title: 'Same Film', count: 2, ids: '1,2' };
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [group] } });
+        let answerOld;
+        media.fetchDuplicateMembers.mockReturnValueOnce(new Promise(r => (answerOld = r)));
+        render(<MediaManagePage />);
+        fireEvent.click(await screen.findByRole('button', { name: /Same Film/ }));
+
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [{ ...group }] } });
+        // Queued at the toast, the answer runs after React's commit task and before its passive-effect task.
+        toast.success.mockImplementationOnce(() =>
+            setImmediate(() => answerOld({ data: { members: [{ id: 1, path: '/old/copy' }] } }))
+        );
+        fireEvent.click(screen.getByRole('button', { name: /refresh cache/i }));
+        job.resolve('success');
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Cache refreshed'));
+        media.fetchDuplicateMembers.mockResolvedValue({ data: { members: [] } });
+        fireEvent.click(await screen.findByRole('button', { name: /Same Film/ }));
+
+        await waitFor(() => expect(media.fetchDuplicateMembers).toHaveBeenCalledTimes(2));
+        expect(screen.queryByText('/old/copy')).not.toBeInTheDocument();
+    });
+
     it('keeps Resolve unavailable while a refresh is running', async () => {
         const group = { normalized_title: 'samefilm', title: 'Same Film', count: 2, ids: '1,2' };
         const copy = { id: 1, path: '/films/Same Film', live: { size_bytes: 1 } };

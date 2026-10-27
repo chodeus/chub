@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, {
+    createContext,
+    useContext,
+    useState,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+} from 'react';
 import PropTypes from 'prop-types';
 
 /**
@@ -110,10 +118,12 @@ export const SearchCoordinatorProvider = ({
     // Refs for debouncing and stable access
     const debounceTimeouts = useRef({});
     const searchCallbacks = useRef({});
+    // The term each type last asked for, written at the call: a result or error for any other term is stale.
+    const requestedTerms = useRef({});
     const searchStatesRef = useRef(searchStates);
 
-    // Mirror latest searchStates into a ref for stable access inside async callbacks.
-    useEffect(() => {
+    // Mirror latest searchStates into a ref for async callbacks; layout, so it is current from the commit on.
+    useLayoutEffect(() => {
         searchStatesRef.current = searchStates;
     }, [searchStates]);
 
@@ -280,6 +290,7 @@ export const SearchCoordinatorProvider = ({
                 addToHistory: shouldAddToHistory = true,
                 ...searchOptions
             } = options;
+            requestedTerms.current[searchType] = term;
 
             // Update search state immediately
             setSearchState(searchType, {
@@ -327,11 +338,7 @@ export const SearchCoordinatorProvider = ({
                 try {
                     const results = await searchFunction(term, searchOptions);
 
-                    // Check if this is still the current search (use ref for latest state)
-                    const currentState = searchStatesRef.current[searchType];
-                    if (currentState?.term !== term) {
-                        return; // Search term has changed, ignore results
-                    }
+                    if (requestedTerms.current[searchType] !== term) return;
 
                     // Determine result count from various API response shapes
                     const data = results?.data || results;
@@ -357,6 +364,7 @@ export const SearchCoordinatorProvider = ({
                     }
                 } catch (error) {
                     console.error(`Search failed for ${searchType}:`, error);
+                    if (requestedTerms.current[searchType] !== term) return;
 
                     setSearchState(searchType, {
                         status: SEARCH_STATUS.ERROR,
@@ -389,6 +397,7 @@ export const SearchCoordinatorProvider = ({
                 clearTimeout(debounceTimeouts.current[searchType]);
                 delete debounceTimeouts.current[searchType];
             }
+            requestedTerms.current[searchType] = '';
 
             // Clear search state
             setSearchState(searchType, {

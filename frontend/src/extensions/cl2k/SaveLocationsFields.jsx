@@ -3,6 +3,7 @@
 import React, {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -189,10 +190,10 @@ const useEntryList = (value, onChange, blankEntry) => {
     }
 
     // Mirrors for replaceById, which runs after an await; a ref cannot be read
-    // during render, and state read there would be the pre-await snapshot.
+    // during render, and layout keeps them current from the commit on.
     const idsRef = useRef(ids);
     const entriesRef = useRef(entries);
-    useEffect(() => {
+    useLayoutEffect(() => {
         idsRef.current = ids;
         entriesRef.current = entries;
     }, [ids, entries]);
