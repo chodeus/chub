@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 // The factory wraps the spy rather than passing it: vitest.config sets
 // mockReset, which would strip an implementation handed over directly.
@@ -55,6 +55,37 @@ describe('Cl2kGdriveUploadsField', () => {
 
         await waitFor(() => expect(names()).toEqual(['A Logos']));
         expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('splits from a parent update whose commit the reply follows', async () => {
+        let settle;
+        let setOuter;
+        let replyOnCommit = null;
+        mockPost.mockImplementation(() => new Promise(resolve => (settle = resolve)));
+        const Outer = () => {
+            const [value, setValue] = useState([{ name: 'A', folder_id: 'X', types: ['logo'] }]);
+            setOuter = setValue;
+            // Runs in the rename's commit after the field's own layout effects, so the reply beats its passive ones.
+            useLayoutEffect(() => {
+                if (replyOnCommit && value[0]?.name === 'A2') {
+                    const reply = replyOnCommit;
+                    replyOnCommit = null;
+                    reply();
+                }
+            }, [value]);
+            return <Cl2kGdriveUploadsField value={value} onChange={setValue} />;
+        };
+        render(<Outer />);
+        fireEvent.click(splitButtons()[0]);
+        await waitFor(() => expect(settle).toBeDefined());
+
+        replyOnCommit = () => settle({ data: { subfolders: SUBFOLDERS } });
+        // Outside act, so the rename commits in React's own task, ahead of its passive effects.
+        await Promise.resolve().then(() =>
+            setOuter([{ name: 'A2', folder_id: 'X', types: ['logo'] }])
+        );
+
+        await waitFor(() => expect(names()).toEqual(['A2 Logos']));
     });
 
     it('reports a failure when the split routes nothing', async () => {

@@ -12,6 +12,7 @@ import { Modal } from '../../components/ui';
 import { FieldRegistry } from '../../components/fields/FieldRegistry.jsx';
 import { apiCore } from '../../utils/api/core';
 import { useToast } from '../../contexts/ToastContext.jsx';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 
 export const CL2K_ART_TYPES = [
     { value: 'poster', label: 'Poster' },
@@ -188,14 +189,9 @@ const useEntryList = (value, onChange, blankEntry) => {
         );
     }
 
-    // Mirrors for replaceById, which runs after an await; a ref cannot be read
-    // during render, and state read there would be the pre-await snapshot.
-    const idsRef = useRef(ids);
-    const entriesRef = useRef(entries);
-    useEffect(() => {
-        idsRef.current = ids;
-        entriesRef.current = entries;
-    }, [ids, entries]);
+    // Mirrors for replaceById, which runs after an await; a ref cannot be read during render.
+    const idsRef = useLatestRef(ids);
+    const entriesRef = useLatestRef(entries);
 
     // One commit for every mutation: a reply landing before React commits the
     // previous one would otherwise index fresh ids into the older entries.
@@ -206,13 +202,13 @@ const useEntryList = (value, onChange, blankEntry) => {
             setIds(nextIds);
             onChange(nextEntries);
         },
-        [onChange]
+        [onChange, idsRef, entriesRef]
     );
 
     const add = useCallback(() => {
         setFocusIndex(entriesRef.current.length);
         commit([...idsRef.current, mintRowId()], [...entriesRef.current, { ...blankEntry }]);
-    }, [blankEntry, commit]);
+    }, [blankEntry, commit, idsRef, entriesRef]);
 
     const patch = useCallback(
         (index, changes) => {
@@ -221,7 +217,7 @@ const useEntryList = (value, onChange, blankEntry) => {
                 entriesRef.current.map((e, i) => (i === index ? { ...e, ...changes } : e))
             );
         },
-        [commit]
+        [commit, idsRef, entriesRef]
     );
 
     const remove = useCallback(
@@ -231,7 +227,7 @@ const useEntryList = (value, onChange, blankEntry) => {
                 entriesRef.current.filter((_, i) => i !== index)
             );
         },
-        [commit]
+        [commit, idsRef, entriesRef]
     );
 
     // Swap one row for several, found by client id against the LATEST entries.
@@ -256,7 +252,7 @@ const useEntryList = (value, onChange, blankEntry) => {
             );
             return true;
         },
-        [commit]
+        [commit, idsRef, entriesRef]
     );
 
     const toggleType = useCallback(
@@ -268,7 +264,7 @@ const useEntryList = (value, onChange, blankEntry) => {
                     : [...current, type],
             });
         },
-        [patch]
+        [patch, entriesRef]
     );
 
     return {

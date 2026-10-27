@@ -1644,7 +1644,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         return () => {
             cancelled = true;
         };
-    }, [item.tmdb_id, isSeasonPoster, seasonNumber]);
+    }, [item.tmdb_id, item.tvdb_id, item.imdb_id, isSeasonPoster, seasonNumber]);
 
     // Revoke the preview object URL when it changes / unmounts.
     useEffect(() => {

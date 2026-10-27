@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { SearchCoordinatorProvider, useSearchCoordinator } from './SearchCoordinatorContext.jsx';
 
 const HISTORY_KEY = 'chub-search-history';
@@ -50,5 +50,47 @@ describe('SearchCoordinatorProvider history', () => {
         const { result } = mountHistory();
 
         expect(result.current.getHistory()).toEqual([]);
+    });
+});
+
+describe('SearchCoordinatorProvider results', () => {
+    it("drops an old term's results that land between the new term's commit and its effects", async () => {
+        let answerOld;
+        const searchFn = vi.fn(() => new Promise(r => (answerOld = r)));
+        const { result } = renderHook(() => useSearchCoordinator(), {
+            wrapper: SearchCoordinatorProvider,
+        });
+        act(() => result.current.registerSearchHandler('media', searchFn));
+        act(() => result.current.search('media', 'old', { immediate: true }));
+        await waitFor(() => expect(searchFn).toHaveBeenCalledTimes(1));
+
+        // Outside act, so React commits 'new' in its own task; the old answer is queued right behind it.
+        await Promise.resolve().then(() => {
+            result.current.search('media', 'new');
+            setImmediate(() => answerOld({ data: { items: [{ id: 1 }] } }));
+        });
+        await waitFor(() => expect(result.current.getSearchState('media').term).toBe('new'));
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(result.current.getSearchState('media').results).toEqual([]);
+    });
+
+    it("keeps an old term's failure off the new search", async () => {
+        let failOld;
+        const searchFn = vi.fn(() => new Promise((_, reject) => (failOld = reject)));
+        const { result } = renderHook(() => useSearchCoordinator(), {
+            wrapper: SearchCoordinatorProvider,
+        });
+        act(() => result.current.registerSearchHandler('media', searchFn));
+        act(() => result.current.search('media', 'old', { immediate: true }));
+        await waitFor(() => expect(searchFn).toHaveBeenCalledTimes(1));
+        act(() => result.current.search('media', 'new'));
+
+        await act(async () => failOld(new Error('timed out')));
+
+        const state = result.current.getSearchState('media');
+        expect(state.term).toBe('new');
+        expect(state.status).toBe(result.current.searchStatus.SEARCHING);
+        expect(state.error).toBeNull();
     });
 });

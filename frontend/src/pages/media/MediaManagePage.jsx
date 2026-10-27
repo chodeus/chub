@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { mediaAPI } from '../../utils/api/media.js';
 import { nestarrAPI } from '../../utils/api/nestarr.js';
 import { apiCore } from '../../utils/api/core.js';
@@ -215,10 +216,7 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [filter, setFilter] = useState('');
-    const listRef = useRef(duplicates);
-    useEffect(() => {
-        listRef.current = duplicates;
-    }, [duplicates]);
+    const listRef = useLatestRef(duplicates);
     // A reloaded list can keep a group's key with different copies: drop what was loaded for it
     const [shownDuplicates, setShownDuplicates] = useState(duplicates);
     if (shownDuplicates !== duplicates) {

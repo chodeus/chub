@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { useLatestRef } from '../hooks/useLatestRef.js';
 
 /**
  * Search Coordinator context for managing unified search state
@@ -110,12 +111,9 @@ export const SearchCoordinatorProvider = ({
     // Refs for debouncing and stable access
     const debounceTimeouts = useRef({});
     const searchCallbacks = useRef({});
-    const searchStatesRef = useRef(searchStates);
-
-    // Mirror latest searchStates into a ref for stable access inside async callbacks.
-    useEffect(() => {
-        searchStatesRef.current = searchStates;
-    }, [searchStates]);
+    // The term each type last asked for, written at the call: a result or error for any other term is stale.
+    const requestedTerms = useRef({});
+    const searchStatesRef = useLatestRef(searchStates);
 
     // Note: searchHistory is already lazily initialized from localStorage via useState
     // initializer, so no separate init effect is needed.
@@ -280,6 +278,7 @@ export const SearchCoordinatorProvider = ({
                 addToHistory: shouldAddToHistory = true,
                 ...searchOptions
             } = options;
+            requestedTerms.current[searchType] = term;
 
             // Update search state immediately
             setSearchState(searchType, {
@@ -327,11 +326,7 @@ export const SearchCoordinatorProvider = ({
                 try {
                     const results = await searchFunction(term, searchOptions);
 
-                    // Check if this is still the current search (use ref for latest state)
-                    const currentState = searchStatesRef.current[searchType];
-                    if (currentState?.term !== term) {
-                        return; // Search term has changed, ignore results
-                    }
+                    if (requestedTerms.current[searchType] !== term) return;
 
                     // Determine result count from various API response shapes
                     const data = results?.data || results;
@@ -357,6 +352,7 @@ export const SearchCoordinatorProvider = ({
                     }
                 } catch (error) {
                     console.error(`Search failed for ${searchType}:`, error);
+                    if (requestedTerms.current[searchType] !== term) return;
 
                     setSearchState(searchType, {
                         status: SEARCH_STATUS.ERROR,
@@ -389,6 +385,7 @@ export const SearchCoordinatorProvider = ({
                 clearTimeout(debounceTimeouts.current[searchType]);
                 delete debounceTimeouts.current[searchType];
             }
+            requestedTerms.current[searchType] = '';
 
             // Clear search state
             setSearchState(searchType, {
@@ -411,11 +408,14 @@ export const SearchCoordinatorProvider = ({
      * Set active search type (for global search coordination)
      * @param {string} searchType - Type to set as active
      */
-    const setActiveSearch = useCallback(searchType => {
-        setActiveSearchType(searchType);
-        const currentState = searchStatesRef.current[searchType];
-        setGlobalSearchTerm(currentState?.term || '');
-    }, []);
+    const setActiveSearch = useCallback(
+        searchType => {
+            setActiveSearchType(searchType);
+            const currentState = searchStatesRef.current[searchType];
+            setGlobalSearchTerm(currentState?.term || '');
+        },
+        [searchStatesRef]
+    );
 
     /**
      * Get suggestions based on search history
