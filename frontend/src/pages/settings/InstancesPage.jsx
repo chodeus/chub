@@ -100,6 +100,13 @@ export const InstancesPage = () => {
     const [logsData, setLogsData] = useState({});
     const [librariesData, setLibrariesData] = useState({});
 
+    const refreshHealth = useCallback(async (serviceType, instanceName) => {
+        const res = await instancesAPI
+            .fetchHealthStatus(instanceName, serviceType)
+            .catch(() => null);
+        setHealthData(prev => ({ ...prev, [`${serviceType}:${instanceName}`]: res?.data }));
+    }, []);
+
     const handleFetchLogs = useCallback((service, instanceName) => {
         const key = `${service}:${instanceName}`;
         instancesAPI
@@ -335,118 +342,7 @@ export const InstancesPage = () => {
         return Object.keys(errors).length === 0;
     }, [formData, modalServiceType]);
 
-    /**
-     * Handle form submission for Add/Edit
-     */
-    const handleFormSubmit = useCallback(
-        async isEdit => {
-            if (!validateForm()) {
-                toast.error('Please fill in all required fields');
-                return;
-            }
-
-            setIsTesting(true);
-
-            try {
-                // Test connection first
-                const testResult = await instancesAPI.testInstanceConfig({
-                    service: modalServiceType,
-                    name: formData.name,
-                    url: formData.url,
-                    api: formData.api,
-                });
-
-                setIsTesting(false);
-
-                // If test passed, save the configuration
-                if (testResult) {
-                    setIsSaving(true);
-
-                    try {
-                        const instanceData = {
-                            service: modalServiceType,
-                            name: formData.name,
-                            url: formData.url,
-                            api: formData.api,
-                            webhook_force_reupload: !!formData.webhook_force_reupload,
-                        };
-
-                        if (isEdit) {
-                            // Update existing instance
-                            await instancesAPI.updateInstance(modalInstanceData.name, instanceData);
-                        } else {
-                            // Create new instance
-                            await instancesAPI.createInstance(instanceData);
-                        }
-
-                        toast.success(
-                            `Instance ${isEdit ? 'updated' : 'added'} successfully: ${formData.name}`
-                        );
-                        setIsSaving(false);
-
-                        // Close modal and refresh (bypass cache to show updated data)
-                        setAddModalOpen(false);
-                        setEditModalOpen(false);
-                        refreshInstances({ useCache: false });
-                    } catch (saveError) {
-                        setIsSaving(false);
-                        console.error('Instance save error:', saveError);
-                        toast.error(
-                            saveError.message || `Failed to ${isEdit ? 'update' : 'add'} instance`
-                        );
-                    }
-                }
-            } catch (error) {
-                setIsTesting(false);
-                setIsSaving(false);
-                console.error('Instance save error:', error);
-                toast.error(error.message || `Failed to ${isEdit ? 'update' : 'add'} instance`);
-            }
-        },
-        [validateForm, modalServiceType, formData, modalInstanceData, toast, refreshInstances]
-    );
-
-    /**
-     * Handle delete confirmation
-     */
-    const handleConfirmDelete = useCallback(async () => {
-        setIsSaving(true);
-
-        try {
-            // Call actual delete endpoint
-            await instancesAPI.deleteInstance(modalInstanceData.name, modalServiceType);
-
-            toast.success(`Instance deleted successfully: ${modalInstanceData.name}`);
-            setIsSaving(false);
-            setDeleteModalOpen(false);
-            refreshInstances({ useCache: false });
-        } catch (error) {
-            setIsSaving(false);
-            console.error('Instance delete error:', error);
-            toast.error(error.message || 'Failed to delete instance');
-        }
-    }, [modalInstanceData, modalServiceType, toast, refreshInstances]);
-
-    /**
-     * Handle field change
-     */
-    const handleFieldChange = useCallback((fieldKey, value) => {
-        setFormData(prev => ({ ...prev, [fieldKey]: value }));
-        // Clear error for this field
-        setFormErrors(prev => {
-            const newErrors = { ...prev };
-            delete newErrors[fieldKey];
-            return newErrors;
-        });
-    }, []);
-
-    /**
-     * Handle connection test for an instance
-     * @param {string} serviceType - Service type (radarr|sonarr|plex)
-     * @param {string} instanceName - Instance name
-     * @param {Object} instanceData - Instance configuration data
-     * @param {boolean} isBulkTest - Whether this is part of bulk testing (suppresses toasts)
-     */
+    /** Test an instance's connection and refresh its health badge; a bulk test shows no toasts. */
     const handleTest = useCallback(
         async (serviceType, instanceName, instanceData, isBulkTest = false) => {
             // Add to testing set
@@ -508,6 +404,8 @@ export const InstancesPage = () => {
                     toast.error(`${instanceName}: ${errorMessage}`);
                 }
             } finally {
+                await refreshHealth(serviceType, instanceName);
+
                 // Remove from testing set
                 setTestingInstances(prev => {
                     const next = new Set(prev);
@@ -516,8 +414,122 @@ export const InstancesPage = () => {
                 });
             }
         },
-        [toast]
+        [toast, refreshHealth]
     );
+
+    /**
+     * Handle form submission for Add/Edit
+     */
+    const handleFormSubmit = useCallback(
+        async isEdit => {
+            if (!validateForm()) {
+                toast.error('Please fill in all required fields');
+                return;
+            }
+
+            setIsTesting(true);
+
+            try {
+                // Test connection first
+                const testResult = await instancesAPI.testInstanceConfig({
+                    service: modalServiceType,
+                    name: formData.name,
+                    url: formData.url,
+                    api: formData.api,
+                });
+
+                setIsTesting(false);
+
+                // If test passed, save the configuration
+                if (testResult) {
+                    setIsSaving(true);
+
+                    try {
+                        const instanceData = {
+                            service: modalServiceType,
+                            name: formData.name,
+                            url: formData.url,
+                            api: formData.api,
+                            webhook_force_reupload: !!formData.webhook_force_reupload,
+                        };
+
+                        if (isEdit) {
+                            // Update existing instance
+                            await instancesAPI.updateInstance(modalInstanceData.name, instanceData);
+                        } else {
+                            // Create new instance
+                            await instancesAPI.createInstance(instanceData);
+                        }
+
+                        toast.success(
+                            `Instance ${isEdit ? 'updated' : 'added'} successfully: ${formData.name}`
+                        );
+                        setIsSaving(false);
+
+                        // Close modal and refresh (bypass cache to show updated data)
+                        setAddModalOpen(false);
+                        setEditModalOpen(false);
+                        refreshInstances({ useCache: false });
+                        handleTest(modalServiceType, formData.name, formData, true);
+                    } catch (saveError) {
+                        setIsSaving(false);
+                        console.error('Instance save error:', saveError);
+                        toast.error(
+                            saveError.message || `Failed to ${isEdit ? 'update' : 'add'} instance`
+                        );
+                    }
+                }
+            } catch (error) {
+                setIsTesting(false);
+                setIsSaving(false);
+                console.error('Instance save error:', error);
+                toast.error(error.message || `Failed to ${isEdit ? 'update' : 'add'} instance`);
+            }
+        },
+        [
+            validateForm,
+            modalServiceType,
+            formData,
+            modalInstanceData,
+            toast,
+            refreshInstances,
+            handleTest,
+        ]
+    );
+
+    /**
+     * Handle delete confirmation
+     */
+    const handleConfirmDelete = useCallback(async () => {
+        setIsSaving(true);
+
+        try {
+            // Call actual delete endpoint
+            await instancesAPI.deleteInstance(modalInstanceData.name, modalServiceType);
+
+            toast.success(`Instance deleted successfully: ${modalInstanceData.name}`);
+            setIsSaving(false);
+            setDeleteModalOpen(false);
+            refreshInstances({ useCache: false });
+        } catch (error) {
+            setIsSaving(false);
+            console.error('Instance delete error:', error);
+            toast.error(error.message || 'Failed to delete instance');
+        }
+    }, [modalInstanceData, modalServiceType, toast, refreshInstances]);
+
+    /**
+     * Handle field change
+     */
+    const handleFieldChange = useCallback((fieldKey, value) => {
+        setFormData(prev => ({ ...prev, [fieldKey]: value }));
+        // Clear error for this field
+        setFormErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[fieldKey];
+            return newErrors;
+        });
+    }, []);
 
     /**
      * Handle sync for an instance
@@ -576,19 +588,8 @@ export const InstancesPage = () => {
             handleTest(serviceType, instanceName, instanceData, true);
         });
 
-        // Fetch health and stats for all instances (best-effort, no toasts)
+        // Fetch stats for all instances (best-effort, no toasts)
         instancesToTest.forEach(({ serviceType, instanceName }) => {
-            instancesAPI
-                .fetchHealthStatus(instanceName)
-                .then(res => {
-                    if (res?.data) {
-                        setHealthData(prev => ({
-                            ...prev,
-                            [`${serviceType}:${instanceName}`]: res.data,
-                        }));
-                    }
-                })
-                .catch(() => {});
             instancesAPI
                 .fetchStatistics(instanceName, { service_type: serviceType })
                 .then(res => {

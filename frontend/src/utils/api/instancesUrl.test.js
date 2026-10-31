@@ -31,6 +31,14 @@ describe('instance names are encoded as one path segment', () => {
         expect(apiCore.get.mock.calls.at(-1)[0]).toBe('/plex/main%3Fx%3D1/libraries');
     });
 
+    it('asks for the health of the named service only', () => {
+        instancesAPI.fetchHealthStatus('4k/movies', 'sonarr');
+
+        expect(apiCore.get.mock.calls.at(-1)[0]).toBe(
+            '/instances/4k%2Fmovies/health?service=sonarr'
+        );
+    });
+
     it('invalidates the same key it fetched', async () => {
         await instancesAPI.updateInstanceLibraries('4k/movies', ['Films']);
 
