@@ -20,7 +20,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS builder
+FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS builder
 ARG NODE_MAJOR=24
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -89,7 +89,7 @@ RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
 # -------------------------
 # Stage 2: shared runtime base — everything except site-packages
 # -------------------------
-FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS runtime-base
+FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS runtime-base
 
 # Referenced by the apt layer so a new day rebuilds it instead of reusing a cached upgrade.
 ARG PACKAGES_DATE
