@@ -16,7 +16,7 @@ from tests.conftest import StubLogger  # noqa: E402
 
 @pytest.fixture
 def upstream(monkeypatch):
-    # Only the outbound HTTP call is faked; each service's URL answers its own status.
+    # Stubs the outbound HTTP call; each service's URL answers its own status.
     answers = {"http://10.0.0.1:32400": 200, "http://10.0.0.2:8989": 401}
 
     def fake_get(url, headers=None, **kwargs):
@@ -38,7 +38,7 @@ def client():
     app = FastAPI()
     app.include_router(inst.router)
     app.dependency_overrides[inst.get_config] = lambda: config
-    app.dependency_overrides[inst.get_logger] = lambda: StubLogger()
+    app.dependency_overrides[inst.get_logger] = StubLogger
     return TestClient(app)
 
 
@@ -55,7 +55,9 @@ def test_service_picks_the_same_named_instance(client, upstream):
 
 
 def test_first_match_still_answers_without_a_service(client, upstream):
-    assert _health(client).json()["data"]["service"] == "plex"
+    response = _health(client)
+
+    assert response.json()["data"]["service"] == "plex"
 
 
 @pytest.mark.parametrize("service", ["radarr", "model_dump", "bogus"])
