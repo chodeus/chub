@@ -102,7 +102,9 @@ export const InstancesPage = () => {
 
     const refreshHealth = useCallback(async (serviceType, instanceName) => {
         const res = await instancesAPI.fetchHealthStatus(instanceName).catch(() => null);
-        setHealthData(prev => ({ ...prev, [`${serviceType}:${instanceName}`]: res?.data }));
+        // The endpoint finds by name alone, and names repeat across services
+        const health = res?.data?.service === serviceType ? res.data : undefined;
+        setHealthData(prev => ({ ...prev, [`${serviceType}:${instanceName}`]: health }));
     }, []);
 
     const handleFetchLogs = useCallback((service, instanceName) => {
@@ -340,13 +342,7 @@ export const InstancesPage = () => {
         return Object.keys(errors).length === 0;
     }, [formData, modalServiceType]);
 
-    /**
-     * Handle connection test for an instance
-     * @param {string} serviceType - Service type (radarr|sonarr|plex)
-     * @param {string} instanceName - Instance name
-     * @param {Object} instanceData - Instance configuration data
-     * @param {boolean} isBulkTest - Whether this is part of bulk testing (suppresses toasts)
-     */
+    /** Test an instance's connection and refresh its health badge; a bulk test shows no toasts. */
     const handleTest = useCallback(
         async (serviceType, instanceName, instanceData, isBulkTest = false) => {
             // Add to testing set

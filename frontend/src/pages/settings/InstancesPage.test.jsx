@@ -12,14 +12,15 @@ const json = (body, status = 200) =>
         headers: { 'content-type': 'application/json' },
     });
 
-// Only HTTP is faked; the page, the card and apiCore are real.
+// Only HTTP and toasts are faked; the page, the card and apiCore are real.
 const stubServer = server => {
     vi.stubGlobal(
         'fetch',
         vi.fn(async (url, init = {}) => {
             const path = String(url).split('?')[0];
             if (path.endsWith('/instances/test')) {
-                return server.tokenWorks
+                const { service } = JSON.parse(init.body);
+                return server.tokenWorks && service !== server.failingService
                     ? json({ success: true, message: 'Connection successful' })
                     : json({ success: false, message: 'Invalid credentials' }, 401);
             }
@@ -33,10 +34,11 @@ const stubServer = server => {
                 return json({ success: true, message: 'updated' });
             }
             if (path.endsWith('/instances')) {
-                return json({
-                    success: true,
-                    data: { plex: { Chodeus: { url: 'http://plex:32400', api: '***' } } },
-                });
+                const data = { plex: { Chodeus: { url: 'http://plex:32400', api: '***' } } };
+                if (server.failingService) {
+                    data[server.failingService] = { Chodeus: { url: 'http://s:8989', api: '***' } };
+                }
+                return json({ success: true, data });
             }
             return json({ success: true, data: {} });
         })
@@ -49,7 +51,7 @@ const renderPage = async () => {
             <InstancesPage />
         </UIStateProvider>
     );
-    await screen.findByText('Chodeus');
+    await screen.findAllByText('Chodeus');
 };
 
 const label = text => screen.findByText(text, { selector: 'span' });
@@ -108,5 +110,13 @@ describe('InstancesPage health badge', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Test' }));
 
         expect(await label('Healthy')).toBeInTheDocument();
+    });
+
+    it('keeps a same-named instance of another service out of the verdict', async () => {
+        stubServer({ tokenWorks: true, failingService: 'sonarr' });
+        await renderPage();
+
+        expect(await label('healthy')).toBeInTheDocument();
+        expect(await label('Failed')).toBeInTheDocument();
     });
 });
