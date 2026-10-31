@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.54.2](https://github.com/chodeus/chub/compare/v2.54.1...v2.54.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([a968127](https://github.com/chodeus/chub/commit/a968127a15c77edf479f997a6aa81c4a05dc74c8))
+* **deps:** update all non-major dependencies ([ddc097f](https://github.com/chodeus/chub/commit/ddc097f7cb9199eefa8a120b751d6e2cbd69a5ff))
+* **deps:** update all non-major dependencies ([#745](https://github.com/chodeus/chub/issues/745)) ([ddc097f](https://github.com/chodeus/chub/commit/ddc097f7cb9199eefa8a120b751d6e2cbd69a5ff))
+* **deps:** update all non-major dependencies ([#746](https://github.com/chodeus/chub/issues/746)) ([a968127](https://github.com/chodeus/chub/commit/a968127a15c77edf479f997a6aa81c4a05dc74c8))
+* **instances:** refresh the health badge after Test and Save, per service ([#753](https://github.com/chodeus/chub/issues/753)) ([1e641f4](https://github.com/chodeus/chub/commit/1e641f46b3021fba5b18ed1b48903d6ce2aea916))
+* **ui:** keep stale async answers out after a reload or a new search ([#751](https://github.com/chodeus/chub/issues/751)) ([73708a4](https://github.com/chodeus/chub/commit/73708a495e79bb2c302c6f225f12871c93dc91a8))
+
 ## [2.54.1](https://github.com/chodeus/chub/compare/v2.54.0...v2.54.1) (2026-10-22)
 
 
