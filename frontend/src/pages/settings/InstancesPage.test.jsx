@@ -26,8 +26,11 @@ const stubServer = server => {
             }
             if (path.endsWith('/instances/Chodeus/health')) {
                 if (server.healthDown) return json({ success: false, message: 'down' }, 500);
-                const status = server.tokenWorks ? 'healthy' : 'unhealthy';
-                return json({ success: true, data: { service: 'plex', status } });
+                // Like the backend: without a service, the first match (Plex) answers.
+                const service = new URL(url, 'http://chub').searchParams.get('service') || 'plex';
+                const works = server.tokenWorks && service !== server.failingService;
+                const status = works ? 'healthy' : 'unhealthy';
+                return json({ success: true, data: { service, status } });
             }
             if (path.endsWith('/instances/Chodeus') && init.method === 'PUT') {
                 server.saved = JSON.parse(init.body);
@@ -112,11 +115,11 @@ describe('InstancesPage health badge', () => {
         expect(await label('Healthy')).toBeInTheDocument();
     });
 
-    it('keeps a same-named instance of another service out of the verdict', async () => {
+    it('gives same-named instances of two services their own verdicts', async () => {
         stubServer({ tokenWorks: true, failingService: 'sonarr' });
         await renderPage();
 
         expect(await label('healthy')).toBeInTheDocument();
-        expect(await label('Failed')).toBeInTheDocument();
+        expect(await label('unhealthy')).toBeInTheDocument();
     });
 });

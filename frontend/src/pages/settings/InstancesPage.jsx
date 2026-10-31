@@ -101,10 +101,10 @@ export const InstancesPage = () => {
     const [librariesData, setLibrariesData] = useState({});
 
     const refreshHealth = useCallback(async (serviceType, instanceName) => {
-        const res = await instancesAPI.fetchHealthStatus(instanceName).catch(() => null);
-        // The endpoint finds by name alone, and names repeat across services
-        const health = res?.data?.service === serviceType ? res.data : undefined;
-        setHealthData(prev => ({ ...prev, [`${serviceType}:${instanceName}`]: health }));
+        const res = await instancesAPI
+            .fetchHealthStatus(instanceName, serviceType)
+            .catch(() => null);
+        setHealthData(prev => ({ ...prev, [`${serviceType}:${instanceName}`]: res?.data }));
     }, []);
 
     const handleFetchLogs = useCallback((service, instanceName) => {

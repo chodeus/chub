@@ -1463,9 +1463,13 @@ def delete_instance(
 # --- Additional instance endpoints ---
 
 
-def _find_instance(config: ChubConfig, instance_id: str):
-    """Look up an instance across all service types."""
+def _find_instance(
+    config: ChubConfig, instance_id: str, service_type: Optional[str] = None
+):
+    """Look up an instance in one service type, or across all of them."""
     for service in ["plex", "radarr", "sonarr", "lidarr"]:
+        if service_type and service != service_type:
+            continue
         instances = getattr(config.instances, service, {})
         if instance_id in instances:
             return service, instances[instance_id]
@@ -2090,6 +2094,10 @@ def get_instance_logs(
 )
 def check_instance_health(
     instance_id: str,
+    service: Optional[str] = Query(
+        default=None,
+        description="Service type; names are unique per service only",
+    ),
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
@@ -2102,13 +2110,14 @@ def check_instance_health(
 
     Args:
         instance_id: Name of the instance to health-check
+        service: Service type holding that name; omitted, the first match wins
 
     Returns:
         Health status including connectivity state and response time
     """
     try:
         logger.debug(f"Serving GET /api/instances/{instance_id}/health")
-        service, details = _find_instance(config, instance_id)
+        service, details = _find_instance(config, instance_id, service)
         if not details:
             return error(
                 f"Instance '{instance_id}' not found",

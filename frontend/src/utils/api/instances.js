@@ -38,9 +38,12 @@ export const instancesAPI = {
         return apiCore.post('/instances/test', instanceData);
     },
 
-    /** Health for one instance, or all when `instanceId` is null. */
-    fetchHealthStatus: (instanceId = null, options = {}) => {
-        const url = instanceId ? `/instances/${instanceId}/health` : '/instances/health';
+    /** Health for one instance of `service`, or all when `instanceId` is null. */
+    fetchHealthStatus: (instanceId = null, service = null, options = {}) => {
+        const query = service ? `?service=${encodeURIComponent(service)}` : '';
+        const url = instanceId
+            ? `/instances/${encodeURIComponent(instanceId)}/health${query}`
+            : '/instances/health';
         return apiCore.get(url, {
             useCache: false, // Health should be real-time
             ...options,
