@@ -2,6 +2,21 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.54.2](https://github.com/chodeus/chub/compare/v2.54.1...v2.54.2) (2026-11-01)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([282dee0](https://github.com/chodeus/chub/commit/282dee03b6997ac36e9fa6d6f04c44e14f5600db))
+* **deps:** update all non-major dependencies ([a968127](https://github.com/chodeus/chub/commit/a968127a15c77edf479f997a6aa81c4a05dc74c8))
+* **deps:** update all non-major dependencies ([ddc097f](https://github.com/chodeus/chub/commit/ddc097f7cb9199eefa8a120b751d6e2cbd69a5ff))
+* **deps:** update all non-major dependencies ([#745](https://github.com/chodeus/chub/issues/745)) ([ddc097f](https://github.com/chodeus/chub/commit/ddc097f7cb9199eefa8a120b751d6e2cbd69a5ff))
+* **deps:** update all non-major dependencies ([#746](https://github.com/chodeus/chub/issues/746)) ([a968127](https://github.com/chodeus/chub/commit/a968127a15c77edf479f997a6aa81c4a05dc74c8))
+* **deps:** update all non-major dependencies ([#758](https://github.com/chodeus/chub/issues/758)) ([282dee0](https://github.com/chodeus/chub/commit/282dee03b6997ac36e9fa6d6f04c44e14f5600db))
+* **deps:** update dependency @tanstack/react-virtual to ^3.14.25 ([#762](https://github.com/chodeus/chub/issues/762)) ([5080f19](https://github.com/chodeus/chub/commit/5080f1952895b8552086a677786d9a66965535b5))
+* **instances:** refresh the health badge after Test and Save, per service ([#753](https://github.com/chodeus/chub/issues/753)) ([1e641f4](https://github.com/chodeus/chub/commit/1e641f46b3021fba5b18ed1b48903d6ce2aea916))
+* **ui:** keep stale async answers out after a reload or a new search ([#751](https://github.com/chodeus/chub/issues/751)) ([73708a4](https://github.com/chodeus/chub/commit/73708a495e79bb2c302c6f225f12871c93dc91a8))
+
 ## [2.54.1](https://github.com/chodeus/chub/compare/v2.54.0...v2.54.1) (2026-10-22)
 
 
