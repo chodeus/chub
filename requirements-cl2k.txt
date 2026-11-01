@@ -3,7 +3,7 @@
 psd-tools==1.26.0
 Wand==0.7.2
 # CPU ONNX runtime for the PP-OCRv4 text detector behind "tighten to letters" (fail-soft).
-onnxruntime==1.31.0
+onnxruntime==1.31.1
 # SVG logo rasterization (renderer._read_logo_image): the image's ImageMagick has
 # no SVG delegate, so Wand 500s on SVG logos. Needs only libcairo2 (via librsvg2-2).
 cairosvg==2.9.1
