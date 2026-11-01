@@ -126,7 +126,7 @@ jobs:
       - name: Install linting tools
         env:
           # renovate: datasource=pypi depName=ruff
-          RUFF_VERSION: 0.17.2
+          RUFF_VERSION: 0.17.3
         run: pip install "ruff==${RUFF_VERSION}"
 
       - name: Run Ruff linter
