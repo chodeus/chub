@@ -232,11 +232,12 @@ def test_border_skip_alone_migrates_on_load(tmp_path, capsys):
     path.write_text(yaml.safe_dump({"border_replacerr": {"skip": True, "border_width": 30}}))
 
     config = load_config(str(path))
+    printed = capsys.readouterr().out
 
     assert config.border_replacerr.border_width == 30
     assert "skip" not in yaml.safe_load(path.read_text())["border_replacerr"]
     assert list(tmp_path.glob("config.yml.legacy-*.yml"))
-    assert "border_replacerr.skip" in capsys.readouterr().out
+    assert "border_replacerr.skip" in printed
 
 
 def test_rule_cleanarr_dry_run_true_becomes_report():
