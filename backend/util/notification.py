@@ -8,13 +8,16 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
-from ratelimit import limits, sleep_and_retry
 
 from backend.util.log_redaction import redact
+from backend.util.rate_limiter import Throttle
 
 # Mirror of config.ALL_MODULES_SENTINEL — a destination whose `modules` list
 # contains this reports on every module.
 ALL_MODULES_SENTINEL = "__ALL__"
+
+# Every webhook POST shares this: 5 at once, then one per second (5 per 5 s, as before).
+_WEBHOOK_THROTTLE = Throttle(rate=1, burst=5)
 
 
 @dataclass
@@ -254,8 +257,6 @@ class NotificationManager:
         return payloads
 
     @staticmethod
-    @sleep_and_retry
-    @limits(calls=5, period=5)
     def safe_post(url: str, payload: Dict[str, Any]) -> requests.Response:
         # Webhook URLs come from admin config, but guard them like every
         # other outbound fetch — a misconfigured URL must not become a probe
@@ -265,6 +266,7 @@ class NotificationManager:
         safe, reason = is_safe_url(url)
         if not safe:
             raise ValueError(f"Notification URL blocked by SSRF guard: {reason}")
+        _WEBHOOK_THROTTLE.acquire()
         # A hung webhook must not stall the whole run: bound every POST.
         return requests.post(url, json=payload, timeout=15)
 

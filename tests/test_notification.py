@@ -566,6 +566,35 @@ def test_safe_post_passes_timeout(monkeypatch):
     assert seen["timeout"] == 15
 
 
+def test_safe_post_waits_on_the_shared_webhook_throttle(monkeypatch):
+    """Past the burst, the next POST waits for the throttle instead of firing at once."""
+    from backend.util import notification
+    from backend.util.rate_limiter import Throttle
+
+    clock = {"now": 0.0}
+    sleeps = []
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        clock["now"] += seconds
+
+    monkeypatch.setattr(
+        notification,
+        "_WEBHOOK_THROTTLE",
+        Throttle(rate=1, burst=2, clock=lambda: clock["now"], sleep=fake_sleep),
+    )
+    monkeypatch.setattr(
+        "backend.util.notification.requests.post",
+        lambda url, json=None, timeout=None: SimpleNamespace(status_code=204, text=""),
+    )
+    monkeypatch.setattr("backend.util.ssrf_guard.is_safe_url", lambda u: (True, ""))
+
+    for _ in range(3):
+        NotificationManager.safe_post("https://discord.com/api/webhooks/1/x", {"a": 1})
+
+    assert sleeps == [1.0]
+
+
 # --- summary collapse: huge runs don't fan out into dozens of Discord messages ---
 
 
