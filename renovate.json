@@ -3,6 +3,7 @@
   "extends": [
     "github>chodeus/chodeus-ops"
   ],
+  "prCreation": "status-success",
   "packageRules": [
     {
       "matchManagers": [
@@ -30,6 +31,13 @@
         "npm": "<12"
       },
       "description": "npm 12 refuses to fetch a registry package that declares bundleDependencies (@tailwindcss/oxide-wasm32-wasi), so lock file maintenance fails with EALLOWREMOTE (npm/cli#9347). Drop this once npm fixes it."
+    },
+    {
+      "matchFileNames": [
+        ".github/**"
+      ],
+      "prCreation": "immediate",
+      "description": "Push CI is path-filtered and never runs on a Renovate branch for .github/workflows or .github/actions, so a status-success gate would hold those PRs forever."
     }
   ]
 }
