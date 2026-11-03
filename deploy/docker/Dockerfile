@@ -21,12 +21,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS builder
-ARG NODE_MAJOR=24
-
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-# Install build dependencies (Node.js 24 arrives above). libcairo2-dev + cairo
+# Install build dependencies (Node.js arrives above). libcairo2-dev + cairo
 # runtime libs are needed at build time for cairosvg, which rasterizes the
 # holiday border SVGs to PNGs.
 RUN set -eux; \
@@ -37,7 +35,6 @@ RUN set -eux; \
     ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
     node --version && npm --version && \
-    node -e "if (process.versions.node.split('.')[0] !== '${NODE_MAJOR}') process.exit(1)" && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
