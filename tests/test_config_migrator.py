@@ -222,6 +222,23 @@ def test_rule_drop_border_skip_is_announced():
     assert any(n.rule == "drop:border_replacerr.skip" for n in notes)
 
 
+def test_border_skip_alone_migrates_on_load(tmp_path, capsys):
+    """A config whose only stale key is `skip` is still detected, rewritten and announced."""
+    import yaml
+
+    from backend.util.config import load_config
+
+    path = tmp_path / "config.yml"
+    path.write_text(yaml.safe_dump({"border_replacerr": {"skip": True, "border_width": 30}}))
+
+    config = load_config(str(path))
+
+    assert config.border_replacerr.border_width == 30
+    assert "skip" not in yaml.safe_load(path.read_text())["border_replacerr"]
+    assert list(tmp_path.glob("config.yml.legacy-*.yml"))
+    assert "border_replacerr.skip" in capsys.readouterr().out
+
+
 def test_rule_cleanarr_dry_run_true_becomes_report():
     out, _ = migrate({"poster_cleanarr": {"dry_run": True}})
     assert out["poster_cleanarr"]["mode"] == "report"

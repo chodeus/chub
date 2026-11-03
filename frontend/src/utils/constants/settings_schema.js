@@ -383,6 +383,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Clean orphan assets after rename',
                 type: 'check_box',
                 section: 'chain',
+                conditional: KOMETA_ONLY,
                 description: 'Clean orphaned posters at the destination after renaming.',
                 helpText:
                     "After renaming, scans the destination for orphan posters — files whose media no longer exists in your instances — and acts on them. A poster is kept if its {tmdb-N}/{tvdb-N} tag or its title still matches the library; it's flagged only when both miss. Source dirs are excluded (gdrive sources re-download on next sync; personal dirs aren't CHUB's to touch). The action (report / move / remove) follows Orphan Assets Mode in Poster Cleanarr.",

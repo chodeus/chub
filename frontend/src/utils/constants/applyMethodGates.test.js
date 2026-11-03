@@ -34,3 +34,12 @@ it('Poster Renamerr shows its Plex-only upload settings for the Plex method', ()
         expect.arrayContaining(PLEX_FIELDS)
     );
 });
+
+it('Poster Renamerr offers orphan cleanup only for Kometa, where the run performs it', () => {
+    expect(visibleKeys('poster_renamerr', { apply_method: 'kometa' })).toContain(
+        'clean_orphan_assets'
+    );
+    expect(visibleKeys('poster_renamerr', { apply_method: 'plex' })).not.toContain(
+        'clean_orphan_assets'
+    );
+});

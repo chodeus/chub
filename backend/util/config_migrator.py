@@ -96,6 +96,7 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     # Legacy-only keys nested under known sections
     legacy_keys = [
         ("poster_renamerr", "incremental_border_replacerr"),
+        ("border_replacerr", "skip"),
         ("unmatched_assets", "ignore_root_folders"),
         ("unmatched_assets", "source_dirs"),
         ("renameinatorr", "ignore_tag"),
