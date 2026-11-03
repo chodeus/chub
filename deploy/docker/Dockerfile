@@ -3,7 +3,7 @@
 # -------------------------
 # Official Node image, not NodeSource's apt repo: no third-party repo or GPG key in the build.
 # Must match the Python base's Debian release (trixie, glibc 2.41): the copied binaries use its libc.
-FROM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 AS node
+FROM node:26.13.0-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS node
 
 # -------------------------
 # Stage 1a: Frontend bundle (BUILD platform, never emulated)
@@ -13,7 +13,7 @@ FROM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33
 # chunks..." for 2h55m (its threaded Rust binding deadlocks under qemu-user)
 # until the 6h job timeout. Pinned to $BUILDPLATFORM, one bundle serves both
 # target arches. `npm ci` keeps optional native bindings strict per the lockfile.
-FROM --platform=$BUILDPLATFORM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 AS frontend
+FROM --platform=$BUILDPLATFORM node:26.13.0-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS frontend
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -21,12 +21,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS builder
-ARG NODE_MAJOR=24
-
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-# Install build dependencies (Node.js 24 arrives above). libcairo2-dev + cairo
+# Install build dependencies (Node.js arrives above). libcairo2-dev + cairo
 # runtime libs are needed at build time for cairosvg, which rasterizes the
 # holiday border SVGs to PNGs.
 RUN set -eux; \
@@ -37,7 +35,6 @@ RUN set -eux; \
     ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
     node --version && npm --version && \
-    node -e "if (process.versions.node.split('.')[0] !== '${NODE_MAJOR}') process.exit(1)" && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
