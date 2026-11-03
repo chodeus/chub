@@ -213,6 +213,15 @@ def test_rule_drop_cleanarr_ignore_media():
     assert "ignore_media" not in out["poster_cleanarr"]
 
 
+def test_rule_drop_border_skip_is_announced():
+    """DAPS's holiday-only `skip` is gone; the migration log must say so."""
+    out, notes = migrate({"border_replacerr": {"skip": True, "border_width": 26}})
+
+    assert "skip" not in out["border_replacerr"]
+    assert out["border_replacerr"]["border_width"] == 26
+    assert any(n.rule == "drop:border_replacerr.skip" for n in notes)
+
+
 def test_rule_cleanarr_dry_run_true_becomes_report():
     out, _ = migrate({"poster_cleanarr": {"dry_run": True}})
     assert out["poster_cleanarr"]["mode"] == "report"

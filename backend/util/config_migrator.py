@@ -734,6 +734,14 @@ def migrate(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], List[MigrationNote]]:
         "ignore_media",
         "per-title ignore is now handled via instance-level filters",
     )
+    _rule_drop_field(
+        out,
+        notes,
+        "border_replacerr",
+        "skip",
+        "holiday-only mode was removed; outside a holiday the default colours "
+        "(or border removal) now apply",
+    )
 
     # Shape conversions
     _rule_split_module_instances_to_plex_scope(out, notes)
