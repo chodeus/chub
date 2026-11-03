@@ -143,5 +143,8 @@ describe('InstancesField', () => {
         expect(
             await screen.findByText("Only used when this module's Apply Method is set to Plex.")
         ).toBeInTheDocument();
+        expect(
+            screen.getByRole('switch', { name: 'Upload posters to this Plex instance' })
+        ).toHaveAccessibleDescription("Only used when this module's Apply Method is set to Plex.");
     });
 });

@@ -239,6 +239,9 @@ def test_stream_token_reaches_border_thumbnails(monkeypatch, tmp_path):
         auth=SimpleNamespace(username="u", password_hash="h", jwt_secret=secret)
     )
     monkeypatch.setattr(apimain, "load_config", lambda: cfg)
+    # The route builds a BorderReplacerr, which loads config and opens a log file.
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("DOCKER_ENV", "true")
     Image.new("RGBA", (600, 900), (255, 165, 0, 255)).save(tmp_path / "v1.png")
     monkeypatch.setattr(
         border_api, "_resolve_variant_source_dir", lambda source, folder: tmp_path

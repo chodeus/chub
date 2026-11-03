@@ -33,15 +33,28 @@ import Spinner from '../../ui/Spinner.jsx';
 
 /** A boolean as the mock's label-left / toggle-right row (used for the
  *  plex_scope add-posters / match-collections options). */
-const ToggleRow = ({ label, hint, checked, disabled, onChange }) => (
-    <div className="flex items-center justify-between gap-4 py-2.5 px-4 bg-surface-inset border border-border rounded-lg">
-        <span className="flex flex-col min-w-0">
-            <span className="text-sm font-medium text-fg">{label}</span>
-            {hint && <span className="text-xs text-fg-muted">{hint}</span>}
-        </span>
-        <Toggle label={label} checked={!!checked} disabled={disabled} onChange={onChange} />
-    </div>
-);
+const ToggleRow = ({ label, hint, checked, disabled, onChange }) => {
+    const hintId = useId();
+    return (
+        <div className="flex items-center justify-between gap-4 py-2.5 px-4 bg-surface-inset border border-border rounded-lg">
+            <span className="flex flex-col min-w-0">
+                <span className="text-sm font-medium text-fg">{label}</span>
+                {hint && (
+                    <span id={hintId} className="text-xs text-fg-muted">
+                        {hint}
+                    </span>
+                )}
+            </span>
+            <Toggle
+                label={label}
+                describedBy={hint ? hintId : undefined}
+                checked={!!checked}
+                disabled={disabled}
+                onChange={onChange}
+            />
+        </div>
+    );
+};
 
 // Per-service dot colour for the instance pills (mirrors the design mock):
 // Radarr green, Sonarr cyan, Lidarr/other lilac, Plex gold. The dot shows the
