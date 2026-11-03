@@ -26,14 +26,18 @@ const curatorOf = preset => {
 const isAbsolute = p => (p || '').trim().startsWith('/');
 
 // Normalised path with no trailing slash: resolves "." / "..", collapses "//"; "/" becomes ''.
+// A relative path keeps the leading ".." it cannot cancel; an absolute one stops at root.
 const trimPath = p => {
     const segments = [];
     (p || '')
         .trim()
         .split('/')
         .forEach(seg => {
-            if (seg === '..') segments.pop();
-            else if (seg && seg !== '.') segments.push(seg);
+            if (seg === '..') {
+                const last = segments[segments.length - 1];
+                if (last && last !== '..') segments.pop();
+                else if (!isAbsolute(p)) segments.push(seg);
+            } else if (seg && seg !== '.') segments.push(seg);
         });
     const joined = segments.join('/');
     return isAbsolute(p) && joined ? `/${joined}` : joined;

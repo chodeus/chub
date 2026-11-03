@@ -187,6 +187,19 @@ describe('BulkPresetPicker rows and locations', () => {
         expect(onChange.mock.calls[0][0][0].location).toBe('/posters/CL2K/Solen');
     });
 
+    it.each([
+        ['../posters', '../posters/CL2K/Solen'],
+        ['../../a/../posters', '../../posters/CL2K/Solen'],
+        ['/../posters', '/posters/CL2K/Solen'],
+    ])('keeps leading ".." only on a relative base (%s)', async (base, location) => {
+        const onChange = renderPicker([]);
+        await loaded();
+        fireEvent.change(baseBox(), { target: { value: base } });
+        await addPreset('CL2K Solen');
+
+        expect(onChange.mock.calls[0][0][0].location).toBe(location);
+    });
+
     it('puts new drives in the style folder already used under the base', async () => {
         const onChange = renderPicker([drive('a', '/posters/cl2k/Solen')]);
         const chodeus = await screen.findByRole('checkbox', { name: /^CL2K Chodeus/ });
