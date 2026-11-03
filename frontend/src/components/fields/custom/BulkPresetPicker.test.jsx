@@ -288,6 +288,19 @@ describe('BulkPresetPicker Poster Renamerr overlap', () => {
     });
 
     it.each([
+        ['/', '/'],
+        ['/kometa/', '/kometa'],
+    ])('names destination %s as %s in the warning', async (destination, shown) => {
+        renderPicker([], withDestination(destination));
+        await loaded();
+        fireEvent.change(baseBox(), { target: { value: '/kometa/posters' } });
+
+        expect(warning()).toHaveTextContent(
+            `destination directory (${shown}) or a folder inside it`
+        );
+    });
+
+    it.each([
         ['/kometa/assets', '/kometa/posters'],
         ['/kometa/assets', '/kometa/assets2'],
         ['', '/kometa'],

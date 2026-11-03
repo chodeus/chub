@@ -247,8 +247,9 @@ export const BulkPresetPicker = React.memo(
                         </span>
                         <span>
                             This is Poster Renamerr&apos;s destination directory (
-                            {trimPath(destinationDir)}) or a folder inside it. Drives synced here
-                            mix with the renamed posters Kometa reads — use a folder outside it.
+                            {trimPath(destinationDir) || '/'}) or a folder inside it. Drives synced
+                            here mix with the renamed posters Kometa reads — use a folder outside
+                            it.
                         </span>
                     </p>
                 )}
