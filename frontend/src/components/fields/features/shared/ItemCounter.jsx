@@ -65,7 +65,7 @@ export const ItemCounter = React.memo(
         const isFull = hasLimit && current >= total;
 
         // Format display text
-        let displayText = '';
+        let displayText;
 
         if (customFormatter) {
             displayText = customFormatter(current, total, itemType);

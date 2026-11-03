@@ -1,5 +1,5 @@
 import js from '@eslint/js';
-import react from 'eslint-plugin-react';
+import eslintReact from '@eslint-react/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
@@ -8,7 +8,8 @@ import { defineConfig } from 'eslint/config';
 export default defineConfig([
   {
     files: ['**/*.{js,jsx}'],
-    plugins: { react, 'react-hooks': reactHooks },
+    extends: [eslintReact.configs.recommended],
+    plugins: { 'react-hooks': reactHooks },
     languageOptions: {
       ecmaVersion: 'latest',
       globals: globals.browser,
@@ -19,14 +20,17 @@ export default defineConfig([
     },
     rules: {
       ...js.configs.recommended.rules,
-      ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       ...prettier.rules,
-      'react/prop-types': 'off',           // PropTypes are optional docs; React 19 ignores them at runtime
-      'react/react-in-jsx-scope': 'off',   // Not needed with the automatic JSX runtime
-    },
-    settings: {
-      react: { version: 'detect' },
+      // The automatic JSX runtime leaves `import React` unused; eslint-plugin-react used to mark it
+      'no-unused-vars': ['error', { varsIgnorePattern: '^React$' }],
+      // eslint-plugin-react-hooks owns these; @eslint-react's copies would report each twice
+      '@eslint-react/rules-of-hooks': 'off',
+      '@eslint-react/exhaustive-deps': 'off',
+      '@eslint-react/purity': 'off',
+      '@eslint-react/set-state-in-effect': 'off',
+      '@eslint-react/set-state-in-render': 'off',
+      '@eslint-react/static-components': 'off',
     },
   },
   {
