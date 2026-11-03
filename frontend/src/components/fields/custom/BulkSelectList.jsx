@@ -18,7 +18,8 @@ const PRIMARY_BUTTON_CLASSES =
  * @param {Object} props
  * @param {string} props.title - Collapsed-header label.
  * @param {boolean} props.loading - Show a loading row.
- * @param {Array} props.groups - [{ key, label, items: [{ value, label, sublabel, disabled }] }]
+ * @param {Array} props.groups - [{ key, label, items: [{ value, label, sublabel, disabled, note }] }]
+ *   (`note` replaces "Already added" as the reason a disabled row shows).
  * @param {React.ReactNode} props.headerSlot - Rendered above the list (e.g. global-dir input).
  * @param {boolean} props.canAdd - Extra gate beyond having a selection (default true).
  * @param {string} props.addDisabledReason - Hint shown when canAdd is false.
@@ -152,7 +153,10 @@ export const BulkSelectList = React.memo(
                                                                 {item.disabled && (
                                                                     <span className="text-fg-muted">
                                                                         {' '}
-                                                                        (Already added)
+                                                                        (
+                                                                        {item.note ??
+                                                                            'Already added'}
+                                                                        )
                                                                     </span>
                                                                 )}
                                                             </span>

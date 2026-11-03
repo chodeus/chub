@@ -151,6 +151,7 @@ describe('BulkPresetPicker rows and locations', () => {
         const chodeus = screen.getByRole('checkbox', { name: /^CL2K Chodeus/ });
 
         expect(added).toBeDisabled();
+        expect(within(added.closest('label')).getByText('(Already added)')).toBeInTheDocument();
         expect(
             within(added.closest('label')).getByText('/kometa/posters/CL2K/Solen01')
         ).toBeInTheDocument();
@@ -218,6 +219,48 @@ describe('BulkPresetPicker rows and locations', () => {
         await addPreset('CL2K Chodeus');
 
         expect(onChange.mock.calls[0][0][1].location).toBe('/new/CL2K/Chodeus');
+    });
+
+    it('reuses the saved style folder under a relative "." base too', async () => {
+        const onChange = renderPicker([drive('a', 'cl2k/Solen')]);
+        await loaded();
+        fireEvent.change(baseBox(), { target: { value: '.' } });
+        await addPreset('CL2K Chodeus');
+
+        expect(onChange.mock.calls[0][0][1].location).toBe('cl2k/Chodeus');
+    });
+});
+
+describe('BulkPresetPicker shared folders', () => {
+    it('blocks a re-shared preset whose folder a saved drive already syncs into', async () => {
+        renderPicker([
+            { name: 'Solen (old share)', id: 'old-id', location: '/posters/cl2k/Solen' },
+        ]);
+        const row = await loaded();
+
+        expect(row).toBeDisabled();
+        expect(
+            within(row.closest('label')).getByText('(folder in use by Solen (old share))')
+        ).toBeInTheDocument();
+    });
+
+    it('matches the folder regardless of case', async () => {
+        renderPicker([{ name: 'Old', id: 'old-id', location: '/posters/CL2K/solen' }]);
+        expect(await loaded()).toBeDisabled();
+    });
+
+    it('never adds two presets of one batch to the same folder', async () => {
+        presetsMock.list = [
+            { name: 'CL2K Solen', id: 'solen-a', style: 'CL2K' },
+            { name: 'CL2K Solen', id: 'solen-b', style: 'CL2K' },
+        ];
+        const onChange = renderPicker([drive('x', '/posters/CL2K/Other')]);
+        const boxes = await screen.findAllByRole('checkbox', { name: /^CL2K Solen/ });
+        boxes.forEach(b => fireEvent.click(b));
+        fireEvent.click(screen.getByRole('button', { name: /^Add 2 selected drives$/ }));
+
+        const added = onChange.mock.calls[0][0].slice(1);
+        expect(added.map(e => e.location)).toEqual(['/posters/CL2K/Solen']);
     });
 });
 

@@ -43,7 +43,13 @@ const trimPath = p => {
     return isAbsolute(p) && joined ? `/${joined}` : joined;
 };
 
-const parentOf = p => p.slice(0, p.lastIndexOf('/'));
+const parentOf = p => {
+    const i = p.lastIndexOf('/');
+    return i < 0 ? '' : p.slice(0, i);
+};
+
+// Case-insensitive folder identity: two drives in one folder rclone-sync over each other.
+const folderKey = p => trimPath(p).toLowerCase();
 
 // A bare "/" base must keep its slash or the location comes out relative.
 const joinPath = (base, ...parts) => {
@@ -125,6 +131,14 @@ export const BulkPresetPicker = React.memo(
             () => new Map((value || []).filter(e => e?.id).map(e => [e.id, e.location ?? ''])),
             [value]
         );
+        const savedByFolder = useMemo(() => {
+            const folders = new Map();
+            (value || []).forEach(e => {
+                const key = folderKey(e?.location);
+                if (key && !folders.has(key)) folders.set(key, e.name || e.id || 'another drive');
+            });
+            return folders;
+        }, [value]);
 
         const styles = useMemo(
             () => new Set(presets.map(p => p?.style?.toLowerCase()).filter(Boolean)),
@@ -172,33 +186,35 @@ export const BulkPresetPicker = React.memo(
                     label: style,
                     items: byStyle[style].map(p => {
                         const added = savedById.has(p.id);
+                        const location = added ? savedById.get(p.id) : locationFor(p);
+                        const owner = added ? null : savedByFolder.get(folderKey(location));
                         return {
                             value: p.id,
                             label: p.name,
-                            sublabel: added ? savedById.get(p.id) : locationFor(p),
-                            disabled: added,
+                            sublabel: location,
+                            disabled: added || !!owner,
+                            ...(owner ? { note: `folder in use by ${owner}` } : {}),
                         };
                     }),
                 }));
-        }, [presets, locationFor, savedById]);
+        }, [presets, locationFor, savedById, savedByFolder]);
 
         const handleAdd = useCallback(
             selectedIds => {
                 const byId = new Map(presets.map(p => [p.id, p]));
+                const taken = new Set(savedByFolder.keys());
                 const additions = [];
                 selectedIds.forEach(id => {
-                    if (savedById.has(id)) return;
                     const p = byId.get(id);
-                    if (!p) return;
-                    additions.push({
-                        name: p.name,
-                        id: p.id,
-                        location: locationFor(p),
-                    });
+                    if (!p || savedById.has(id)) return;
+                    const location = locationFor(p);
+                    if (taken.has(folderKey(location))) return;
+                    taken.add(folderKey(location));
+                    additions.push({ name: p.name, id: p.id, location });
                 });
                 if (additions.length) onChange([...(value || []), ...additions]);
             },
-            [presets, savedById, locationFor, value, onChange]
+            [presets, savedById, savedByFolder, locationFor, value, onChange]
         );
 
         const canAdd = !!baseDir.trim();
