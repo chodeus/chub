@@ -198,6 +198,35 @@ def test_rule_rename_labelarr_plex_instance_to_instance():
     assert all("plex_instance" not in e for e in entries)
 
 
+def test_rule_rename_labelarr_keeps_an_instance_already_set():
+    """A stale `plex_instance` never overwrites the current `instance`; an empty one is filled."""
+    out, notes = migrate(
+        {
+            "labelarr": {
+                "mappings": [
+                    {
+                        "plex_instances": [
+                            {"instance": "current", "plex_instance": "stale"},
+                            {"instance": "", "plex_instance": "p3"},
+                        ]
+                    }
+                ]
+            }
+        }
+    )
+    entries = out["labelarr"]["mappings"][0]["plex_instances"]
+    assert [e["instance"] for e in entries] == ["current", "p3"]
+    assert all("plex_instance" not in e for e in entries)
+    assert any(n.level == "warning" and "stale" in n.message for n in notes)
+
+
+def test_rule_rename_field_keeps_a_value_already_set():
+    """A legacy key left beside its renamed key is dropped, not copied over it."""
+    out, _ = migrate({"renameinatorr": {"ignore_tag": "old", "ignore_tags": ["kept"]}})
+    assert out["renameinatorr"]["ignore_tags"] == ["kept"]
+    assert "ignore_tag" not in out["renameinatorr"]
+
+
 def test_rule_drop_incremental_border_replacerr():
     out, _ = migrate({"poster_renamerr": {"incremental_border_replacerr": True}})
     assert "incremental_border_replacerr" not in out["poster_renamerr"]
