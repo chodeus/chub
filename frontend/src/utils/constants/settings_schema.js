@@ -1369,7 +1369,7 @@ const CORE_SETTINGS_SCHEMA = [
                         label: 'ARR Path Prefix',
                         type: 'text',
                         required: true,
-                        placeholder: '/data',
+                        placeholder: 'e.g. /data',
                         description: 'Path prefix as seen inside the ARR container (e.g. /data).',
                     },
                     {
@@ -1377,9 +1377,9 @@ const CORE_SETTINGS_SCHEMA = [
                         label: 'CHUB Path Prefix',
                         type: 'text',
                         required: true,
-                        placeholder: '/mnt/user/data',
+                        placeholder: 'e.g. /media',
                         description:
-                            'Equivalent path as seen inside the CHUB container (e.g. /mnt/user/data).',
+                            'Equivalent path as seen inside the CHUB container (e.g. /media).',
                     },
                 ],
             },

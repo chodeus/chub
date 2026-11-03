@@ -131,7 +131,6 @@ const LoginPage = () => {
                                 setErrorMsg('');
                             }}
                             disabled={submitting}
-                            placeholder="admin"
                             className={`${inputCls} ${fieldError(!!errorMsg, username)} placeholder:text-fg-subtle`}
                         />
                     </label>
