@@ -224,6 +224,40 @@ def test_stream_token_rejected_off_allowlist(monkeypatch):
     )
 
 
+def test_stream_token_reaches_border_thumbnails(monkeypatch, tmp_path):
+    """The Border Replacerr thumbnail <img> URL carries a stream token; it must not 403."""
+    import logging
+
+    import backend.api.border_replacerr as border_api
+    import backend.api.main as apimain
+    from PIL import Image
+
+    from backend.util.auth import create_stream_token, generate_jwt_secret
+
+    secret = generate_jwt_secret()
+    cfg = SimpleNamespace(
+        auth=SimpleNamespace(username="u", password_hash="h", jwt_secret=secret)
+    )
+    monkeypatch.setattr(apimain, "load_config", lambda: cfg)
+    Image.new("RGBA", (600, 900), (255, 165, 0, 255)).save(tmp_path / "v1.png")
+    monkeypatch.setattr(
+        border_api, "_resolve_variant_source_dir", lambda source, folder: tmp_path
+    )
+    monkeypatch.setattr(border_api, "_THUMB_DIR", tmp_path / "thumbs")
+
+    app = FastAPI()
+    app.dependency_overrides[border_api.get_logger] = lambda: logging.getLogger("t")
+    app.add_middleware(apimain.AuthMiddleware)
+    app.include_router(border_api.router)
+    stream = create_stream_token("u", secret)
+    url = f"/api/border-replacerr/borders/🎃 Halloween/bundled/v1.png?token={stream}"
+
+    resp = TestClient(app).get(url)
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+
+
 # 8. Renaming an instance must migrate rows even when the historical `source` is
 #    title-cased (the doubled-instance bug).
 def test_rename_instance_migrates_title_cased_source(db):
