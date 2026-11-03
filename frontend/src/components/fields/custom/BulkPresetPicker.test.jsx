@@ -218,6 +218,7 @@ describe('BulkPresetPicker Poster Renamerr overlap', () => {
         ['/kometa', '/kometa/posters'],
         ['/kometa/', '/kometa'],
         ['/', '/posters'],
+        ['/kometa', '/other/../kometa/posters'],
     ])('warns when destination %s holds base %s', async (destination, base) => {
         renderPicker([], withDestination(destination));
         await loaded();
@@ -234,6 +235,7 @@ describe('BulkPresetPicker Poster Renamerr overlap', () => {
         ['/kometa/assets', '/kometa/posters'],
         ['/kometa/assets', '/kometa/assets2'],
         ['', '/kometa'],
+        ['/kometa', '/kometa/../other'],
     ])('stays quiet when destination %s does not hold base %s', async (destination, base) => {
         renderPicker([], withDestination(destination));
         await loaded();

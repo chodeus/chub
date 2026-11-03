@@ -23,13 +23,21 @@ const curatorOf = preset => {
     return preset.name?.startsWith(prefix) ? preset.name.slice(prefix.length) : preset.name;
 };
 
-const trimPath = p =>
+const isAbsolute = p => (p || '').trim().startsWith('/');
+
+// Normalised path with no trailing slash: resolves "." / "..", collapses "//"; "/" becomes ''.
+const trimPath = p => {
+    const segments = [];
     (p || '')
         .trim()
-        .replace(/\/{2,}/g, '/')
-        .replace(/\/+$/, '');
-
-const isAbsolute = p => (p || '').trim().startsWith('/');
+        .split('/')
+        .forEach(seg => {
+            if (seg === '..') segments.pop();
+            else if (seg && seg !== '.') segments.push(seg);
+        });
+    const joined = segments.join('/');
+    return isAbsolute(p) && joined ? `/${joined}` : joined;
+};
 
 const parentOf = p => p.slice(0, p.lastIndexOf('/'));
 
