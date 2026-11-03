@@ -23,7 +23,13 @@ const curatorOf = preset => {
     return preset.name?.startsWith(prefix) ? preset.name.slice(prefix.length) : preset.name;
 };
 
-const trimPath = p => (p || '').trim().replace(/\/+$/, '');
+const trimPath = p =>
+    (p || '')
+        .trim()
+        .replace(/\/{2,}/g, '/')
+        .replace(/\/+$/, '');
+
+const isAbsolute = p => (p || '').trim().startsWith('/');
 
 const parentOf = p => p.slice(0, p.lastIndexOf('/'));
 
@@ -32,7 +38,7 @@ const joinPath = (base, ...parts) => {
     const head = trimPath(base);
     const rest = parts.filter(Boolean).join('/');
     if (head) return rest ? `${head}/${rest}` : head;
-    return (base || '').trim().startsWith('/') ? `/${rest}` : rest;
+    return isAbsolute(base) ? `/${rest}` : rest;
 };
 
 const usesStyleFolder = template => (template || '{base}/{style}/{name}') !== '{base}/{name}';
@@ -47,7 +53,7 @@ const deriveBaseDir = (entries, styles, template) => {
     const counts = new Map();
     (entries || []).forEach(entry => {
         const location = trimPath(entry?.location);
-        if (!location.startsWith('/')) return;
+        if (!isAbsolute(location)) return;
         let base = parentOf(location);
         const folder = base.slice(base.lastIndexOf('/') + 1).toLowerCase();
         if (usesStyleFolder(template) && styles.has(folder)) base = parentOf(base);
@@ -60,10 +66,25 @@ const deriveBaseDir = (entries, styles, template) => {
     return best;
 };
 
+// Style folders already on disk under base, keyed lowercase, so new drives join an existing "cl2k".
+const styleFoldersUnder = (entries, base, styles) => {
+    const root = trimPath(base);
+    const folders = new Map();
+    (entries || []).forEach(entry => {
+        const parent = parentOf(trimPath(entry?.location));
+        const folder = parent.slice(parent.lastIndexOf('/') + 1);
+        const key = folder.toLowerCase();
+        if (parentOf(parent) === root && styles.has(key)) folders.set(key, folder);
+    });
+    return folders;
+};
+
 const isSameOrInside = (path, dir) => {
     const p = trimPath(path);
     const d = trimPath(dir);
-    return !!p && !!d && (p === d || p.startsWith(`${d}/`));
+    if (d) return p === d || p.startsWith(`${d}/`);
+    // A "/" destination holds every absolute path.
+    return isAbsolute(dir) && isAbsolute(path);
 };
 
 export const BulkPresetPicker = React.memo(
@@ -103,6 +124,21 @@ export const BulkPresetPicker = React.memo(
         );
         const baseDir = typedBase ?? derivedBase;
 
+        const styleFolders = useMemo(
+            () => styleFoldersUnder(value, baseDir, styles),
+            [value, baseDir, styles]
+        );
+        const locationFor = useCallback(
+            p =>
+                buildLocation(
+                    template,
+                    baseDir,
+                    styleFolders.get(p.style?.toLowerCase()) ?? p.style,
+                    curatorOf(p)
+                ),
+            [template, baseDir, styleFolders]
+        );
+
         // Only the Kometa apply method writes to destination_dir; Plex uploads directly.
         const renamerr = rootConfig?.poster_renamerr;
         const destinationDir =
@@ -127,14 +163,12 @@ export const BulkPresetPicker = React.memo(
                         return {
                             value: p.id,
                             label: p.name,
-                            sublabel: added
-                                ? savedById.get(p.id)
-                                : buildLocation(template, baseDir, p.style, curatorOf(p)),
+                            sublabel: added ? savedById.get(p.id) : locationFor(p),
                             disabled: added,
                         };
                     }),
                 }));
-        }, [presets, baseDir, template, savedById]);
+        }, [presets, locationFor, savedById]);
 
         const handleAdd = useCallback(
             selectedIds => {
@@ -147,12 +181,12 @@ export const BulkPresetPicker = React.memo(
                     additions.push({
                         name: p.name,
                         id: p.id,
-                        location: buildLocation(template, baseDir, p.style, curatorOf(p)),
+                        location: locationFor(p),
                     });
                 });
                 if (additions.length) onChange([...(value || []), ...additions]);
             },
-            [presets, savedById, baseDir, template, value, onChange]
+            [presets, savedById, locationFor, value, onChange]
         );
 
         const canAdd = !!baseDir.trim();

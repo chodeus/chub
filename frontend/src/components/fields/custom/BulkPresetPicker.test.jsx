@@ -90,6 +90,18 @@ describe('BulkPresetPicker base directory', () => {
         expect(baseBox()).toHaveValue('/mnt/b');
     });
 
+    it('does not split the vote over a doubled slash', async () => {
+        renderPicker([
+            drive('a', '/other/CL2K/a'),
+            drive('b', '/other/CL2K/b'),
+            drive('c', '/posters/CL2K/c'),
+            drive('d', '/posters/MM2K/d'),
+            drive('e', '/posters//CL2K/e'),
+        ]);
+        await loaded();
+        expect(baseBox()).toHaveValue('/posters');
+    });
+
     it('ignores drives at the filesystem root or on relative paths', async () => {
         renderPicker([
             drive('a', 'posters/x'),
@@ -174,6 +186,26 @@ describe('BulkPresetPicker rows and locations', () => {
 
         expect(onChange.mock.calls[0][0][0].location).toBe('/posters/CL2K/Solen');
     });
+
+    it('puts new drives in the style folder already used under the base', async () => {
+        const onChange = renderPicker([drive('a', '/posters/cl2k/Solen')]);
+        const chodeus = await screen.findByRole('checkbox', { name: /^CL2K Chodeus/ });
+
+        expect(
+            within(chodeus.closest('label')).getByText('/posters/cl2k/Chodeus')
+        ).toBeInTheDocument();
+        await addPreset('CL2K Chodeus');
+        expect(onChange.mock.calls[0][0][1].location).toBe('/posters/cl2k/Chodeus');
+    });
+
+    it('uses the preset spelling under a base with no saved style folder', async () => {
+        const onChange = renderPicker([drive('a', '/posters/cl2k/Solen')]);
+        await loaded();
+        fireEvent.change(baseBox(), { target: { value: '/new' } });
+        await addPreset('CL2K Chodeus');
+
+        expect(onChange.mock.calls[0][0][1].location).toBe('/new/CL2K/Chodeus');
+    });
 });
 
 describe('BulkPresetPicker Poster Renamerr overlap', () => {
@@ -185,6 +217,7 @@ describe('BulkPresetPicker Poster Renamerr overlap', () => {
     it.each([
         ['/kometa', '/kometa/posters'],
         ['/kometa/', '/kometa'],
+        ['/', '/posters'],
     ])('warns when destination %s holds base %s', async (destination, base) => {
         renderPicker([], withDestination(destination));
         await loaded();
