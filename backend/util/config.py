@@ -42,6 +42,12 @@ class GDriveListEntry(BaseModel):
     # source_dirs) are unaffected.
     search_only: bool = False
 
+    @field_validator("location", mode="before")
+    @classmethod
+    def _strip_location(cls, value: Any) -> Any:
+        """Trim stray spaces so sync_gdrive writes where poster_renamerr scans."""
+        return value.strip() if isinstance(value, str) else value
+
 
 class SyncGDriveToken(BaseModel):
     access_token: Optional[str] = ""
