@@ -16,7 +16,7 @@ from backend.util.rate_limiter import Throttle
 # contains this reports on every module.
 ALL_MODULES_SENTINEL = "__ALL__"
 
-# Every webhook POST shares this: one per second, so never more than five in any five seconds.
+# Shared by every webhook POST: calls start at most once per second, counted on entry as the old decorator did.
 _WEBHOOK_THROTTLE = Throttle(rate=1, burst=1)
 
 

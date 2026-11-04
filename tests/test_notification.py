@@ -603,7 +603,7 @@ def test_safe_post_waits_on_the_shared_webhook_throttle(monkeypatch):
     ]
 
 
-def test_webhook_throttle_allows_at_most_five_posts_in_any_five_seconds():
+def test_webhook_throttle_starts_at_most_five_calls_in_any_five_seconds():
     """The production throttle settings, driven through the real Throttle with a fake clock."""
     from backend.util import notification
     from backend.util.rate_limiter import Throttle
@@ -620,7 +620,7 @@ def test_webhook_throttle_allows_at_most_five_posts_in_any_five_seconds():
         throttle.acquire()
         times.append(clock["now"])
 
-    # A sixth POST within five seconds of any earlier one would break the limit.
+    # A sixth call starting within five seconds of any earlier one would break the limit.
     assert all(times[i + 5] - times[i] >= 5 - 1e-9 for i in range(len(times) - 5))
 
 
