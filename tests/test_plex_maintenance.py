@@ -151,15 +151,30 @@ def test_photo_transcoder_rechecks_each_file_before_removing(tmp_path, monkeypat
     assert (outside / "f0.jpg").read_bytes() == b"keep"
 
 
-def test_photo_transcoder_stops_while_walking_when_cancelled(tmp_path):
-    cache_dir = _make_cache(tmp_path, n_files=2, size=10)
+def test_transcoder_walk_checks_cancel_in_folders_without_files(tmp_path):
+    for i in range(3):
+        (tmp_path / "Cache" / "PhotoTranscoder" / f"{i:02x}").mkdir(parents=True)
+    asked = []
+
+    files = list(plex_metadata.transcoder_files(str(tmp_path), lambda: asked.append(1) or True))
+
+    assert (files, len(asked)) == ([], 1)
+
+
+def test_photo_transcoder_stops_mid_folder_when_cancelled(tmp_path, monkeypatch):
+    cache_dir = _make_cache(tmp_path, n_files=3, size=10)
     m = make_module(plex_path=str(tmp_path))
     m._cancel_event = threading.Event()
-    m._cancel_event.set()
+    real_remove = os.remove
 
+    def remove_then_cancel(path):
+        real_remove(path)
+        m._cancel_event.set()
+
+    monkeypatch.setattr(os, "remove", remove_then_cancel)
     stats = m._clean_photo_transcoder()
 
-    assert stats == {"count": 0, "total_size": 0}
+    assert stats == {"count": 1, "total_size": 10}
     assert len(list(cache_dir.iterdir())) == 2
 
 

@@ -798,6 +798,8 @@ def transcoder_files(
             return
         dirs[:] = [d for d in dirs if d != "@eaDir"]
         for name in files:
+            if cancelled():
+                return
             path = os.path.join(root, name)
             try:
                 st = os.lstat(path)
