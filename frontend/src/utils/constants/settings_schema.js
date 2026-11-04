@@ -4,6 +4,10 @@ import {
     withExtensionSettingsModules,
 } from '../../extensions/index.js';
 
+// Apply-method gates: show a field only where that method reads it (unset = kometa).
+const KOMETA_ONLY = { field: 'apply_method', condition: 'not_equals', value: 'plex' };
+const PLEX_ONLY = { field: 'apply_method', condition: 'equals', value: 'plex' };
+
 const CORE_SETTINGS_SCHEMA = [
     {
         key: 'tmdb',
@@ -280,6 +284,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'File Action',
                 type: 'dropdown',
                 section: 'output',
+                conditional: KOMETA_ONLY,
                 options: ['copy', 'move', 'hardlink', 'symlink'],
                 required: true,
                 description: 'How Kometa places files at the destination.',
@@ -291,6 +296,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Destination Directory',
                 type: 'dir',
                 section: 'output',
+                conditional: KOMETA_ONLY,
                 required: true,
                 description: 'Where Kometa writes renamed posters.',
                 helpText:
@@ -301,6 +307,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Asset folders (per-show)',
                 type: 'check_box',
                 section: 'output',
+                conditional: KOMETA_ONLY,
                 description: 'Plex-style per-show folders instead of flat filenames.',
                 helpText:
                     'Kometa method: enable Plex-style folder layout: destination/<Show Name>/poster.jpg + Season01.jpg. When off, files are flat: destination/<Show Name>_Season01.jpg.',
@@ -376,6 +383,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Clean orphan assets after rename',
                 type: 'check_box',
                 section: 'chain',
+                conditional: KOMETA_ONLY,
                 description: 'Clean orphaned posters at the destination after renaming.',
                 helpText:
                     "After renaming, scans the destination for orphan posters — files whose media no longer exists in your instances — and acts on them. A poster is kept if its {tmdb-N}/{tvdb-N} tag or its title still matches the library; it's flagged only when both miss. Source dirs are excluded (gdrive sources re-download on next sync; personal dirs aren't CHUB's to touch). The action (report / move / remove) follows Orphan Assets Mode in Poster Cleanarr.",
@@ -394,6 +402,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Upload delay (ms)',
                 type: 'number',
                 section: 'chain',
+                conditional: PLEX_ONLY,
                 description: 'Pause after each Plex upload (ms). 0 = none.',
                 helpText:
                     'Optional pause after each poster uploaded to Plex, to be gentle on the server during large runs. 0 = no delay (default). Only applied after an actual upload, never after a skip. Try 50 if your Plex struggles under bursts.',
@@ -403,6 +412,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Skip unchanged posters',
                 type: 'check_box',
                 section: 'chain',
+                conditional: PLEX_ONLY,
                 description: 'Plex only — skip re-processing posters whose source is unchanged.',
                 helpText:
                     'Plex apply only. Skip re-staging (copy → border → upload) a poster whose source is unchanged since it was last applied, instead of reprocessing every poster each run. Makes a scheduled run a near no-op for a stable library. Note: because it keys on the source file, adding a Plex library or changing border settings won’t re-apply to unchanged posters until their source changes — turn this off (or force a run) once to backfill in that case.',
@@ -639,6 +649,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Destination Directory',
                 type: 'dir',
                 section: 'apply',
+                conditional: KOMETA_ONLY,
                 description: 'Kometa assets directory for renamed assets.',
                 helpText:
                     'Kometa assets directory where renamed assets are written. Required when Apply Method is "kometa".',
@@ -648,6 +659,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'File Action',
                 type: 'dropdown',
                 section: 'apply',
+                conditional: KOMETA_ONLY,
                 options: ['copy', 'move', 'hardlink', 'symlink'],
                 required: true,
                 description: 'How Kometa places files at the destination.',
@@ -659,6 +671,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Asset folders (per-title)',
                 type: 'check_box',
                 section: 'apply',
+                conditional: KOMETA_ONLY,
                 description: 'Kometa-style per-title folders instead of flat filenames.',
                 helpText:
                     'Kometa-style folder layout: destination/<Title (Year)>/logo.png. When off, files are flat: destination/<Title (Year)>_logo.png. Match this to your Kometa configuration.',
@@ -1369,7 +1382,7 @@ const CORE_SETTINGS_SCHEMA = [
                         label: 'ARR Path Prefix',
                         type: 'text',
                         required: true,
-                        placeholder: '/data',
+                        placeholder: 'e.g. /data',
                         description: 'Path prefix as seen inside the ARR container (e.g. /data).',
                     },
                     {
@@ -1377,9 +1390,9 @@ const CORE_SETTINGS_SCHEMA = [
                         label: 'CHUB Path Prefix',
                         type: 'text',
                         required: true,
-                        placeholder: '/mnt/user/data',
+                        placeholder: 'e.g. /media',
                         description:
-                            'Equivalent path as seen inside the CHUB container (e.g. /mnt/user/data).',
+                            'Equivalent path as seen inside the CHUB container (e.g. /media).',
                     },
                 ],
             },

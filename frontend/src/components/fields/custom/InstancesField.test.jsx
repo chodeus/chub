@@ -126,4 +126,25 @@ describe('InstancesField', () => {
         await screen.findByRole('checkbox', { name: 'Movies' });
         expect(container.querySelectorAll('div[role="button"], div[tabindex]')).toHaveLength(0);
     });
+
+    it('notes on the Poster Renamerr upload toggle that only the Plex method uses it', async () => {
+        const { SETTINGS_SCHEMA } = await import('../../../utils/constants/settings_schema.js');
+        const plexScope = SETTINGS_SCHEMA.find(m => m.key === 'poster_renamerr').fields.find(
+            f => f.key === 'plex_scope'
+        );
+        render(
+            <InstancesField
+                field={plexScope}
+                value={[{ instance: 'plex_1', library_names: [], add_posters: false }]}
+                onChange={() => {}}
+            />
+        );
+
+        expect(
+            await screen.findByText("Only used when this module's Apply Method is set to Plex.")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole('switch', { name: 'Upload posters to this Plex instance' })
+        ).toHaveAccessibleDescription("Only used when this module's Apply Method is set to Plex.");
+    });
 });

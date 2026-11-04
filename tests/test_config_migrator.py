@@ -198,6 +198,35 @@ def test_rule_rename_labelarr_plex_instance_to_instance():
     assert all("plex_instance" not in e for e in entries)
 
 
+def test_rule_rename_labelarr_keeps_an_instance_already_set():
+    """A stale `plex_instance` never overwrites the current `instance`; an empty one is filled."""
+    out, notes = migrate(
+        {
+            "labelarr": {
+                "mappings": [
+                    {
+                        "plex_instances": [
+                            {"instance": "current", "plex_instance": "stale"},
+                            {"instance": "", "plex_instance": "p3"},
+                        ]
+                    }
+                ]
+            }
+        }
+    )
+    entries = out["labelarr"]["mappings"][0]["plex_instances"]
+    assert [e["instance"] for e in entries] == ["current", "p3"]
+    assert all("plex_instance" not in e for e in entries)
+    assert any(n.level == "warning" and "stale" in n.message for n in notes)
+
+
+def test_rule_rename_field_keeps_a_value_already_set():
+    """A legacy key left beside its renamed key is dropped, not copied over it."""
+    out, _ = migrate({"renameinatorr": {"ignore_tag": "old", "ignore_tags": ["kept"]}})
+    assert out["renameinatorr"]["ignore_tags"] == ["kept"]
+    assert "ignore_tag" not in out["renameinatorr"]
+
+
 def test_rule_drop_incremental_border_replacerr():
     out, _ = migrate({"poster_renamerr": {"incremental_border_replacerr": True}})
     assert "incremental_border_replacerr" not in out["poster_renamerr"]
@@ -211,6 +240,33 @@ def test_rule_drop_unmatched_source_dirs():
 def test_rule_drop_cleanarr_ignore_media():
     out, _ = migrate({"poster_cleanarr": {"ignore_media": ["X"]}})
     assert "ignore_media" not in out["poster_cleanarr"]
+
+
+def test_rule_drop_border_skip_is_announced():
+    """DAPS's holiday-only `skip` is gone; the migration log must say so."""
+    out, notes = migrate({"border_replacerr": {"skip": True, "border_width": 26}})
+
+    assert "skip" not in out["border_replacerr"]
+    assert out["border_replacerr"]["border_width"] == 26
+    assert any(n.rule == "drop:border_replacerr.skip" for n in notes)
+
+
+def test_border_skip_alone_migrates_on_load(tmp_path, capsys):
+    """A config whose only stale key is `skip` is still detected, rewritten and announced."""
+    import yaml
+
+    from backend.util.config import load_config
+
+    path = tmp_path / "config.yml"
+    path.write_text(yaml.safe_dump({"border_replacerr": {"skip": True, "border_width": 30}}))
+
+    config = load_config(str(path))
+    printed = capsys.readouterr().out
+
+    assert config.border_replacerr.border_width == 30
+    assert "skip" not in yaml.safe_load(path.read_text())["border_replacerr"]
+    assert list(tmp_path.glob("config.yml.legacy-*.yml"))
+    assert "border_replacerr.skip" in printed
 
 
 def test_rule_cleanarr_dry_run_true_becomes_report():
