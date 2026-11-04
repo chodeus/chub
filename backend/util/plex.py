@@ -1,6 +1,7 @@
 import html
 import itertools
 import os
+import re
 import sys
 import time
 import uuid
@@ -132,6 +133,30 @@ def connect_plex_with_retry(
                 )
                 return None
     return None
+
+
+_LEGACY_AGENT_GUID = re.compile(r"^com\.plexapp\.agents\.([a-z0-9]+)://([^?]+)")
+_LEGACY_AGENT_SOURCE = {"thetvdb": "tvdb", "themoviedb": "tmdb", "imdb": "imdb"}
+# tvdb2..tvdb5 are HAMA's season-mapping modes of the same TVDB id; anidb-N has no mapping.
+_HAMA_ID = re.compile(r"^(tvdb|tmdb|tsdb|imdb)\d?-(\w+)$")
+
+
+def legacy_agent_ids(guid: Any) -> Dict[str, str]:
+    """tmdb/tvdb/imdb from a legacy agent's guid string (HAMA, the retired TheTVDB/TheMovieDB/IMDb agents)."""
+    match = _LEGACY_AGENT_GUID.match(str(guid or "").strip().lower())
+    if not match:
+        return {}
+    agent, value = match.groups()
+    if agent == "hama":
+        hama = _HAMA_ID.match(value)
+        if not hama:
+            return {}
+        source, value = hama.groups()
+        source = "tmdb" if source == "tsdb" else source
+    else:
+        source = _LEGACY_AGENT_SOURCE.get(agent)
+    valid = value.startswith("tt") if source == "imdb" else value.isdigit()
+    return {source: value} if source and valid else {}
 
 
 class PlexClient:
@@ -292,11 +317,15 @@ class PlexClient:
             logger=logger,
         ) as bar:
             for item in bar:
-                guids = {
-                    g.id.split("://")[0]: g.id.split("://")[1]
-                    for g in getattr(item, "guids", [])
-                    if "://" in g.id
-                }
+                # Legacy agents keep their ids in item.guid; Guid children (modern agents) win.
+                guids = legacy_agent_ids(getattr(item, "guid", None))
+                guids.update(
+                    {
+                        g.id.split("://")[0]: g.id.split("://")[1]
+                        for g in getattr(item, "guids", [])
+                        if "://" in g.id
+                    }
+                )
                 # plexapi exposes `year` even when unset (as None) — coerce to
                 # an empty string so downstream matchers don't compare against
                 # the literal "None". Hits hardest on artists, which never
@@ -499,7 +528,7 @@ class PlexClient:
         return all_entries
 
     def _fetch_by_rating_key(self, plex_id: Any, season_number: Any = None):
-        """Items for a ratingKey; None when Plex lacks the key, other errors raise."""
+        """Items for a ratingKey ([] when its show lacks the season); None when Plex lacks the key."""
         try:
             rating_key = int(plex_id)
         except (TypeError, ValueError):
@@ -517,7 +546,8 @@ class PlexClient:
                 ]
             except Exception:
                 seasons = []
-            return seasons or None
+            # The show is known: a title search could only find a different show.
+            return seasons
         return [item]
 
     def _locate_targets(
@@ -770,6 +800,41 @@ class PlexClient:
                 f"Failed to upload {art_label} for '{item_title}' in '{library_name}': {e}"
             )
             return False
+
+    def copies_without_upload(
+        self,
+        library_name: str,
+        item_title: str,
+        *,
+        year: Any = None,
+        is_collection: bool = False,
+        season_number: Any = None,
+        plex_id: Any = None,
+    ) -> Optional[List[str]]:
+        """ratingKeys of the target copies with no uploaded poster selected; None when Plex can't say."""
+        try:
+            targets = self._locate_targets(
+                library_name,
+                item_title,
+                year=year,
+                is_collection=is_collection,
+                season_number=season_number,
+                plex_id=plex_id,
+            )
+            if not targets:
+                return None
+            missing = []
+            for tgt in targets:
+                selected = next((p for p in tgt.posters() if p.selected), None)
+                # Any upload counts (ours, Kometa's overlay, the user's own).
+                if not str(getattr(selected, "ratingKey", "")).startswith("upload://"):
+                    missing.append(str(tgt.ratingKey))
+            return missing
+        except Exception as e:
+            self.logger.debug(
+                f"Could not read the selected poster for '{item_title}' in '{library_name}': {e}"
+            )
+            return None
 
     def upload_poster(
         self,

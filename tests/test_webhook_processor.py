@@ -648,3 +648,63 @@ def test_item_present_direct_match():
     assert WebhookProcessor._item_present(plex, "The Movie", None) is True
     assert WebhookProcessor._item_present(plex, "Other", 2020) is False
     assert WebhookProcessor._item_present(plex, "The Movie", 1999) is False
+
+
+def test_wait_finds_a_season_under_plex_title_when_sonarr_names_it_differently(
+    monkeypatch,
+):
+    wp = _wp_with_plex(monkeypatch)
+    slept = []
+    plex = _plex_with(2, [object()], show_title="Daredevil", show_year=2015)
+    monkeypatch.setattr(
+        "plexapi.server.PlexServer", lambda url, token, timeout=10: plex
+    )
+    import time as _time
+
+    monkeypatch.setattr(_time, "sleep", lambda s: slept.append(s))
+
+    found = wp.wait_for_plex_availability(
+        "Marvel's Daredevil",
+        year=2015,
+        season_number=2,
+        plex_matches=[("Daredevil", 2015)],
+    )
+
+    assert (found, slept) == (True, [])
+
+
+def test_wait_checks_a_plex_title_against_plex_own_year(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    slept = []
+    _patch_plex(monkeypatch, [("AVPR: Aliens vs Predator - Requiem", 2007)], slept)
+
+    found = wp.wait_for_plex_availability(
+        "Aliens vs Predator: Requiem",
+        year=2008,
+        plex_matches=[("AVPR: Aliens vs Predator - Requiem", 2007)],
+    )
+
+    assert (found, slept) == (True, [])
+
+
+def test_a_same_titled_show_from_another_year_does_not_end_the_wait(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    wp.max_retries = 1
+    slept = []
+    plex = _plex_with(3, [object()], show_title="The Office", show_year=2001)
+    monkeypatch.setattr(
+        "plexapi.server.PlexServer", lambda url, token, timeout=10: plex
+    )
+    import time as _time
+
+    monkeypatch.setattr(_time, "sleep", lambda s: slept.append(s))
+
+    found = wp.wait_for_plex_availability(
+        "The Office (US)",
+        year=2005,
+        season_number=3,
+        plex_matches=[("The Office", 2005)],
+    )
+
+    assert found is False
+    assert slept

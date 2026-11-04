@@ -264,7 +264,14 @@ def _process_webhook_job(
                         "error_code": "MEDIA_RETRIEVAL_FAILED",
                     }
 
-                return {"success": True, "media": media, "stored_media": stored_media}
+                return {
+                    "success": True,
+                    "media": media,
+                    "stored_media": stored_media,
+                    "plex_matches": _snapshot_plex_matches(
+                        db_context, stored_media, asset_type
+                    ),
+                }
 
             finally:
                 # Clean up the ARR client connection
@@ -294,6 +301,7 @@ def _process_webhook_job(
             year=media.get("year"),
             season_number=webhook_season if instance_info["type"] == "sonarr" else None,
             is_added_event=is_added_event,
+            plex_matches=process_result["plex_matches"],
         )
 
         # Run poster rename on the stored media. A Sonarr Download event
@@ -390,6 +398,28 @@ def _process_webhook_job(
             "message": f"Webhook processing failed: {str(e)}",
             "error_code": "WEBHOOK_PROCESSING_EXCEPTION",
         }
+
+
+def _snapshot_plex_matches(db: ChubDB, stored_media: Any, asset_type: str) -> list:
+    """(title, year) of the Plex items this item matches in the cached snapshot, by guid only."""
+    from backend.util.plex_index import PlexMediaIndex, _coerce_year
+
+    rows = stored_media if isinstance(stored_media, list) else [stored_media]
+    row = next((r for r in rows if r.get("season_number") is None), rows[0])
+    try:
+        entries, key = PlexMediaIndex(db.plex.get_all()).resolve(
+            row, media_type=asset_type
+        )
+    except Exception:
+        return []  # best-effort: the wait still searches by the *arr title
+    # A title hit is only the *arr title again.
+    if key == "TITLE":
+        return []
+    return list(
+        dict.fromkeys(
+            (e["title"], _coerce_year(e.get("year"))) for e in entries if e.get("title")
+        )
+    )
 
 
 def _process_media_record(media: dict, asset_type: str) -> list:
@@ -565,6 +595,7 @@ def _process_upload_posters_job(
             manifest=manifest,
             force=force,
             refresh_plex=refresh_plex,
+            verify_skips=targeted,
         )
         result = uploader.run()
 
@@ -665,6 +696,7 @@ def _handle_post_rename_actions(
                     manifest=manifest,
                     force=force_upload,
                     refresh_plex=refresh_plex,
+                    verify_skips=True,
                 ).run()
             if upload_result and not upload_result.get("success"):
                 log.warning(

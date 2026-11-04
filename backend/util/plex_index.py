@@ -32,6 +32,8 @@ from backend.util.normalization import normalize_titles
 MOVIE_PRIORITY_KEYS = ["tmdb", "imdb", "title"]
 SHOW_PRIORITY_KEYS = ["tvdb", "tmdb", "imdb", "title"]
 SEASON_PRIORITY_KEYS = ["tvdb", "tmdb", "imdb", "title"]
+# No title: the *arr title is what the live search already tries, and it can differ from Plex's.
+SHOW_GUID_KEYS = ["tvdb", "tmdb", "imdb"]
 COLLECTION_PRIORITY_KEYS = ["title"]
 # Music: MusicBrainz id is the cross-source anchor; fall back to a normalized
 # title (parent-scoped for albums, see _search_values / resolve).
@@ -275,7 +277,8 @@ class PlexMediaIndex:
         if media_type == "movie":
             return self._match(self.movies, MOVIE_PRIORITY_KEYS, values)
         if media_type == "season":
-            return self._match(self.seasons, SEASON_PRIORITY_KEYS, values)
+            entries, key = self._match(self.seasons, SEASON_PRIORITY_KEYS, values)
+            return (entries, key) if entries else self.show_for_season(self.shows, asset)
         if media_type in ("show", "tvshow"):
             return self._match(self.shows, SHOW_PRIORITY_KEYS, values)
         if media_type == "collection":
@@ -291,6 +294,14 @@ class PlexMediaIndex:
             album_values = self._search_values(asset, title_override=scoped)
             return self._match(self.albums, ALBUM_PRIORITY_KEYS, album_values)
         return [], None
+
+    @staticmethod
+    def show_for_season(
+        shows: Dict[str, List[Dict]], asset: Dict
+    ) -> Tuple[List[Dict], Optional[str]]:
+        """Show entries by guid for a season not in the snapshot yet; Plex fetches it via their ratingKey."""
+        values = PlexMediaIndex._search_values(asset)
+        return PlexMediaIndex._match(shows, SHOW_GUID_KEYS, values)
 
     def is_empty(self) -> bool:
         return not (

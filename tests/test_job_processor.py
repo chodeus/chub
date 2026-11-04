@@ -439,3 +439,127 @@ def test_labelarr_bulk_job_reports_a_refused_sync_as_a_failure(monkeypatch):
     )
 
     assert (res["success"], res["error_code"]) == (False, "ARR_REFRESH_FAILED")
+
+
+def _plex_row(title, tvdb, season=None, year="2015"):
+    from backend.util.normalization import normalize_titles
+
+    return {
+        "asset_type": "show",
+        "library_name": "TV",
+        "title": title,
+        "normalized_title": normalize_titles(title),
+        "season_number": season,
+        "year": year,
+        "guids": {"tvdb": tvdb},
+    }
+
+
+def test_webhook_wait_also_looks_under_the_plex_title(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    stored = [
+        {"title": "Marvel's Daredevil", "tvdb_id": 281662, "season_number": None},
+        {"title": "Marvel's Daredevil", "tvdb_id": 281662, "season_number": 2},
+    ]
+    db = NS(
+        media=NS(get_by_title_year_instance=lambda *a: stored),
+        plex=NS(get_all=lambda: [_plex_row("Daredevil", "281662")]),
+    )
+    waits = []
+
+    class _Processor:
+        def __init__(self, logger):
+            pass
+
+        def _validate_webhook(self, data, client):
+            info = {"type": "sonarr", "name": "Sonarr", "url": "u", "api": "k"}
+            return {"success": True, "instance_info": info, "media_id": 1, "season_number": 2}
+
+        def wait_for_plex_availability(self, *a, **k):
+            waits.append(k)
+
+    arr = NS(
+        is_connected=lambda: True,
+        get_show=lambda mid: {"title": "Marvel's Daredevil", "year": 2015},
+        session=NS(close=lambda: None),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.WebhookProcessor", _Processor)
+    monkeypatch.setattr("backend.util.arr.create_arr_client", lambda *a: arr)
+    monkeypatch.setattr("backend.modules.poster_renamerr.PosterRenamerr", lambda **k: None)
+    monkeypatch.setattr(jp, "_process_media_record", lambda media, typ: [media])
+    monkeypatch.setattr(jp, "_update_media_record", lambda *a: None)
+    monkeypatch.setattr(jp, "_instance_force_reupload", lambda info: False)
+    monkeypatch.setattr(jp, "_adhoc_rename_and_post", lambda *a, **k: {"success": True})
+
+    result = jp._process_webhook_job({"webhook_data": {}}, _logger(), 1, db)
+
+    assert result["success"] is True
+    assert waits[0]["plex_matches"] == [("Daredevil", 2015)]
+
+
+def test_plex_matches_come_from_the_snapshot_by_guid():
+    from types import SimpleNamespace as NS
+
+    rows = [_plex_row("Daredevil", "281662"), _plex_row("Daredevil", "281662", 1)]
+    db = NS(plex=NS(get_all=lambda: rows))
+    stored = {"title": "Marvel's Daredevil", "tvdb_id": 281662, "season_number": None}
+
+    matches = jp._snapshot_plex_matches(db, stored, "show")
+    unreadable = jp._snapshot_plex_matches(NS(plex=None), stored, "show")
+
+    assert (matches, unreadable) == ([("Daredevil", 2015)], [])
+
+
+def test_item_scoped_upload_rechecks_the_posters_it_would_skip(monkeypatch):
+    seen = {}
+
+    class _Uploader:
+        def __init__(self, *a, **k):
+            seen.update(k)
+
+        def run(self):
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "backend.util.notification.NotificationManager", _outcome_notifier([])
+    )
+    monkeypatch.setattr(jp, "_check_plex_upload_enabled", lambda cfg: True)
+    monkeypatch.setattr(jp, "ChubDB", _OutcomeDB)
+    monkeypatch.setattr("backend.util.upload_posters.PosterUploader", _Uploader)
+
+    jp._adhoc_rename_and_post(_outcome_renamer(), [{}], _logger(), 1)
+
+    assert seen["verify_skips"] is True
+
+
+def test_a_title_only_snapshot_match_adds_no_plex_title():
+    from types import SimpleNamespace as NS
+
+    rows = [{**_plex_row("Shōgun", None, year="1980"), "guids": {}}]
+    db = NS(plex=NS(get_all=lambda: rows))
+    stored = {"title": "Shogun", "year": 1980, "season_number": None}
+
+    matches = jp._snapshot_plex_matches(db, stored, "show")
+
+    assert matches == []
+
+
+def test_only_targeted_upload_jobs_recheck_the_posters_they_would_skip(monkeypatch):
+    seen = []
+
+    class _Uploader:
+        def __init__(self, *a, **k):
+            seen.append(k["verify_skips"])
+
+        def run(self):
+            return {"success": True}
+
+    monkeypatch.setattr(jp, "ChubDB", _OutcomeDB)
+    monkeypatch.setattr("backend.util.upload_posters.PosterUploader", _Uploader)
+
+    for targeted in (True, False):
+        payload = {"manifest": {"media_cache": [1]}, "targeted": targeted}
+        jp._process_upload_posters_job(payload, _logger(), 1)
+
+    assert seen == [True, False]

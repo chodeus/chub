@@ -227,3 +227,28 @@ def test_album_mbid_match_is_case_insensitive():
         media_type="album",
     )
     assert key == "MBID" and [e["plex_id"] for e in entries] == [1]
+
+
+def test_season_missing_from_the_snapshot_resolves_to_its_show_by_guid():
+    idx = PlexMediaIndex(
+        [
+            _show(10, "TV", tvdb="500", title="Daredevil", norm="daredevil"),
+            _show(11, "TV", tvdb="500", season=1, title="Daredevil", norm="daredevil"),
+        ]
+    )
+
+    entries, key = idx.resolve(
+        {"tvdb_id": "500", "title": "Marvel's Daredevil"},
+        media_type="season",
+        season_number=2,
+    )
+
+    assert (key, [e["plex_id"] for e in entries]) == ("TVDB", [10])
+
+
+def test_season_never_falls_back_to_a_show_by_title():
+    idx = PlexMediaIndex([_show(10, "TV", tvdb=None)])
+
+    found = idx.resolve({"title": "The Show"}, media_type="season", season_number=2)
+
+    assert found == ([], None)
