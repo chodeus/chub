@@ -202,7 +202,7 @@ export const DateRangeField = React.memo(
                                 </div>
 
                                 {/* From Day */}
-                                <div className="flex flex-col w-16">
+                                <div className="flex flex-col w-24 shrink-0">
                                     <label
                                         className="text-xs text-fg-muted mb-1"
                                         htmlFor={`${inputId}-from-day`}
@@ -268,7 +268,7 @@ export const DateRangeField = React.memo(
                                 </div>
 
                                 {/* To Day */}
-                                <div className="flex flex-col w-16">
+                                <div className="flex flex-col w-24 shrink-0">
                                     <label
                                         className="text-xs text-fg-muted mb-1"
                                         htmlFor={`${inputId}-to-day`}

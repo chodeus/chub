@@ -768,13 +768,13 @@ const MediaManagePage = () => {
                                       .map(s => s.trim())
                                       .filter(Boolean)
                                 : [];
-                            let folderPaths = [];
+                            let folderPaths;
                             try {
                                 folderPaths = JSON.parse(dup.folders || '[]').filter(Boolean);
                             } catch {
                                 folderPaths = [];
                             }
-                            let memberTitles = [];
+                            let memberTitles;
                             try {
                                 memberTitles = JSON.parse(dup.titles || '[]').filter(Boolean);
                             } catch {

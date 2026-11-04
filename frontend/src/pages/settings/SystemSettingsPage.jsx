@@ -381,7 +381,7 @@ export const SystemSettingsPage = () => {
                         />
                         <InsetInput
                             ariaLabel="Backup location"
-                            placeholder="/mnt/user/backups/chub"
+                            placeholder="e.g. /backups"
                             value={backupDir}
                             onChange={e => setBackupDir(e.target.value)}
                             onBlur={() => {

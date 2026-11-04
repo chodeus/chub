@@ -5,12 +5,20 @@ import PropTypes from 'prop-types';
  * Toggle switch — 38×22 pill with a 16px white knob. On = brand fill (knob
  * left 19px), off = border-grey (knob left 3px). Per the redesign spec.
  */
-const Toggle = ({ checked = false, onChange, disabled = false, label, className = '' }) => (
+const Toggle = ({
+    checked = false,
+    onChange,
+    disabled = false,
+    label,
+    describedBy,
+    className = '',
+}) => (
     <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
+        aria-describedby={describedBy}
         disabled={disabled}
         onClick={() => !disabled && onChange?.(!checked)}
         className={`relative shrink-0 rounded-full transition-colors touch-expand disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
@@ -30,6 +38,7 @@ Toggle.propTypes = {
     disabled: PropTypes.bool,
     // Required: it is the switch's only accessible name — the knob is aria-hidden.
     label: PropTypes.string.isRequired,
+    describedBy: PropTypes.string,
     className: PropTypes.string,
 };
 

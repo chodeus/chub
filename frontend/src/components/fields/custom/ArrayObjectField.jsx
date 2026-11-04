@@ -36,6 +36,7 @@ const alignRowIds = (ids, length) =>
  * @param {boolean} props.disabled - Field disabled state
  * @param {boolean} props.highlightInvalid - Show validation errors
  * @param {string} props.errorMessage - Error message to display
+ * @param {Object} props.rootConfig - Whole config, passed through to the bulk preset picker
  */
 export const ArrayObjectField = ({
     field,
@@ -44,6 +45,7 @@ export const ArrayObjectField = ({
     disabled = false,
     highlightInvalid = false,
     errorMessage,
+    rootConfig,
 }) => {
     const [expandedIndex, setExpandedIndex] = useState(null);
     const [editingData, setEditingData] = useState({});
@@ -931,6 +933,7 @@ export const ArrayObjectField = ({
                             value={value}
                             onChange={handleBulkChange}
                             disabled={disabled}
+                            rootConfig={rootConfig}
                         />
                     )}
                     {field.displayType === 'gdrive' ? (
@@ -971,6 +974,7 @@ export const ArrayObjectField = ({
                         value={value}
                         onChange={handleBulkChange}
                         disabled={disabled}
+                        rootConfig={rootConfig}
                     />
                 )}
 

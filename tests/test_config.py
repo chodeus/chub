@@ -192,6 +192,17 @@ def test_load_config_caches_until_the_file_changes(tmp_path, monkeypatch):
     assert load_config(config_path).auth.username == "second"
 
 
+def test_gdrive_location_is_trimmed_on_load(tmp_path):
+    """A hand-typed drive location with stray spaces syncs to the folder renamerr scans."""
+    config_path = tmp_path / "config.yml"
+    drive = {"name": "CL2K Solen", "id": "fake-id", "location": "  /posters/CL2K/Solen  "}
+    config_path.write_text(yaml.safe_dump({"sync_gdrive": {"gdrive_list": [drive]}}))
+
+    entry = load_config(str(config_path)).sync_gdrive.gdrive_list[0]
+
+    assert entry.location == "/posters/CL2K/Solen"
+
+
 def test_load_config_does_not_share_mutable_state(tmp_path):
     """Callers mutate what load_config returns before saving — never the cache."""
     config_path = str(tmp_path / "config.yml")

@@ -78,6 +78,7 @@ STREAM_PATH_PREFIXES = (
     "/api/media/",
     "/api/posters/",
     "/api/border-replacerr/preview/",
+    "/api/border-replacerr/borders/",
     "/api/modules/events",
 )
 
