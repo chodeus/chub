@@ -156,9 +156,13 @@ def test_transcoder_walk_checks_cancel_in_folders_without_files(tmp_path):
         (tmp_path / "Cache" / "PhotoTranscoder" / f"{i:02x}").mkdir(parents=True)
     asked = []
 
-    files = list(plex_metadata.transcoder_files(str(tmp_path), lambda: asked.append(1) or True))
+    def cancel_on_third_folder():
+        asked.append(1)
+        return len(asked) == 3
 
-    assert (files, len(asked)) == ([], 1)
+    files = list(plex_metadata.transcoder_files(str(tmp_path), cancel_on_third_folder))
+
+    assert (files, len(asked)) == ([], 3)
 
 
 def test_photo_transcoder_stops_mid_folder_when_cancelled(tmp_path, monkeypatch):

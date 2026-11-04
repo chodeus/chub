@@ -132,6 +132,41 @@ def test_scan_bloat_images_skips_uploaded_themes(tmp_path):
     assert [b["name"] for b in bloat] == ["old"]
 
 
+def test_run_reports_no_bloat_when_the_in_use_read_fails(tmp_path, monkeypatch):
+    """A DB without user_art_url reads as 0 in-use, so report mode must not list live artwork."""
+    plex = tmp_path / "plex"
+    live = plex / "Metadata" / "Movies" / "a" / "x.bundle" / "Uploads" / "posters" / "live_thumb"
+    live.parent.mkdir(parents=True)
+    live.write_bytes(b"x")
+    db_dir = plex / "Plug-in Support" / "Databases"
+    db_dir.mkdir(parents=True)
+    con = sqlite3.connect(db_dir / "com.plexapp.plugins.library.db")
+    con.execute("CREATE TABLE metadata_items (id INTEGER PRIMARY KEY, user_thumb_url TEXT)")
+    con.execute("INSERT INTO metadata_items (user_thumb_url) VALUES ('upload://posters/live_thumb')")
+    con.commit()
+    con.close()
+
+    errors = []
+    m = make_module()
+    m.logger.error = lambda msg, *a, **k: errors.append(msg)
+    m.mode = "report"
+    m.plex_path = str(plex)
+    m.working_dir = str(tmp_path)
+    m.config = SimpleNamespace(
+        local_db=True, use_existing_db=False, ignore_running=False, overlays_only=False,
+        target_paths=None, excluded_libraries=[],
+    )
+    executed = []
+    monkeypatch.setattr(m, "_execute_mode", lambda *a, **k: executed.append(a) or {"count": 0})
+    monkeypatch.setattr(m, "_run_asset_passes", lambda: ({}, {}))
+
+    m.run()
+
+    assert executed == []
+    assert [e for e in errors if "0 in-use images" in e]
+    assert not [e for e in errors if "An error occurred" in e]
+
+
 # --- PR #90: _is_kometa_overlay + overlays_only mode in _execute_mode ---
 
 
