@@ -12,6 +12,7 @@ Mounts assumed (see Unraid container volume mapping):
         /plex/Plug-in Support/Databases/com.plexapp.plugins.library.db
         /plex/Metadata/{Movies,TV Shows}/<first_char>/<rest>.bundle/
             Uploads/posters/<hash>   ← candidates (no file extension)
+            Uploads/themes/<hash>    ← theme audio, never walked
             Contents/                ← Plex-managed, ignored
 
 A poster file is "in use" if its filename (the bytes between the last /
@@ -25,6 +26,8 @@ Public surface:
     get_plex_metadata_dir(plex_path) -> str
     resolve_in_metadata_dir(file_path, plex_path) -> Optional[str]
     get_in_use_hashes(db_path) -> Set[str]
+    walk_metadata(metadata_dir) / is_uploaded_theme(path)
+    transcoder_files(plex_path) -> Iterator[(path, size)]
     copy_plex_db(plex_path, dest) -> Optional[str]
     scan_bundles(plex_path, *, force=False) -> Dict
     bloat_flat_from_scan(scan) -> List[Dict]
@@ -39,10 +42,11 @@ from __future__ import annotations
 import os
 import shutil
 import sqlite3
+import stat
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Set
+from typing import Any, Dict, Iterator, List, Literal, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 from backend.util.paths import get_config_dir
@@ -61,6 +65,9 @@ IN_USE_IMAGE_COLUMNS = (
     "user_clear_logo_url",
     "user_square_art_url",
 )
+
+# Every Plex schema has these; without them the in-use set can't cover item artwork.
+REQUIRED_ARTWORK_COLUMNS = ("user_thumb_url", "user_art_url")
 
 # `tags` artwork: legacy collections (tag_type 2), people and genres.
 # Excludes taggings.thumb_url (never scanned — lives under Contents/) and
@@ -90,6 +97,21 @@ def resolve_in_metadata_dir(file_path: str, plex_path: str) -> Optional[str]:
     return real
 
 
+_UPLOADED_THEMES = f"{os.sep}Uploads{os.sep}themes{os.sep}"
+
+
+def is_uploaded_theme(path: str) -> bool:
+    """True for a bundle's Uploads/themes/ dir or file: theme audio, never artwork."""
+    return _UPLOADED_THEMES in os.path.join(path, "")
+
+
+def walk_metadata(metadata_dir: str) -> Iterator[Tuple[str, List[str], List[str]]]:
+    """os.walk over Metadata/ that never enters a bundle's Uploads/themes/."""
+    for root, dirs, files in os.walk(metadata_dir):
+        dirs[:] = [d for d in dirs if not is_uploaded_theme(os.path.join(root, d))]
+        yield root, dirs, files
+
+
 def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
     """
     Copy Plex's live SQLite DB to `dest` for read-only querying.
@@ -112,6 +134,15 @@ def _is_missing_schema_error(exc: sqlite3.OperationalError) -> bool:
     """True only for 'no such column/table' — a schema gap, not a read failure."""
     msg = str(exc).lower()
     return msg.startswith("no such column") or msg.startswith("no such table")
+
+
+def _require_artwork_columns(cur: sqlite3.Cursor) -> None:
+    """Raise unless metadata_items has REQUIRED_ARTWORK_COLUMNS."""
+    cur.execute("PRAGMA table_info(metadata_items)")
+    present = {row[1] for row in cur.fetchall()}
+    missing = [c for c in REQUIRED_ARTWORK_COLUMNS if c not in present]
+    if missing:
+        raise sqlite3.DatabaseError(f"metadata_items has no {', '.join(missing)} column")
 
 
 def _in_use_filename(value: Any) -> Optional[str]:
@@ -142,6 +173,9 @@ def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
         conn = sqlite3.connect(db_path)
         try:
             cur = conn.cursor()
+            # Fail closed: skipping these would leave a tags-only set that
+            # passes poster_cleanarr's 0-in-use guard.
+            _require_artwork_columns(cur)
 
             def _collect(table: str, columns: tuple) -> None:
                 for col in columns:
@@ -301,7 +335,7 @@ def build_bundle_section_map(db_path: str, metadata_dir: str) -> Dict[str, str]:
     # Group every file by its enclosing .bundle dir (same walk shape as
     # scan_bundles), then resolve each bundle's library via an anchored file.
     bundle_files: Dict[str, List[str]] = {}
-    for root, _dirs, files in os.walk(metadata_dir):
+    for root, _dirs, files in walk_metadata(metadata_dir):
         bundle_root = root
         while bundle_root and not bundle_root.endswith(".bundle"):
             parent = os.path.dirname(bundle_root)
@@ -463,7 +497,7 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
     # delete/selection only on uploads and the active swap on both.
     # bundle_files[bundle_path] = [{filename, path, size, mtime, kind, source}, ...]
     bundle_files: Dict[str, List[Dict[str, Any]]] = {}
-    for root, dirs, files in os.walk(metadata_dir):
+    for root, dirs, files in walk_metadata(metadata_dir):
         bundle_root = root
         while bundle_root and not bundle_root.endswith(".bundle"):
             parent = os.path.dirname(bundle_root)
@@ -744,6 +778,21 @@ def bloat_flat_from_scan(scan: Dict[str, Any]) -> List[Dict[str, Any]]:
     return flat
 
 
+def transcoder_files(plex_path: str) -> Iterator[Tuple[str, int]]:
+    """Yield (path, size) per PhotoTranscoder cache file, skipping Synology @eaDir and links."""
+    transcoder_dir = os.path.join(plex_path, "Cache", "PhotoTranscoder")
+    for root, dirs, files in os.walk(transcoder_dir):
+        dirs[:] = [d for d in dirs if d != "@eaDir"]
+        for name in files:
+            path = os.path.join(root, name)
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue  # Plex pruned it mid-walk
+            if stat.S_ISREG(st.st_mode):
+                yield path, st.st_size
+
+
 def scan_transcoder_cache(plex_path: str, *, force: bool = False) -> Dict[str, int]:
     """
     Walk `<plex>/Cache/PhotoTranscoder/` and report total file count + byte size.
@@ -762,20 +811,11 @@ def scan_transcoder_cache(plex_path: str, *, force: bool = False) -> Dict[str, i
         if cached:
             return {"count": cached["count"], "size_bytes": cached["size_bytes"]}
 
-    transcoder_dir = os.path.join(plex_path, "Cache", "PhotoTranscoder")
     count = 0
     size_bytes = 0
-    if os.path.isdir(transcoder_dir):
-        for root, _dirs, files in os.walk(transcoder_dir):
-            for filename in files:
-                fpath = os.path.join(root, filename)
-                try:
-                    size_bytes += os.path.getsize(fpath)
-                    count += 1
-                except OSError:
-                    # File vanished or unreadable mid-walk — skip silently; this
-                    # is a stat-only report, not a critical path.
-                    continue
+    for _path, size in transcoder_files(plex_path):
+        count += 1
+        size_bytes += size
 
     result = {"count": count, "size_bytes": size_bytes}
     _cache_put(cache_key, result)
@@ -811,7 +851,7 @@ def variant_in_use(plex_path: str, filename: str) -> Optional[bool]:
         conn = sqlite3.connect(f"{Path(db).as_uri()}?mode=ro", uri=True, timeout=5)
         try:
             cur = conn.cursor()
-            checked = False
+            _require_artwork_columns(cur)
             sources = [("metadata_items", IN_USE_IMAGE_COLUMNS)]
             cur.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='tags'"
@@ -826,15 +866,13 @@ def variant_in_use(plex_path: str, filename: str) -> Optional[bool]:
                             (f"%{escaped}%",),
                         )
                         values = cur.fetchall()
-                        checked = True
                     except sqlite3.OperationalError as e:
                         if not _is_missing_schema_error(e):
                             raise
                         continue
                     if any(_in_use_filename(v) == filename for (v,) in values):
                         return True
-            # No artwork column could be read: unverified, not "unused"
-            return False if checked else None
+            return False
         finally:
             conn.close()
     except Exception:
@@ -848,8 +886,8 @@ def delete_variant(
     real = resolve_in_metadata_dir(file_path, plex_path)
     if real is None:
         return "refused"
-    # Plex-sourced variants sit under `<bundle>/Contents/…`. Refuse.
-    if f"{os.sep}Contents{os.sep}" in real:
+    # Plex-sourced variants sit under `<bundle>/Contents/…`; themes are audio. Refuse.
+    if f"{os.sep}Contents{os.sep}" in real or is_uploaded_theme(real):
         return "refused"
     in_use = variant_in_use(plex_path, os.path.basename(real))
     if in_use is None:

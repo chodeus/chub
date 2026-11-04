@@ -586,9 +586,11 @@ class PosterCleanarr(ChubModule):
         self, metadata_dir: str, in_use: Set[str]
     ) -> List[Dict[str, Any]]:
         """Walk Metadata directory and find bloat images."""
+        from backend.util.plex_metadata import walk_metadata
+
         bloat: List[Dict[str, Any]] = []
 
-        for root, dirs, files in os.walk(metadata_dir):
+        for root, dirs, files in walk_metadata(metadata_dir):
             if self.is_cancelled():
                 break
 

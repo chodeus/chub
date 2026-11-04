@@ -119,6 +119,20 @@ def test_query_in_use_tolerates_old_plex_missing_new_columns(tmp_path):
     assert in_use == {"legacy"}
 
 
+def test_scan_bloat_images_skips_uploaded_themes(tmp_path):
+    """Theme audio under Uploads/themes/ is extensionless and in no artwork
+    column, so without the skip a remove run deletes the selected theme."""
+    bundle = tmp_path / "Metadata" / "TV Shows" / "a" / "show.bundle"
+    for rel in ("posters/active", "posters/old", "themes/selected", "themes/n/other"):
+        path = bundle / "Uploads" / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x")
+
+    bloat = make_module()._scan_bloat_images(str(tmp_path / "Metadata"), {"active"})
+
+    assert [b["name"] for b in bloat] == ["old"]
+
+
 # --- PR #90: _is_kometa_overlay + overlays_only mode in _execute_mode ---
 
 

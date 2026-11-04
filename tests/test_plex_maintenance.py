@@ -5,6 +5,7 @@ import os
 from types import SimpleNamespace
 
 from backend.modules.plex_maintenance import PlexMaintenance
+from backend.util.plex_metadata import scan_transcoder_cache
 
 
 class StubLogger:
@@ -87,6 +88,43 @@ def test_photo_transcoder_failed_delete_not_counted(tmp_path, monkeypatch):
     # The failed file must not be in the count or the byte total.
     assert failed
     assert stats == {"count": 2, "total_size": 20}
+
+
+def test_photo_transcoder_skips_synology_metadata_and_links(tmp_path):
+    cache_dir = _make_cache(tmp_path, n_files=1, size=10)
+    synology = cache_dir / "@eaDir" / "f0.jpg" / "SYNOPHOTO_THUMB_S.jpg"
+    synology.parent.mkdir(parents=True)
+    synology.write_bytes(b"y" * 5)
+    outside = tmp_path / "outside.jpg"
+    outside.write_bytes(b"z" * 100)
+    link = cache_dir / "link.jpg"
+    link.symlink_to(outside)
+    m = make_module(plex_path=str(tmp_path))
+
+    # The size shown on the page and the cleanup walk the same files.
+    scan = scan_transcoder_cache(str(tmp_path), force=True)
+    assert (scan["count"], scan["size_bytes"]) == (1, 10)
+    assert m._clean_photo_transcoder() == {"count": 1, "total_size": 10}
+    assert synology.exists()
+    assert link.is_symlink()
+    assert outside.exists()
+
+
+def test_photo_transcoder_file_plex_removed_first_is_not_an_error(tmp_path, monkeypatch):
+    _make_cache(tmp_path, n_files=3, size=10)
+    m = make_module(plex_path=str(tmp_path))
+    real_remove = os.remove
+
+    def plex_got_there_first(path):
+        real_remove(path)
+        if path.endswith("f1.jpg"):
+            raise FileNotFoundError(path)
+
+    monkeypatch.setattr(os, "remove", plex_got_there_first)
+    stats = m._clean_photo_transcoder()
+
+    assert stats == {"count": 2, "total_size": 20}
+    assert [msg for msg in m.logger.msgs if msg[0] == "error"] == []
 
 
 def test_maintenance_tasks_skipped_in_dry_run():

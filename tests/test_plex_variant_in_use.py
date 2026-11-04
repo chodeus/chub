@@ -58,7 +58,7 @@ def _plex(tmp_path, columns=IN_USE_IMAGE_COLUMNS, with_tags=True):
 
 @pytest.mark.parametrize(
     "columns, with_tags",
-    [(IN_USE_IMAGE_COLUMNS, True), (("user_thumb_url",), False)],
+    [(IN_USE_IMAGE_COLUMNS, True), (("user_thumb_url", "user_art_url"), False)],
     ids=["full schema", "older schema without tags or newer columns"],
 )
 def test_agrees_with_the_scan_on_every_value(tmp_path, columns, with_tags):
@@ -168,3 +168,42 @@ def test_route_answers_each_outcome(monkeypatch, tmp_path, outcome, status, code
     assert res.status_code == status
     if code:
         assert code in res.text
+
+
+@pytest.mark.parametrize(
+    "item_columns",
+    ["user_thumb_url TEXT", "user_art_url TEXT", None],
+    ids=["no art column", "no thumb column", "no metadata_items table"],
+)
+def test_in_use_reads_fail_closed_without_the_core_artwork_columns(tmp_path, item_columns):
+    """Tag artwork alone is a non-empty set: skipping the poster/art columns
+    would pass the 0-in-use guard and delete every item's artwork."""
+    db_dir = tmp_path / "Plug-in Support" / "Databases"
+    db_dir.mkdir(parents=True)
+    db = db_dir / PLEX_DB_NAME
+    con = sqlite3.connect(db)
+    if item_columns:
+        con.execute(f"CREATE TABLE metadata_items (id INTEGER PRIMARY KEY, {item_columns})")
+    con.execute("CREATE TABLE tags (id INTEGER PRIMARY KEY, user_thumb_url TEXT)")
+    con.execute("INSERT INTO tags (user_thumb_url) VALUES ('upload://posters/coll_thumb')")
+    con.commit()
+    con.close()
+    plex_path = str(tmp_path)
+    variant = _variant(tmp_path, "item_poster")
+
+    scanned = get_in_use_hashes(str(db))
+    live = variant_in_use(plex_path, "item_poster")
+    outcome = delete_variant(str(variant), plex_path=plex_path)
+
+    assert (scanned, live, outcome) == (set(), None, "unverified")
+    assert variant.exists()
+
+
+def test_delete_refuses_an_uploaded_theme(tmp_path):
+    plex_path, _ = _plex(tmp_path)
+    theme = tmp_path / "Metadata" / "Movies" / "a" / "x.bundle" / "Uploads" / "themes" / "zzz999"
+    theme.parent.mkdir(parents=True)
+    theme.write_bytes(b"x")
+
+    assert delete_variant(str(theme), plex_path=plex_path) == "refused"
+    assert theme.exists()
