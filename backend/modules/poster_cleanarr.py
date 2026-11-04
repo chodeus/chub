@@ -273,15 +273,15 @@ class PosterCleanarr(ChubModule):
                     )
 
                     # Empty in-use set = failed DB read (best-effort), not an
-                    # empty library — deleting would flag all artwork as bloat.
-                    if not in_use and self.mode in ("move", "remove"):
+                    # empty library — every mode would flag all artwork as bloat.
+                    if not in_use:
                         self.logger.error(
                             "Plex reported 0 in-use images while "
                             f"{len(bloat_list)} on-disk images were flagged as "
                             "bloat — treating this as a failed Plex DB read, not "
-                            f"an empty library, and skipping '{self.mode}' to "
-                            "avoid deleting all custom artwork. Verify the Plex "
-                            "database is readable and re-run."
+                            f"an empty library, and skipping '{self.mode}' so no "
+                            "custom artwork is reported or removed as bloat. "
+                            "Verify the Plex database is readable and re-run."
                         )
                     else:
                         # Execute mode
@@ -586,9 +586,11 @@ class PosterCleanarr(ChubModule):
         self, metadata_dir: str, in_use: Set[str]
     ) -> List[Dict[str, Any]]:
         """Walk Metadata directory and find bloat images."""
+        from backend.util.plex_metadata import walk_metadata
+
         bloat: List[Dict[str, Any]] = []
 
-        for root, dirs, files in os.walk(metadata_dir):
+        for root, dirs, files in walk_metadata(metadata_dir):
             if self.is_cancelled():
                 break
 

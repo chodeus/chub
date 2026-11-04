@@ -8,11 +8,13 @@ import pytest
 from backend.util.plex_metadata import (
     PLEX_DB_NAME,
     _classify_variant_kind,
+    bloat_flat_from_scan,
     build_bundle_section_map,
     copy_plex_db,
     get_in_use_hashes,
     get_plex_metadata_dir,
     invalidate_cache,
+    is_uploaded_theme,
     resolve_in_metadata_dir,
     scan_bundles,
 )
@@ -170,7 +172,9 @@ def test_get_in_use_hashes_includes_clear_logo_and_square_art(tmp_path):
 def _make_tags_db(path, tag_cols=("user_thumb_url", "user_art_url", "user_music_url")):
     """metadata_items + a `tags` table carrying collection/people artwork."""
     conn = sqlite3.connect(str(path))
-    conn.execute("CREATE TABLE metadata_items (id INTEGER PRIMARY KEY, user_thumb_url TEXT)")
+    conn.execute(
+        "CREATE TABLE metadata_items (id INTEGER PRIMARY KEY, user_thumb_url TEXT, user_art_url TEXT)"
+    )
     conn.execute("INSERT INTO metadata_items (user_thumb_url) VALUES ('upload://posters/item1')")
     conn.execute(
         "CREATE TABLE tags (id INTEGER PRIMARY KEY, tag TEXT, tag_type INTEGER, "
@@ -256,8 +260,8 @@ def test_get_in_use_hashes_is_union_only(tmp_path):
                 if v:
                     baseline.add(v.rsplit("/", 1)[-1])
         except sqlite3.OperationalError:
-            # Stub schema defines only user_thumb_url; the rest are absent by
-            # design and contribute nothing to the baseline.
+            # Stub schema defines only user_thumb_url and user_art_url; the rest
+            # are absent by design and contribute nothing to the baseline.
             continue
     c.close()
 
@@ -328,7 +332,7 @@ def _make_indexed_db(path, rows, sections):
     conn.execute(
         "CREATE TABLE metadata_items (id INTEGER PRIMARY KEY, title TEXT, "
         "year INTEGER, metadata_type INTEGER, library_section_id INTEGER, "
-        "user_thumb_url TEXT)"
+        "user_thumb_url TEXT, user_art_url TEXT)"
     )
     conn.executemany(
         "INSERT INTO metadata_items "
@@ -528,3 +532,39 @@ def test_library_optout_decision_excludes_only_matching_library(tmp_path):
     assert is_excluded(music_bloat) is True  # opted-out library -> dropped
     assert is_excluded(films_bloat) is False  # included library -> kept
     assert is_excluded(orphan_bloat) is False  # unresolved bundle -> fail-open keep
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        ("/plex/Metadata/TV Shows/a/x.bundle/Uploads/themes", True),
+        ("/plex/Metadata/TV Shows/a/x.bundle/Uploads/themes/abc", True),
+        ("/plex/Metadata/TV Shows/a/x.bundle/Uploads/themes/n/abc", True),
+        ("/plex/Metadata/TV Shows/a/x.bundle/Uploads/themesX/abc", False),
+        ("/plex/Metadata/TV Shows/a/x.bundle/Uploads/posters/abc", False),
+        ("/plex/Metadata/TV Shows/a/x.bundle/Contents/themes/abc", False),
+    ],
+)
+def test_is_uploaded_theme(path, expected):
+    assert is_uploaded_theme(path.replace("/", os.sep)) is expected
+
+
+def test_scan_bundles_never_lists_uploaded_themes(tmp_path, monkeypatch):
+    """Uploaded theme audio, the selected theme included, is never listed."""
+    plex = tmp_path / "plex"
+    _make_indexed_db(
+        plex / "Plug-in Support" / "Databases" / PLEX_DB_NAME,
+        rows=[(1, "Show", 2020, 2, 1, "upload://posters/show_thumb")],
+        sections=[(1, "TV", 2)],
+    )
+    bundle = plex / "Metadata" / "TV Shows" / "a" / "show.bundle"
+    for rel in ("posters/show_thumb", "posters/show_old", "themes/selected", "themes/n/other"):
+        _touch(bundle / "Uploads" / rel)
+
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
+    invalidate_cache()
+    scan = scan_bundles(str(plex), force=True)
+
+    listed = {v["filename"] for b in scan["bundles"] for v in b["variants"]}
+    assert listed == {"show_thumb", "show_old"}
+    assert [e["filename"] for e in bloat_flat_from_scan(scan)] == ["show_old"]

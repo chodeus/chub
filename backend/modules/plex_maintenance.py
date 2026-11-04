@@ -224,12 +224,14 @@ class PlexMaintenance(ChubModule):
     # ------------------------------------------------------------------
 
     def _clean_photo_transcoder(self) -> Dict[str, Any]:
-        """Walk $PLEX/Cache/PhotoTranscoder/ and delete every file under it."""
-        transcoder_dir = os.path.join(self.plex_path, "Cache", "PhotoTranscoder")
+        """Delete every PhotoTranscoder cache file plex_metadata.transcoder_files yields."""
+        from backend.util.plex_metadata import transcoder_files, transcoder_root
 
-        if not os.path.isdir(transcoder_dir):
+        root = transcoder_root(self.plex_path)
+        if root is None:
             self.logger.warning(
-                f"PhotoTranscoder directory not found: {transcoder_dir}"
+                "PhotoTranscoder directory not found, or reached through a symlink: "
+                f"{os.path.join(self.plex_path, 'Cache', 'PhotoTranscoder')}"
             )
             return {"count": 0, "total_size": 0}
 
@@ -239,24 +241,25 @@ class PlexMaintenance(ChubModule):
 
         self.logger.info("Cleaning PhotoTranscoder cache...")
 
-        for root, _dirs, files in os.walk(transcoder_dir):
-            if self.is_cancelled():
-                break
-            for filename in files:
-                filepath = os.path.join(root, filename)
-                try:
-                    size = os.path.getsize(filepath)
-                    if dry_run:
-                        self.logger.debug(f"[DRY RUN] would purge {filepath}")
-                    else:
-                        self.logger.debug(f"[PURGED_CACHE] {filepath}")
-                        os.remove(filepath)
-                    # Only counted once the remove has succeeded, so the
-                    # summary never includes files that failed to delete.
-                    count += 1
-                    total_size += size
-                except Exception as e:
-                    self.logger.error(f"Failed to remove {filepath}: {e}")
+        for filepath, size in transcoder_files(self.plex_path, self.is_cancelled):
+            try:
+                if dry_run:
+                    self.logger.debug(f"[DRY RUN] would purge {filepath}")
+                else:
+                    # A folder swapped for a link after the walk listed it.
+                    if not os.path.realpath(filepath).startswith(root + os.sep):
+                        self.logger.warning(f"Skipped {filepath}: resolves outside {root}")
+                        continue
+                    os.remove(filepath)
+                    self.logger.debug(f"[PURGED_CACHE] {filepath}")
+                # Only counted once the remove has succeeded, so the
+                # summary never includes files that failed to delete.
+                count += 1
+                total_size += size
+            except FileNotFoundError:
+                continue  # Plex pruned it first
+            except Exception as e:
+                self.logger.error(f"Failed to remove {filepath}: {e}")
 
         verb = "would remove" if dry_run else "removed"
         self.logger.info(
