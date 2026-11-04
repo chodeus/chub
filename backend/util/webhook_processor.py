@@ -517,7 +517,7 @@ class WebhookProcessor:
         year=None,
         season_number=None,
         is_added_event=False,
-        plex_titles: Iterable[str] = (),
+        plex_matches: Iterable[Tuple[str, Optional[int]]] = (),
     ) -> bool:
         """
         Ensure a media item is in Plex before processing its posters, without
@@ -573,10 +573,8 @@ class WebhookProcessor:
             if not targets:
                 return True  # Nothing checkable — don't block.
 
-            # Plex's own titles were matched by guid, so their year isn't rechecked.
-            lookups = [(media_title, year)] + [
-                (t, None) for t in plex_titles if t.lower() != media_title.lower()
-            ]
+            # Plex's own (title, year) for the items the snapshot matched by guid.
+            lookups = list(dict.fromkeys([(media_title, year), *plex_matches]))
 
             def _present() -> bool:
                 # One pass across every instance; True on the first hit. Sharing a

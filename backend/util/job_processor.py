@@ -268,7 +268,7 @@ def _process_webhook_job(
                     "success": True,
                     "media": media,
                     "stored_media": stored_media,
-                    "plex_titles": _snapshot_plex_titles(
+                    "plex_matches": _snapshot_plex_matches(
                         db_context, stored_media, asset_type
                     ),
                 }
@@ -301,7 +301,7 @@ def _process_webhook_job(
             year=media.get("year"),
             season_number=webhook_season if instance_info["type"] == "sonarr" else None,
             is_added_event=is_added_event,
-            plex_titles=process_result["plex_titles"],
+            plex_matches=process_result["plex_matches"],
         )
 
         # Run poster rename on the stored media. A Sonarr Download event
@@ -400,9 +400,9 @@ def _process_webhook_job(
         }
 
 
-def _snapshot_plex_titles(db: ChubDB, stored_media: Any, asset_type: str) -> list:
-    """Plex's own titles for this item from the cached snapshot, by guid only."""
-    from backend.util.plex_index import PlexMediaIndex
+def _snapshot_plex_matches(db: ChubDB, stored_media: Any, asset_type: str) -> list:
+    """(title, year) of the Plex items this item matches in the cached snapshot, by guid only."""
+    from backend.util.plex_index import PlexMediaIndex, _coerce_year
 
     rows = stored_media if isinstance(stored_media, list) else [stored_media]
     row = next((r for r in rows if r.get("season_number") is None), rows[0])
@@ -412,10 +412,14 @@ def _snapshot_plex_titles(db: ChubDB, stored_media: Any, asset_type: str) -> lis
         )
     except Exception:
         return []  # best-effort: the wait still searches by the *arr title
-    # A title hit is the *arr title again, and the wait skips the year check on these.
+    # A title hit is only the *arr title again.
     if key == "TITLE":
         return []
-    return sorted({e["title"] for e in entries if e.get("title")})
+    return list(
+        dict.fromkeys(
+            (e["title"], _coerce_year(e.get("year"))) for e in entries if e.get("title")
+        )
+    )
 
 
 def _process_media_record(media: dict, asset_type: str) -> list:
@@ -591,6 +595,7 @@ def _process_upload_posters_job(
             manifest=manifest,
             force=force,
             refresh_plex=refresh_plex,
+            verify_skips=targeted,
         )
         result = uploader.run()
 

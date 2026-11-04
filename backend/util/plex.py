@@ -801,7 +801,7 @@ class PlexClient:
             )
             return False
 
-    def shows_uploaded_poster(
+    def copies_without_upload(
         self,
         library_name: str,
         item_title: str,
@@ -810,8 +810,8 @@ class PlexClient:
         is_collection: bool = False,
         season_number: Any = None,
         plex_id: Any = None,
-    ) -> Optional[bool]:
-        """False when a target has no uploaded poster selected; None when Plex can't say."""
+    ) -> Optional[List[str]]:
+        """ratingKeys of the target copies with no uploaded poster selected; None when Plex can't say."""
         try:
             targets = self._locate_targets(
                 library_name,
@@ -823,12 +823,13 @@ class PlexClient:
             )
             if not targets:
                 return None
+            missing = []
             for tgt in targets:
                 selected = next((p for p in tgt.posters() if p.selected), None)
                 # Any upload counts (ours, Kometa's overlay, the user's own).
                 if not str(getattr(selected, "ratingKey", "")).startswith("upload://"):
-                    return False
-            return True
+                    missing.append(str(tgt.ratingKey))
+            return missing
         except Exception as e:
             self.logger.debug(
                 f"Could not read the selected poster for '{item_title}' in '{library_name}': {e}"

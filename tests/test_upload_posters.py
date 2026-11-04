@@ -946,7 +946,8 @@ class _Poster:
 class _PlexItem:
     TYPE = "movie"
 
-    def __init__(self, *posters, index=None, seasons=()):
+    def __init__(self, *posters, index=None, seasons=(), rating_key=None):
+        self.ratingKey = rating_key
         self._posters = list(posters)
         self.index = index
         self._seasons = list(seasons)
@@ -1046,8 +1047,8 @@ def _unchanged_dune(tmp_path):
 
 
 def test_webhook_reuploads_where_plex_fell_back_to_a_provider_poster(tmp_path):
-    kept = _PlexItem(_Poster("upload://posters/abc"))
-    lost = _PlexItem(_Poster("metadata://posters/tmdb_xyz"))
+    kept = _PlexItem(_Poster("upload://posters/abc"), rating_key=1)
+    lost = _PlexItem(_Poster("metadata://posters/tmdb_xyz"), rating_key=2)
     updates = []
     asset = _unchanged_dune(tmp_path)
 
@@ -1065,8 +1066,10 @@ def test_webhook_reuploads_where_plex_fell_back_to_a_provider_poster(tmp_path):
 
 
 def test_unchanged_poster_still_skips_when_plex_shows_an_upload(tmp_path):
-    overlay = _PlexItem(_Poster("metadata://posters/a", False), _Poster("upload://posters/b"))
-    own = _PlexItem(_Poster("upload://posters/c"))
+    overlay = _PlexItem(
+        _Poster("metadata://posters/a", False), _Poster("upload://posters/b"), rating_key=1
+    )
+    own = _PlexItem(_Poster("upload://posters/c"), rating_key=2)
 
     result = _uploader([], verify_skips=True)._sync_single_asset(
         asset=_unchanged_dune(tmp_path),
@@ -1122,3 +1125,33 @@ def test_a_show_without_the_season_never_falls_back_to_a_title_search(tmp_path):
     assert [(r.action, r.reason) for r in results] == [
         ("failed", "Season not found in Plex yet")
     ]
+
+
+def test_a_title_searched_target_reuploads_only_the_copy_that_lost_it(tmp_path):
+    from types import SimpleNamespace
+
+    from backend.util.plex import PlexClient
+
+    kept = _PlexItem(_Poster("upload://posters/abc"), rating_key=1)
+    lost = _PlexItem(_Poster("metadata://posters/tmdb_xyz"), rating_key=2)
+    section = SimpleNamespace(search=lambda **k: [kept, lost])
+    client = PlexClient.__new__(PlexClient)
+    client.logger = _quiet()
+    client.plex = SimpleNamespace(
+        fetchItem=lambda key: {1: kept, 2: lost}[int(key)],
+        library=SimpleNamespace(section=lambda name: section),
+    )
+    asset = _unchanged_dune(tmp_path)
+    asset["uploaded_libraries"] = '["Movies"]'
+    index = {"tmdb:438631": [{"library_name": "Movies", "title": "Dune", "year": "2021"}]}
+
+    result = _uploader([], verify_skips=True)._sync_single_asset(
+        asset=asset,
+        plex_client=client,
+        index=index,
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert result.action == "updated"
+    assert (kept.uploaded, lost.uploaded) == ([], [asset["renamed_file"]])

@@ -1,4 +1,4 @@
-"""PlexClient.shows_uploaded_poster: False when no uploaded poster is selected, None when Plex can't say."""
+"""PlexClient.copies_without_upload: copies with no uploaded poster selected; None when Plex can't say."""
 
 from types import SimpleNamespace
 
@@ -13,6 +13,7 @@ def _poster(key, selected=True):
 
 
 def _client(item=None, search=()):
+    items = {str(getattr(i, "ratingKey", "")): i for i in search}
     client = PlexClient.__new__(PlexClient)
     noop = lambda *a, **k: None  # noqa: E731
     client.logger = SimpleNamespace(debug=noop, info=noop, error=noop)
@@ -20,7 +21,7 @@ def _client(item=None, search=()):
     def fetch(key):
         if item is None:
             raise NotFound("gone")
-        return item
+        return item if str(key) == "7" else items[str(key)]
 
     section = SimpleNamespace(search=lambda **k: list(search))
     client.plex = SimpleNamespace(
@@ -29,27 +30,36 @@ def _client(item=None, search=()):
     return client
 
 
-def _shown(client):
-    return client.shows_uploaded_poster("Films", "Dune", year=2021, plex_id="7")
+def _shown(client, plex_id="7"):
+    return client.copies_without_upload("Films", "Dune", year=2021, plex_id=plex_id)
 
 
 @pytest.mark.parametrize(
-    "posters, shown",
+    "posters, missing",
     [
-        ([_poster("upload://posters/abc")], True),
-        ([_poster("metadata://posters/tmdb", False), _poster("upload://posters/abc")], True),
-        ([_poster("metadata://posters/tmdb")], False),
-        ([_poster("https://image.tmdb.org/t/p/original/x.jpg")], False),
-        ([_poster("upload://posters/abc", False)], False),
-        ([], False),
+        ([_poster("upload://posters/abc")], []),
+        ([_poster("metadata://posters/tmdb", False), _poster("upload://posters/abc")], []),
+        ([_poster("metadata://posters/tmdb")], ["7"]),
+        ([_poster("https://image.tmdb.org/t/p/original/x.jpg")], ["7"]),
+        ([_poster("upload://posters/abc", False)], ["7"]),
+        ([], ["7"]),
     ],
 )
-def test_what_plex_has_selected(posters, shown):
-    item = SimpleNamespace(TYPE="movie", posters=lambda: posters)
+def test_what_plex_has_selected(posters, missing):
+    item = SimpleNamespace(TYPE="movie", ratingKey=7, posters=lambda: posters)
 
     found = _shown(_client(item))
 
-    assert found is shown
+    assert found == missing
+
+
+def test_a_title_search_reports_only_the_copy_without_an_upload():
+    kept = SimpleNamespace(ratingKey=1, posters=lambda: [_poster("upload://posters/a")])
+    lost = SimpleNamespace(ratingKey=2, posters=lambda: [_poster("metadata://posters/b")])
+
+    found = _shown(_client(search=[kept, lost]), plex_id=None)
+
+    assert found == ["2"]
 
 
 def test_unknown_when_plex_holds_no_such_item():

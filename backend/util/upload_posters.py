@@ -1064,14 +1064,14 @@ class PosterUploader:
         season_number: Optional[int],
         is_collection: bool,
     ) -> List[Dict]:
-        """Targets an unchanged poster still owes: libraries missing it, plus (verify_skips) items showing no upload."""
+        """Targets an unchanged poster still owes: libraries missing it, plus (verify_skips) copies showing no upload."""
         owed = [t for t in targets if str(t.get("library_name")) in missing_libs]
         if not self.verify_skips:
             return owed
         for t in targets:
             if t in owed:
                 continue
-            shown = plex_client.shows_uploaded_poster(
+            missing = plex_client.copies_without_upload(
                 t["library_name"],
                 t["title"],
                 year=t.get("year"),
@@ -1079,12 +1079,13 @@ class PosterUploader:
                 season_number=season_number,
                 plex_id=t.get("plex_id"),
             )
-            if shown is False:
+            for rating_key in missing or []:
                 self.logger.info(
                     f"Plex shows no uploaded poster for '{t['title']}' in "
                     f"'{t['library_name']}'; uploading it again"
                 )
-                owed.append(t)
+                # Only that copy: a title-searched target can cover several.
+                owed.append({**t, "plex_id": rating_key})
         return owed
 
     def _note_year_discrepancy(

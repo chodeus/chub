@@ -441,7 +441,7 @@ def test_labelarr_bulk_job_reports_a_refused_sync_as_a_failure(monkeypatch):
     assert (res["success"], res["error_code"]) == (False, "ARR_REFRESH_FAILED")
 
 
-def _plex_row(title, tvdb, season=None):
+def _plex_row(title, tvdb, season=None, year="2015"):
     from backend.util.normalization import normalize_titles
 
     return {
@@ -450,6 +450,7 @@ def _plex_row(title, tvdb, season=None):
         "title": title,
         "normalized_title": normalize_titles(title),
         "season_number": season,
+        "year": year,
         "guids": {"tvdb": tvdb},
     }
 
@@ -494,20 +495,20 @@ def test_webhook_wait_also_looks_under_the_plex_title(monkeypatch):
     result = jp._process_webhook_job({"webhook_data": {}}, _logger(), 1, db)
 
     assert result["success"] is True
-    assert waits[0]["plex_titles"] == ["Daredevil"]
+    assert waits[0]["plex_matches"] == [("Daredevil", 2015)]
 
 
-def test_plex_titles_come_from_the_snapshot_by_guid():
+def test_plex_matches_come_from_the_snapshot_by_guid():
     from types import SimpleNamespace as NS
 
     rows = [_plex_row("Daredevil", "281662"), _plex_row("Daredevil", "281662", 1)]
     db = NS(plex=NS(get_all=lambda: rows))
     stored = {"title": "Marvel's Daredevil", "tvdb_id": 281662, "season_number": None}
 
-    titles = jp._snapshot_plex_titles(db, stored, "show")
-    unreadable = jp._snapshot_plex_titles(NS(plex=None), stored, "show")
+    matches = jp._snapshot_plex_matches(db, stored, "show")
+    unreadable = jp._snapshot_plex_matches(NS(plex=None), stored, "show")
 
-    assert (titles, unreadable) == (["Daredevil"], [])
+    assert (matches, unreadable) == ([("Daredevil", 2015)], [])
 
 
 def test_item_scoped_upload_rechecks_the_posters_it_would_skip(monkeypatch):
@@ -535,10 +536,30 @@ def test_item_scoped_upload_rechecks_the_posters_it_would_skip(monkeypatch):
 def test_a_title_only_snapshot_match_adds_no_plex_title():
     from types import SimpleNamespace as NS
 
-    rows = [{**_plex_row("Shōgun", None), "year": 1980, "guids": {}}]
+    rows = [{**_plex_row("Shōgun", None, year="1980"), "guids": {}}]
     db = NS(plex=NS(get_all=lambda: rows))
     stored = {"title": "Shogun", "year": 1980, "season_number": None}
 
-    titles = jp._snapshot_plex_titles(db, stored, "show")
+    matches = jp._snapshot_plex_matches(db, stored, "show")
 
-    assert titles == []
+    assert matches == []
+
+
+def test_only_targeted_upload_jobs_recheck_the_posters_they_would_skip(monkeypatch):
+    seen = []
+
+    class _Uploader:
+        def __init__(self, *a, **k):
+            seen.append(k["verify_skips"])
+
+        def run(self):
+            return {"success": True}
+
+    monkeypatch.setattr(jp, "ChubDB", _OutcomeDB)
+    monkeypatch.setattr("backend.util.upload_posters.PosterUploader", _Uploader)
+
+    for targeted in (True, False):
+        payload = {"manifest": {"media_cache": [1]}, "targeted": targeted}
+        jp._process_upload_posters_job(payload, _logger(), 1)
+
+    assert seen == [True, False]
