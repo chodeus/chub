@@ -3,7 +3,7 @@
 import ipaddress
 import socket
 import time
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Tuple
 from urllib.parse import urlparse
 
 from backend.util.config import load_config
@@ -501,8 +501,23 @@ class WebhookProcessor:
                     return True
         return False
 
+    @classmethod
+    def _found(cls, plex, lookups, season_number) -> bool:
+        """True when any (title, year) lookup finds the item, or its season, in this Plex."""
+        return any(
+            cls._season_present(plex, title, title_year, season_number)
+            if season_number is not None
+            else cls._item_present(plex, title, title_year)
+            for title, title_year in lookups
+        )
+
     def wait_for_plex_availability(
-        self, media_title: str, year=None, season_number=None, is_added_event=False
+        self,
+        media_title: str,
+        year=None,
+        season_number=None,
+        is_added_event=False,
+        plex_titles: Iterable[str] = (),
     ) -> bool:
         """
         Ensure a media item is in Plex before processing its posters, without
@@ -558,6 +573,11 @@ class WebhookProcessor:
             if not targets:
                 return True  # Nothing checkable — don't block.
 
+            # Plex's own titles were matched by guid, so their year isn't rechecked.
+            lookups = [(media_title, year)] + [
+                (t, None) for t in plex_titles if t.lower() != media_title.lower()
+            ]
+
             def _present() -> bool:
                 # One pass across every instance; True on the first hit. Sharing a
                 # single budget (vs a retry loop nested per instance) keeps M
@@ -565,12 +585,7 @@ class WebhookProcessor:
                 for name, url, token in targets:
                     try:
                         plex = PlexServer(url, token, timeout=10)
-                        if season_number is not None:
-                            if self._season_present(
-                                plex, media_title, year, season_number
-                            ):
-                                return True
-                        elif self._item_present(plex, media_title, year):
+                        if self._found(plex, lookups, season_number):
                             return True
                     except Exception as e:
                         log.debug(f"Plex check failed for {name}: {e}")

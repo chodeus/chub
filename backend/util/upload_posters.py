@@ -83,6 +83,7 @@ class PosterUploader:
         manifest: Optional[Dict] = None,
         force: bool = False,
         refresh_plex: bool = True,
+        verify_skips: bool = False,
     ):
         self.full_config = load_config()
         self.config = self.full_config.poster_renamerr
@@ -91,6 +92,8 @@ class PosterUploader:
         self.logger = self.logger.get_adapter("poster_uploader")
         self.manifest = manifest or {}
         self.force = force
+        # Item-scoped runs only: one Plex call per target an unchanged poster would skip.
+        self.verify_skips = verify_skips
         # When False, reuse the existing plex_media_cache snapshot instead of
         # re-fetching the whole Plex library. Used by the interactive manual
         # "apply this one poster now" path so a click doesn't trigger a full
@@ -375,7 +378,9 @@ class PosterUploader:
 
         if seasons:
             all_results.extend(
-                self._sync_seasons(seasons, plex_client, season_index, dry_run)
+                self._sync_seasons(
+                    seasons, plex_client, season_index, show_index, dry_run
+                )
             )
 
         if collections:
@@ -488,6 +493,7 @@ class PosterUploader:
         seasons: List[Dict],
         plex_client: PlexClient,
         season_index: Dict,
+        show_index: Dict,
         dry_run: bool,
     ) -> List[UploadResult]:
         """Sync season posters"""
@@ -514,6 +520,7 @@ class PosterUploader:
                         dry_run=dry_run,
                         season_number=season_num,
                         title_override=f"{norm_title}:S{season_num}",
+                        show_index=show_index,
                     )
                     results.append(result)
                 except Exception as e:
@@ -685,6 +692,7 @@ class PosterUploader:
         season_number: Optional[int] = None,
         title_override: Optional[str] = None,
         is_collection: bool = False,
+        show_index: Optional[Dict] = None,
     ) -> UploadResult:
         """Sync a single asset with comprehensive error handling"""
 
@@ -733,6 +741,10 @@ class PosterUploader:
             matched_entries, match_type = self.match_asset(
                 index, priority_keys, search_values
             )
+            if not matched_entries and show_index:
+                matched_entries, match_type = PlexMediaIndex.show_for_season(
+                    show_index, asset
+                )
 
             if not matched_entries:
                 # LIVE per-item fallback. The cached plex_media_cache snapshot
@@ -827,7 +839,10 @@ class PosterUploader:
             # libraries still missing it, growing the existing record.
             reset_record: bool
             if mtime_unchanged:
-                if not missing_libs:
+                upload_targets = self._owed_targets(
+                    plex_client, targets, missing_libs, season_number, is_collection
+                )
+                if not upload_targets:
                     # Unchanged file, every library already has it — true skip.
                     return UploadResult(
                         asset_title=asset_title,
@@ -838,12 +853,9 @@ class PosterUploader:
                         library_name=lib_label,
                         match_type=match_type,
                     )
-                # Unchanged bytes but some libraries are missing it — backfill
-                # without re-reading the file.
+                # Unchanged bytes but some targets lack it — backfill without
+                # re-reading the file.
                 current_file_hash = record_hash
-                upload_targets = [
-                    t for t in targets if str(t.get("library_name")) in missing_libs
-                ]
                 reset_record = False
             else:
                 # mtime missing/changed — fall back to the sha256 comparison.
@@ -859,7 +871,10 @@ class PosterUploader:
                     )
 
                 if current_file_hash == record_hash and not self.force:
-                    if not missing_libs:
+                    upload_targets = self._owed_targets(
+                        plex_client, targets, missing_libs, season_number, is_collection
+                    )
+                    if not upload_targets:
                         # Same bytes, every library covered: refresh the mtime
                         # fast-path key (preserving the record) and skip.
                         # Never persist in dry-run — a pretend run must not
@@ -883,10 +898,7 @@ class PosterUploader:
                             library_name=lib_label,
                             match_type=match_type,
                         )
-                    # Same bytes, some libraries missing — backfill those.
-                    upload_targets = [
-                        t for t in targets if str(t.get("library_name")) in missing_libs
-                    ]
+                    # Same bytes, some targets lack it — backfill those.
                     reset_record = False
                 else:
                     # New bytes (or forced): (re)push to every matched library.
@@ -1043,6 +1055,37 @@ class PosterUploader:
                     type_map[name] = None
             self._live_lib_types[cache_key] = type_map
         return [name for name, typ in type_map.items() if typ in plex_types]
+
+    def _owed_targets(
+        self,
+        plex_client: PlexClient,
+        targets: List[Dict],
+        missing_libs: set,
+        season_number: Optional[int],
+        is_collection: bool,
+    ) -> List[Dict]:
+        """Targets an unchanged poster still owes: libraries missing it, plus (verify_skips) items showing no upload."""
+        owed = [t for t in targets if str(t.get("library_name")) in missing_libs]
+        if not self.verify_skips:
+            return owed
+        for t in targets:
+            if t in owed:
+                continue
+            shown = plex_client.shows_uploaded_poster(
+                t["library_name"],
+                t["title"],
+                year=t.get("year"),
+                is_collection=is_collection,
+                season_number=season_number,
+                plex_id=t.get("plex_id"),
+            )
+            if shown is False:
+                self.logger.info(
+                    f"Plex shows no uploaded poster for '{t['title']}' in "
+                    f"'{t['library_name']}'; uploading it again"
+                )
+                owed.append(t)
+        return owed
 
     def _note_year_discrepancy(
         self,

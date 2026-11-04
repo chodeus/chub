@@ -648,3 +648,37 @@ def test_item_present_direct_match():
     assert WebhookProcessor._item_present(plex, "The Movie", None) is True
     assert WebhookProcessor._item_present(plex, "Other", 2020) is False
     assert WebhookProcessor._item_present(plex, "The Movie", 1999) is False
+
+
+def test_wait_finds_a_season_under_plex_title_when_sonarr_names_it_differently(
+    monkeypatch,
+):
+    wp = _wp_with_plex(monkeypatch)
+    slept = []
+    plex = _plex_with(2, [object()], show_title="Daredevil", show_year=2015)
+    monkeypatch.setattr(
+        "plexapi.server.PlexServer", lambda url, token, timeout=10: plex
+    )
+    import time as _time
+
+    monkeypatch.setattr(_time, "sleep", lambda s: slept.append(s))
+
+    found = wp.wait_for_plex_availability(
+        "Marvel's Daredevil", year=2015, season_number=2, plex_titles=["Daredevil"]
+    )
+
+    assert (found, slept) == (True, [])
+
+
+def test_wait_does_not_recheck_the_year_of_a_plex_title(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    slept = []
+    _patch_plex(monkeypatch, [("AVPR: Aliens vs Predator - Requiem", 2007)], slept)
+
+    found = wp.wait_for_plex_availability(
+        "Aliens vs Predator: Requiem",
+        year=2008,
+        plex_titles=["AVPR: Aliens vs Predator - Requiem"],
+    )
+
+    assert (found, slept) == (True, [])

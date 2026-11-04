@@ -709,6 +709,7 @@ def _make_uploader(updates):
 
     up = object.__new__(PosterUploader)
     up.force = False
+    up.verify_skips = False
     up.config = SimpleNamespace(upload_delay_ms=0)
     up.logger = SimpleNamespace(warning=lambda *a, **k: None)
     up.db = SimpleNamespace(
@@ -931,3 +932,168 @@ def test_write_music_sidecar_failure_preserves_existing_cover(tmp_path, monkeypa
     assert existing.read_bytes() == b"original"
     assert warnings, "sidecar failure should warn, not pass silently"
     assert _tmp_litter(folder) == []
+
+
+# --- seasons the snapshot lacks, and posters Plex has lost ---
+
+
+class _Poster:
+    def __init__(self, rating_key, selected=True):
+        self.ratingKey = rating_key
+        self.selected = selected
+
+
+class _PlexItem:
+    TYPE = "movie"
+
+    def __init__(self, *posters, index=None, seasons=()):
+        self._posters = list(posters)
+        self.index = index
+        self._seasons = list(seasons)
+        self.uploaded = []
+
+    def posters(self):
+        return self._posters
+
+    def seasons(self):
+        return self._seasons
+
+    def uploadPoster(self, filepath=None, url=None):
+        self.uploaded.append(filepath)
+
+
+def _quiet():
+    from types import SimpleNamespace
+
+    noop = lambda *a, **k: None  # noqa: E731
+    return SimpleNamespace(debug=noop, info=noop, warning=noop, error=noop)
+
+
+def _real_client(items):
+    """A real PlexClient over a fake server that only knows ratingKeys."""
+    import pytest
+    from types import SimpleNamespace
+
+    from backend.util.plex import PlexClient
+
+    def no_title_search(name):
+        pytest.fail("a known ratingKey must not fall back to a title search")
+
+    client = PlexClient.__new__(PlexClient)
+    client.logger = _quiet()
+    client.plex = SimpleNamespace(
+        fetchItem=lambda key: items[key],
+        library=SimpleNamespace(section=no_title_search),
+    )
+    return client
+
+
+def _uploader(updates, verify_skips=False):
+    up = _make_uploader(updates)
+    up.logger = _quiet()
+    up.verify_skips = verify_skips
+    up._live_lib_types = {}
+    return up
+
+
+def test_new_season_uploads_through_its_show_when_sonarr_names_it_differently(
+    tmp_path,
+):
+    poster = tmp_path / "Season02.jpg"
+    poster.write_bytes(b"season-2")
+    season_2 = _PlexItem(index=2)
+    show = _PlexItem(seasons=[_PlexItem(index=1), season_2])
+    show.TYPE = "show"
+    cache = [
+        {"plex_id": "10", "asset_type": "show", "library_name": "TV",
+         "title": "Daredevil", "normalized_title": "daredevil",
+         "season_number": None, "guids": {"tvdb": "281662"}},
+        {"plex_id": "11", "asset_type": "show", "library_name": "TV",
+         "title": "Daredevil", "normalized_title": "daredevil",
+         "season_number": 1, "guids": {"tvdb": "281662"}},
+    ]
+    _, show_idx, season_idx, *_ = PosterUploader._build_indexes(cache)
+    season = {
+        "title": "Marvel's Daredevil", "asset_type": "show", "season_number": 2,
+        "tvdb_id": 281662, "renamed_file": str(poster),
+    }
+
+    results = _uploader([])._sync_seasons(
+        [season], _real_client({10: show}), season_idx, show_idx, False
+    )
+
+    assert [r.action for r in results] == ["updated"]
+    assert season_2.uploaded == [str(poster)]
+
+
+def _two_copies_index():
+    return {
+        "tmdb:438631": [
+            {"library_name": "Movies", "title": "Dune", "year": "2021", "plex_id": "1"},
+            {"library_name": "Movies 4K", "title": "Dune", "year": "2021", "plex_id": "2"},
+        ]
+    }
+
+
+def _unchanged_dune(tmp_path):
+    poster = tmp_path / "Dune (2021).jpg"
+    poster.write_bytes(b"poster-bytes")
+    return {
+        "title": "Dune", "asset_type": "movie", "tmdb_id": 438631,
+        "renamed_file": str(poster), "file_mtime": poster.stat().st_mtime,
+        "uploaded_libraries": '["Movies", "Movies 4K"]',
+    }
+
+
+def test_webhook_reuploads_where_plex_fell_back_to_a_provider_poster(tmp_path):
+    kept = _PlexItem(_Poster("upload://posters/abc"))
+    lost = _PlexItem(_Poster("metadata://posters/tmdb_xyz"))
+    updates = []
+    asset = _unchanged_dune(tmp_path)
+
+    result = _uploader(updates, verify_skips=True)._sync_single_asset(
+        asset=asset,
+        plex_client=_real_client({1: kept, 2: lost}),
+        index=_two_copies_index(),
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert (result.action, result.library_name) == ("updated", "Movies 4K")
+    assert (kept.uploaded, lost.uploaded) == ([], [asset["renamed_file"]])
+    assert json.loads(updates[0]["uploaded_libraries"]) == ["Movies", "Movies 4K"]
+
+
+def test_unchanged_poster_still_skips_when_plex_shows_an_upload(tmp_path):
+    overlay = _PlexItem(_Poster("metadata://posters/a", False), _Poster("upload://posters/b"))
+    own = _PlexItem(_Poster("upload://posters/c"))
+
+    result = _uploader([], verify_skips=True)._sync_single_asset(
+        asset=_unchanged_dune(tmp_path),
+        plex_client=_real_client({1: overlay, 2: own}),
+        index=_two_copies_index(),
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert result.action == "skipped"
+    assert (overlay.uploaded, own.uploaded) == ([], [])
+
+
+def test_full_runs_never_ask_plex_what_it_shows(tmp_path):
+    asked = []
+
+    class _Unasked(_PlexItem):
+        def posters(self):
+            asked.append(self)
+            return []
+
+    result = _uploader([])._sync_single_asset(
+        asset=_unchanged_dune(tmp_path),
+        plex_client=_real_client({1: _Unasked(), 2: _Unasked()}),
+        index=_two_copies_index(),
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert (result.action, asked) == ("skipped", [])
