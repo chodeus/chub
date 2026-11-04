@@ -2,9 +2,12 @@
 PhotoTranscoder cleanup accounting."""
 
 import os
+import shutil
+import threading
 from types import SimpleNamespace
 
 from backend.modules.plex_maintenance import PlexMaintenance
+from backend.util import plex_metadata
 from backend.util.plex_metadata import scan_transcoder_cache
 
 
@@ -103,11 +106,61 @@ def test_photo_transcoder_skips_synology_metadata_and_links(tmp_path):
 
     # The size shown on the page and the cleanup walk the same files.
     scan = scan_transcoder_cache(str(tmp_path), force=True)
+    stats = m._clean_photo_transcoder()
+
     assert (scan["count"], scan["size_bytes"]) == (1, 10)
-    assert m._clean_photo_transcoder() == {"count": 1, "total_size": 10}
+    assert stats == {"count": 1, "total_size": 10}
     assert synology.exists()
     assert link.is_symlink()
     assert outside.exists()
+
+
+def test_photo_transcoder_refuses_a_linked_cache_folder(tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "keep.jpg").write_bytes(b"x" * 10)
+    (tmp_path / "Cache").mkdir()
+    (tmp_path / "Cache" / "PhotoTranscoder").symlink_to(elsewhere, target_is_directory=True)
+    m = make_module(plex_path=str(tmp_path))
+
+    scan = scan_transcoder_cache(str(tmp_path), force=True)
+    stats = m._clean_photo_transcoder()
+
+    assert (scan["count"], stats) == (0, {"count": 0, "total_size": 0})
+    assert (elsewhere / "keep.jpg").exists()
+    assert any(msg[0] == "warning" and "symlink" in msg[1] for msg in m.logger.msgs)
+
+
+def test_photo_transcoder_rechecks_each_file_before_removing(tmp_path, monkeypatch):
+    cache_dir = _make_cache(tmp_path, n_files=1, size=10)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "f0.jpg").write_bytes(b"keep")
+    real_files = plex_metadata.transcoder_files
+
+    def folder_swapped_after_listing(*args, **kwargs):
+        for path, size in real_files(*args, **kwargs):
+            shutil.rmtree(cache_dir)
+            cache_dir.symlink_to(outside, target_is_directory=True)
+            yield path, size
+
+    monkeypatch.setattr(plex_metadata, "transcoder_files", folder_swapped_after_listing)
+    stats = make_module(plex_path=str(tmp_path))._clean_photo_transcoder()
+
+    assert stats == {"count": 0, "total_size": 0}
+    assert (outside / "f0.jpg").read_bytes() == b"keep"
+
+
+def test_photo_transcoder_stops_while_walking_when_cancelled(tmp_path):
+    cache_dir = _make_cache(tmp_path, n_files=2, size=10)
+    m = make_module(plex_path=str(tmp_path))
+    m._cancel_event = threading.Event()
+    m._cancel_event.set()
+
+    stats = m._clean_photo_transcoder()
+
+    assert stats == {"count": 0, "total_size": 0}
+    assert len(list(cache_dir.iterdir())) == 2
 
 
 def test_photo_transcoder_file_plex_removed_first_is_not_an_error(tmp_path, monkeypatch):
@@ -125,6 +178,7 @@ def test_photo_transcoder_file_plex_removed_first_is_not_an_error(tmp_path, monk
 
     assert stats == {"count": 2, "total_size": 20}
     assert [msg for msg in m.logger.msgs if msg[0] == "error"] == []
+    assert not any("f1.jpg" in msg[1] for msg in m.logger.msgs if msg[0] == "debug")
 
 
 def test_maintenance_tasks_skipped_in_dry_run():

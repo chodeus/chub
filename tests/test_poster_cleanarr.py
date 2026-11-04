@@ -120,8 +120,7 @@ def test_query_in_use_tolerates_old_plex_missing_new_columns(tmp_path):
 
 
 def test_scan_bloat_images_skips_uploaded_themes(tmp_path):
-    """Theme audio under Uploads/themes/ is extensionless and in no artwork
-    column, so without the skip a remove run deletes the selected theme."""
+    """Uploaded theme audio is never bloat, the selected theme included."""
     bundle = tmp_path / "Metadata" / "TV Shows" / "a" / "show.bundle"
     for rel in ("posters/active", "posters/old", "themes/selected", "themes/n/other"):
         path = bundle / "Uploads" / rel

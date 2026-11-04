@@ -225,13 +225,13 @@ class PlexMaintenance(ChubModule):
 
     def _clean_photo_transcoder(self) -> Dict[str, Any]:
         """Delete every PhotoTranscoder cache file plex_metadata.transcoder_files yields."""
-        from backend.util.plex_metadata import transcoder_files
+        from backend.util.plex_metadata import transcoder_files, transcoder_root
 
-        transcoder_dir = os.path.join(self.plex_path, "Cache", "PhotoTranscoder")
-
-        if not os.path.isdir(transcoder_dir):
+        root = transcoder_root(self.plex_path)
+        if root is None:
             self.logger.warning(
-                f"PhotoTranscoder directory not found: {transcoder_dir}"
+                "PhotoTranscoder directory not found, or reached through a symlink: "
+                f"{os.path.join(self.plex_path, 'Cache', 'PhotoTranscoder')}"
             )
             return {"count": 0, "total_size": 0}
 
@@ -241,15 +241,17 @@ class PlexMaintenance(ChubModule):
 
         self.logger.info("Cleaning PhotoTranscoder cache...")
 
-        for filepath, size in transcoder_files(self.plex_path):
-            if self.is_cancelled():
-                break
+        for filepath, size in transcoder_files(self.plex_path, self.is_cancelled):
             try:
                 if dry_run:
                     self.logger.debug(f"[DRY RUN] would purge {filepath}")
                 else:
-                    self.logger.debug(f"[PURGED_CACHE] {filepath}")
+                    # A folder swapped for a link after the walk listed it.
+                    if not os.path.realpath(filepath).startswith(root + os.sep):
+                        self.logger.warning(f"Skipped {filepath}: resolves outside {root}")
+                        continue
                     os.remove(filepath)
+                    self.logger.debug(f"[PURGED_CACHE] {filepath}")
                 # Only counted once the remove has succeeded, so the
                 # summary never includes files that failed to delete.
                 count += 1

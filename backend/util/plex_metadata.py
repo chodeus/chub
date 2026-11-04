@@ -27,7 +27,7 @@ Public surface:
     resolve_in_metadata_dir(file_path, plex_path) -> Optional[str]
     get_in_use_hashes(db_path) -> Set[str]
     walk_metadata(metadata_dir) / is_uploaded_theme(path)
-    transcoder_files(plex_path) -> Iterator[(path, size)]
+    transcoder_root(plex_path) / transcoder_files(plex_path) -> Iterator[(path, size)]
     copy_plex_db(plex_path, dest) -> Optional[str]
     scan_bundles(plex_path, *, force=False) -> Dict
     bloat_flat_from_scan(scan) -> List[Dict]
@@ -46,7 +46,7 @@ import stat
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Literal, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 from backend.util.paths import get_config_dir
@@ -778,10 +778,24 @@ def bloat_flat_from_scan(scan: Dict[str, Any]) -> List[Dict[str, Any]]:
     return flat
 
 
-def transcoder_files(plex_path: str) -> Iterator[Tuple[str, int]]:
-    """Yield (path, size) per PhotoTranscoder cache file, skipping Synology @eaDir and links."""
-    transcoder_dir = os.path.join(plex_path, "Cache", "PhotoTranscoder")
+def transcoder_root(plex_path: str) -> Optional[str]:
+    """Real Cache/PhotoTranscoder under plex_path; None when missing or reached through a link."""
+    root = os.path.join(os.path.realpath(plex_path), "Cache", "PhotoTranscoder")
+    if not os.path.isdir(root) or os.path.realpath(root) != root:
+        return None
+    return root
+
+
+def transcoder_files(
+    plex_path: str, cancelled: Callable[[], bool] = lambda: False
+) -> Iterator[Tuple[str, int]]:
+    """Yield (path, size) per file under transcoder_root, skipping Synology @eaDir and links."""
+    transcoder_dir = transcoder_root(plex_path)
+    if transcoder_dir is None:
+        return
     for root, dirs, files in os.walk(transcoder_dir):
+        if cancelled():
+            return
         dirs[:] = [d for d in dirs if d != "@eaDir"]
         for name in files:
             path = os.path.join(root, name)

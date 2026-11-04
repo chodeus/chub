@@ -534,9 +534,6 @@ def test_library_optout_decision_excludes_only_matching_library(tmp_path):
     assert is_excluded(orphan_bloat) is False  # unresolved bundle -> fail-open keep
 
 
-# --- uploaded themes are audio, never artwork ---
-
-
 @pytest.mark.parametrize(
     "path,expected",
     [
@@ -553,8 +550,7 @@ def test_is_uploaded_theme(path, expected):
 
 
 def test_scan_bundles_never_lists_uploaded_themes(tmp_path, monkeypatch):
-    """Plex stores uploaded theme audio extensionless like posters, and no
-    artwork column names it, so the selected theme would read as bloat."""
+    """Uploaded theme audio, the selected theme included, is never listed."""
     plex = tmp_path / "plex"
     _make_indexed_db(
         plex / "Plug-in Support" / "Databases" / PLEX_DB_NAME,

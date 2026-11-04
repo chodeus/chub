@@ -176,8 +176,7 @@ def test_route_answers_each_outcome(monkeypatch, tmp_path, outcome, status, code
     ids=["no art column", "no thumb column", "no metadata_items table"],
 )
 def test_in_use_reads_fail_closed_without_the_core_artwork_columns(tmp_path, item_columns):
-    """Tag artwork alone is a non-empty set: skipping the poster/art columns
-    would pass the 0-in-use guard and delete every item's artwork."""
+    """Tag artwork alone must not pass as the in-use set: fail closed, delete nothing."""
     db_dir = tmp_path / "Plug-in Support" / "Databases"
     db_dir.mkdir(parents=True)
     db = db_dir / PLEX_DB_NAME
@@ -205,5 +204,7 @@ def test_delete_refuses_an_uploaded_theme(tmp_path):
     theme.parent.mkdir(parents=True)
     theme.write_bytes(b"x")
 
-    assert delete_variant(str(theme), plex_path=plex_path) == "refused"
+    outcome = delete_variant(str(theme), plex_path=plex_path)
+
+    assert outcome == "refused"
     assert theme.exists()
