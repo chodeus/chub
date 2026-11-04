@@ -504,8 +504,10 @@ def test_plex_titles_come_from_the_snapshot_by_guid():
     db = NS(plex=NS(get_all=lambda: rows))
     stored = {"title": "Marvel's Daredevil", "tvdb_id": 281662, "season_number": None}
 
-    assert jp._snapshot_plex_titles(db, stored, "show") == ["Daredevil"]
-    assert jp._snapshot_plex_titles(NS(plex=None), stored, "show") == []
+    titles = jp._snapshot_plex_titles(db, stored, "show")
+    unreadable = jp._snapshot_plex_titles(NS(plex=None), stored, "show")
+
+    assert (titles, unreadable) == (["Daredevil"], [])
 
 
 def test_item_scoped_upload_rechecks_the_posters_it_would_skip(monkeypatch):
@@ -537,4 +539,6 @@ def test_a_title_only_snapshot_match_adds_no_plex_title():
     db = NS(plex=NS(get_all=lambda: rows))
     stored = {"title": "Shogun", "year": 1980, "season_number": None}
 
-    assert jp._snapshot_plex_titles(db, stored, "show") == []
+    titles = jp._snapshot_plex_titles(db, stored, "show")
+
+    assert titles == []

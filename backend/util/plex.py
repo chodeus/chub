@@ -317,7 +317,7 @@ class PlexClient:
             logger=logger,
         ) as bar:
             for item in bar:
-                # Legacy-agent items carry no Guid children; their ids live in item.guid.
+                # Legacy agents keep their ids in item.guid; Guid children (modern agents) win.
                 guids = legacy_agent_ids(getattr(item, "guid", None))
                 guids.update(
                     {
@@ -528,7 +528,7 @@ class PlexClient:
         return all_entries
 
     def _fetch_by_rating_key(self, plex_id: Any, season_number: Any = None):
-        """Items for a ratingKey; None when Plex lacks the key, other errors raise."""
+        """Items for a ratingKey ([] when its show lacks the season); None when Plex lacks the key."""
         try:
             rating_key = int(plex_id)
         except (TypeError, ValueError):
@@ -546,7 +546,8 @@ class PlexClient:
                 ]
             except Exception:
                 seasons = []
-            return seasons or None
+            # The show is known: a title search could only find a different show.
+            return seasons
         return [item]
 
     def _locate_targets(
@@ -810,7 +811,7 @@ class PlexClient:
         season_number: Any = None,
         plex_id: Any = None,
     ) -> Optional[bool]:
-        """False when a target fell back to a provider poster; None when Plex can't say."""
+        """False when a target has no uploaded poster selected; None when Plex can't say."""
         try:
             targets = self._locate_targets(
                 library_name,

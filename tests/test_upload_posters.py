@@ -1097,3 +1097,28 @@ def test_full_runs_never_ask_plex_what_it_shows(tmp_path):
     )
 
     assert (result.action, asked) == ("skipped", [])
+
+
+def test_a_show_without_the_season_never_falls_back_to_a_title_search(tmp_path):
+    poster = tmp_path / "Season03.jpg"
+    poster.write_bytes(b"season-3")
+    show = _PlexItem(seasons=[_PlexItem(index=1)])
+    show.TYPE = "show"
+    cache = [
+        {"plex_id": "10", "asset_type": "show", "library_name": "TV",
+         "title": "Daredevil", "normalized_title": "daredevil",
+         "season_number": None, "guids": {"tvdb": "281662"}},
+    ]
+    _, show_idx, season_idx, *_ = PosterUploader._build_indexes(cache)
+    season = {
+        "title": "Marvel's Daredevil", "asset_type": "show", "season_number": 3,
+        "tvdb_id": 281662, "renamed_file": str(poster),
+    }
+
+    results = _uploader([])._sync_seasons(
+        [season], _real_client({10: show}), season_idx, show_idx, False
+    )
+
+    assert [(r.action, r.reason) for r in results] == [
+        ("failed", "Season not found in Plex yet")
+    ]

@@ -28,7 +28,9 @@ from backend.util.plex import PlexClient, legacy_agent_ids
     ],
 )
 def test_legacy_agent_ids(guid, ids):
-    assert legacy_agent_ids(guid) == ids
+    found = legacy_agent_ids(guid)
+
+    assert found == ids
 
 
 class _Movie:

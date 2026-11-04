@@ -1,4 +1,4 @@
-"""PlexClient.shows_uploaded_poster: False only when Plex has gone back to a provider poster."""
+"""PlexClient.shows_uploaded_poster: False when no uploaded poster is selected, None when Plex can't say."""
 
 from types import SimpleNamespace
 
@@ -47,15 +47,21 @@ def _shown(client):
 def test_what_plex_has_selected(posters, shown):
     item = SimpleNamespace(TYPE="movie", posters=lambda: posters)
 
-    assert _shown(_client(item)) is shown
+    found = _shown(_client(item))
+
+    assert found is shown
 
 
 def test_unknown_when_plex_holds_no_such_item():
-    assert _shown(_client(item=None, search=[])) is None
+    found = _shown(_client(item=None, search=[]))
+
+    assert found is None
 
 
 def test_unknown_when_plex_cannot_list_the_posters():
     def broken():
         raise ConnectionError("Plex timed out")
 
-    assert _shown(_client(SimpleNamespace(TYPE="movie", posters=broken))) is None
+    found = _shown(_client(SimpleNamespace(TYPE="movie", posters=broken)))
+
+    assert found is None
