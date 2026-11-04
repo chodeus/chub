@@ -16,8 +16,8 @@ from backend.util.rate_limiter import Throttle
 # contains this reports on every module.
 ALL_MODULES_SENTINEL = "__ALL__"
 
-# Every webhook POST shares this: 5 at once, then one per second (5 per 5 s, as before).
-_WEBHOOK_THROTTLE = Throttle(rate=1, burst=5)
+# Every webhook POST shares this: one per second, so never more than five in any five seconds.
+_WEBHOOK_THROTTLE = Throttle(rate=1, burst=1)
 
 
 @dataclass
@@ -263,10 +263,11 @@ class NotificationManager:
         # of link-local/metadata services.
         from backend.util.ssrf_guard import is_safe_url
 
+        # Wait before the SSRF check: a wait after it would widen the DNS-rebinding window before the POST.
+        _WEBHOOK_THROTTLE.acquire()
         safe, reason = is_safe_url(url)
         if not safe:
             raise ValueError(f"Notification URL blocked by SSRF guard: {reason}")
-        _WEBHOOK_THROTTLE.acquire()
         # A hung webhook must not stall the whole run: bound every POST.
         return requests.post(url, json=payload, timeout=15)
 

@@ -567,32 +567,61 @@ def test_safe_post_passes_timeout(monkeypatch):
 
 
 def test_safe_post_waits_on_the_shared_webhook_throttle(monkeypatch):
-    """Past the burst, the next POST waits for the throttle instead of firing at once."""
+    """Past the burst the next POST waits, and the wait comes before the SSRF check, never between it and the POST."""
     from backend.util import notification
     from backend.util.rate_limiter import Throttle
 
     clock = {"now": 0.0}
-    sleeps = []
+    events = []
 
     def fake_sleep(seconds):
-        sleeps.append(seconds)
         clock["now"] += seconds
+
+    def fake_post(url, json=None, timeout=None):
+        events.append(("post", clock["now"]))
+        return SimpleNamespace(status_code=204, text="")
+
+    def fake_check(url):
+        events.append(("check", clock["now"]))
+        return True, ""
 
     monkeypatch.setattr(
         notification,
         "_WEBHOOK_THROTTLE",
         Throttle(rate=1, burst=2, clock=lambda: clock["now"], sleep=fake_sleep),
     )
-    monkeypatch.setattr(
-        "backend.util.notification.requests.post",
-        lambda url, json=None, timeout=None: SimpleNamespace(status_code=204, text=""),
-    )
-    monkeypatch.setattr("backend.util.ssrf_guard.is_safe_url", lambda u: (True, ""))
+    monkeypatch.setattr("backend.util.notification.requests.post", fake_post)
+    monkeypatch.setattr("backend.util.ssrf_guard.is_safe_url", fake_check)
 
     for _ in range(3):
         NotificationManager.safe_post("https://discord.com/api/webhooks/1/x", {"a": 1})
 
-    assert sleeps == [1.0]
+    assert events == [
+        ("check", 0.0), ("post", 0.0),
+        ("check", 0.0), ("post", 0.0),
+        ("check", 1.0), ("post", 1.0),
+    ]
+
+
+def test_webhook_throttle_allows_at_most_five_posts_in_any_five_seconds():
+    """The production throttle settings, driven through the real Throttle with a fake clock."""
+    from backend.util import notification
+    from backend.util.rate_limiter import Throttle
+
+    clock = {"now": 0.0}
+
+    def fake_sleep(seconds):
+        clock["now"] += seconds
+
+    shipped = notification._WEBHOOK_THROTTLE
+    throttle = Throttle(rate=shipped.rate, burst=shipped.burst, clock=lambda: clock["now"], sleep=fake_sleep)
+    times = []
+    for _ in range(20):
+        throttle.acquire()
+        times.append(clock["now"])
+
+    # A sixth POST within five seconds of any earlier one would break the limit.
+    assert all(times[i + 5] - times[i] >= 5 - 1e-9 for i in range(len(times) - 5))
 
 
 # --- summary collapse: huge runs don't fan out into dozens of Discord messages ---
