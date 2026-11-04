@@ -31,6 +31,12 @@ export default defineConfig([
       '@eslint-react/set-state-in-effect': 'off',
       '@eslint-react/set-state-in-render': 'off',
       '@eslint-react/static-components': 'off',
+      // eslint-plugin-react's recommended set had these as errors; @eslint-react's leaves them off or at warn
+      '@eslint-react/dom-no-unsafe-target-blank': 'error',
+      '@eslint-react/dom-no-unknown-property': 'error',
+      '@eslint-react/no-missing-component-display-name': 'error',
+      '@eslint-react/jsx-no-comment-textnodes': 'error',
+      '@eslint-react/jsx-no-children-prop': 'error',
     },
   },
   {
