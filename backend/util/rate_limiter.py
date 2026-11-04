@@ -26,6 +26,15 @@ class _Bucket:
         self.tokens = tokens
         self.last_refill = last_refill
 
+    def take(self, now: float, rate: float, burst: int) -> float:
+        """Refill to ``now`` and take a token: 0.0 on success, else seconds until one is free."""
+        self.tokens = min(burst, self.tokens + (now - self.last_refill) * rate)
+        self.last_refill = now
+        if self.tokens < 1:
+            return (1 - self.tokens) / rate
+        self.tokens -= 1
+        return 0.0
+
 
 class RateLimiter:
     """
@@ -88,17 +97,36 @@ class RateLimiter:
                 bucket = _Bucket(tokens=self.burst - 1, last_refill=now)
                 self._buckets[key] = bucket
                 return
-            elapsed = now - bucket.last_refill
-            bucket.tokens = min(self.burst, bucket.tokens + elapsed * self.rate)
-            bucket.last_refill = now
-            if bucket.tokens < 1:
-                retry_after = max(1, int((1 - bucket.tokens) / self.rate))
+            wait = bucket.take(now, self.rate, self.burst)
+            if wait:
                 raise HTTPException(
                     status_code=429,
                     detail="Too many requests",
-                    headers={"Retry-After": str(retry_after)},
+                    headers={"Retry-After": str(max(1, int(wait)))},
                 )
-            bucket.tokens -= 1
+
+
+class Throttle:
+    """One shared token bucket for outbound calls: ``acquire()`` waits for a token."""
+
+    def __init__(self, rate: float, burst: int, clock=time.monotonic, sleep=time.sleep) -> None:
+        if rate <= 0 or burst <= 0:
+            raise ValueError("rate and burst must be positive")
+        self.rate = float(rate)
+        self.burst = int(burst)
+        self._clock = clock
+        self._sleep = sleep
+        self._bucket = _Bucket(tokens=float(burst), last_refill=clock())
+        self._lock = threading.Lock()
+
+    def acquire(self) -> None:
+        """Block until a token is free, then take it."""
+        while True:
+            with self._lock:
+                wait = self._bucket.take(self._clock(), self.rate, self.burst)
+            if not wait:
+                return
+            self._sleep(wait)
 
 
 # Shared limiter instances. Local-first app — the only limiter that

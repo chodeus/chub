@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from fastapi import HTTPException
 
-from backend.util.rate_limiter import RateLimiter
+from backend.util.rate_limiter import RateLimiter, Throttle
 
 
 def make_request(path="/login", ip="1.2.3.4", headers=None):
@@ -144,3 +144,50 @@ def test_default_ignores_forwarded_headers():
     limiter(make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.1"}))
     with pytest.raises(HTTPException):
         limiter(make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.2"}))
+
+
+class _FakeTime:
+    """A clock that only moves when the code under test sleeps."""
+
+    def __init__(self):
+        self.now = 100.0
+        self.sleeps = []
+
+    def clock(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def test_throttle_allows_the_burst_then_waits():
+    fake = _FakeTime()
+    throttle = Throttle(rate=1, burst=5, clock=fake.clock, sleep=fake.sleep)
+
+    for _ in range(5):
+        throttle.acquire()
+    assert fake.sleeps == []
+
+    throttle.acquire()
+    assert fake.sleeps == [pytest.approx(1.0)]
+
+
+def test_throttle_refills_while_idle():
+    fake = _FakeTime()
+    throttle = Throttle(rate=1, burst=2, clock=fake.clock, sleep=fake.sleep)
+    throttle.acquire()
+    throttle.acquire()
+
+    fake.now += 2.0
+    throttle.acquire()
+    throttle.acquire()
+
+    assert fake.sleeps == []
+
+
+def test_throttle_rejects_bad_settings():
+    with pytest.raises(ValueError):
+        Throttle(rate=0, burst=1)
+    with pytest.raises(ValueError):
+        Throttle(rate=1, burst=0)
