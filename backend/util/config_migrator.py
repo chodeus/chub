@@ -96,6 +96,7 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     # Legacy-only keys nested under known sections
     legacy_keys = [
         ("poster_renamerr", "incremental_border_replacerr"),
+        ("border_replacerr", "skip"),
         ("unmatched_assets", "ignore_root_folders"),
         ("unmatched_assets", "source_dirs"),
         ("renameinatorr", "ignore_tag"),
@@ -173,6 +174,19 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
 # first, then drop the whole section.
 
 
+def _is_unset(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+def _move_key(d: Dict[str, Any], old_key: str, new_key: str) -> bool:
+    """Pop ``old_key`` into ``new_key`` unless ``new_key`` already holds a value; True when moved."""
+    value = d.pop(old_key)
+    if not _is_unset(d.get(new_key)):
+        return False
+    d[new_key] = value
+    return True
+
+
 def _rule_rename_field(
     raw: Dict[str, Any],
     notes: List[MigrationNote],
@@ -183,11 +197,19 @@ def _rule_rename_field(
     sec = raw.get(section)
     if not isinstance(sec, dict) or old_key not in sec:
         return
-    sec[new_key] = sec.pop(old_key)
+    if _move_key(sec, old_key, new_key):
+        notes.append(
+            MigrationNote(
+                rule=f"rename:{section}.{old_key}->{new_key}",
+                message=f"Renamed `{section}.{old_key}` to `{section}.{new_key}`.",
+            )
+        )
+        return
     notes.append(
         MigrationNote(
             rule=f"rename:{section}.{old_key}->{new_key}",
-            message=f"Renamed `{section}.{old_key}` to `{section}.{new_key}`.",
+            message=f"Dropped stale `{section}.{old_key}`: `{section}.{new_key}` is already set.",
+            level="warning",
         )
     )
 
@@ -260,6 +282,7 @@ def _rule_rename_nested_key_in_labelarr(
     if not isinstance(mappings, list):
         return
     renamed = 0
+    kept = 0
     for mapping in mappings:
         if not isinstance(mapping, dict):
             continue
@@ -268,8 +291,21 @@ def _rule_rename_nested_key_in_labelarr(
             continue
         for entry in plex_instances:
             if isinstance(entry, dict) and "plex_instance" in entry:
-                entry["instance"] = entry.pop("plex_instance")
-                renamed += 1
+                if _move_key(entry, "plex_instance", "instance"):
+                    renamed += 1
+                else:
+                    kept += 1
+    if kept:
+        notes.append(
+            MigrationNote(
+                rule="rename:labelarr.mappings[].plex_instances[].plex_instance->instance",
+                message=(
+                    f"Dropped stale `plex_instance` on {kept} labelarr plex mapping "
+                    f"entries that already had `instance`."
+                ),
+                level="warning",
+            )
+        )
     if renamed:
         notes.append(
             MigrationNote(
@@ -733,6 +769,14 @@ def migrate(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], List[MigrationNote]]:
         "poster_cleanarr",
         "ignore_media",
         "per-title ignore is now handled via instance-level filters",
+    )
+    _rule_drop_field(
+        out,
+        notes,
+        "border_replacerr",
+        "skip",
+        "holiday-only mode was removed; outside a holiday the default colours "
+        "(or border removal) now apply",
     )
 
     # Shape conversions

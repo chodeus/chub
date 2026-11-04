@@ -9,7 +9,7 @@ export const NOTIFICATIONS_SCHEMA = [
                 label: 'Bot Name',
                 type: 'text',
                 required: false,
-                placeholder: 'My CHUB Bot',
+                placeholder: 'Notification Bot',
             },
             {
                 key: 'color',
