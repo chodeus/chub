@@ -2,6 +2,30 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.54.2](https://github.com/chodeus/chub/compare/v2.54.1...v2.54.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* **border:** load the bundled border thumbnails again ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+* **config:** a migrated legacy key never overwrites a value already set under its new name ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+* **config:** note the dropped border_replacerr.skip when migrating a legacy config ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+* **deps:** update all non-major dependencies ([282dee0](https://github.com/chodeus/chub/commit/282dee03b6997ac36e9fa6d6f04c44e14f5600db))
+* **deps:** update all non-major dependencies ([a968127](https://github.com/chodeus/chub/commit/a968127a15c77edf479f997a6aa81c4a05dc74c8))
+* **deps:** update all non-major dependencies ([ddc097f](https://github.com/chodeus/chub/commit/ddc097f7cb9199eefa8a120b751d6e2cbd69a5ff))
+* **deps:** update all non-major dependencies ([#745](https://github.com/chodeus/chub/issues/745)) ([ddc097f](https://github.com/chodeus/chub/commit/ddc097f7cb9199eefa8a120b751d6e2cbd69a5ff))
+* **deps:** update all non-major dependencies ([#746](https://github.com/chodeus/chub/issues/746)) ([a968127](https://github.com/chodeus/chub/commit/a968127a15c77edf479f997a6aa81c4a05dc74c8))
+* **deps:** update all non-major dependencies ([#758](https://github.com/chodeus/chub/issues/758)) ([282dee0](https://github.com/chodeus/chub/commit/282dee03b6997ac36e9fa6d6f04c44e14f5600db))
+* **deps:** update dependency @tanstack/react-virtual to ^3.14.25 ([#762](https://github.com/chodeus/chub/issues/762)) ([5080f19](https://github.com/chodeus/chub/commit/5080f1952895b8552086a677786d9a66965535b5))
+* **gdrive:** fill the bulk-add base directory from the saved drives ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+* **gdrive:** never bulk-add a drive into a folder another drive syncs ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+* **gdrive:** trim drive locations so sync and Poster Renamerr use one folder ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+* **instances:** refresh the health badge after Test and Save, per service ([#753](https://github.com/chodeus/chub/issues/753)) ([1e641f4](https://github.com/chodeus/chub/commit/1e641f46b3021fba5b18ed1b48903d6ce2aea916))
+* **ui:** keep stale async answers out after a reload or a new search ([#751](https://github.com/chodeus/chub/issues/751)) ([73708a4](https://github.com/chodeus/chub/commit/73708a495e79bb2c302c6f225f12871c93dc91a8))
+* **ui:** placeholders that read like settings now match what a blank does ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+* **ui:** show only the Poster and Asset Renamerr settings the chosen apply method uses ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+* **ui:** widen the holiday schedule day pickers so two digits fit ([e4400cc](https://github.com/chodeus/chub/commit/e4400cc3c24e37f9586e6bf2cccef0232d4bd2e3))
+
 ## [2.54.1](https://github.com/chodeus/chub/compare/v2.54.0...v2.54.1) (2026-10-22)
 
 
