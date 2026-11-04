@@ -31,26 +31,33 @@ const UnavailableField = ({ field }) => {
 
 // All field types - simple placeholders
 
-export const ColorField = React.memo(props => <UnavailableField {...props} />);
-export const ColorListField = React.memo(props => <UnavailableField {...props} />);
+// memo() of an arrow has no name, so each placeholder gets one for DevTools and display-name lint.
+const placeholder = displayName => {
+    const Placeholder = React.memo(props => <UnavailableField {...props} />);
+    Placeholder.displayName = displayName;
+    return Placeholder;
+};
 
-export const DirField = React.memo(props => <UnavailableField {...props} />);
-export const DirListField = React.memo(props => <UnavailableField {...props} />);
-export const InstanceDropdownField = React.memo(props => <UnavailableField {...props} />);
-export const InstancesField = React.memo(props => <UnavailableField {...props} />);
-export const GDrivePresetsField = React.memo(props => <UnavailableField {...props} />);
-export const HolidayPresetsField = React.memo(props => <UnavailableField {...props} />);
-export const HolidayScheduleField = React.memo(props => <UnavailableField {...props} />);
-export const DirListDragDropField = React.memo(props => <UnavailableField {...props} />);
-export const DirListOptionsField = React.memo(props => <UnavailableField {...props} />);
+export const ColorField = placeholder('ColorField');
+export const ColorListField = placeholder('ColorListField');
+
+export const DirField = placeholder('DirField');
+export const DirListField = placeholder('DirListField');
+export const InstanceDropdownField = placeholder('InstanceDropdownField');
+export const InstancesField = placeholder('InstancesField');
+export const GDrivePresetsField = placeholder('GDrivePresetsField');
+export const HolidayPresetsField = placeholder('HolidayPresetsField');
+export const HolidayScheduleField = placeholder('HolidayScheduleField');
+export const DirListDragDropField = placeholder('DirListDragDropField');
+export const DirListOptionsField = placeholder('DirListOptionsField');
 
 // Additional field types from original vision - currently placeholders
 // TagSelectField and TagDisplayField replaced by tag_input and tag_display field types
 // which use the configurable TagInputField component
 // export const TagSelectField = React.memo(props => <UnavailableField {...props} />);
 // export const TagDisplayField = React.memo(props => <UnavailableField {...props} />);
-export const TagMultiSelectField = React.memo(props => <UnavailableField {...props} />);
-export const MediaInfoDisplayField = React.memo(props => <UnavailableField {...props} />);
-export const MediaDisplayField = React.memo(props => <UnavailableField {...props} />);
-export const DirPickerField = React.memo(props => <UnavailableField {...props} />);
-export const PosterField = React.memo(props => <UnavailableField {...props} />);
+export const TagMultiSelectField = placeholder('TagMultiSelectField');
+export const MediaInfoDisplayField = placeholder('MediaInfoDisplayField');
+export const MediaDisplayField = placeholder('MediaDisplayField');
+export const DirPickerField = placeholder('DirPickerField');
+export const PosterField = placeholder('PosterField');
