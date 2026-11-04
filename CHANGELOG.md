@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.54.3](https://github.com/chodeus/chub/compare/v2.54.2...v2.54.3) (2026-11-04)
+
+
+### Bug Fixes
+
+* **plex-maintenance:** leave Synology metadata and links in the PhotoTranscoder cache, and skip files Plex already removed ([5d83a20](https://github.com/chodeus/chub/commit/5d83a2036b193374179d7d1a7dd9498dbdc3e68f))
+* **plex:** read ids from libraries on legacy agents (HAMA, TheTVDB, TheMovieDB, IMDb) ([af2ff4a](https://github.com/chodeus/chub/commit/af2ff4af77c809854830d2b83a0e7bc7f20d6278))
+* **poster-cleanarr:** never treat uploaded theme songs as bloat ([5d83a20](https://github.com/chodeus/chub/commit/5d83a2036b193374179d7d1a7dd9498dbdc3e68f))
+* **poster-cleanarr:** refuse to clean when Plex's database lacks the poster and art columns ([5d83a20](https://github.com/chodeus/chub/commit/5d83a2036b193374179d7d1a7dd9498dbdc3e68f))
+* **upload:** find a new season through its show's id when Sonarr and Plex name the show differently ([af2ff4a](https://github.com/chodeus/chub/commit/af2ff4af77c809854830d2b83a0e7bc7f20d6278))
+* **upload:** send a poster again when a webhook finds Plex has dropped it ([af2ff4a](https://github.com/chodeus/chub/commit/af2ff4af77c809854830d2b83a0e7bc7f20d6278))
+
 ## [2.54.2](https://github.com/chodeus/chub/compare/v2.54.1...v2.54.2) (2026-11-04)
 
 
