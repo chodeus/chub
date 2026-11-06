@@ -587,6 +587,7 @@ def test_upgradinatorr_lidarr_wanted_records_group_by_artist():
             "album_title": "First Album",
             "foreign_album_id": "mb-album-1",
             "monitored": True,
+            "release_date": None,
             "episode_data": [],
         },
         {
@@ -595,6 +596,7 @@ def test_upgradinatorr_lidarr_wanted_records_group_by_artist():
             "album_title": "Second Album",
             "foreign_album_id": "mb-album-2",
             "monitored": True,
+            "release_date": None,
             "episode_data": [],
         },
     ]

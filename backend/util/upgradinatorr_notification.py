@@ -96,6 +96,16 @@ def _limit_line(run: Dict[str, Any]) -> Optional[str]:
     return f"Max grabs {cap} reached: stopped early, the rest is searched next run"
 
 
+def _held_line(run: Dict[str, Any]) -> Optional[str]:
+    holds = run.get("release_holds") or {}
+    parts = []
+    if holds.get("too_new"):
+        parts.append(f"{holds['too_new']} released in the last {holds.get('days')} days")
+    if holds.get("no_date"):
+        parts.append(f"{holds['no_date']} with no release date")
+    return f"Held back: {', '.join(parts)}" if parts else None
+
+
 def _imported_line(run: Dict[str, Any]) -> Optional[str]:
     pending = run.get("pending_grabs") or 0
     if not pending:
@@ -286,6 +296,7 @@ def build_upgradinatorr_embeds(output: Any) -> List[Dict[str, Any]]:
                 _search_line(run),
                 _progress_line(run),
                 _limit_line(run),
+                _held_line(run),
                 _imported_line(run),
             )
             if line

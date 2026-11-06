@@ -950,6 +950,21 @@ const CORE_SETTINGS_SCHEMA = [
                             'Stop the run once this many items have grabbed something. The rest of the batch stays untagged and is searched next run. Set to 0 for no limit.',
                     },
                     {
+                        key: 'min_age_days',
+                        label: 'Minimum Release Age (days)',
+                        type: 'number',
+                        required: false,
+                        defaultValue: 0,
+                        min: 0,
+                        descriptionByType: {
+                            radarr: 'Skip movies released within this many days (the earliest of in cinemas, digital and physical), or with no release date. Set to 0 to turn off.',
+                            sonarr: 'Skip series whose first episode aired within this many days, or with no air date. Set to 0 to turn off.',
+                            lidarr: 'Skip albums released within this many days, or with no release date. Set to 0 to turn off.',
+                            default:
+                                'Skip items released within this many days, or with no release date. Set to 0 to turn off.',
+                        },
+                    },
+                    {
                         key: 'tag_name',
                         label: 'Tag Name',
                         type: 'text',

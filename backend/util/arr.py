@@ -2373,6 +2373,14 @@ def extract_poster_url(item: dict) -> Optional[str]:
     return None
 
 
+def first_release_date(item: Dict[str, Any], keys: Sequence[str], year: Any) -> Optional[str]:
+    """The earliest of these *arr date fields as YYYY-MM-DD, else 1 January of ``year``."""
+    dates = sorted(str(item[key])[:10] for key in keys if item.get(key))
+    if dates:
+        return dates[0]
+    return f"{year:04d}-01-01" if isinstance(year, int) and year > 0 else None
+
+
 def normalize_arr_media(
     item, tags, arr_type, include_episode=False, episode_lookup=None, logger=None
 ):
@@ -2482,6 +2490,9 @@ def normalize_arr_media(
             "normalized_folder": normalize_titles(folder or ""),
             "has_file": item.get("hasFile"),
             "has_content": bool(item.get("hasFile")),
+            "release_date": first_release_date(
+                item, ("inCinemas", "digitalRelease", "physicalRelease"), year
+            ),
             "tags": tag_names,
             "seasons": None,
             "season_numbers": None,
@@ -2709,6 +2720,7 @@ def normalize_arr_media(
             "folder": folder,
             "normalized_folder": normalize_titles(folder or ""),
             "has_file": None,
+            "release_date": first_release_date(item, ("firstAired",), year),
             "has_content": any(
                 (s.get("season_has_episodes") or 0) > 0 for s in season_list
             ),

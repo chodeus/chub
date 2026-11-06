@@ -87,3 +87,32 @@ def test_a_failed_chunk_fails_the_whole_lookup():
     albums = client.get_albums_by_id([1, 2], chunk=1)
 
     assert albums is None
+
+
+def test_a_release_date_is_the_earliest_known_else_the_first_of_the_year():
+    from backend.util.arr import first_release_date
+
+    movie = {"inCinemas": "2020-05-01T00:00:00Z", "digitalRelease": "2020-03-01T00:00:00Z"}
+    keys = ("inCinemas", "digitalRelease", "physicalRelease")
+    assert first_release_date(movie, keys, 2020) == "2020-03-01"
+    assert first_release_date({}, keys, 2019) == "2019-01-01"
+    assert first_release_date({}, keys, None) is None
+    assert first_release_date({}, keys, 0) is None
+
+
+def test_normalized_movies_and_series_carry_their_release_date():
+    from backend.util.arr import normalize_arr_media
+
+    movie = normalize_arr_media(
+        {"id": 1, "title": "M", "year": 2020, "path": "/m/M (2020)", "digitalRelease": "2020-03-01T00:00:00Z"},
+        [],
+        arr_type="radarr",
+    )
+    series = normalize_arr_media(
+        {"id": 2, "title": "S", "year": 2015, "path": "/tv/S", "firstAired": "2015-09-15T00:00:00Z"},
+        [],
+        arr_type="sonarr",
+    )
+
+    assert movie["release_date"] == "2020-03-01"
+    assert series["release_date"] == "2015-09-15"

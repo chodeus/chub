@@ -439,6 +439,8 @@ class UpgradinatorrInstance(BaseModel):
     queue_block_hours: int = 72
     # Stop a run once this many searched items have grabbed something. 0 = no limit.
     max_grabs: int = 0
+    # Skip what came out within this many days, or has no date. 0 = off.
+    min_age_days: int = 0
 
     @field_validator("season_monitored_threshold")
     @classmethod

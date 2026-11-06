@@ -268,6 +268,7 @@ class Upgradinatorr(ChubModule):
                 or not item["monitored"]
                 or item["status"] not in VALID_STATUSES
                 or movie_key in blocked
+                or item.get("release_hold")
             ):
                 reasons = []
                 if checked_tag in item_tags:
@@ -280,6 +281,8 @@ class Upgradinatorr(ChubModule):
                     reasons.append(f"status={item['status']}")
                 if movie_key in blocked:
                     reasons.append(blocked[movie_key])
+                if item.get("release_hold"):
+                    reasons.append(item["release_hold"])
                 self.logger.debug(
                     f"Skipping {item['title']} ({item['year']}), Reason: {', '.join(reasons)}"
                 )
@@ -1410,6 +1413,54 @@ class Upgradinatorr(ChubModule):
 
         return all_records
 
+    def _gather_media(
+        self, app: BaseARRClient, instance_type: str, search_mode: str, min_age_days: int
+    ) -> Optional[Tuple[List[Dict[str, Any]], Optional[int], Dict[str, int]]]:
+        """(media, wanted count, release-hold counts); None when the wanted list is unreadable."""
+        wanted_count: Optional[int] = None
+        if search_mode in ("missing", "cutoff"):
+            wanted_records = self._get_all_wanted(app, search_mode)
+            if wanted_records is None:
+                return None
+            wanted_count = len(wanted_records)
+            media = self._convert_wanted_to_media_dict(wanted_records, instance_type, app)
+        elif app.instance_type.lower() in ("sonarr", "lidarr"):
+            media = app.get_all_media(include_episode=True)
+        else:
+            media = app.get_all_media()
+        holds = self._hold_new_releases(media or [], instance_type, min_age_days)
+        return media, wanted_count, holds
+
+    def _hold_new_releases(
+        self, media: List[Dict[str, Any]], instance_type: str, min_age_days: int
+    ) -> Dict[str, int]:
+        """Hold back what came out within ``min_age_days`` or has no date; returns the counts."""
+        holds = {"too_new": 0, "no_date": 0}
+        if min_age_days <= 0:
+            return holds
+        cutoff = (datetime.now(timezone.utc).date() - timedelta(days=min_age_days)).isoformat()
+        for item in media:
+            # Lidarr artists have no date of their own, so each album is held instead.
+            targets = (item.get("seasons") or []) if instance_type == "lidarr" else [item]
+            for target in targets:
+                if not target.get("monitored"):
+                    continue
+                released = target.get("release_date")
+                kind = "no_date" if not released else "too_new" if released > cutoff else None
+                if kind is None:
+                    continue
+                holds[kind] += 1
+                if target is item:
+                    item["release_hold"] = f"released {released or 'on no known date'}"
+                else:
+                    target["monitored"] = False
+        if any(holds.values()):
+            self.logger.info(
+                f"Held back {holds['too_new']} released in the last {min_age_days} "
+                f"day(s) and {holds['no_date']} with no release date."
+            )
+        return holds
+
     def _convert_wanted_to_media_dict(
         self,
         wanted_records: List[Dict[str, Any]],
@@ -1505,6 +1556,7 @@ class Upgradinatorr(ChubModule):
                             "album_title": album.get("title", ""),
                             "foreign_album_id": album.get("foreignAlbumId", ""),
                             "monitored": album.get("monitored", True),
+                            "release_date": (album.get("releaseDate") or "")[:10] or None,
                             "episode_data": [],
                         }
                     )
@@ -1621,6 +1673,9 @@ class Upgradinatorr(ChubModule):
         )
         queue_block_hours: int = self._queue_block_hours(instance_settings)
         max_grabs = self._coerce_whole(self._get_setting(instance_settings, "max_grabs")) or 0
+        min_age_days = (
+            self._coerce_whole(self._get_setting(instance_settings, "min_age_days")) or 0
+        )
         # Anchors "was this grabbed by this run?" — queue rows added before it
         # are pre-existing work, not something this run caused.
         run_started = datetime.now(timezone.utc)
@@ -1673,19 +1728,10 @@ class Upgradinatorr(ChubModule):
             f"[mode: {search_mode}]"
         )
 
-        wanted_count: Optional[int] = None
-        if search_mode in ("missing", "cutoff"):
-            wanted_records = self._get_all_wanted(app, search_mode)
-            if wanted_records is None:
-                return self._completed_only(app, earlier_grabs)
-            wanted_count = len(wanted_records)
-            media_dict = self._convert_wanted_to_media_dict(
-                wanted_records, instance_type, app
-            )
-        elif app.instance_type.lower() in ("sonarr", "lidarr"):
-            media_dict = app.get_all_media(include_episode=True)
-        else:
-            media_dict = app.get_all_media()
+        gathered = self._gather_media(app, instance_type, search_mode, min_age_days)
+        if gathered is None:
+            return self._completed_only(app, earlier_grabs)
+        media_dict, wanted_count, release_holds = gathered
         checked_tag_id: int = app.get_tag_id_from_name(checked_tag_name)
         if ignore_tag_name:
             app.get_tag_id_from_name(ignore_tag_name)
@@ -1742,17 +1788,10 @@ class Upgradinatorr(ChubModule):
                         self.logger.warning(
                             f"Failed to clear upgradinatorr_progress for {app.instance_name}: {e}"
                         )
-            if search_mode in ("missing", "cutoff"):
-                wanted_records = self._get_all_wanted(app, search_mode)
-                if wanted_records is None:
-                    return self._completed_only(app, earlier_grabs)
-                media_dict = self._convert_wanted_to_media_dict(
-                    wanted_records, instance_type, app
-                )
-            elif app.instance_type.lower() in ("sonarr", "lidarr"):
-                media_dict = app.get_all_media(include_episode=True)
-            else:
-                media_dict = app.get_all_media()
+            gathered = self._gather_media(app, instance_type, search_mode, min_age_days)
+            if gathered is None:
+                return self._completed_only(app, earlier_grabs)
+            media_dict, _wanted, release_holds = gathered
             filter_cap = len(media_dict) if granular else count
             filtered_media_dict = self.filter_media(
                 media_dict,
@@ -1801,6 +1840,8 @@ class Upgradinatorr(ChubModule):
         output_dict["search_mode"] = search_mode
         output_dict["budget"] = count
         output_dict["granular"] = granular
+        if any(release_holds.values()):
+            output_dict["release_holds"] = {"days": min_age_days, **release_holds}
 
         if not self.config.dry_run:
             search_count: int = 0
