@@ -283,15 +283,13 @@ class BaseARRClient:
         return self.make_get_request(endpoint)
 
     def get_command_state(self, command_id: int) -> Optional[Dict[str, Any]]:
-        """The command's resource, ``{}`` once the *arr no longer has it, None if unreadable."""
+        """The command's resource, or None when it is gone or unreadable."""
         # Not make_get_request: its 404 ERROR log fires a failure notification.
         endpoint = f"{self.api_base}/command/{command_id}"
         try:
             response = self.session.get(
                 endpoint, timeout=getattr(self.session, "timeout", self.timeout)
             )
-            if response.status_code == 404:
-                return {}
             response.raise_for_status()
             body = response.json()
         except (requests.RequestException, ValueError) as e:

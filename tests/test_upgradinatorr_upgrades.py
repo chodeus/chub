@@ -918,7 +918,9 @@ def test_a_lidarr_import_carries_its_album_title_type_and_year():
         "year": 2004,
     }
     label = "Diplo - Favela on Blast: Rio Baile Funk 04 (2004) [EP]"
-    assert f"{label} — upgraded" in _embed_body(completed)
+    # Discord shows \[ as [; the escape stops a title opening a masked link.
+    shown = label.replace("[", r"\[").replace("]", r"\]")
+    assert f"{shown} — upgraded" in _embed_body(completed)
     assert f"  {label}" in _run_log(module, completed).split("\n")
 
 

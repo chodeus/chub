@@ -34,7 +34,8 @@ RED = 0xE74C3C
 GREEN = 0x2ECC71
 
 _NOUNS = {"radarr": "movies", "sonarr": "series", "lidarr": "artists"}
-_MARKDOWN = str.maketrans({char: f"\\{char}" for char in "\\*_~`|"})
+# Brackets too: an escaped [ can't open a masked link.
+_MARKDOWN = str.maketrans({char: f"\\{char}" for char in "\\*_~`|[]"})
 
 
 def _md(text: Any) -> str:
@@ -103,15 +104,16 @@ def _limit_line(run: Dict[str, Any]) -> Optional[str]:
 def _inflight_line(run: Dict[str, Any]) -> Optional[str]:
     if run.get("inflight_running"):
         return (
-            f"Waiting on the last run's search of {run['inflight_running']}: "
+            f"Waiting on the last run's search of {_md(run['inflight_running'])}: "
             "nothing new is searched until it finishes"
         )
     finished = run.get("inflight_finished") or {}
     if not finished:
         return None
+    label = _md(finished.get("label"))
     if finished.get("state") == "failed":
-        return f"The last run's search of {finished.get('label')} failed"
-    return f"Finished the last run's search of {finished.get('label')}"
+        return f"The last run's search of {label} failed"
+    return f"Finished the last run's search of {label}"
 
 
 def _held_line(run: Dict[str, Any]) -> Optional[str]:
@@ -259,7 +261,7 @@ def _import_fields(completed: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     fields: List[Dict[str, str]] = []
     for tag, noun, rows in import_report_sections(completed):
         for entry in rows[:NOTIFICATION_ITEM_CAP]:
-            name = f"{report_item_label(entry)} — {tag.lower()}"
+            name = f"{_md(report_item_label(entry))} — {tag.lower()}"
             fields.append(
                 {"name": _clip(name, FIELD_NAME_LIMIT), "value": _import_value(entry)}
             )

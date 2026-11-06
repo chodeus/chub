@@ -161,17 +161,21 @@ def test_a_zero_score_is_shown_and_an_empty_format_list_says_none():
 
 
 def test_markdown_in_titles_and_release_names_is_escaped():
-    entry = _upgrade(1, download="Some_Movie_2006*Cut*")
+    entry = _upgrade(1, title="[x](https://host)", download="Some_Movie_2006*Cut*")
     stuck = _stuck(1, message="Has `ticks` and |pipes|")
     stuck["title"] = "Under_score"
+    inflight = {"label": "[y](https://host)", "state": "done"}
 
     parts = build_upgradinatorr_embeds(
-        {"radarr": _run(data=[stuck], completed=[entry])}
+        {"radarr": _run(data=[stuck], completed=[entry], inflight_finished=inflight)}
     )
     text = _text(parts)
 
     assert r"Release: Some\_Movie\_2006\*Cut\*" in text
     assert r"• Under\_score (1992): Has \`ticks\` and \|pipes\|" in text
+    # An escaped [ can't open a masked link.
+    assert r"\[x\](https://host) (2001) — upgraded" in text
+    assert r"Finished the last run's search of \[y\](https://host)" in text
 
 
 def test_a_backtick_cannot_close_the_diff_fence():

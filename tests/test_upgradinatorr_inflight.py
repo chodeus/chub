@@ -171,10 +171,11 @@ def test_a_finished_search_is_tagged_and_reported_not_searched_again(isolated_db
 @pytest.mark.parametrize(
     "state, started, expected",
     [
-        ({}, 1, "done"),  # the *arr no longer has it
+        ({"status": "completed"}, 1, "done"),
         ({"status": "failed"}, 1, "failed"),
         ({"status": "started"}, 7, "done"),  # given up on after 6 hours
-        (None, 1, "running"),  # unreadable: wait rather than search twice
+        (None, 1, "running"),  # gone or unreadable: no proof it finished
+        ({}, 1, "running"),
     ],
 )
 def test_the_staged_search_state(state, started, expected):
@@ -277,7 +278,7 @@ class _ErrorLog(StubLogger):
     "status, body, expected",
     [
         (200, {"status": "started"}, {"status": "started"}),
-        (404, {}, {}),  # gone: no ERROR, which would send a failure notification
+        (404, {}, None),  # gone: no ERROR, which would send a failure notification
         (500, {}, None),
     ],
 )

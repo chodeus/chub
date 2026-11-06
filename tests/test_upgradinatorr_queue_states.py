@@ -317,14 +317,15 @@ def test_notification_splits_upgraded_and_acquired_from_stuck():
     # whether it replaced a file or filled an empty slot.
     assert "Serum — upgraded" in names
     assert "ShockOne (2016) — acquired" in names
-    assert "Release: Serum - Jupiter (2019) [single]" in body
+    assert r"Release: Serum - Jupiter (2019) \[single\]" in body
     assert "- Score: 25\n+ Score: 50" in body
     # A first acquisition replaced nothing: no outgoing side at all.
     assert "```diff\n+ FLAC\n+ Score: 50\n```" in body
     assert "None" not in body
     # A stuck row names the item and the *arr's reason, never the queued release.
     assert "• Serum: Album match is not close enough: 75.1% vs 80%" in body
-    assert "Serum - Jupiter [WEB] [FLAC Lossless]" not in body
+    # Escaping can't hide a leak: the bracket-free words are checked.
+    assert "FLAC Lossless" not in body
 
 
 @pytest.mark.parametrize("bad", [1, "oops", {"a": 1}])

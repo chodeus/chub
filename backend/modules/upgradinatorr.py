@@ -1689,9 +1689,10 @@ class Upgradinatorr(ChubModule):
         except Exception as e:
             self.logger.debug(f"Command {row['command_id']} unreadable: {e}")
             command = None
-        if command is None:
+        # *arrs keep an ended command a day: a gone one is no proof it finished.
+        if not command:
             return "running"
-        status = command.get("status") if command else "completed"
+        status = command.get("status")
         if status == "completed":
             return "done"
         return "failed" if status in COMMAND_TERMINAL_FAILURES else "running"
