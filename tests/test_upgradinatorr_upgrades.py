@@ -59,7 +59,10 @@ class _HistoryARR(FakeARR):
 
     def __init__(self, imports, deletes, media=None):
         super().__init__([[upgradinatorr_media_item([])] if media is None else media])
-        self._by_event = {3: imports, 6: deletes}
+        self._by_event = {
+            self.history_import_event: imports,
+            self.history_upgrade_delete_event: deletes,
+        }
         self.since_calls = []
 
     def get_history_since(self, date, event_type):
@@ -864,7 +867,6 @@ class _LidarrHistoryARR(_HistoryARR):
 
     def __init__(self, imports, deletes, albums):
         super().__init__(imports, deletes)
-        self._by_event = {8: imports, 5: deletes}
         self._albums = albums
         self.album_lookups = []
 
