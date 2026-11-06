@@ -1,0 +1,281 @@
+"""Pins Upgradinatorr's Discord embeds: summary lines, capped queue lists, import
+diffs, and that every part stays inside Discord's limits."""
+
+from backend.util.constants import NOTIFICATION_ITEM_CAP
+from backend.util.upgradinatorr_notification import (
+    QUEUE_LINE_CAP,
+    build_upgradinatorr_embeds,
+)
+
+FOOTER = "Powered by: CHUB"
+
+
+def _run(**overrides):
+    run = {
+        "server_name": "Radarr",
+        "data": [],
+        "completed": [],
+        "pending_grabs": 0,
+        "searches_attempted": 5,
+        "searches_failed": 0,
+        "searches_deferred": 0,
+        "tagged_count": 40,
+        "untagged_count": 80,
+        "total_count": 120,
+        "tagged_in_run": 5,
+        "instance_type": "radarr",
+        "search_mode": "upgrade",
+        "budget": 5,
+        "granular": False,
+    }
+    run.update(overrides)
+    return run
+
+
+def _upgrade(n, **overrides):
+    entry = {
+        "media_id": n,
+        "title": f"Movie {n}",
+        "year": 2001,
+        "download": f"Movie.{n}.2001.1080p.BluRay-GRP",
+        "score": 1715,
+        "previous_score": 900,
+        "quality": "Bluray-1080p",
+        "previous_quality": "WEBDL-1080p",
+        "custom_formats": ["1080p", "BHDStudio", "DTS-HD MA", "HD Bluray Tier 01"],
+        "previous_custom_formats": ["1080p", "AMZN", "DD+"],
+        "replaced": True,
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _stuck(n, message="Not an upgrade for existing movie file."):
+    return {
+        "media_id": n,
+        "title": f"Stuck {n}",
+        "year": 1992,
+        "grabs": [],
+        "queue_imports": [
+            {
+                "state": "stuck",
+                "download": f"Stuck.{n}.1992.1080p-GRP",
+                "age_hours": 30.0,
+                "messages": [message, "second reason"],
+            }
+        ],
+    }
+
+
+def _text(parts):
+    return "\n".join(
+        [part.get("description") or "" for part in parts]
+        + [f"{f['name']}\n{f['value']}" for part in parts for f in part["fields"]]
+    )
+
+
+def test_the_summary_states_the_search_the_rotation_and_the_imports():
+    data = [
+        {"media_id": 1, "grabs": [{"download_id": "a"}, {"download_id": "b"}]},
+        {"media_id": 2, "grabs": []},
+    ]
+    run = _run(
+        data=data,
+        searches_failed=1,
+        completed=[_upgrade(1), _upgrade(2, replaced=False)],
+        pending_grabs=3,
+    )
+
+    [part] = build_upgradinatorr_embeds({"radarr": run})
+
+    assert part["title"] == "Upgradinatorr: Radarr"
+    assert part["description"].split("\n") == [
+        "Upgrade search: searched 5 this run, 2 grabbed, 1 failed",
+        "Progress: 45 of 120 movies searched, 75 left (15 more runs at 5 a run)",
+        "Imported: 2 of 3 grabs from earlier runs (1 upgraded, 1 acquired)",
+    ]
+
+
+def test_season_mode_progress_uses_the_counts_from_before_the_run():
+    """Season/album mode can stop part-way through a parent without tagging it,
+    so this run's tag count would overstate progress."""
+    run = _run(instance_type="sonarr", granular=True, tagged_in_run=99)
+
+    [part] = build_upgradinatorr_embeds({"sonarr": run})
+
+    assert "Progress: 40 of 120 series done before this run" in part["description"]
+    assert "more run" not in part["description"]
+
+
+def test_a_finished_rotation_estimates_no_more_runs():
+    run = _run(tagged_count=118, tagged_in_run=2, searches_attempted=0)
+
+    [part] = build_upgradinatorr_embeds({"radarr": run})
+
+    assert part["description"].split("\n") == [
+        "Upgrade search: nothing searched this run",
+        "Progress: 120 of 120 movies searched, 0 left",
+    ]
+
+
+def test_an_imports_only_result_has_no_search_or_progress_line():
+    """_completed_only results carry no budget: nothing was left to search."""
+    run = {
+        "server_name": "Radarr",
+        "data": [],
+        "completed": [_upgrade(1)],
+        "pending_grabs": 1,
+    }
+
+    [part] = build_upgradinatorr_embeds({"radarr": run})
+
+    assert part["description"] == "Imported: 1 of 1 grab from earlier runs (1 upgraded)"
+
+
+def test_an_upgrade_is_a_diff_of_the_old_and_new_file():
+    [part] = build_upgradinatorr_embeds({"radarr": _run(completed=[_upgrade(1)])})
+
+    [field] = part["fields"]
+    assert field["name"] == "Movie 1 (2001) — upgraded"
+    assert field["value"] == (
+        "Release: Movie.1.2001.1080p.BluRay-GRP\n"
+        "```diff\n"
+        "- WEBDL-1080p\n"
+        "- CF: 1080p, AMZN, DD+\n"
+        "- Score: 900\n"
+        "+ Bluray-1080p\n"
+        "+ CF: 1080p, BHDStudio, DTS-HD MA, HD Bluray\n"
+        "+     Tier 01\n"
+        "+ Score: 1715\n"
+        "```"
+    )
+
+
+def test_a_zero_score_is_shown_and_an_empty_format_list_says_none():
+    entry = _upgrade(1, score=0, custom_formats=[], replaced=False)
+
+    [part] = build_upgradinatorr_embeds({"radarr": _run(completed=[entry])})
+
+    assert "+ CF: none\n+ Score: 0\n```" in part["fields"][0]["value"]
+
+
+def test_markdown_in_titles_and_release_names_is_escaped():
+    entry = _upgrade(1, download="Some_Movie_2006*Cut*")
+    stuck = _stuck(1, message="Has `ticks` and |pipes|")
+    stuck["title"] = "Under_score"
+
+    parts = build_upgradinatorr_embeds(
+        {"radarr": _run(data=[stuck], completed=[entry])}
+    )
+    text = _text(parts)
+
+    assert r"Release: Some\_Movie\_2006\*Cut\*" in text
+    assert r"• Under\_score (1992): Has \`ticks\` and \|pipes\|" in text
+
+
+def test_a_backtick_cannot_close_the_diff_fence():
+    entry = _upgrade(1, custom_formats=["weird```name"])
+
+    [part] = build_upgradinatorr_embeds({"radarr": _run(completed=[entry])})
+
+    assert part["fields"][0]["value"].count("```") == 2
+
+
+def test_stuck_items_show_the_first_reason_and_cap_the_list():
+    data = [_stuck(n) for n in range(QUEUE_LINE_CAP + 2)]
+
+    parts = build_upgradinatorr_embeds({"radarr": _run(data=data)})
+    text = _text(parts)
+
+    assert f"Import stuck ({QUEUE_LINE_CAP + 2})" in text
+    assert "• Stuck 0 (1992): Not an upgrade for existing movie file." in text
+    assert f"Stuck {QUEUE_LINE_CAP - 1} (1992)" in text
+    assert f"Stuck {QUEUE_LINE_CAP} (1992)" not in text
+    assert "…and 2 more — see the server log" in text
+    assert "second reason" not in text
+    assert "Stuck.0.1992" not in text
+
+
+def test_a_waiting_item_with_several_downloads_names_the_oldest():
+    item = {
+        "media_id": 1,
+        "title": "Show",
+        "year": None,
+        "grabs": [],
+        "queue_imports": [
+            {"state": "pending", "age_hours": 3.2, "messages": []},
+            {"state": "pending", "age_hours": 41.6, "messages": []},
+        ],
+    }
+
+    [part] = build_upgradinatorr_embeds({"sonarr": _run(data=[item])})
+
+    assert part["fields"][0] == {
+        "name": "Awaiting import (1)",
+        "value": "• Show: 2 downloads, oldest waiting 42h",
+    }
+
+
+def test_imports_past_the_cap_point_at_the_server_log():
+    completed = [_upgrade(n) for n in range(NOTIFICATION_ITEM_CAP + 3)]
+
+    text = _text(build_upgradinatorr_embeds({"radarr": _run(completed=completed)}))
+
+    assert f"Movie {NOTIFICATION_ITEM_CAP - 1} (2001) — upgraded" in text
+    assert f"Movie {NOTIFICATION_ITEM_CAP} (2001)" not in text
+    assert "…and 3 more upgrades — see the server log" in text
+
+
+def test_every_part_fits_discord_limits_at_the_caps():
+    """The worst case the caps allow: 50 imports per section with long names and
+    format lists, plus a full stuck list with long reasons."""
+    long_name = "_" * 400
+    formats = [f"Custom Format Number {n}" for n in range(30)]
+    completed = [
+        _upgrade(n, title=long_name, download=long_name, custom_formats=formats)
+        for n in range(NOTIFICATION_ITEM_CAP + 5)
+    ] + [
+        _upgrade(n, replaced=False, quality="Q" * 500, custom_formats=formats)
+        for n in range(NOTIFICATION_ITEM_CAP + 5)
+    ]
+    data = [_stuck(n, message="x" * 2000) for n in range(QUEUE_LINE_CAP + 5)]
+    for item in data:
+        item["title"] = long_name
+
+    parts = build_upgradinatorr_embeds(
+        {"radarr": _run(server_name="S" * 400, data=data, completed=completed)}
+    )
+
+    assert len(parts) > 1
+    for index, part in enumerate(parts, 1):
+        assert part["part"] == f" (part {index} of {len(parts)})"
+        title = part["title"] + part["part"]
+        assert len(title) <= 256
+        assert len(part["fields"]) <= 25
+        assert len(part.get("description") or "") <= 4096
+        total = len(title) + len(part.get("description") or "") + len(FOOTER)
+        for field in part["fields"]:
+            assert 0 < len(field["name"]) <= 256
+            assert 0 < len(field["value"]) <= 1024
+            total += len(field["name"]) + len(field["value"])
+        assert total <= 6000
+
+
+def test_many_small_fields_split_at_discords_field_count():
+    completed = [
+        {"media_id": n, "title": f"M{n}", "replaced": False, "score": n}
+        for n in range(NOTIFICATION_ITEM_CAP + 10)
+    ]
+
+    parts = build_upgradinatorr_embeds({"radarr": _run(completed=completed)})
+
+    assert [len(part["fields"]) for part in parts] == [25, 25, 1]
+    assert parts[0]["description"] and parts[1]["description"] is None
+
+
+def test_one_embed_set_per_instance():
+    output = {"radarr": _run(), "radarr4k": _run(server_name="Radarr 4K")}
+
+    titles = [part["title"] for part in build_upgradinatorr_embeds(output)]
+
+    assert titles == ["Upgradinatorr: Radarr", "Upgradinatorr: Radarr 4K"]

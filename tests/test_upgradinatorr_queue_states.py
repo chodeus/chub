@@ -304,32 +304,26 @@ def test_notification_splits_upgraded_and_acquired_from_stuck():
         }
     }
 
-    fields, ok = format_for_discord(
+    parts, ok = format_for_discord(
         SimpleNamespace(module_name="upgradinatorr"), output
     )
     assert ok is True
-    rendered = [(f["name"], f["value"]) for page in fields.values() for f in page]
+    rendered = [(f["name"], f["value"]) for part in parts for f in part["fields"]]
     names = [name for name, _ in rendered]
     body = "\n".join(value for _, value in rendered)
 
-    assert any("import stuck" in name for name in names)
+    assert names[0] == "Import stuck (1)"
     # A completed import is what the run has to show for itself — it stays,
     # whether it replaced a file or filled an empty slot.
-    assert any("upgraded" in name for name in names)
-    assert any("acquired" in name for name in names)
-    assert "Serum - Jupiter (2019) [single]" in body
-    assert "CF Score: 50 (was 25)" in body
-    assert "1 upgrade(s) across 1 item(s)" in body
-    # A first acquisition replaced nothing: no outgoing score, and the quality
-    # it got rather than a transition.
-    assert "ShockOne (2016)" in body
-    assert "1 acquisition(s) across 1 item(s)" in body
-    assert "Quality: FLAC" in body
-    assert "was None" not in body
-    # The queue row collapses to the section tally; the *arr's own rejection
-    # text is log-level detail and must not reach Discord.
-    assert "1 download(s) across 1 item(s) — manual import required" in body
-    assert "Album match is not close enough" not in body
+    assert "Serum — upgraded" in names
+    assert "ShockOne (2016) — acquired" in names
+    assert "Release: Serum - Jupiter (2019) [single]" in body
+    assert "- Score: 25\n+ Score: 50" in body
+    # A first acquisition replaced nothing: no outgoing side at all.
+    assert "```diff\n+ FLAC\n+ Score: 50\n```" in body
+    assert "None" not in body
+    # A stuck row names the item and the *arr's reason, never the queued release.
+    assert "• Serum: Album match is not close enough: 75.1% vs 80%" in body
     assert "Serum - Jupiter [WEB] [FLAC Lossless]" not in body
 
 

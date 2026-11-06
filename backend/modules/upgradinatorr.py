@@ -5,7 +5,7 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple
 
 from backend.util.arr import (
     ARR_READ_THREADS,
@@ -68,6 +68,15 @@ SYNTHETIC_DOWNLOAD_ID_PREFIX = "history:"
 # How far an Upgrade delete may sit from the import that caused it. Measured
 # across a live Radarr/Sonarr history: 24/24 pairs landed within 1 second.
 UPGRADE_PAIR_WINDOW_SECONDS = 300
+
+
+class GrabReconcile(NamedTuple):
+    """Earlier runs' grabs: the imported rows, their download ids, and how many were held."""
+
+    completed: List[Dict[str, Any]]
+    resolved: Set[str]
+    # 0 whenever history went unread, so the report claims no "N of M".
+    pending: int = 0
 
 
 class _BufferingLogger:
@@ -589,14 +598,14 @@ class Upgradinatorr(ChubModule):
 
     def _collect_completed_imports(
         self, app: BaseARRClient, grabs_db: UpgradinatorrGrabs
-    ) -> Tuple[List[Dict[str, Any]], Set[str]]:
-        """(completed imports, resolved download ids) for grabs that imported."""
+    ) -> GrabReconcile:
+        """The completed imports among earlier runs' grabs."""
         # Each entry carries ``replaced``. Fails closed: an unreadable history
         # leaves grabs pending rather than resolving them as "nothing imported".
         grabs_db.prune(app.instance_name, GRAB_RETENTION_DAYS)
         pending = grabs_db.pending(app.instance_name)
         if not pending:
-            return [], set()
+            return GrabReconcile([], set())
         pair_field = getattr(app, "upgrade_pair_field", None)
         import_event = getattr(app, "history_import_event", None)
         delete_event = getattr(app, "history_upgrade_delete_event", None)
@@ -605,7 +614,7 @@ class Upgradinatorr(ChubModule):
                 f"{app.instance_name} maps no history events; skipping the "
                 "completed-import report."
             )
-            return [], set()
+            return GrabReconcile([], set())
         since = self._history_lookback(pending)
         imports = app.get_history_since(since, import_event)
         deletes = app.get_history_since(since, delete_event)
@@ -614,7 +623,7 @@ class Upgradinatorr(ChubModule):
                 f"Could not read {app.instance_name} history since {since}; "
                 f"{len(pending)} grab(s) stay pending for the next run."
             )
-            return [], set()
+            return GrabReconcile([], set())
 
         # A file deleted "for Upgrade" separates an upgrade from a first
         # acquisition. Both are reported, so search_mode never matters here.
@@ -659,19 +668,36 @@ class Upgradinatorr(ChubModule):
                 "previous_score": (deleted or {}).get("customFormatScore"),
                 "quality": self._quality_name(record),
                 "previous_quality": self._quality_name(deleted or {}),
+                "custom_formats": self._custom_format_names(record),
+                "previous_custom_formats": self._custom_format_names(deleted or {}),
                 "replaced": deleted is not None,
             }
         # Resolved, but deliberately NOT cleared here: an *arr call later in the
         # run can still abort it and discard this report, and a cleared grab can
         # never be reported again. The caller settles them on a path that returns.
         resolved = {str(record.get("downloadId")) for record in ours}
-        return list(completed_by_download.values()), resolved
+        return GrabReconcile(
+            list(completed_by_download.values()), resolved, len(pending)
+        )
 
     @staticmethod
     def _quality_name(record: Dict[str, Any]) -> Optional[str]:
         """The *arr's quality name for a history record, e.g. ``Remux-1080p``."""
         quality = (record.get("quality") or {}).get("quality") or {}
         return quality.get("name")
+
+    @staticmethod
+    def _custom_format_names(record: Dict[str, Any]) -> Optional[List[str]]:
+        """Sorted CF names on a history record; None when the *arr sent no list."""
+        formats = record.get("customFormats")
+        if not isinstance(formats, list):
+            return None
+        names = {
+            str(cf["name"]).strip()
+            for cf in formats
+            if isinstance(cf, dict) and cf.get("name")
+        }
+        return sorted(names, key=str.casefold)
 
     @classmethod
     def _pair_upgrades(
@@ -1381,9 +1407,7 @@ class Upgradinatorr(ChubModule):
         return []
 
     @staticmethod
-    def _new_output(
-        server_name: str, completed: List[Dict[str, Any]], resolved: Set[str]
-    ) -> Dict[str, Any]:
+    def _new_output(server_name: str, grabs: GrabReconcile) -> Dict[str, Any]:
         """The per-instance result shape. One definition so a bail-out and a full
         run can't drift apart."""
         return {
@@ -1398,10 +1422,11 @@ class Upgradinatorr(ChubModule):
             "data": [],
             # Grabs from EARLIER runs whose download imported, upgrade or
             # first acquisition. This run's own grabs haven't downloaded yet.
-            "completed": completed,
+            "completed": grabs.completed,
+            "pending_grabs": grabs.pending,
             # Grabs this result accounts for. run() pops it once print_output
             # has written the report, so it never reaches a notification.
-            "resolved_grabs": sorted(resolved),
+            "resolved_grabs": sorted(grabs.resolved),
         }
 
     def _settle_grabs(self, instance_name: str, resolved: Any) -> None:
@@ -1435,18 +1460,19 @@ class Upgradinatorr(ChubModule):
             )
 
     def _completed_only(
-        self, app: BaseARRClient, completed: List[Dict[str, Any]], resolved: Set[str]
+        self, app: BaseARRClient, grabs: GrabReconcile
     ) -> Optional[Dict[str, Any]]:
         """Result for a run with nothing left to search, carrying any import the
         reconcile confirmed — returning None here would drop it."""
-        if not completed:
+        if not grabs.completed:
             # Nothing to report, so nothing to lose by settling now.
-            self._settle_grabs(app.instance_name, resolved)
+            self._settle_grabs(app.instance_name, grabs.resolved)
             return None
         self.logger.info(
-            f"{len(completed)} completed import(s) to report for {app.instance_name}."
+            f"{len(grabs.completed)} completed import(s) to report for "
+            f"{app.instance_name}."
         )
-        return self._new_output(app.instance_name, completed, resolved)
+        return self._new_output(app.instance_name, grabs)
 
     def process_instance(
         self,
@@ -1510,18 +1536,14 @@ class Upgradinatorr(ChubModule):
         # Resolved BEFORE the media gathering and every early return below it:
         # these grabs are from earlier runs, so whether this run has anything
         # left to search says nothing about whether one finished importing.
-        completed_imports: List[Dict[str, Any]] = []
-        resolved_grabs: Set[str] = set()
+        earlier_grabs = GrabReconcile([], set())
         if not self.config.dry_run:
             # Reporting is not worth losing a run over: this now sits upstream of
             # the searches, so a history or DB error must degrade to "nothing to
             # report" rather than skipping the instance entirely.
             try:
                 with ChubDB(logger=self.logger) as grabs_ctx:
-                    (
-                        completed_imports,
-                        resolved_grabs,
-                    ) = self._collect_completed_imports(
+                    earlier_grabs = self._collect_completed_imports(
                         app, grabs_ctx.upgradinatorr_grabs
                     )
             except Exception as e:
@@ -1539,7 +1561,7 @@ class Upgradinatorr(ChubModule):
         if search_mode in ("missing", "cutoff"):
             wanted_records = self._get_all_wanted(app, search_mode)
             if wanted_records is None:
-                return self._completed_only(app, completed_imports, resolved_grabs)
+                return self._completed_only(app, earlier_grabs)
             wanted_count = len(wanted_records)
             media_dict = self._convert_wanted_to_media_dict(
                 wanted_records, instance_type, app
@@ -1607,7 +1629,7 @@ class Upgradinatorr(ChubModule):
             if search_mode in ("missing", "cutoff"):
                 wanted_records = self._get_all_wanted(app, search_mode)
                 if wanted_records is None:
-                    return self._completed_only(app, completed_imports, resolved_grabs)
+                    return self._completed_only(app, earlier_grabs)
                 media_dict = self._convert_wanted_to_media_dict(
                     wanted_records, instance_type, app
                 )
@@ -1632,7 +1654,7 @@ class Upgradinatorr(ChubModule):
             self.logger.warning(
                 f"No media found for {app.instance_name}. Reason: nothing left to tag."
             )
-            return self._completed_only(app, completed_imports, resolved_grabs)
+            return self._completed_only(app, earlier_grabs)
 
         if wanted_count is not None:
             self.logger.info(
@@ -1653,11 +1675,16 @@ class Upgradinatorr(ChubModule):
                     untagged_count += 1
 
         output_dict: Dict[str, Any] = self._new_output(
-            app.instance_name, completed_imports, resolved_grabs
+            app.instance_name, earlier_grabs
         )
         output_dict["tagged_count"] = tagged_count
         output_dict["untagged_count"] = untagged_count
         output_dict["total_count"] = total_count
+        output_dict["tagged_in_run"] = 0
+        output_dict["instance_type"] = instance_type
+        output_dict["search_mode"] = search_mode
+        output_dict["budget"] = count
+        output_dict["granular"] = granular
 
         if not self.config.dry_run:
             search_count: int = 0
@@ -1897,6 +1924,7 @@ class Upgradinatorr(ChubModule):
             # would otherwise be counted as tagged when it deliberately is not.
             deferred = self._deferred_count(search_stats)
             tagged_in_run -= deferred
+            output_dict["tagged_in_run"] = max(tagged_in_run, 0)
             summary = (
                 f"   → {search_stats['searches_attempted']} searched, "
                 f"{max(tagged_in_run, 0)} tagged"

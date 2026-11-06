@@ -1,0 +1,264 @@
+"""Upgradinatorr's Discord/Notifiarr embeds: a run summary, queue lists, a diff per import."""
+
+import math
+import textwrap
+from typing import Any, Dict, List, Optional, Tuple
+
+from backend.util.constants import (
+    NOTIFICATION_ITEM_CAP,
+    QUEUE_REPORT_SECTIONS,
+    import_report_sections,
+)
+
+QUEUE_LINE_CAP = 10
+REASON_CHARS = 200
+RELEASE_CHARS = 200
+QUALITY_CHARS = 60
+# Columns a phone shows in a code block before Discord wraps the line itself.
+DIFF_WIDTH = 46
+CF_LINE_CAP = 4
+
+# Discord's title cap is 256; the rest is room for the " (part i of n)" suffix.
+TITLE_CHARS = 200
+FIELD_NAME_LIMIT = 256
+FIELD_VALUE_LIMIT = 1024
+DESCRIPTION_LIMIT = 4096
+EMBED_FIELD_LIMIT = 25
+# Discord rejects an embed over 6000 characters; the rest covers footer and part suffix.
+EMBED_CHAR_BUDGET = 5500
+BLANK = "​"
+
+_NOUNS = {"radarr": "movies", "sonarr": "series", "lidarr": "artists"}
+_MARKDOWN = str.maketrans({char: f"\\{char}" for char in "\\*_~`|"})
+
+
+def _md(text: Any) -> str:
+    return str(text).translate(_MARKDOWN)
+
+
+def _code(text: Any) -> str:
+    """Text safe inside a code block, where a backtick would close the fence."""
+    return str(text).replace("`", "'")
+
+
+def _clip(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _plural(count: int, word: str) -> str:
+    return f"{count} {word}" if count == 1 else f"{count} {word}s"
+
+
+def _item_title(entry: Dict[str, Any]) -> str:
+    title = entry.get("title") or "Unknown"
+    year = entry.get("year")
+    return f"{title} ({year})" if year else str(title)
+
+
+def _search_line(run: Dict[str, Any]) -> Optional[str]:
+    # No budget means process_instance found nothing to search and only reports imports.
+    if "budget" not in run:
+        return None
+    mode = str(run.get("search_mode") or "upgrade").capitalize()
+    attempted = run.get("searches_attempted") or 0
+    if not attempted:
+        return f"{mode} search: nothing searched this run"
+    grabbed = sum(len(item.get("grabs") or []) for item in run.get("data") or [])
+    parts = [f"searched {attempted} this run", f"{grabbed} grabbed"]
+    if run.get("searches_failed"):
+        parts.append(f"{run['searches_failed']} failed")
+    if run.get("searches_deferred"):
+        parts.append(f"{run['searches_deferred']} staged for the next run")
+    return f"{mode} search: " + ", ".join(parts)
+
+
+def _progress_line(run: Dict[str, Any]) -> Optional[str]:
+    total = run.get("total_count") or 0
+    if "budget" not in run or not total:
+        return None
+    noun = _NOUNS.get(run.get("instance_type"), "items")
+    tagged = run.get("tagged_count") or 0
+    if run.get("granular"):
+        # Season/album mode can stop mid-parent untagged, so this run's tag count is unknown.
+        return f"Progress: {tagged} of {total} {noun} done before this run"
+    tagged = min(tagged + (run.get("tagged_in_run") or 0), total)
+    left = total - tagged
+    line = f"Progress: {tagged} of {total} {noun} searched, {left} left"
+    budget = run.get("budget") or 0
+    if left and budget > 0:
+        runs = _plural(math.ceil(left / budget), "more run")
+        line += f" ({runs} at {budget} a run)"
+    return line
+
+
+def _imported_line(run: Dict[str, Any]) -> Optional[str]:
+    pending = run.get("pending_grabs") or 0
+    if not pending:
+        return None
+    completed = run.get("completed") or []
+    line = f"Imported: {len(completed)} of {_plural(pending, 'grab')} from earlier runs"
+    kinds = [
+        f"{len(rows)} {tag.lower()}"
+        for tag, _noun, rows in import_report_sections(completed)
+    ]
+    return f"{line} ({', '.join(kinds)})" if kinds else line
+
+
+def _queue_rows(
+    data: List[Dict[str, Any]], state: str
+) -> List[Tuple[Dict[str, Any], List[Dict[str, Any]]]]:
+    rows = []
+    for item in data:
+        entries = [e for e in item.get("queue_imports") or [] if e.get("state") == state]
+        if entries:
+            rows.append((item, entries))
+    return rows
+
+
+def _queue_line(
+    item: Dict[str, Any], entries: List[Dict[str, Any]], state: str
+) -> str:
+    head = f"• {_md(_item_title(item))}"
+    if state == "stuck":
+        reasons = [m for e in entries for m in e.get("messages") or [] if m]
+        return f"{head}: {_md(_clip(str(reasons[0]), REASON_CHARS))}" if reasons else head
+    ages = [e["age_hours"] for e in entries if e.get("age_hours") is not None]
+    waiting = f"waiting {max(ages):.0f}h" if ages else "waiting"
+    if len(entries) > 1:
+        return f"{head}: {len(entries)} downloads, oldest {waiting}"
+    return f"{head}: {waiting}"
+
+
+def _line_fields(name: str, lines: List[str]) -> List[Dict[str, str]]:
+    """Lines packed into as few fields as fit, the name on the first only."""
+    chunks: List[List[str]] = [[]]
+    for line in lines:
+        line = _clip(line, FIELD_VALUE_LIMIT)
+        if chunks[-1] and len("\n".join(chunks[-1] + [line])) > FIELD_VALUE_LIMIT:
+            chunks.append([])
+        chunks[-1].append(line)
+    return [
+        {"name": _clip(name, FIELD_NAME_LIMIT) if i == 0 else BLANK, "value": "\n".join(c)}
+        for i, c in enumerate(chunks)
+    ]
+
+
+def _queue_fields(data: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    fields: List[Dict[str, str]] = []
+    for state, tag, _note, _level in QUEUE_REPORT_SECTIONS:
+        rows = _queue_rows(data, state)
+        if not rows:
+            continue
+        lines = [_queue_line(item, entries, state) for item, entries in rows[:QUEUE_LINE_CAP]]
+        if len(rows) > QUEUE_LINE_CAP:
+            lines.append(f"…and {len(rows) - QUEUE_LINE_CAP} more — see the server log")
+        fields.extend(_line_fields(f"{tag.capitalize()} ({len(rows)})", lines))
+    return fields
+
+
+def _wrap_formats(formats: List[str]) -> List[str]:
+    text = ", ".join(_code(name) for name in formats) or "none"
+    rows = textwrap.wrap(
+        text,
+        width=DIFF_WIDTH - 2,
+        initial_indent="CF: ",
+        subsequent_indent="    ",
+        break_on_hyphens=False,
+    )
+    if len(rows) > CF_LINE_CAP:
+        rows = rows[:CF_LINE_CAP]
+        rows[-1] += " …"
+    return rows
+
+
+def _diff_side(
+    sign: str, quality: Any, formats: Optional[List[str]], score: Any
+) -> List[str]:
+    lines = []
+    if quality:
+        lines.append(f"{sign} {_clip(_code(quality), QUALITY_CHARS)}")
+    if formats is not None:
+        lines.extend(f"{sign} {row}" for row in _wrap_formats(formats))
+    # None is unknown; 0 is a real score.
+    if score is not None:
+        lines.append(f"{sign} Score: {score}")
+    return lines
+
+
+def _import_value(entry: Dict[str, Any]) -> str:
+    lines = []
+    if entry.get("download"):
+        lines.append(f"Release: {_md(_clip(str(entry['download']), RELEASE_CHARS))}")
+    diff: List[str] = []
+    if entry.get("replaced"):
+        diff += _diff_side(
+            "-",
+            entry.get("previous_quality"),
+            entry.get("previous_custom_formats"),
+            entry.get("previous_score"),
+        )
+    diff += _diff_side(
+        "+", entry.get("quality"), entry.get("custom_formats"), entry.get("score")
+    )
+    if diff:
+        lines.append("```diff\n" + "\n".join(diff) + "\n```")
+    return "\n".join(lines) or BLANK
+
+
+def _import_fields(completed: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    fields: List[Dict[str, str]] = []
+    for tag, noun, rows in import_report_sections(completed):
+        for entry in rows[:NOTIFICATION_ITEM_CAP]:
+            name = f"{_item_title(entry)} — {tag.lower()}"
+            fields.append(
+                {"name": _clip(name, FIELD_NAME_LIMIT), "value": _import_value(entry)}
+            )
+        extra = len(rows) - NOTIFICATION_ITEM_CAP
+        if extra > 0:
+            more = _plural(extra, f"more {noun}")
+            fields.append({"name": BLANK, "value": f"…and {more} — see the server log"})
+    return fields
+
+
+def _embeds(
+    title: str, description: Optional[str], fields: List[Dict[str, str]]
+) -> List[Dict[str, Any]]:
+    """Fields split across embeds by Discord's field-count and size limits."""
+    parts = [{"embed": True, "title": title, "description": description, "fields": []}]
+    size = len(title) + len(description or "")
+    for field in fields:
+        cost = len(field["name"]) + len(field["value"])
+        current = parts[-1]["fields"]
+        if current and (
+            len(current) >= EMBED_FIELD_LIMIT or size + cost > EMBED_CHAR_BUDGET
+        ):
+            parts.append({"embed": True, "title": title, "description": None, "fields": []})
+            size = len(title)
+        parts[-1]["fields"].append(field)
+        size += cost
+    if len(parts) > 1:
+        for index, part in enumerate(parts, 1):
+            part["part"] = f" (part {index} of {len(parts)})"
+    return parts
+
+
+def build_upgradinatorr_embeds(output: Any) -> List[Dict[str, Any]]:
+    """One embed set per instance: summary, queue lists, then a diff per import."""
+    parts: List[Dict[str, Any]] = []
+    for name, run in (output or {}).items():
+        if not isinstance(run, dict):
+            continue
+        title = _clip(f"Upgradinatorr: {run.get('server_name') or name}", TITLE_CHARS)
+        lines = [
+            line
+            for line in (_search_line(run), _progress_line(run), _imported_line(run))
+            if line
+        ]
+        fields = _queue_fields(run.get("data") or []) + _import_fields(
+            run.get("completed") or []
+        )
+        description = _clip("\n".join(lines), DESCRIPTION_LIMIT) or None
+        if not description and not fields:
+            description = "Nothing to report this run."
+        parts.extend(_embeds(title, description, fields))
+    return parts
