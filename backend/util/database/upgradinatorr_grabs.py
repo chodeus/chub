@@ -43,7 +43,8 @@ class UpgradinatorrGrabs(DatabaseBase):
                     grab.get("year"),
                     grab.get("release_title"),
                     grab.get("score"),
-                    now,
+                    # A grab from a resumed search predates the run.
+                    grab.get("grabbed_at") or now,
                 ),
             )
 

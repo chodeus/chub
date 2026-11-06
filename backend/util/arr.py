@@ -209,10 +209,11 @@ class BaseARRClient:
     api_version = "v3"  # Override in subclasses (e.g. LidarrClient uses "v1")
 
     # History event ids the completed-upgrade report reads. The same int means
-    # different events per *arr, so subclasses MUST override all three. Ints
+    # different events per *arr, so subclasses MUST override all four. Ints
     # only: Lidarr rejects the string event names Radarr/Sonarr accept.
     history_import_event: Optional[int] = None
     history_upgrade_delete_event: Optional[int] = None
+    history_failed_event: Optional[int] = None
     # Record field pairing an import to the delete it replaced.
     upgrade_pair_field: Optional[str] = None
 
@@ -280,6 +281,21 @@ class BaseARRClient:
         """
         endpoint = f"{self.api_base}/health"
         return self.make_get_request(endpoint)
+
+    def get_command_state(self, command_id: int) -> Optional[Dict[str, Any]]:
+        """The command's resource, or None when it is gone or unreadable."""
+        # Not make_get_request: its 404 ERROR log fires a failure notification.
+        endpoint = f"{self.api_base}/command/{command_id}"
+        try:
+            response = self.session.get(
+                endpoint, timeout=getattr(self.session, "timeout", self.timeout)
+            )
+            response.raise_for_status()
+            body = response.json()
+        except (requests.RequestException, ValueError) as e:
+            self.logger.warning(f"Could not read command {command_id}: {e}")
+            return None
+        return body if isinstance(body, dict) else None
 
     def wait_for_command_result(self, command_id: int, label: str = "") -> str:
         """Poll `command_id` until it settles. Returns one of COMMAND_COMPLETED,
@@ -1011,6 +1027,7 @@ class RadarrClient(BaseARRClient):
 
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 6  # movieFileDeleted
+    history_failed_event = 4  # downloadFailed
     upgrade_pair_field = "movieId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:
@@ -1359,6 +1376,7 @@ class SonarrClient(BaseARRClient):
 
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 5  # episodeFileDeleted
+    history_failed_event = 4  # downloadFailed
     upgrade_pair_field = "episodeId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:
@@ -1902,6 +1920,7 @@ class LidarrClient(BaseARRClient):
     # track and would report one album as a dozen upgrades.
     history_import_event = 8  # downloadImported
     history_upgrade_delete_event = 5  # trackFileDeleted
+    history_failed_event = 4  # downloadFailed
     upgrade_pair_field = "albumId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:
@@ -1927,6 +1946,23 @@ class LidarrClient(BaseARRClient):
         """Get all albums for an artist."""
         endpoint = f"{self.api_base}/album?artistId={artist_id}"
         return self.make_get_request(endpoint)
+
+    def get_albums_by_id(
+        self, album_ids: List[int], chunk: int = 100
+    ) -> Optional[List[Dict[str, Any]]]:
+        """The albums with these ids, ``chunk`` per request; None if any request fails."""
+        # Never send an empty albumIds: Lidarr answers that with the WHOLE library.
+        ids = list(dict.fromkeys(album_ids))
+        albums: List[Dict[str, Any]] = []
+        for start in range(0, len(ids), chunk):
+            page = self.make_get_request(
+                f"{self.api_base}/album",
+                params={"albumIds": ids[start : start + chunk]},
+            )
+            if not isinstance(page, list):
+                return None
+            albums.extend(page)
+        return albums
 
     def add_tags(self, media_id: Union[int, List[int]], tag_id: int) -> Any:
         """Add a tag to one or more artists."""
@@ -2352,6 +2388,14 @@ def extract_poster_url(item: dict) -> Optional[str]:
     return None
 
 
+def first_release_date(item: Dict[str, Any], keys: Sequence[str], year: Any) -> Optional[str]:
+    """The earliest of these *arr date fields as YYYY-MM-DD, else 1 January of ``year``."""
+    dates = sorted(str(item[key])[:10] for key in keys if item.get(key))
+    if dates:
+        return dates[0]
+    return f"{year:04d}-01-01" if isinstance(year, int) and year > 0 else None
+
+
 def normalize_arr_media(
     item, tags, arr_type, include_episode=False, episode_lookup=None, logger=None
 ):
@@ -2461,6 +2505,9 @@ def normalize_arr_media(
             "normalized_folder": normalize_titles(folder or ""),
             "has_file": item.get("hasFile"),
             "has_content": bool(item.get("hasFile")),
+            "release_date": first_release_date(
+                item, ("inCinemas", "digitalRelease", "physicalRelease"), year
+            ),
             "tags": tag_names,
             "seasons": None,
             "season_numbers": None,
@@ -2688,6 +2735,7 @@ def normalize_arr_media(
             "folder": folder,
             "normalized_folder": normalize_titles(folder or ""),
             "has_file": None,
+            "release_date": first_release_date(item, ("firstAired",), year),
             "has_content": any(
                 (s.get("season_has_episodes") or 0) > 0 for s in season_list
             ),

@@ -196,6 +196,17 @@ suffixes: List[str] = [
     "Saga",
 ]
 
+# Discord carries at most this many item blocks per listing. Past it the section
+# keeps its tally and points at the server log, which always holds everything.
+NOTIFICATION_ITEM_CAP = 50
+
+# When a run would fan out into more than this many Discord messages (embeds),
+# collapse the per-item detail into a single summary embed. A first-time bulk
+# poster apply of thousands of items would otherwise hammer the webhook and trip
+# Discord's rate limiter; normal runs (a handful of items → 1–2 parts) are
+# returned unchanged.
+SUMMARY_PART_THRESHOLD = 10
+
 # (queue state, report tag, note, logger level) for the sections Upgradinatorr
 # reports. The run log and the Discord/Notifiarr embed both render from this —
 # a second copy in the formatter is how the notification kept shipping per-item
@@ -207,7 +218,7 @@ QUEUE_REPORT_SECTIONS: Tuple[Tuple[str, str, str, str], ...] = (
 
 
 def queue_report_tally(download_count: int, item_count: int, note: str) -> str:
-    """The one-line queue-section summary the run log and the notification share."""
+    """The run log's one-line queue-section summary."""
     return f"{download_count} download(s) across {item_count} item(s) — {note}"
 
 
@@ -230,10 +241,22 @@ def import_report_sections(
 
 
 def import_report_tally(count: int, item_count: int, noun: str) -> str:
-    """The one-line import-section summary the run log and the notification share."""
+    """The run log's one-line import-section summary."""
     # Counts imported releases, not parents — a tally naming a different noun
     # from the lines beneath it put "1 items with grabs" above seven rows.
     return f"{count} {noun}(s) across {item_count} item(s)"
+
+
+def report_item_label(entry: Dict[str, Any]) -> str:
+    """``Title (Year)``, or ``Artist - Album (Year) [Type]`` once the row names its album."""
+    title = entry.get("title") or "Unknown"
+    album = entry.get("album") or {}
+    if album.get("title"):
+        title = f"{title} - {album['title']}"
+    # An album row's own year is the release's; the entry year belongs to the artist.
+    year = album.get("year") if album else entry.get("year")
+    label = f"{title} ({year})" if year else str(title)
+    return f"{label} [{album['type']}]" if album.get("type") else label
 
 
 def import_score_text(score: object, previous: object) -> Optional[str]:

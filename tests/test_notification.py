@@ -787,41 +787,159 @@ def _upgradinatorr_output():
     }
 
 
-def test_upgradinatorr_notification_tallies_the_queue():
-    """The *arr's own rejection text and the per-item queue rows are log-level
-    detail — the notification carries only the section tally."""
+def _upgradinatorr_text(output):
     from backend.util.notification_formatting import format_for_discord
 
-    cfg = SimpleNamespace(module_name="upgradinatorr")
-    data, ok = format_for_discord(cfg, _upgradinatorr_output())
+    parts, ok = format_for_discord(SimpleNamespace(module_name="upgradinatorr"), output)
     assert ok
-    blob = " ".join(
-        f.get("name", "") + " " + f.get("value", "")
-        for fields in data.values()
-        for f in fields
+    return "\n".join(
+        f"{f['name']}\n{f['value']}" for part in parts for f in part["fields"]
     )
-    # A grab is still downloading at run end — it never reaches Discord.
+
+
+def test_upgradinatorr_notification_lists_a_waiting_item_on_one_line():
+    """A waiting download is one line; the *arr's reasons and the release name stay in the log."""
+    blob = _upgradinatorr_text(_upgradinatorr_output())
+    assert "Awaiting import (1)\n• Armin van Buuren: waiting 40h" in blob
+    # A grab is still downloading at run end — it is counted, never listed.
     assert "Anastacia - Resurrection" not in blob
-    # The queue section collapses to the same tally the run log prints.
-    assert "1 download(s) across 1 item(s)" in blob
-    assert "already downloaded, not searched again" in blob
-    # None of the per-item queue detail may reach Discord.
     assert "Has unmatched tracks" not in blob
     assert "not imported or missing" not in blob
-    assert "waiting 40h" not in blob
     assert "Starbound" not in blob
 
 
-def test_upgradinatorr_notification_matches_the_log_tally():
-    """One owner for the section policy: the notification's tally string is the
-    same helper the run log renders, so the two can't drift again."""
-    from backend.util.constants import QUEUE_REPORT_SECTIONS, queue_report_tally
-    from backend.util.notification_formatting import format_for_discord
+def test_upgradinatorr_queue_headings_come_from_the_log_section_table():
+    """Queue headings use QUEUE_REPORT_SECTIONS' tags, the table the run log renders."""
+    from backend.util.constants import QUEUE_REPORT_SECTIONS
 
-    cfg = SimpleNamespace(module_name="upgradinatorr")
-    data, ok = format_for_discord(cfg, _upgradinatorr_output())
-    assert ok
-    _state, _tag, note, _level = QUEUE_REPORT_SECTIONS[0]
-    expected = queue_report_tally(1, 1, note)
-    values = " ".join(f.get("value", "") for fields in data.values() for f in fields)
-    assert expected in values
+    _state, tag, _note, _level = QUEUE_REPORT_SECTIONS[0]
+    assert f"{tag.capitalize()} (1)" in _upgradinatorr_text(_upgradinatorr_output())
+
+
+def _upgradinatorr_destination(method, config):
+    from backend.util.config import ChubConfig
+
+    return ChubConfig.model_validate(
+        {
+            "notifications": {
+                "destinations": [
+                    {
+                        "id": "u1",
+                        "method": method,
+                        "enabled": True,
+                        "events": {"success": True, "failure": False},
+                        "modules": ["upgradinatorr"],
+                        "config": config,
+                    }
+                ]
+            }
+        }
+    )
+
+
+def _completed_upgrade_output():
+    return {
+        "radarr": {
+            "server_name": "Radarr",
+            "data": [],
+            "pending_grabs": 2,
+            "completed": [
+                {
+                    "media_id": 7,
+                    "title": "300",
+                    "year": 2006,
+                    "download": "300.2006.1080p.BluRay-BHDStudio",
+                    "score": 1715,
+                    "previous_score": 900,
+                    "quality": "Bluray-1080p",
+                    "previous_quality": "Bluray-1080p",
+                    "replaced": True,
+                }
+            ],
+        }
+    }
+
+
+def test_upgradinatorr_discord_post_carries_the_instance_title_and_summary():
+    """Through the real formatter, the embed carries the instance title and the run summary."""
+    full_config = _upgradinatorr_destination(
+        "discord", {"webhook": "https://discord.com/api/webhooks/1/tok"}
+    )
+    manager = NotificationManager(full_config, MagicMock(), module_name="upgradinatorr")
+    with patch.object(NotificationManager, "safe_post") as post:
+        post.return_value = SimpleNamespace(status_code=204, text="")
+        result = manager.send_notification(_completed_upgrade_output())
+
+    assert result["success"] is True
+    embed = post.call_args.args[1]["embeds"][0]
+    assert embed["title"] == "Upgradinatorr: Radarr"
+    assert embed["description"] == (
+        "Imported: 1 of 2 grabs from earlier runs (1 upgraded)"
+    )
+    assert embed["fields"][0]["name"] == "300 (2006) — upgraded"
+    assert "- Score: 900\n+ Bluray-1080p\n+ Score: 1715" in embed["fields"][0]["value"]
+
+
+def test_upgradinatorr_notifiarr_post_carries_the_instance_title_and_summary():
+    full_config = _upgradinatorr_destination(
+        "notifiarr",
+        {
+            "webhook": "https://notifiarr.com/api/v1/notification/passthrough/KEY",
+            "channel_id": 42,
+        },
+    )
+    manager = NotificationManager(full_config, MagicMock(), module_name="upgradinatorr")
+    with patch.object(NotificationManager, "safe_post") as post:
+        post.return_value = SimpleNamespace(status_code=200, text="")
+        result = manager.send_notification(_completed_upgrade_output())
+
+    assert result["success"] is True
+    text = post.call_args.args[1]["discord"]["text"]
+    assert text["title"] == "Upgradinatorr: Radarr"
+    assert text["description"] == "Imported: 1 of 2 grabs from earlier runs (1 upgraded)"
+    assert text["fields"][0]["title"] == "300 (2006) — upgraded"
+
+
+def test_build_discord_payload_keeps_the_generic_title_without_a_part_title():
+    payloads = NotificationManager.build_discord_payload(
+        "Mod",
+        [{"embed": True, "fields": [], "part": " (Part 1 of 2)"}],
+        "2024-01-01T00:00:00Z",
+    )
+    embed = payloads[0]["embeds"][0]
+    assert embed["title"] == "Mod Notification (Part 1 of 2)"
+    assert embed["description"] is None
+
+
+def test_upgradinatorr_outcome_colour_beats_the_destination_colour_on_discord():
+    full_config = _upgradinatorr_destination(
+        "discord",
+        {"webhook": "https://discord.com/api/webhooks/1/tok", "color": "123456"},
+    )
+    manager = NotificationManager(full_config, MagicMock(), module_name="upgradinatorr")
+    quiet = {"radarr": {"server_name": "Radarr", "data": [], "completed": []}}
+    with patch.object(NotificationManager, "safe_post") as post:
+        post.return_value = SimpleNamespace(status_code=204, text="")
+        manager.send_notification(_completed_upgrade_output())
+        manager.send_notification(quiet)
+
+    colours = [call.args[1]["embeds"][0]["color"] for call in post.call_args_list]
+    # An import is green; a run with nothing to show keeps the destination's colour.
+    assert colours == [0x2ECC71, 0x123456]
+
+
+def test_upgradinatorr_outcome_colour_reaches_notifiarr_as_hex():
+    full_config = _upgradinatorr_destination(
+        "notifiarr",
+        {
+            "webhook": "https://notifiarr.com/api/v1/notification/passthrough/KEY",
+            "channel_id": 42,
+            "color": "123456",
+        },
+    )
+    manager = NotificationManager(full_config, MagicMock(), module_name="upgradinatorr")
+    with patch.object(NotificationManager, "safe_post") as post:
+        post.return_value = SimpleNamespace(status_code=200, text="")
+        manager.send_notification(_completed_upgrade_output())
+
+    assert post.call_args.args[1]["discord"]["color"] == "2ECC71"

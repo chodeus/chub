@@ -940,6 +940,31 @@ const CORE_SETTINGS_SCHEMA = [
                             'Do not search an item that already has a download sitting in the queue waiting to import, until that download is older than this many hours. Prevents grabbing a second copy of something already on disk. Set to 0 to always search.',
                     },
                     {
+                        key: 'max_grabs',
+                        label: 'Max Items Grabbed Per Run',
+                        type: 'number',
+                        required: false,
+                        defaultValue: 0,
+                        min: 0,
+                        description:
+                            'Stop the run once this many movies, series or artists have grabbed something. A series or artist counts once, however many seasons or albums it grabs. The rest of the batch stays untagged and is searched next run. Set to 0 for no limit.',
+                    },
+                    {
+                        key: 'min_age_days',
+                        label: 'Minimum Release Age (days)',
+                        type: 'number',
+                        required: false,
+                        defaultValue: 0,
+                        min: 0,
+                        descriptionByType: {
+                            radarr: 'Skip movies released within this many days (the earliest of in cinemas, digital and physical; 1 January of the year when none is set). Movies with no date or year are skipped too. Set to 0 to turn off.',
+                            sonarr: 'Skip series whose first episode aired within this many days (1 January of the year when no air date is set). Series with no air date or year are skipped too. Set to 0 to turn off.',
+                            lidarr: 'Skip albums released within this many days, or with no release date. Set to 0 to turn off.',
+                            default:
+                                'Skip items released within this many days, or with no release date. Set to 0 to turn off.',
+                        },
+                    },
+                    {
                         key: 'tag_name',
                         label: 'Tag Name',
                         type: 'text',

@@ -1,26 +1,9 @@
 import datetime
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union
 
-from backend.util.constants import (
-    QUEUE_REPORT_SECTIONS,
-    import_quality_text,
-    import_report_sections,
-    import_report_tally,
-    import_score_text,
-    queue_report_tally,
-)
-
-# When a run would fan out into more than this many Discord messages (embeds),
-# collapse the per-item detail into a single summary embed. A first-time bulk
-# poster apply of thousands of items would otherwise hammer the webhook and trip
-# Discord's rate limiter; normal runs (a handful of items → 1–2 parts) are
-# returned unchanged.
-SUMMARY_PART_THRESHOLD = 10
-
-# Discord carries at most this many item blocks per listing. Past it the section
-# keeps its tally and points at the server log, which always holds everything.
-NOTIFICATION_ITEM_CAP = 50
+from backend.util.constants import NOTIFICATION_ITEM_CAP, SUMMARY_PART_THRESHOLD
+from backend.util.upgradinatorr_notification import build_upgradinatorr_embeds
 
 
 def capped_lines(entries: list, tally: str) -> list:
@@ -71,7 +54,7 @@ def _collapse_large_notification(
 
 def format_for_discord(
     config: Any, output: Any
-) -> Tuple[Dict[int, List[Dict[str, Any]]], bool]:
+) -> Tuple[Union[Dict[int, List[Dict[str, Any]]], List[Dict[str, Any]]], bool]:
     """Format notification output for Discord embeds and chunking.
 
     Args:
@@ -79,7 +62,8 @@ def format_for_discord(
         output: Output from the module to be formatted.
 
     Returns:
-        Tuple of (embed field dict, success bool).
+        Tuple of (embed fields per part number, or a list of ready message
+        parts for "flat" and "embeds" formatters; success bool).
     """
     DISCORD_FIELD_CHAR_LIMIT = 1000
     DISCORD_EMBED_CHAR_LIMIT = 5000
@@ -432,69 +416,6 @@ def format_for_discord(
             f"Searched: {searched_movies} movies, {searched_episodes} episodes",
         ]
         return [{"name": "Summary", "value": "```" + "\n".join(lines) + "```"}]
-
-    def fmt_upgradinatorr(o: Any) -> List[Dict[str, Any]]:
-        """Format upgradinatorr output for Discord embeds.
-
-        Completed imports are listed, grabs are not — at run end a grab is still
-        downloading and may never import. Section tables are shared with the log.
-        """
-        fields: List[Dict[str, Any]] = []
-        for inst, data in o.items():
-            srv = data.get("server_name", inst)
-            instance_data = data.get("data", []) or []
-            completed = data.get("completed") or []
-            for tag, noun, section in import_report_sections(completed):
-                blocks: List[List[str]] = []
-                for entry in section:
-                    title = entry.get("title", "Unknown")
-                    year = f" ({entry.get('year')})" if entry.get("year") else ""
-                    block = [f"{title}{year}", f"\t{entry.get('download')}"]
-                    quality = import_quality_text(
-                        entry.get("quality"), entry.get("previous_quality")
-                    )
-                    if quality:
-                        block.append(f"\tQuality: {quality}")
-                    score = import_score_text(
-                        entry.get("score"), entry.get("previous_score")
-                    )
-                    if score:
-                        block.append(f"\tCF Score: {score}")
-                    blocks.append(block)
-                items = {entry.get("media_id") for entry in section}
-                fields.extend(
-                    chunk_code_fields(
-                        f"{srv} — {tag.lower()}",
-                        "\n".join(
-                            capped_lines(
-                                blocks,
-                                import_report_tally(len(blocks), len(items), noun),
-                            )
-                        ),
-                    )
-                )
-            for state, tag, note, _level in QUEUE_REPORT_SECTIONS:
-                item_count = 0
-                total = 0
-                for item in instance_data:
-                    entries = [
-                        e
-                        for e in (item.get("queue_imports") or [])
-                        if e.get("state") == state
-                    ]
-                    if not entries:
-                        continue
-                    item_count += 1
-                    total += len(entries)
-                if not item_count:
-                    continue
-                fields.append(
-                    {
-                        "name": f"{srv} — {tag.lower()}",
-                        "value": f"```{queue_report_tally(total, item_count, note)}```",
-                    }
-                )
-        return fields
 
     def fmt_labelarr(o: Any) -> List[Dict[str, Any]]:
         """Format labelarr output for Discord embeds.
@@ -879,7 +800,7 @@ def format_for_discord(
         "renameinatorr": {"formatter": fmt_renameinatorr, "type": "embedded"},
         "health_checkarr": {"formatter": fmt_health_checkarr, "type": "embedded"},
         "nohl": {"formatter": fmt_nohl, "type": "embedded"},
-        "upgradinatorr": {"formatter": fmt_upgradinatorr, "type": "embedded"},
+        "upgradinatorr": {"formatter": build_upgradinatorr_embeds, "type": "embeds"},
         "labelarr": {"formatter": fmt_labelarr, "type": "embedded"},
         "nestarr": {"formatter": fmt_nestarr, "type": "embedded"},
         "jduparr": {"formatter": fmt_jduparr, "type": "flat"},
@@ -902,7 +823,8 @@ def format_for_discord(
     formatter = formatter_entry["formatter"]
     output_type = formatter_entry["type"]
     formatted_output = formatter(output)
-    if output_type == "flat":
+    # "embeds" formatters size and cap their own parts; "flat" ones are plain messages.
+    if output_type in ("flat", "embeds"):
         return formatted_output, True
     parts = split_fields(formatted_output)
     return _collapse_large_notification(parts, formatted_output), True

@@ -20,6 +20,17 @@ ALL_MODULES_SENTINEL = "__ALL__"
 _WEBHOOK_THROTTLE = Throttle(rate=1, burst=1)
 
 
+def _part_color(part: Dict[str, Any], default: Any) -> Any:
+    """The formatter's own colour for this part, else the destination's."""
+    return default if part.get("color") is None else part["color"]
+
+
+def _part_title(module_title: str, part: Dict[str, Any]) -> str:
+    """The formatter's own embed title, else the generic one, plus any part suffix."""
+    title = part.get("title") or f"{module_title} Notification"
+    return f"{title}{part.get('part', '')}"
+
+
 @dataclass
 class NotifiarrConfig:
     webhook: str
@@ -236,9 +247,9 @@ class NotificationManager:
             if "embed" in part:
                 payload["embeds"] = [
                     {
-                        "title": f"{module_title} Notification{part.get('part', '')}",
-                        "description": None,
-                        "color": color,
+                        "title": _part_title(module_title, part),
+                        "description": part.get("description"),
+                        "color": _part_color(part, color),
                         "timestamp": timestamp,
                         "fields": part.get("fields", []),
                         "footer": {"text": "Powered by: CHUB"},
@@ -396,16 +407,20 @@ class NotificationManager:
                     for f in part.get("fields", [])
                 ]
                 pt_payload["discord"]["text"] = {
-                    "title": f"{module_title} Notification{part.get('part', '')}",
+                    "title": _part_title(module_title, part),
                     "fields": fields,
                 }
+                if part.get("description"):
+                    pt_payload["discord"]["text"]["description"] = part["description"]
             else:
                 content = part.get("content")
                 pt_payload["discord"]["text"] = {
                     "description": " ",
                     "content": content,
                 }
-            color = self.resolve_color(output, auth_data.color, default="00FF00")
+            color = _part_color(
+                part, self.resolve_color(output, auth_data.color, default="00FF00")
+            )
             if isinstance(color, int):
                 color = f"{color:06X}"
             elif isinstance(color, str):

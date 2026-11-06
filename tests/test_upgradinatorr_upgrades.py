@@ -55,11 +55,16 @@ class _HistoryARR(FakeARR):
 
     history_import_event = 3
     history_upgrade_delete_event = 6
+    history_failed_event = 4
     upgrade_pair_field = "movieId"
 
-    def __init__(self, imports, deletes, media=None):
+    def __init__(self, imports, deletes, media=None, failures=()):
         super().__init__([[upgradinatorr_media_item([])] if media is None else media])
-        self._by_event = {3: imports, 6: deletes}
+        self._by_event = {
+            self.history_import_event: imports,
+            self.history_upgrade_delete_event: deletes,
+            self.history_failed_event: list(failures),
+        }
         self.since_calls = []
 
     def get_history_since(self, date, event_type):
@@ -68,9 +73,8 @@ class _HistoryARR(FakeARR):
 
 
 def _collect(module, app, grabs):
-    """The collector returns (completed, resolved ids); most tests want the first."""
-    completed, _resolved = module._collect_completed_imports(app, grabs)
-    return completed
+    """The completed rows of one reconcile; most tests want only those."""
+    return module._collect_completed_imports(app, grabs).completed
 
 
 def _pending_since(hours: float = 1.0) -> str:
@@ -88,7 +92,7 @@ def _grab(download_id="dl-1", **overrides):
         "year": 2024,
         "release_title": "Movie.2024.REMUX-GRP",
         "score": 4000,
-        "grabbed_at": "2026-08-29T09:00:00+00:00",
+        "grabbed_at": _pending_since(),
     }
     row.update(overrides)
     return row
@@ -100,14 +104,18 @@ def _import(
     score=7007,
     date="2026-08-29T10:00:01Z",
     quality="WEBDL-1080p",
+    formats=None,
 ):
-    return {
+    row = {
         "downloadId": download_id,
         "movieId": movie_id,
         "customFormatScore": score,
         "date": date,
         "quality": {"quality": {"name": quality}},
     }
+    if formats is not None:
+        row["customFormats"] = [{"id": i, "name": n} for i, n in enumerate(formats)]
+    return row
 
 
 def _delete(
@@ -116,24 +124,33 @@ def _delete(
     reason="Upgrade",
     date="2026-08-29T10:00:00Z",
     quality="WEBDL-1080p",
+    formats=None,
 ):
-    return {
+    row = {
         "movieId": movie_id,
         "customFormatScore": score,
         "data": {"reason": reason},
         "date": date,
         "quality": {"quality": {"name": quality}},
     }
+    if formats is not None:
+        row["customFormats"] = [{"id": i, "name": n} for i, n in enumerate(formats)]
+    return row
 
 
 def test_import_that_replaced_a_file_is_reported_with_both_scores():
     module = make_upgradinatorr(dry_run=False)
     grabs = _FakeGrabs([_grab()])
-    app = _HistoryARR([_import()], [_delete()])
+    app = _HistoryARR(
+        [_import(formats=["x264", "BHDStudio", "aac", "1080p", "bluray tier 01"])],
+        [_delete(formats=["x264", "AMZN"])],
+    )
 
-    completed, resolved = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, pending = seen.completed, seen.resolved, seen.pending
 
     assert resolved == {"dl-1"}
+    assert pending == 1
     assert completed == [
         {
             "media_id": 7,
@@ -144,6 +161,8 @@ def test_import_that_replaced_a_file_is_reported_with_both_scores():
             "previous_score": 4851,
             "quality": "WEBDL-1080p",
             "previous_quality": "WEBDL-1080p",
+            "custom_formats": ["1080p", "aac", "BHDStudio", "bluray tier 01", "x264"],
+            "previous_custom_formats": ["AMZN", "x264"],
             "replaced": True,
         }
     ]
@@ -156,7 +175,8 @@ def test_import_that_replaced_nothing_is_an_acquisition():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], [])
 
-    completed, resolved = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert [(it["download"], it["replaced"]) for it in completed] == [
         ("Movie.2024.REMUX-GRP", False)
@@ -164,6 +184,9 @@ def test_import_that_replaced_nothing_is_an_acquisition():
     # Nothing was replaced, so there is no outgoing file to name.
     assert completed[0]["previous_score"] is None
     assert completed[0]["previous_quality"] is None
+    assert completed[0]["previous_custom_formats"] is None
+    # An *arr that sends no customFormats list is unknown, not "no formats".
+    assert completed[0]["custom_formats"] is None
     assert resolved == {"dl-1"}
 
 
@@ -199,7 +222,8 @@ def test_an_unrelated_import_is_ignored():
     grabs = _FakeGrabs([_grab(download_id="ours")])
     app = _HistoryARR([_import(download_id="someone-elses")], [_delete()])
 
-    completed, resolved = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert completed == []
     assert resolved == set()
@@ -245,7 +269,8 @@ def test_unreadable_history_fails_closed_and_keeps_the_grab_pending():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR(None, [_delete()])
 
-    completed, resolved = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert completed == []
     assert resolved == set()
@@ -259,7 +284,8 @@ def test_an_unreadable_delete_history_keeps_the_grab_pending():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], None)
 
-    completed, resolved = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert completed == []
     assert resolved == set()
@@ -272,7 +298,8 @@ def test_a_paged_delete_envelope_is_not_read_as_zero_deletes():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], {"records": [_delete()]})
 
-    completed, resolved = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert completed == []
     assert resolved == set()
@@ -301,9 +328,11 @@ def test_lookback_starts_at_the_oldest_pending_grab():
 
     _collect(module, app, grabs)
 
-    assert [date for date, _event in app.since_calls] == [
-        "2026-08-24T01:30:00Z",
-        "2026-08-24T01:30:00Z",
+    # Imports, upgrade deletes and failed downloads all read from the same start.
+    assert app.since_calls == [
+        ("2026-08-24T01:30:00Z", 3),
+        ("2026-08-24T01:30:00Z", 6),
+        ("2026-08-24T01:30:00Z", 4),
     ]
 
 
@@ -319,9 +348,11 @@ def test_client_without_an_event_mapping_reports_nothing():
 
 def test_pending_grabs_survive_a_round_trip(tmp_path):
     db = UpgradinatorrGrabs(StubLogger(), db_path=str(tmp_path / "grabs.db"))
-    db.record("radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00")
+    # No stamp of its own, so the run's stamp applies.
+    unstamped = _grab(grabbed_at=None)
+    db.record("radarr", [unstamped], grabbed_at="2026-08-29T09:00:00+00:00")
     # A re-run re-reporting the same download must not duplicate the row.
-    db.record("radarr", [_grab()], grabbed_at="2026-08-30T09:00:00+00:00")
+    db.record("radarr", [unstamped], grabbed_at="2026-08-30T09:00:00+00:00")
 
     rows = db.pending("radarr")
     assert len(rows) == 1
@@ -339,7 +370,9 @@ def test_pending_grabs_survive_a_round_trip(tmp_path):
 def test_prune_drops_grabs_past_the_retention_window(tmp_path):
     db = UpgradinatorrGrabs(StubLogger(), db_path=str(tmp_path / "grabs.db"))
     db.record(
-        "radarr", [_grab(download_id="stale")], grabbed_at="2020-01-01T00:00:00+00:00"
+        "radarr",
+        [_grab(download_id="stale", grabbed_at=None)],
+        grabbed_at="2020-01-01T00:00:00+00:00",
     )
     db.record("radarr", [_grab(download_id="fresh")])
 
@@ -509,7 +542,8 @@ def test_an_import_that_was_itself_replaced_later_is_not_an_upgrade():
         [_delete(score=3525, date="2026-08-29T11:20:30Z")],
     )
 
-    completed, resolved = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     upgraded = [it for it in completed if it["replaced"]]
     assert [it["score"] for it in upgraded] == [3575]
@@ -561,10 +595,6 @@ def test_a_quality_gain_is_shown_when_the_cf_score_fell():
     """Measured on a live library: every upgrade whose CF score went DOWN was a
     quality gain, which outranks custom formats. Without the quality line the
     notification reads as a downgrade."""
-    from types import SimpleNamespace
-
-    from backend.util.notification_formatting import format_for_discord
-
     module = make_upgradinatorr(dry_run=False)
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR(
@@ -576,69 +606,50 @@ def test_a_quality_gain_is_shown_when_the_cf_score_fell():
     assert completed[0]["quality"] == "Remux-1080p"
     assert completed[0]["previous_quality"] == "WEBDL-1080p"
 
-    fields, ok = format_for_discord(
-        SimpleNamespace(module_name="upgradinatorr"),
-        {"radarr": {"server_name": "Radarr", "data": [], "completed": completed}},
-    )
-    body = "\n".join(f["value"] for page in fields.values() for f in page)
-    assert "Quality: WEBDL-1080p → Remux-1080p" in body
-    assert "CF Score: 2550 (was 5570)" in body
+    body = _embed_body(completed)
+    assert "- WEBDL-1080p\n- Score: 5570\n+ Remux-1080p\n+ Score: 2550" in body
 
 
-def test_no_quality_line_when_the_quality_did_not_move():
-    from types import SimpleNamespace
-
-    from backend.util.notification_formatting import format_for_discord
-
+def test_an_upgrade_diffs_both_files_even_when_the_quality_held():
+    """The diff states each side whole, so an unmoved quality still shows on both."""
     module = make_upgradinatorr(dry_run=False)
     grabs = _FakeGrabs([_grab()])
-    app = _HistoryARR([_import()], [_delete()])
-
-    fields, ok = format_for_discord(
-        SimpleNamespace(module_name="upgradinatorr"),
-        {
-            "radarr": {
-                "server_name": "Radarr",
-                "data": [],
-                "completed": _collect(module, app, grabs),
-            }
-        },
+    app = _HistoryARR(
+        [_import(formats=["DTS-HD MA", "BHDStudio"])],
+        [_delete(formats=["DTS"])],
     )
-    body = "\n".join(f["value"] for page in fields.values() for f in page)
-    assert "Quality:" not in body
-    assert "CF Score: 7007 (was 4851)" in body
+
+    body = _embed_body(_collect(module, app, grabs))
+    assert "Movie (2024) — upgraded" in body
+    assert "Release: Movie.2024.REMUX-GRP" in body
+    assert (
+        "```diff\n- WEBDL-1080p\n- CF: DTS\n- Score: 4851\n"
+        "+ WEBDL-1080p\n+ CF: BHDStudio, DTS-HD MA\n+ Score: 7007\n```"
+    ) in body
 
 
 def _run_log(module, completed):
-    """print_output's lines for one instance, with a capturing logger."""
-
-    class _Capture(StubLogger):
-        def __init__(self):
-            super().__init__()
-            self.lines = []
-
-        def info(self, *args, **kwargs):
-            self.lines.append(" ".join(str(a) for a in args))
-
-    module.logger = _Capture()
-    module.print_output(
-        {
-            "radarr": upgradinatorr_module.Upgradinatorr._new_output(
-                "Radarr", completed, set()
-            )
-        }
+    """print_output's lines for one instance holding these completed imports."""
+    return _run_log_output(
+        module,
+        upgradinatorr_module.Upgradinatorr._new_output(
+            "Radarr", upgradinatorr_module.GrabReconcile(completed, set())
+        ),
     )
-    return "\n".join(module.logger.lines)
 
 
 def _embed_body(completed):
+    """Every description, field name and value the notification would send."""
     from backend.util.notification_formatting import format_for_discord
 
-    fields, _ok = format_for_discord(
+    parts, ok = format_for_discord(
         SimpleNamespace(module_name="upgradinatorr"),
         {"radarr": {"server_name": "Radarr", "data": [], "completed": completed}},
     )
-    return "\n".join(f["value"] for page in fields.values() for f in page)
+    assert ok
+    text = [part.get("description") or "" for part in parts]
+    text += [f"{f['name']}\n{f['value']}" for part in parts for f in part["fields"]]
+    return "\n".join(text)
 
 
 def test_an_acquisition_names_the_quality_it_got():
@@ -652,7 +663,10 @@ def test_an_acquisition_names_the_quality_it_got():
 
     assert completed[0]["replaced"] is False
     log = _run_log(module, completed)
-    assert "Quality: FLAC" in _embed_body(completed)
+    body = _embed_body(completed)
+    assert "Movie (2024) — acquired" in body
+    assert "```diff\n+ FLAC\n+ Score: 7007\n```" in body
+    assert "\n- " not in body
     assert "Score 7007, FLAC —" in log
 
 
@@ -668,7 +682,8 @@ def test_an_unknown_score_prints_no_score_at_all():
 
     body = _embed_body(completed)
     assert "None" not in body
-    assert "Quality: FLAC" in body
+    assert "Score" not in body
+    assert "+ FLAC" in body
     log = _run_log(module, completed)
     assert "None" not in log
     assert "FLAC — Movie.2024.REMUX-GRP" in log
@@ -708,6 +723,47 @@ def test_two_downloads_sharing_a_release_title_both_count(isolated_db):
     assert len(stored) == len(grabs)
 
 
+def test_a_searched_run_carries_what_the_notification_summary_reads(isolated_db):
+    module = make_upgradinatorr(dry_run=False)
+    app = _DedupeARR(
+        grab_history=[
+            {
+                "downloadId": "dl-1",
+                "movieId": 7,
+                "sourceTitle": "Movie.2024.REMUX-GRP",
+                "customFormatScore": 7007,
+                "eventType": "grabbed",
+            }
+        ],
+        queue_rows=[],
+    )
+
+    result = module.process_instance("radarr", _upgrade_settings(count=3), app)
+
+    summary_keys = (
+        "instance_type",
+        "search_mode",
+        "budget",
+        "granular",
+        "tagged_count",
+        "tagged_in_run",
+        "total_count",
+        "searches_attempted",
+        "pending_grabs",
+    )
+    assert {key: result[key] for key in summary_keys} == {
+        "instance_type": "radarr",
+        "search_mode": "upgrade",
+        "budget": 3,
+        "granular": False,
+        "tagged_count": 0,
+        "tagged_in_run": 1,
+        "total_count": 1,
+        "searches_attempted": 1,
+        "pending_grabs": 0,
+    }
+
+
 def test_upgrades_survive_the_nothing_left_to_search_bail_out(isolated_db):
     """process_instance bails out early when there is no media to search, so
     returning None there would drop an import the reconcile already confirmed."""
@@ -721,6 +777,9 @@ def test_upgrades_survive_the_nothing_left_to_search_bail_out(isolated_db):
 
     assert result is not None, "the bail-out dropped a completed upgrade"
     assert [it["download"] for it in result["completed"]] == ["Movie.2024.REMUX-GRP"]
+    assert result["pending_grabs"] == 1
+    # No search ran, so the notification must not print a search or progress line.
+    assert "budget" not in result
 
 
 def test_nothing_to_search_and_no_upgrades_still_reports_nothing(isolated_db):
@@ -799,3 +858,185 @@ def test_the_report_is_settled_only_once_it_has_been_written(isolated_db):
     assert settled == []
     # Popped on the way out, so it can never reach a notification payload.
     assert "resolved_grabs" not in result
+
+
+class _LidarrHistoryARR(_HistoryARR):
+    """Lidarr pairs by album and can look albums up by id."""
+
+    history_import_event = 8
+    history_upgrade_delete_event = 5
+    history_failed_event = 4
+    upgrade_pair_field = "albumId"
+
+    def __init__(self, imports, deletes, albums):
+        super().__init__(imports, deletes)
+        self._albums = albums
+        self.album_lookups = []
+
+    def get_albums_by_id(self, album_ids):
+        self.album_lookups.append(list(album_ids))
+        if isinstance(self._albums, Exception):
+            raise self._albums
+        return self._albums
+
+
+def _lidarr_import(**overrides):
+    row = _import(**overrides)
+    row.pop("movieId")
+    row["albumId"] = 31
+    return row
+
+
+def _lidarr_delete():
+    row = _delete()
+    row.pop("movieId")
+    row["albumId"] = 31
+    return row
+
+
+_FAVELA = {
+    "id": 31,
+    "title": "Favela on Blast: Rio Baile Funk 04",
+    "albumType": "EP",
+    "secondaryTypes": ["Compilation"],
+    "releaseDate": "2004-01-01T00:00:00Z",
+}
+
+
+def test_a_lidarr_import_carries_its_album_title_type_and_year():
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab(title="Diplo", year=None)])
+    app = _LidarrHistoryARR([_lidarr_import()], [_lidarr_delete()], [_FAVELA])
+
+    completed = _collect(module, app, grabs)
+
+    assert app.album_lookups == [[31]]
+    assert completed[0]["replaced"] is True
+    assert completed[0]["album"] == {
+        "title": "Favela on Blast: Rio Baile Funk 04",
+        "type": "EP",
+        "year": 2004,
+    }
+    label = "Diplo - Favela on Blast: Rio Baile Funk 04 (2004) [EP]"
+    # Discord shows \[ as [; the escape stops a title opening a masked link.
+    shown = label.replace("[", r"\[").replace("]", r"\]")
+    assert f"{shown} — upgraded" in _embed_body(completed)
+    assert f"  {label}" in _run_log(module, completed).split("\n")
+
+
+@pytest.mark.parametrize("albums", [None, RuntimeError("lidarr down")])
+def test_a_failed_album_lookup_still_reports_the_import(albums):
+    """The album is display only: losing it must never lose the import report."""
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab(title="Diplo", year=None)])
+    app = _LidarrHistoryARR([_lidarr_import()], [_lidarr_delete()], albums)
+
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
+
+    assert resolved == {"dl-1"}
+    assert "album" not in completed[0]
+    assert "Diplo — upgraded" in _embed_body(completed)
+
+
+
+def _failure(download_id="dl-1", message="Duplicate NZB"):
+    return {
+        "downloadId": download_id,
+        "movieId": 7,
+        "eventType": "downloadFailed",
+        "date": "2026-08-29T11:00:00Z",
+        "data": {"message": message},
+    }
+
+
+def test_a_failed_download_is_reported_with_the_arrs_reason_and_settled():
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab()])
+    app = _HistoryARR([], [], failures=[_failure()])
+
+    seen = module._collect_completed_imports(app, grabs)
+
+    assert seen.completed == []
+    assert seen.resolved == {"dl-1"}
+    assert [(row["download"], row["reason"]) for row in seen.not_imported] == [
+        ("Movie.2024.REMUX-GRP", "Duplicate NZB")
+    ]
+    assert grabs.pruned == [("radarr", upgradinatorr_module.GRAB_PRUNE_DAYS)]
+
+
+def test_a_grab_past_the_retention_window_is_reported_as_not_imported():
+    module = make_upgradinatorr(dry_run=False)
+    stale = _pending_since(hours=24 * upgradinatorr_module.GRAB_RETENTION_DAYS + 1)
+    fresh = _pending_since(hours=24 * upgradinatorr_module.GRAB_RETENTION_DAYS - 1)
+    grabs = _FakeGrabs(
+        [_grab("stale", grabbed_at=stale), _grab("fresh", grabbed_at=fresh)]
+    )
+    app = _HistoryARR([], [])
+
+    seen = module._collect_completed_imports(app, grabs)
+
+    assert seen.resolved == {"stale"}
+    assert [row["reason"] for row in seen.not_imported] == [
+        f"not imported after {upgradinatorr_module.GRAB_RETENTION_DAYS} days"
+    ]
+    assert seen.pending == 2
+
+
+def test_an_import_wins_over_an_earlier_failure_of_the_same_download():
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab()])
+    app = _HistoryARR([_import()], [], failures=[_failure()])
+
+    seen = module._collect_completed_imports(app, grabs)
+
+    assert [row["download"] for row in seen.completed] == ["Movie.2024.REMUX-GRP"]
+    assert seen.not_imported == ()
+
+
+def test_unreadable_failures_still_report_imports_and_keep_the_rest_pending():
+    """Only the failure read degrades: imports report and nothing else is settled."""
+    module = make_upgradinatorr(dry_run=False)
+    old = _pending_since(hours=24 * upgradinatorr_module.GRAB_RETENTION_DAYS + 1)
+    grabs = _FakeGrabs([_grab("dl-1"), _grab("old", grabbed_at=old)])
+    app = _HistoryARR([_import()], [], failures=())
+    app._by_event[app.history_failed_event] = None
+
+    seen = module._collect_completed_imports(app, grabs)
+
+    assert [row["download"] for row in seen.completed] == ["Movie.2024.REMUX-GRP"]
+    assert seen.resolved == {"dl-1"}
+    assert seen.not_imported == ()
+
+
+def test_a_failed_grab_alone_survives_the_nothing_left_to_search_bail_out(isolated_db):
+    module = make_upgradinatorr(dry_run=False)
+    UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).record(
+        "radarr", [_grab()], grabbed_at=_pending_since()
+    )
+    app = _HistoryARR([], [], media=[], failures=[_failure()])
+
+    result = module.process_instance("radarr", _upgrade_settings(unattended=False), app)
+
+    assert result is not None, "the bail-out dropped a failed grab"
+    assert [row["reason"] for row in result["not_imported"]] == ["Duplicate NZB"]
+    assert result["resolved_grabs"] == ["dl-1"]
+    log = _run_log_output(module, result)
+    assert "[NOT IMPORTED] 1 grab(s) from earlier runs:" in log
+    assert "Movie.2024.REMUX-GRP — Duplicate NZB" in log
+
+
+def _run_log_output(module, run):
+    """print_output's info lines for one instance's result, with a capturing logger."""
+
+    class _Capture(StubLogger):
+        def __init__(self):
+            super().__init__()
+            self.lines = []
+
+        def info(self, *args, **kwargs):
+            self.lines.append(" ".join(str(a) for a in args))
+
+    module.logger = _Capture()
+    module.print_output({"radarr": run})
+    return "\n".join(module.logger.lines)
