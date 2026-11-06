@@ -327,3 +327,38 @@ def test_the_did_not_import_list_is_capped():
     assert f"Gone {QUEUE_LINE_CAP - 1} (2020)" in text
     assert f"Gone {QUEUE_LINE_CAP} (2020)" not in text
     assert "…and 3 more — see the server log" in text
+
+
+def test_the_embed_colour_follows_the_run_outcome():
+    from backend.util.upgradinatorr_notification import GREEN, RED
+
+    grabbed = [{"media_id": 1, "grabs": [{"download_id": "a"}]}]
+    cases = {
+        "failed": _run(searches_failed=1, data=grabbed),
+        "grabbed": _run(data=grabbed),
+        "imported": _run(completed=[_upgrade(1)]),
+        "quiet": _run(),
+    }
+
+    colours = {
+        name: [part.get("color") for part in build_upgradinatorr_embeds({name: run})]
+        for name, run in cases.items()
+    }
+
+    assert colours == {
+        "failed": [RED],
+        "grabbed": [GREEN],
+        "imported": [GREEN],
+        "quiet": [None],
+    }
+
+
+def test_every_part_of_a_split_embed_carries_the_colour():
+    from backend.util.upgradinatorr_notification import GREEN
+
+    completed = [_upgrade(n) for n in range(30)]
+
+    parts = build_upgradinatorr_embeds({"radarr": _run(completed=completed)})
+
+    assert len(parts) > 1
+    assert {part.get("color") for part in parts} == {GREEN}

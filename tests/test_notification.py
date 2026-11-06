@@ -912,3 +912,37 @@ def test_build_discord_payload_keeps_the_generic_title_without_a_part_title():
     embed = payloads[0]["embeds"][0]
     assert embed["title"] == "Mod Notification (Part 1 of 2)"
     assert embed["description"] is None
+
+
+def test_upgradinatorr_outcome_colour_beats_the_destination_colour_on_discord():
+    full_config = _upgradinatorr_destination(
+        "discord",
+        {"webhook": "https://discord.com/api/webhooks/1/tok", "color": "123456"},
+    )
+    manager = NotificationManager(full_config, MagicMock(), module_name="upgradinatorr")
+    quiet = {"radarr": {"server_name": "Radarr", "data": [], "completed": []}}
+    with patch.object(NotificationManager, "safe_post") as post:
+        post.return_value = SimpleNamespace(status_code=204, text="")
+        manager.send_notification(_completed_upgrade_output())
+        manager.send_notification(quiet)
+
+    colours = [call.args[1]["embeds"][0]["color"] for call in post.call_args_list]
+    # An import is green; a run with nothing to show keeps the destination's colour.
+    assert colours == [0x2ECC71, 0x123456]
+
+
+def test_upgradinatorr_outcome_colour_reaches_notifiarr_as_hex():
+    full_config = _upgradinatorr_destination(
+        "notifiarr",
+        {
+            "webhook": "https://notifiarr.com/api/v1/notification/passthrough/KEY",
+            "channel_id": 42,
+            "color": "123456",
+        },
+    )
+    manager = NotificationManager(full_config, MagicMock(), module_name="upgradinatorr")
+    with patch.object(NotificationManager, "safe_post") as post:
+        post.return_value = SimpleNamespace(status_code=200, text="")
+        manager.send_notification(_completed_upgrade_output())
+
+    assert post.call_args.args[1]["discord"]["color"] == "2ECC71"

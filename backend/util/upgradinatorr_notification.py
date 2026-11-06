@@ -29,6 +29,9 @@ EMBED_FIELD_LIMIT = 25
 EMBED_CHAR_BUDGET = 5500
 BLANK = "​"
 
+RED = 0xE74C3C
+GREEN = 0x2ECC71
+
 _NOUNS = {"radarr": "movies", "sonarr": "series", "lidarr": "artists"}
 _MARKDOWN = str.maketrans({char: f"\\{char}" for char in "\\*_~`|"})
 
@@ -232,6 +235,15 @@ def _import_fields(completed: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     return fields
 
 
+def _outcome_color(run: Dict[str, Any]) -> Optional[int]:
+    """Red when a search failed, green when something was grabbed or imported, else None."""
+    # None leaves the Discord destination's own colour in charge.
+    if run.get("searches_failed"):
+        return RED
+    grabbed = any(item.get("grabs") for item in run.get("data") or [])
+    return GREEN if grabbed or run.get("completed") else None
+
+
 def _embeds(
     title: str, description: Optional[str], fields: List[Dict[str, str]]
 ) -> List[Dict[str, Any]]:
@@ -274,5 +286,9 @@ def build_upgradinatorr_embeds(output: Any) -> List[Dict[str, Any]]:
         description = _clip("\n".join(lines), DESCRIPTION_LIMIT) or None
         if not description and not fields:
             description = "Nothing to report this run."
-        parts.extend(_embeds(title, description, fields))
+        color = _outcome_color(run)
+        for part in _embeds(title, description, fields):
+            if color is not None:
+                part["color"] = color
+            parts.append(part)
     return parts
