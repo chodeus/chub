@@ -1693,25 +1693,29 @@ class Upgradinatorr(ChubModule):
 
     def _inflight_state(self, app: BaseARRClient, row: Dict[str, Any]) -> str:
         """``running``, ``done`` or ``failed`` for the search a previous run left."""
+        if getattr(app, "get_command_state", None) is None:
+            return "done"
+        status = self._command_status(app, row["command_id"])
+        if status == "completed":
+            return "done"
+        if status in COMMAND_TERMINAL_FAILURES:
+            return "failed"
+        # Running, unreadable or gone (*arrs keep an ended command a day):
+        # wait, then give up.
         started = self._parse_arr_datetime(row.get("started_at"))
         age = datetime.now(timezone.utc) - started if started else None
         if age is not None and age > timedelta(hours=INFLIGHT_GIVE_UP_HOURS):
             return "done"
-        lookup = getattr(app, "get_command_state", None)
-        if lookup is None:
-            return "done"
+        return "running"
+
+    def _command_status(self, app: BaseARRClient, command_id: int) -> Optional[str]:
+        """The *arr's status for a command, None when it can't say."""
         try:
-            command = lookup(row["command_id"])
+            command = app.get_command_state(command_id)
         except Exception as e:
-            self.logger.debug(f"Command {row['command_id']} unreadable: {e}")
-            command = None
-        # *arrs keep an ended command a day: a gone one is no proof it finished.
-        if not command:
-            return "running"
-        status = command.get("status")
-        if status == "completed":
-            return "done"
-        return "failed" if status in COMMAND_TERMINAL_FAILURES else "running"
+            self.logger.debug(f"Command {command_id} unreadable: {e}")
+            return None
+        return command.get("status") if command else None
 
     def _grabs_since(
         self, app: BaseARRClient, instance_type: str, row: Dict[str, Any]

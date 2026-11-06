@@ -174,6 +174,8 @@ def test_a_finished_search_is_tagged_and_reported_not_searched_again(isolated_db
         ({"status": "completed"}, 1, "done"),
         ({"status": "failed"}, 1, "failed"),
         ({"status": "started"}, 7, "done"),  # given up on after 6 hours
+        ({"status": "failed"}, 7, "failed"),  # the *arr's answer beats the give-up
+        (None, 7, "done"),
         (None, 1, "running"),  # gone or unreadable: no proof it finished
         ({}, 1, "running"),
     ],
