@@ -1,5 +1,4 @@
-"""Pins LidarrClient.get_albums_by_id: repeated albumIds, chunking, and never an
-empty request (Lidarr answers that with the whole library)."""
+"""Pins Lidarr album lookups by id and the release dates the normalizer adds."""
 
 import json
 

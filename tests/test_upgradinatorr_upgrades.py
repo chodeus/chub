@@ -989,8 +989,7 @@ def test_an_import_wins_over_an_earlier_failure_of_the_same_download():
 
 
 def test_unreadable_failures_still_report_imports_and_keep_the_rest_pending():
-    """Only the failure read degrades: imports still report, and nothing else is
-    settled, so a failed or stale grab is judged again next run."""
+    """Only the failure read degrades: imports report and nothing else is settled."""
     module = make_upgradinatorr(dry_run=False)
     old = _pending_since(hours=24 * upgradinatorr_module.GRAB_RETENTION_DAYS + 1)
     grabs = _FakeGrabs([_grab("dl-1"), _grab("old", grabbed_at=old)])

@@ -1,5 +1,4 @@
-"""Pins Upgradinatorr's Discord embeds: summary lines, capped queue lists, import
-diffs, and that every part stays inside Discord's limits."""
+"""Pins Upgradinatorr's Discord embeds: summary, capped lists, diffs and Discord's limits."""
 
 from backend.util.constants import NOTIFICATION_ITEM_CAP
 from backend.util.upgradinatorr_notification import (
@@ -97,8 +96,7 @@ def test_the_summary_states_the_search_the_rotation_and_the_imports():
 
 
 def test_season_mode_progress_uses_the_counts_from_before_the_run():
-    """Season/album mode can stop part-way through a parent without tagging it,
-    so this run's tag count would overstate progress."""
+    """Season/album mode can stop mid-parent untagged, so progress uses pre-run counts."""
     run = _run(instance_type="sonarr", granular=True, tagged_in_run=99)
 
     [part] = build_upgradinatorr_embeds({"sonarr": run})
@@ -227,8 +225,7 @@ def test_imports_past_the_cap_point_at_the_server_log():
 
 
 def test_every_part_fits_discord_limits_at_the_caps():
-    """The worst case the caps allow: 50 imports per section with long names and
-    format lists, plus a full stuck list with long reasons."""
+    """At the caps' worst case, every part stays inside Discord's limits."""
     long_name = "_" * 400
     formats = [f"Custom Format Number {n}" for n in range(30)]
     completed = [

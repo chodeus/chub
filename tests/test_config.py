@@ -869,9 +869,7 @@ def test_upgradinatorr_granular_sonarr_skips_already_done_parent():
 
 
 def test_upgradinatorr_series_mode_resumes_past_searched_seasons_and_clears_progress():
-    """A season already searched this turn (an earlier run, or one it finished
-    after a timeout) is not searched again; the series is tagged once and its
-    progress rows are wiped."""
+    """A season already searched this turn is skipped; the series is tagged once and its progress wiped."""
     module = make_upgradinatorr(dry_run=False)
     app = FakeSonarrApp()
     progress = FakeProgress()
@@ -1530,8 +1528,7 @@ def test_upgradinatorr_artist_mode_skips_searched_albums_and_records_the_rest():
 
 
 def test_upgradinatorr_series_mode_keeps_seasons_searched_before_a_timeout():
-    """The next run finishes the timed-out season; the ones before it must not
-    be searched again, so each finished season is recorded as it completes."""
+    """Each finished season is recorded, so a timeout later in the series resumes past it."""
 
     class _SlowSecondSeason(FakeSonarrApp):
         def search_season(self, media_id, season_number):

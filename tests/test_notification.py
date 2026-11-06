@@ -798,8 +798,7 @@ def _upgradinatorr_text(output):
 
 
 def test_upgradinatorr_notification_lists_a_waiting_item_on_one_line():
-    """A waiting download is one line: the item and how long it has waited. The
-    *arr's per-track rejection text and the queued release name stay in the log."""
+    """A waiting download is one line; the *arr's reasons and the release name stay in the log."""
     blob = _upgradinatorr_text(_upgradinatorr_output())
     assert "Awaiting import (1)\n• Armin van Buuren: waiting 40h" in blob
     # A grab is still downloading at run end — it is counted, never listed.
@@ -810,8 +809,7 @@ def test_upgradinatorr_notification_lists_a_waiting_item_on_one_line():
 
 
 def test_upgradinatorr_queue_headings_come_from_the_log_section_table():
-    """One owner for the section names: the heading is QUEUE_REPORT_SECTIONS' tag,
-    the same table the run log renders, so the two can't drift again."""
+    """Queue headings use QUEUE_REPORT_SECTIONS' tags, the table the run log renders."""
     from backend.util.constants import QUEUE_REPORT_SECTIONS
 
     _state, tag, _note, _level = QUEUE_REPORT_SECTIONS[0]
@@ -863,8 +861,7 @@ def _completed_upgrade_output():
 
 
 def test_upgradinatorr_discord_post_carries_the_instance_title_and_summary():
-    """Through the real formatter: the embed is titled per instance and the run
-    summary is its description, not the generic "<Module> Notification"."""
+    """Through the real formatter, the embed carries the instance title and the run summary."""
     full_config = _upgradinatorr_destination(
         "discord", {"webhook": "https://discord.com/api/webhooks/1/tok"}
     )

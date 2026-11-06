@@ -1,5 +1,4 @@
-"""Pins Upgradinatorr's per-run limits through the real process_instance: the
-max-grabs cap and the minimum release age."""
+"""Pins the per-run limits (max grabs, minimum release age) through process_instance."""
 
 from types import SimpleNamespace
 
@@ -158,8 +157,7 @@ def test_without_a_minimum_age_nothing_is_held(isolated_db):
 
 
 def test_a_held_item_does_not_stop_the_rotation_from_starting_over(isolated_db):
-    """Too-new items are outside the pool, like unmonitored ones: once every
-    eligible item is tagged, the unattended reset still fires."""
+    """Held items sit outside the pool, so the unattended reset still fires."""
     module = make_upgradinatorr(dry_run=False)
     first = [
         _movie(1, release_date=_days_ago(90), tags=["checked"]),

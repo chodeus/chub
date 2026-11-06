@@ -194,8 +194,8 @@ class Upgradinatorr(ChubModule):
 
     @staticmethod
     def _coerce_whole(raw: Any) -> Optional[int]:
-        """A whole, non-negative number, or None when the value isn't one.
-        bool is excluded first — it is an int subclass, so True would read as 1."""
+        """A whole, non-negative number, or None when the value isn't one."""
+        # bool goes first: it is an int subclass, so True would read as 1.
         if raw is None or isinstance(raw, bool):
             return None
         if isinstance(raw, float):
@@ -864,6 +864,12 @@ class Upgradinatorr(ChubModule):
             taken.add((key, slot))
             paired[index] = replaced[key][slot][1]
         return paired
+
+    @staticmethod
+    def _add_searched(searched_items: List[Dict[str, Any]], item: Dict[str, Any]) -> None:
+        """Add a searched parent once; _resume_inflight may have added it already."""
+        if all(seen["media_id"] != item["media_id"] for seen in searched_items):
+            searched_items.append(item)
 
     @staticmethod
     def _children_done(
@@ -2068,7 +2074,7 @@ class Upgradinatorr(ChubModule):
                     self.logger.info(
                         f"Processing: {self._format_item_title(item)} [ID: {item['media_id']}]"
                     )
-                    searched_items.append(item)
+                    self._add_searched(searched_items, item)
 
                     budget_hit = False
 

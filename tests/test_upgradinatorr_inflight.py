@@ -1,6 +1,4 @@
-"""Pins finishing a slow search on the next run: the run that stops waiting
-stages it, and the next run waits for it, then tags it and reports its grabs
-instead of searching it again."""
+"""Pins finishing a slow search on the next run instead of searching it again."""
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -276,3 +274,54 @@ def test_command_state_through_the_real_request_path(status, body, expected):
     client.session.mount("http://", _Answer(status, body))
 
     assert client.get_command_state(7) == expected
+
+
+class _SonarrResumeARR(FakeARR):
+    instance_name = "sonarr"
+    instance_type = "Sonarr"
+    history_import_event = 3
+    history_upgrade_delete_event = 5
+    history_failed_event = 4
+    upgrade_pair_field = "episodeId"
+
+    def __init__(self, series, history):
+        super().__init__([series])
+        self.season_searches = []
+        self.history = history
+
+    def search_season(self, media_id, season_number):
+        self.season_searches.append((media_id, season_number))
+        return {"id": 700 + season_number}
+
+    def get_command_state(self, command_id):
+        return {"status": "completed"}
+
+    def get_season_grab_history(self, media_id, season_number):
+        return self.history.get(season_number, [])
+
+    def get_history_since(self, date, event_type):
+        return []
+
+
+def test_a_resumed_season_reports_its_series_once_when_the_run_reaches_it(isolated_db):
+    module = make_upgradinatorr(dry_run=False)
+    with ChubDB(logger=StubLogger(), db_path=isolated_db) as db:
+        db.upgradinatorr_inflight.stage("sonarr", 11, "1", 701, "Show S1", _iso(2))
+    series = {
+        "title": "Show", "year": 2020, "media_id": 11, "monitored": True,
+        "status": "continuing", "tags": [],
+        "seasons": [
+            {"season_number": 1, "monitored": True, "episode_data": []},
+            {"season_number": 2, "monitored": True, "episode_data": []},
+        ],
+    }
+    history = {1: [{"downloadId": "s1", "seriesId": 11, "sourceTitle": "Show.S01-GRP",
+                    "eventType": "grabbed", "date": _iso(1)}]}
+    app = _SonarrResumeARR([series], history)
+
+    result = module.process_instance("sonarr", _settings(), app)
+
+    # Season 1 finished last run's search; this run searches only season 2.
+    assert app.season_searches == [(11, 2)]
+    assert [entry["media_id"] for entry in result["data"]] == [11]
+    assert [grab["download"] for grab in result["data"][0]["grabs"]] == ["Show.S01-GRP"]
