@@ -322,7 +322,8 @@ class _SonarrResumeARR(FakeARR):
         return []
 
 
-def test_a_resumed_season_reports_its_series_once_when_the_run_reaches_it(isolated_db):
+def _resume_season_one(isolated_db, backlog=0):
+    """Last run's season 1 search finished; returns this run's app and result."""
     module = make_upgradinatorr(dry_run=False)
     with ChubDB(logger=StubLogger(), db_path=isolated_db) as db:
         db.upgradinatorr_inflight.stage("sonarr", 11, "1", 701, "Show S1", _iso(2))
@@ -337,10 +338,29 @@ def test_a_resumed_season_reports_its_series_once_when_the_run_reaches_it(isolat
     history = {1: [{"downloadId": "s1", "seriesId": 11, "sourceTitle": "Show.S01-GRP",
                     "eventType": "grabbed", "date": _iso(1)}]}
     app = _SonarrResumeARR([series], history)
+    app.count_queued_commands = lambda names: backlog
+    return app, module.process_instance("sonarr", _settings(), app)
 
-    result = module.process_instance("sonarr", _settings(), app)
+
+def test_a_resumed_season_reports_its_series_once_when_the_run_reaches_it(isolated_db):
+    app, result = _resume_season_one(isolated_db)
 
     # Season 1 finished last run's search; this run searches only season 2.
     assert app.season_searches == [(11, 2)]
     assert [entry["media_id"] for entry in result["data"]] == [11]
+    assert [grab["download"] for grab in result["data"][0]["grabs"]] == ["Show.S01-GRP"]
+    assert app.add_calls == [(11, 1)]
+    assert result["tagged_in_run"] == 1
+
+
+def test_a_resumed_season_the_run_never_reaches_is_not_counted_as_tagged(isolated_db):
+    """The readiness gate stops the run before the series' other seasons."""
+    app, result = _resume_season_one(
+        isolated_db, backlog=upgradinatorr_module.SEARCH_BACKLOG_LIMIT
+    )
+
+    assert app.season_searches == []
+    assert app.add_calls == []
+    assert result["tagged_in_run"] == 0
+    # Still reported, so last run's season 1 grab isn't lost.
     assert [grab["download"] for grab in result["data"][0]["grabs"]] == ["Show.S01-GRP"]

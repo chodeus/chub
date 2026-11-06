@@ -75,6 +75,8 @@ SYNTHETIC_DOWNLOAD_ID_PREFIX = "history:"
 UPGRADE_PAIR_WINDOW_SECONDS = 300
 # How long the next runs wait on a search a run stopped watching before taking it as done.
 INFLIGHT_GIVE_UP_HOURS = 6
+# Marks a parent whose resumed season/album search left it untagged.
+RESUMED_UNTAGGED = "resumed_untagged"
 
 
 class GrabReconcile(NamedTuple):
@@ -874,9 +876,23 @@ class Upgradinatorr(ChubModule):
 
     @staticmethod
     def _add_searched(searched_items: List[Dict[str, Any]], item: Dict[str, Any]) -> None:
-        """Add a searched parent once; _resume_inflight may have added it already."""
-        if all(seen["media_id"] != item["media_id"] for seen in searched_items):
-            searched_items.append(item)
+        """Add a searched parent once, replacing the copy _resume_inflight may have added."""
+        for index, seen in enumerate(searched_items):
+            if seen["media_id"] == item["media_id"]:
+                searched_items[index] = item
+                return
+        searched_items.append(item)
+
+    @staticmethod
+    def _tagged_in_run(
+        searched_items: List[Dict[str, Any]],
+        failed_searches: Dict[int, List[str]],
+        deferred: int,
+    ) -> int:
+        """Searched parents this run tagged: not failed, staged or left mid-resume."""
+        failed = sum(1 for failures in failed_searches.values() if failures)
+        waiting = sum(1 for item in searched_items if item.get(RESUMED_UNTAGGED))
+        return max(len(searched_items) - failed - deferred - waiting, 0)
 
     @staticmethod
     def _children_done(
@@ -1756,7 +1772,8 @@ class Upgradinatorr(ChubModule):
             "year": None,
             "seasons": None,
         }
-        searched_items.append(item)
+        # A season/album leaves its parent untagged unless the loop searches the rest.
+        searched_items.append(item if child is None else {**item, RESUMED_UNTAGGED: True})
         grabs = self._grabs_since(app, instance_type, row)
         if grabs:
             grabbed_downloads.setdefault(media_id, []).extend(grabs)
@@ -2264,17 +2281,13 @@ class Upgradinatorr(ChubModule):
                     }
                 )
             output_dict.update(search_stats)
-            tagged_in_run = len(searched_items) - sum(
-                1 for v in failed_searches.values() if v
-            )
-            # A deferred item is in searched_items but records no failure, so it
-            # would otherwise be counted as tagged when it deliberately is not.
+            # A staged item records no failure, so it is subtracted on its own.
             deferred = self._deferred_count(search_stats)
-            tagged_in_run -= deferred
-            output_dict["tagged_in_run"] = max(tagged_in_run, 0)
+            tagged_in_run = self._tagged_in_run(searched_items, failed_searches, deferred)
+            output_dict["tagged_in_run"] = tagged_in_run
             summary = (
                 f"   → {search_stats['searches_attempted']} searched, "
-                f"{max(tagged_in_run, 0)} tagged"
+                f"{tagged_in_run} tagged"
             )
             if deferred:
                 summary += f", {deferred} staged for the next run"
