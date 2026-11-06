@@ -189,8 +189,8 @@ class Upgradinatorr(ChubModule):
         return getattr(settings, key, default)
 
     @staticmethod
-    def _coerce_hours(raw: Any) -> Optional[int]:
-        """A whole, non-negative hour count, or None when the value isn't one.
+    def _coerce_whole(raw: Any) -> Optional[int]:
+        """A whole, non-negative number, or None when the value isn't one.
         bool is excluded first — it is an int subclass, so True would read as 1."""
         if raw is None or isinstance(raw, bool):
             return None
@@ -205,11 +205,27 @@ class Upgradinatorr(ChubModule):
             return None
         return raw if raw >= 0 else None
 
+    def _grab_cap_reached(
+        self,
+        max_grabs: int,
+        grabbed_downloads: Dict[int, List[Dict[str, Any]]],
+        app: BaseARRClient,
+    ) -> bool:
+        """True once max_grabs searched items have grabbed something; 0 never caps."""
+        grabbed = sum(1 for downloads in grabbed_downloads.values() if downloads)
+        if not max_grabs or grabbed < max_grabs:
+            return False
+        self.logger.info(
+            f"Max grabs ({max_grabs}) reached on {app.instance_name}: stopping here; "
+            "the rest of the batch stays untagged for the next run."
+        )
+        return True
+
     def _queue_block_hours(self, settings: Any) -> int:
         """Hours an unresolved download suppresses re-searching. Only an explicit
         0 opts out — every unusable value falls back, never to 0."""
         raw = self._get_setting(settings, "queue_block_hours", QUEUE_BLOCK_HOURS_DEFAULT)
-        hours = self._coerce_hours(raw)
+        hours = self._coerce_whole(raw)
         if hours is not None:
             return hours
         if raw is not None and str(raw).strip():
@@ -1604,6 +1620,7 @@ class Upgradinatorr(ChubModule):
             or "series_artist"
         )
         queue_block_hours: int = self._queue_block_hours(instance_settings)
+        max_grabs = self._coerce_whole(self._get_setting(instance_settings, "max_grabs")) or 0
         # Anchors "was this grabbed by this run?" — queue rows added before it
         # are pre-existing work, not something this run caused.
         run_started = datetime.now(timezone.utc)
@@ -1826,6 +1843,9 @@ class Upgradinatorr(ChubModule):
 
                 for item in filtered_media_dict:
                     if self.is_cancelled():
+                        break
+                    if self._grab_cap_reached(max_grabs, grabbed_downloads, app):
+                        output_dict["max_grabs_hit"] = max_grabs
                         break
                     self.logger.debug("")  # Blank line before block
                     self.logger.debug("═" * 70)

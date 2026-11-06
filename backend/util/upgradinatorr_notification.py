@@ -89,6 +89,13 @@ def _progress_line(run: Dict[str, Any]) -> Optional[str]:
     return line
 
 
+def _limit_line(run: Dict[str, Any]) -> Optional[str]:
+    cap = run.get("max_grabs_hit")
+    if not cap:
+        return None
+    return f"Max grabs {cap} reached: stopped early, the rest is searched next run"
+
+
 def _imported_line(run: Dict[str, Any]) -> Optional[str]:
     pending = run.get("pending_grabs") or 0
     if not pending:
@@ -275,7 +282,12 @@ def build_upgradinatorr_embeds(output: Any) -> List[Dict[str, Any]]:
         title = _clip(f"Upgradinatorr: {run.get('server_name') or name}", TITLE_CHARS)
         lines = [
             line
-            for line in (_search_line(run), _progress_line(run), _imported_line(run))
+            for line in (
+                _search_line(run),
+                _progress_line(run),
+                _limit_line(run),
+                _imported_line(run),
+            )
             if line
         ]
         fields = (

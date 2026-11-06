@@ -437,6 +437,8 @@ class UpgradinatorrInstance(BaseModel):
     # Hours an unresolved queue row suppresses re-searching its item. 0 = never
     # suppress. Past the cap a forgotten row stops blocking the item forever.
     queue_block_hours: int = 72
+    # Stop a run once this many searched items have grabbed something. 0 = no limit.
+    max_grabs: int = 0
 
     @field_validator("season_monitored_threshold")
     @classmethod

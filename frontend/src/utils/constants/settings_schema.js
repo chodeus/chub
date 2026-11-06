@@ -940,6 +940,16 @@ const CORE_SETTINGS_SCHEMA = [
                             'Do not search an item that already has a download sitting in the queue waiting to import, until that download is older than this many hours. Prevents grabbing a second copy of something already on disk. Set to 0 to always search.',
                     },
                     {
+                        key: 'max_grabs',
+                        label: 'Max Grabs Per Run',
+                        type: 'number',
+                        required: false,
+                        defaultValue: 0,
+                        min: 0,
+                        description:
+                            'Stop the run once this many items have grabbed something. The rest of the batch stays untagged and is searched next run. Set to 0 for no limit.',
+                    },
+                    {
                         key: 'tag_name',
                         label: 'Tag Name',
                         type: 'text',
