@@ -724,6 +724,25 @@ class SchemaManager:
         )
         self._add_table(upgradinatorr_grabs)
 
+        # The search an Upgradinatorr run stopped waiting on: the next run waits
+        # for it, then tags it and reports its grabs instead of searching again.
+        upgradinatorr_inflight = TableDefinition(
+            name="upgradinatorr_inflight",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("instance_name", "TEXT", nullable=False),
+                ColumnDefinition("media_id", "INTEGER", nullable=False),
+                ColumnDefinition("child_id", "TEXT"),
+                ColumnDefinition("command_id", "INTEGER", nullable=False),
+                ColumnDefinition("label", "TEXT"),
+                ColumnDefinition("started_at", "TEXT"),
+            ],
+            indexes=[
+                "CREATE UNIQUE INDEX IF NOT EXISTS upgradinatorr_inflight_instance_idx ON upgradinatorr_inflight (instance_name)",
+            ],
+        )
+        self._add_table(upgradinatorr_inflight)
+
         # TMDB external-ID lookup cache — maps (tvdb_id|imdb_id, media_type)
         # → tmdb_id resolved via TMDB's /3/find endpoint. Negative-cache rows
         # (tmdb_id NULL) prevent re-querying known-missing IDs. Expiration is

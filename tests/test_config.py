@@ -868,7 +868,10 @@ def test_upgradinatorr_granular_sonarr_skips_already_done_parent():
     assert progress.get_processed_children("sonarr_main", 11) == set()
 
 
-def test_upgradinatorr_legacy_sonarr_tags_once_and_clears_stale_progress():
+def test_upgradinatorr_series_mode_resumes_past_searched_seasons_and_clears_progress():
+    """A season already searched this turn (an earlier run, or one it finished
+    after a timeout) is not searched again; the series is tagged once and its
+    progress rows are wiped."""
     module = make_upgradinatorr(dry_run=False)
     app = FakeSonarrApp()
     progress = FakeProgress()
@@ -883,10 +886,32 @@ def test_upgradinatorr_legacy_sonarr_tags_once_and_clears_stale_progress():
         progress_db=progress,
         search_count=0,
     )
-    # All monitored seasons searched, parent tagged once, stale row wiped.
     assert hit is False
     assert new_count == 1
-    assert app.season_searches == [(11, 1), (11, 2), (11, 3)]
+    assert app.season_searches == [(11, 2), (11, 3)]
+    assert app.tag_calls == [(11, 99)]
+    assert progress.get_processed_children("sonarr_main", 11) == set()
+
+
+def test_upgradinatorr_series_mode_tags_a_series_whose_seasons_were_all_searched():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeSonarrApp()
+    progress = FakeProgress()
+    for season in ("1", "2", "3"):
+        progress.record_processed_child("sonarr_main", 11, season)
+
+    new_count, hit = module._process_sonarr_item(
+        _sonarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=False,
+        progress_db=progress,
+        search_count=0,
+    )
+
+    assert app.season_searches == []
+    assert new_count == 0
     assert app.tag_calls == [(11, 99)]
     assert progress.get_processed_children("sonarr_main", 11) == set()
 
@@ -1471,3 +1496,89 @@ def test_setup_explicit_value_respected(tmp_path):
         )
     )
     assert load_config(str(config_path)).general.setup_completed is False
+
+
+def test_upgradinatorr_artist_mode_skips_searched_albums_and_records_the_rest():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeLidarrApp()
+    progress = FakeProgress()
+    progress.record_processed_child("lidarr_main", 21, "101")
+    recorded = []
+    real_record = progress.record_processed_child
+
+    def record(instance, media_id, child):
+        recorded.append(str(child))
+        real_record(instance, media_id, child)
+
+    progress.record_processed_child = record
+
+    module._process_lidarr_item(
+        _lidarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=False,
+        progress_db=progress,
+        search_count=0,
+    )
+
+    assert app.album_searches == [102, 103]
+    # A finished album is recorded, so a timeout later in the artist resumes past it.
+    assert recorded == ["102", "103"]
+    assert app.tag_calls == [(21, 99)]
+    assert progress.get_processed_children("lidarr_main", 21) == set()
+
+
+def test_upgradinatorr_series_mode_keeps_seasons_searched_before_a_timeout():
+    """The next run finishes the timed-out season; the ones before it must not
+    be searched again, so each finished season is recorded as it completes."""
+
+    class _SlowSecondSeason(FakeSonarrApp):
+        def search_season(self, media_id, season_number):
+            super().search_season(media_id, season_number)
+            return {"id": 40 + season_number, "body": {"seasonNumber": season_number}}
+
+        def wait_for_command_result(self, cmd_id, label=""):
+            return "timeout" if cmd_id == 42 else "completed"
+
+    module = make_upgradinatorr(dry_run=False)
+    app = _SlowSecondSeason()
+    progress = FakeProgress()
+
+    module._process_sonarr_item(
+        _sonarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=False,
+        progress_db=progress,
+        search_count=0,
+    )
+
+    assert app.season_searches == [(11, 1), (11, 2)]
+    assert app.tag_calls == []
+    assert progress.get_processed_children("sonarr_main", 11) == {"1"}
+    assert module._deferred_store()["sonarr_main"]["child_id"] == "2"
+
+
+def test_upgradinatorr_artist_mode_tags_an_artist_whose_albums_were_all_searched():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeLidarrApp()
+    progress = FakeProgress()
+    for album_id in ("101", "102", "103"):
+        progress.record_processed_child("lidarr_main", 21, album_id)
+
+    new_count, _hit = module._process_lidarr_item(
+        _lidarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=False,
+        progress_db=progress,
+        search_count=0,
+    )
+
+    assert app.album_searches == []
+    assert new_count == 0
+    assert app.tag_calls == [(21, 99)]
+    assert progress.get_processed_children("lidarr_main", 21) == set()

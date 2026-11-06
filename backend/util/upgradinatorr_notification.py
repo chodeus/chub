@@ -96,6 +96,20 @@ def _limit_line(run: Dict[str, Any]) -> Optional[str]:
     return f"Max grabs {cap} reached: stopped early, the rest is searched next run"
 
 
+def _inflight_line(run: Dict[str, Any]) -> Optional[str]:
+    if run.get("inflight_running"):
+        return (
+            f"Waiting on the last run's search of {run['inflight_running']}: "
+            "nothing new is searched until it finishes"
+        )
+    finished = run.get("inflight_finished") or {}
+    if not finished:
+        return None
+    if finished.get("state") == "failed":
+        return f"The last run's search of {finished.get('label')} failed"
+    return f"Finished the last run's search of {finished.get('label')}"
+
+
 def _held_line(run: Dict[str, Any]) -> Optional[str]:
     holds = run.get("release_holds") or {}
     parts = []
@@ -294,6 +308,7 @@ def build_upgradinatorr_embeds(output: Any) -> List[Dict[str, Any]]:
             line
             for line in (
                 _search_line(run),
+                _inflight_line(run),
                 _progress_line(run),
                 _limit_line(run),
                 _held_line(run),

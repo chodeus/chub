@@ -282,6 +282,14 @@ class BaseARRClient:
         endpoint = f"{self.api_base}/health"
         return self.make_get_request(endpoint)
 
+    def get_command_state(self, command_id: int) -> Optional[Dict[str, Any]]:
+        """The command's resource, ``{}`` once the *arr no longer has it, None if unreadable."""
+        try:
+            response = self.make_get_request(f"{self.api_base}/command/{command_id}")
+        except ARRPermanentError:
+            return {}
+        return response if isinstance(response, dict) else None
+
     def wait_for_command_result(self, command_id: int, label: str = "") -> str:
         """Poll `command_id` until it settles. Returns one of COMMAND_COMPLETED,
         COMMAND_FAILED, COMMAND_TIMEOUT, COMMAND_UNREACHABLE.
