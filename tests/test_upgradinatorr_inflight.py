@@ -138,13 +138,13 @@ def test_a_still_running_search_holds_the_next_run_back(isolated_db):
 
 def test_a_finished_search_is_tagged_and_reported_not_searched_again(isolated_db):
     module = make_upgradinatorr(dry_run=False)
-    start = _iso(2)
+    start, grabbed = _iso(2), _iso(1)
     _stage(isolated_db, media_id=2, child_id=None, command_id=502, label="Movie 2 (2001)",
            started_at=start)
     history = {
         2: [
             {"downloadId": "new", "movieId": 2, "sourceTitle": "Movie.2.NEW-GRP",
-             "eventType": "grabbed", "date": _iso(1)},
+             "eventType": "grabbed", "date": grabbed},
             {"downloadId": "old", "movieId": 2, "sourceTitle": "Movie.2.OLD-GRP",
              "eventType": "grabbed", "date": _iso(30)},
         ]
@@ -162,6 +162,10 @@ def test_a_finished_search_is_tagged_and_reported_not_searched_again(isolated_db
     assert _inflight(isolated_db) is None
     [part] = build_upgradinatorr_embeds({"radarr": result})
     assert "Finished the last run's search of Movie 2 (2001)" in part["description"]
+    # Its own date, not this run's start: the next run's history lookback starts there.
+    with ChubDB(logger=StubLogger(), db_path=isolated_db) as db:
+        rows = db.upgradinatorr_grabs.pending("radarr")
+    assert [(r["download_id"], r["grabbed_at"]) for r in rows] == [("new", grabbed)]
 
 
 @pytest.mark.parametrize(

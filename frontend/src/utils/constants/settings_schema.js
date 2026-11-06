@@ -941,13 +941,13 @@ const CORE_SETTINGS_SCHEMA = [
                     },
                     {
                         key: 'max_grabs',
-                        label: 'Max Grabs Per Run',
+                        label: 'Max Items Grabbed Per Run',
                         type: 'number',
                         required: false,
                         defaultValue: 0,
                         min: 0,
                         description:
-                            'Stop the run once this many items have grabbed something. The rest of the batch stays untagged and is searched next run. Set to 0 for no limit.',
+                            'Stop the run once this many movies, series or artists have grabbed something. A series or artist counts once, however many seasons or albums it grabs. The rest of the batch stays untagged and is searched next run. Set to 0 for no limit.',
                     },
                     {
                         key: 'min_age_days',
@@ -957,8 +957,8 @@ const CORE_SETTINGS_SCHEMA = [
                         defaultValue: 0,
                         min: 0,
                         descriptionByType: {
-                            radarr: 'Skip movies released within this many days (the earliest of in cinemas, digital and physical), or with no release date. Set to 0 to turn off.',
-                            sonarr: 'Skip series whose first episode aired within this many days, or with no air date. Set to 0 to turn off.',
+                            radarr: 'Skip movies released within this many days (the earliest of in cinemas, digital and physical; 1 January of the year when none is set). Movies with no date or year are skipped too. Set to 0 to turn off.',
+                            sonarr: 'Skip series whose first episode aired within this many days (1 January of the year when no air date is set). Series with no air date or year are skipped too. Set to 0 to turn off.',
                             lidarr: 'Skip albums released within this many days, or with no release date. Set to 0 to turn off.',
                             default:
                                 'Skip items released within this many days, or with no release date. Set to 0 to turn off.',

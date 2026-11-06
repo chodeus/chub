@@ -93,7 +93,10 @@ def _limit_line(run: Dict[str, Any]) -> Optional[str]:
     cap = run.get("max_grabs_hit")
     if not cap:
         return None
-    return f"Max grabs {cap} reached: stopped early, the rest is searched next run"
+    return (
+        f"Max items grabbed ({cap}) reached: stopped early, "
+        "the rest is searched next run"
+    )
 
 
 def _inflight_line(run: Dict[str, Any]) -> Optional[str]:

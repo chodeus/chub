@@ -348,9 +348,11 @@ def test_client_without_an_event_mapping_reports_nothing():
 
 def test_pending_grabs_survive_a_round_trip(tmp_path):
     db = UpgradinatorrGrabs(StubLogger(), db_path=str(tmp_path / "grabs.db"))
-    db.record("radarr", [_grab()], grabbed_at="2026-08-29T09:00:00+00:00")
+    # No stamp of its own, so the run's stamp applies.
+    unstamped = _grab(grabbed_at=None)
+    db.record("radarr", [unstamped], grabbed_at="2026-08-29T09:00:00+00:00")
     # A re-run re-reporting the same download must not duplicate the row.
-    db.record("radarr", [_grab()], grabbed_at="2026-08-30T09:00:00+00:00")
+    db.record("radarr", [unstamped], grabbed_at="2026-08-30T09:00:00+00:00")
 
     rows = db.pending("radarr")
     assert len(rows) == 1
@@ -368,7 +370,9 @@ def test_pending_grabs_survive_a_round_trip(tmp_path):
 def test_prune_drops_grabs_past_the_retention_window(tmp_path):
     db = UpgradinatorrGrabs(StubLogger(), db_path=str(tmp_path / "grabs.db"))
     db.record(
-        "radarr", [_grab(download_id="stale")], grabbed_at="2020-01-01T00:00:00+00:00"
+        "radarr",
+        [_grab(download_id="stale", grabbed_at=None)],
+        grabbed_at="2020-01-01T00:00:00+00:00",
     )
     db.record("radarr", [_grab(download_id="fresh")])
 

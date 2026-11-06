@@ -228,7 +228,19 @@ def test_every_part_fits_discord_limits_at_the_caps():
     """At the caps' worst case, every part stays inside Discord's limits."""
     long_name = "_" * 400
     formats = [f"Custom Format Number {n}" for n in range(30)]
-    completed = [
+    # Every field maximised at once, first so the per-section cap keeps it.
+    worst = _upgrade(
+        0,
+        title=long_name,
+        download=long_name,
+        quality="Q" * 500,
+        previous_quality="P" * 500,
+        custom_formats=formats,
+        previous_custom_formats=formats,
+        score=-123456789,
+        previous_score=-123456789,
+    )
+    completed = [worst] + [
         _upgrade(n, title=long_name, download=long_name, custom_formats=formats)
         for n in range(NOTIFICATION_ITEM_CAP + 5)
     ] + [
@@ -238,10 +250,19 @@ def test_every_part_fits_discord_limits_at_the_caps():
     data = [_stuck(n, message="x" * 2000) for n in range(QUEUE_LINE_CAP + 5)]
     for item in data:
         item["title"] = long_name
-
-    parts = build_upgradinatorr_embeds(
-        {"radarr": _run(server_name="S" * 400, data=data, completed=completed)}
+    not_imported = [
+        {"title": long_name, "year": 2001, "download": long_name, "reason": "x" * 2000}
+        for _ in range(QUEUE_LINE_CAP + 5)
+    ]
+    run = _run(
+        server_name="S" * 400,
+        data=data,
+        completed=completed,
+        not_imported=not_imported,
+        inflight_finished={"label": long_name, "state": "failed"},
     )
+
+    parts = build_upgradinatorr_embeds({"radarr": run})
 
     assert len(parts) > 1
     for index, part in enumerate(parts, 1):

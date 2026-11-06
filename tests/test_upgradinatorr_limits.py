@@ -97,7 +97,7 @@ def test_the_run_stops_once_max_grabs_items_have_grabbed(isolated_db):
     assert result["max_grabs_hit"] == 2
     [part] = build_upgradinatorr_embeds({"radarr": result})
     assert (
-        "Max grabs 2 reached: stopped early, the rest is searched next run"
+        "Max items grabbed (2) reached: stopped early, the rest is searched next run"
         in part["description"]
     )
 

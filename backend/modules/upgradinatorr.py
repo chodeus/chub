@@ -220,7 +220,8 @@ class Upgradinatorr(ChubModule):
         if not max_grabs or grabbed < max_grabs:
             return False
         self.logger.info(
-            f"Max grabs ({max_grabs}) reached on {app.instance_name}: stopping here; "
+            f"Max items grabbed ({max_grabs}) reached on {app.instance_name}: "
+            "stopping here; "
             "the rest of the batch stays untagged for the next run."
         )
         return True
@@ -626,6 +627,12 @@ class Upgradinatorr(ChubModule):
         if oldest is None:
             oldest = datetime.now(timezone.utc) - timedelta(days=GRAB_RETENTION_DAYS)
         return oldest.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    @staticmethod
+    def _grab_stamp(date: Any, run_started: datetime) -> str:
+        """A grab's lookback floor: its history date if earlier than the run's start."""
+        when = Upgradinatorr._parse_arr_datetime(date) or run_started
+        return min(when, run_started).astimezone(timezone.utc).isoformat()
 
     def _collect_completed_imports(
         self, app: BaseARRClient, grabs_db: UpgradinatorrGrabs
@@ -2202,6 +2209,7 @@ class Upgradinatorr(ChubModule):
                     by_download_id[str(q["download_id"])] = {
                         "download": q["download"],
                         "score": q["torrent_custom_format_score"],
+                        "date": q.get("date"),
                     }
                 queue_imports: List[Dict[str, Any]] = []
                 for q in queue_map.get(item["media_id"], []):
@@ -2239,6 +2247,7 @@ class Upgradinatorr(ChubModule):
                         "year": item["year"],
                         "release_title": grab["download"],
                         "score": grab["score"],
+                        "grabbed_at": self._grab_stamp(grab.get("date"), run_started),
                     }
                     for grab in grabs
                     if not grab["download_id"].startswith(SYNTHETIC_DOWNLOAD_ID_PREFIX)
