@@ -20,6 +20,7 @@ from backend.util.arr import (
 from backend.util.base_module import ChubModule
 from backend.util.constants import (
     QUEUE_REPORT_SECTIONS,
+    report_item_label,
     import_quality_text,
     import_report_sections,
     import_report_tally,
@@ -672,6 +673,7 @@ class Upgradinatorr(ChubModule):
                 "previous_custom_formats": self._custom_format_names(deleted or {}),
                 "replaced": deleted is not None,
             }
+        self._attach_album_details(app, completed_by_download, ours)
         # Resolved, but deliberately NOT cleared here: an *arr call later in the
         # run can still abort it and discard this report, and a cleared grab can
         # never be reported again. The caller settles them on a path that returns.
@@ -679,6 +681,44 @@ class Upgradinatorr(ChubModule):
         return GrabReconcile(
             list(completed_by_download.values()), resolved, len(pending)
         )
+
+    def _attach_album_details(
+        self,
+        app: BaseARRClient,
+        rows: Dict[str, Dict[str, Any]],
+        records: List[Dict[str, Any]],
+    ) -> None:
+        """Give each Lidarr import row its album's title, primary type and year."""
+        album_ids = {
+            str(record.get("downloadId")): record["albumId"]
+            for record in records
+            if record.get("albumId") is not None
+        }
+        lookup = getattr(app, "get_albums_by_id", None)
+        if not album_ids or lookup is None:
+            return
+        # Display only: a failure here must never cost the import report itself.
+        try:
+            albums = lookup(sorted(set(album_ids.values())))
+        except Exception as e:
+            albums = None
+            self.logger.debug(f"Album lookup raised on {app.instance_name}: {e}")
+        if not isinstance(albums, list):
+            self.logger.warning(
+                f"Could not read album details from {app.instance_name}; "
+                "reporting these imports by artist only."
+            )
+            return
+        by_id = {album.get("id"): album for album in albums if isinstance(album, dict)}
+        for download_id, album_id in album_ids.items():
+            album = by_id.get(album_id)
+            if album and download_id in rows:
+                released = str(album.get("releaseDate") or "")[:4]
+                rows[download_id]["album"] = {
+                    "title": album.get("title"),
+                    "type": album.get("albumType"),
+                    "year": int(released) if released.isdigit() else None,
+                }
 
     @staticmethod
     def _quality_name(record: Dict[str, Any]) -> Optional[str]:
@@ -2071,7 +2111,7 @@ class Upgradinatorr(ChubModule):
                     f"[{tag}] {import_report_tally(len(section), len(items), noun)}:"
                 )
                 for entry in section:
-                    self.logger.info(f"  {self._format_item_title(entry)}")
+                    self.logger.info(f"  {report_item_label(entry)}")
                     prefix = self._detail_prefix(
                         entry.get("score"),
                         entry.get("previous_score"),

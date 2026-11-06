@@ -853,3 +853,80 @@ def test_the_report_is_settled_only_once_it_has_been_written(isolated_db):
     assert settled == []
     # Popped on the way out, so it can never reach a notification payload.
     assert "resolved_grabs" not in result
+
+
+class _LidarrHistoryARR(_HistoryARR):
+    """Lidarr pairs by album and can look albums up by id."""
+
+    history_import_event = 8
+    history_upgrade_delete_event = 5
+    upgrade_pair_field = "albumId"
+
+    def __init__(self, imports, deletes, albums):
+        super().__init__(imports, deletes)
+        self._by_event = {8: imports, 5: deletes}
+        self._albums = albums
+        self.album_lookups = []
+
+    def get_albums_by_id(self, album_ids):
+        self.album_lookups.append(list(album_ids))
+        if isinstance(self._albums, Exception):
+            raise self._albums
+        return self._albums
+
+
+def _lidarr_import(**overrides):
+    row = _import(**overrides)
+    row.pop("movieId")
+    row["albumId"] = 31
+    return row
+
+
+def _lidarr_delete():
+    row = _delete()
+    row.pop("movieId")
+    row["albumId"] = 31
+    return row
+
+
+_FAVELA = {
+    "id": 31,
+    "title": "Favela on Blast: Rio Baile Funk 04",
+    "albumType": "EP",
+    "secondaryTypes": ["Compilation"],
+    "releaseDate": "2004-01-01T00:00:00Z",
+}
+
+
+def test_a_lidarr_import_carries_its_album_title_type_and_year():
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab(title="Diplo", year=None)])
+    app = _LidarrHistoryARR([_lidarr_import()], [_lidarr_delete()], [_FAVELA])
+
+    completed = _collect(module, app, grabs)
+
+    assert app.album_lookups == [[31]]
+    assert completed[0]["replaced"] is True
+    assert completed[0]["album"] == {
+        "title": "Favela on Blast: Rio Baile Funk 04",
+        "type": "EP",
+        "year": 2004,
+    }
+    label = "Diplo - Favela on Blast: Rio Baile Funk 04 (2004) [EP]"
+    assert f"{label} — upgraded" in _embed_body(completed)
+    assert f"  {label}" in _run_log(module, completed).split("\n")
+
+
+@pytest.mark.parametrize("albums", [None, RuntimeError("lidarr down")])
+def test_a_failed_album_lookup_still_reports_the_import(albums):
+    """The album is display only: losing it must never lose the import report."""
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab(title="Diplo", year=None)])
+    app = _LidarrHistoryARR([_lidarr_import()], [_lidarr_delete()], albums)
+
+    completed, resolved, _pending = module._collect_completed_imports(app, grabs)
+
+    assert resolved == {"dl-1"}
+    assert "album" not in completed[0]
+    assert "Diplo — upgraded" in _embed_body(completed)
+

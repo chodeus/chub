@@ -1928,6 +1928,23 @@ class LidarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/album?artistId={artist_id}"
         return self.make_get_request(endpoint)
 
+    def get_albums_by_id(
+        self, album_ids: List[int], chunk: int = 100
+    ) -> Optional[List[Dict[str, Any]]]:
+        """The albums with these ids, ``chunk`` per request; None if any request fails."""
+        # Never send an empty albumIds: Lidarr answers that with the WHOLE library.
+        ids = list(dict.fromkeys(album_ids))
+        albums: List[Dict[str, Any]] = []
+        for start in range(0, len(ids), chunk):
+            page = self.make_get_request(
+                f"{self.api_base}/album",
+                params={"albumIds": ids[start : start + chunk]},
+            )
+            if not isinstance(page, list):
+                return None
+            albums.extend(page)
+        return albums
+
     def add_tags(self, media_id: Union[int, List[int]], tag_id: int) -> Any:
         """Add a tag to one or more artists."""
         if isinstance(media_id, int):

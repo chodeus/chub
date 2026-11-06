@@ -279,3 +279,15 @@ def test_one_embed_set_per_instance():
     titles = [part["title"] for part in build_upgradinatorr_embeds(output)]
 
     assert titles == ["Upgradinatorr: Radarr", "Upgradinatorr: Radarr 4K"]
+
+
+def test_an_album_label_uses_the_release_year_and_primary_type():
+    from backend.util.constants import report_item_label
+
+    album = {"title": "On My Way", "type": "Single", "year": 2015}
+    assert report_item_label({"title": "Axwell", "year": 1977, "album": album}) == (
+        "Axwell - On My Way (2015) [Single]"
+    )
+    assert report_item_label({"title": "A", "album": {"title": "B"}}) == "A - B"
+    assert report_item_label({"title": "Alien", "year": 1979}) == "Alien (1979)"
+    assert report_item_label({}) == "Unknown"

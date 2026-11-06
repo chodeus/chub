@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from backend.util.constants import (
     NOTIFICATION_ITEM_CAP,
     QUEUE_REPORT_SECTIONS,
+    report_item_label,
     import_report_sections,
 )
 
@@ -47,12 +48,6 @@ def _clip(text: str, limit: int) -> str:
 
 def _plural(count: int, word: str) -> str:
     return f"{count} {word}" if count == 1 else f"{count} {word}s"
-
-
-def _item_title(entry: Dict[str, Any]) -> str:
-    title = entry.get("title") or "Unknown"
-    year = entry.get("year")
-    return f"{title} ({year})" if year else str(title)
 
 
 def _search_line(run: Dict[str, Any]) -> Optional[str]:
@@ -118,7 +113,7 @@ def _queue_rows(
 def _queue_line(
     item: Dict[str, Any], entries: List[Dict[str, Any]], state: str
 ) -> str:
-    head = f"• {_md(_item_title(item))}"
+    head = f"• {_md(report_item_label(item))}"
     if state == "stuck":
         reasons = [m for e in entries for m in e.get("messages") or [] if m]
         return f"{head}: {_md(_clip(str(reasons[0]), REASON_CHARS))}" if reasons else head
@@ -209,7 +204,7 @@ def _import_fields(completed: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     fields: List[Dict[str, str]] = []
     for tag, noun, rows in import_report_sections(completed):
         for entry in rows[:NOTIFICATION_ITEM_CAP]:
-            name = f"{_item_title(entry)} — {tag.lower()}"
+            name = f"{report_item_label(entry)} — {tag.lower()}"
             fields.append(
                 {"name": _clip(name, FIELD_NAME_LIMIT), "value": _import_value(entry)}
             )

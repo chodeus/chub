@@ -240,6 +240,18 @@ def import_report_tally(count: int, item_count: int, noun: str) -> str:
     return f"{count} {noun}(s) across {item_count} item(s)"
 
 
+def report_item_label(entry: Dict[str, Any]) -> str:
+    """``Title (Year)``, or ``Artist - Album (Year) [Type]`` once the row names its album."""
+    title = entry.get("title") or "Unknown"
+    album = entry.get("album") or {}
+    if album.get("title"):
+        title = f"{title} - {album['title']}"
+    # An album row's own year is the release's; the entry year belongs to the artist.
+    year = album.get("year") if album else entry.get("year")
+    label = f"{title} ({year})" if year else str(title)
+    return f"{label} [{album['type']}]" if album.get("type") else label
+
+
 def import_score_text(score: object, previous: object) -> Optional[str]:
     """``7007 (was 4851)``, or None when the *arr reported no score at all."""
     # None means unknown, not zero — printing it rendered a literal "Score None".
