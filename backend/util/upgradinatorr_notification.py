@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from backend.util.constants import (
     NOTIFICATION_ITEM_CAP,
     QUEUE_REPORT_SECTIONS,
+    SUMMARY_PART_THRESHOLD,
     report_item_label,
     import_report_sections,
 )
@@ -300,36 +301,56 @@ def _embeds(
     return parts
 
 
+def _import_count_field(completed: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    if not completed:
+        return []
+    return [
+        {
+            "name": f"Imports ({len(completed)})",
+            "value": "Too many to show one by one: the server log lists each import.",
+        }
+    ]
+
+
+def _instance_parts(
+    name: str, run: Dict[str, Any], diffs: bool
+) -> List[Dict[str, Any]]:
+    """One instance's embeds; without ``diffs`` its imports are only counted."""
+    title = _clip(f"Upgradinatorr: {run.get('server_name') or name}", TITLE_CHARS)
+    lines = [
+        line
+        for line in (
+            _search_line(run),
+            _inflight_line(run),
+            _progress_line(run),
+            _limit_line(run),
+            _held_line(run),
+            _imported_line(run),
+        )
+        if line
+    ]
+    completed = run.get("completed") or []
+    fields = (
+        _queue_fields(run.get("data") or [])
+        + _not_imported_fields(run.get("not_imported") or [])
+        + (_import_fields(completed) if diffs else _import_count_field(completed))
+    )
+    description = _clip("\n".join(lines), DESCRIPTION_LIMIT) or None
+    if not description and not fields:
+        description = "Nothing to report this run."
+    color = _outcome_color(run)
+    parts = _embeds(title, description, fields)
+    if color is not None:
+        for part in parts:
+            part["color"] = color
+    return parts
+
+
 def build_upgradinatorr_embeds(output: Any) -> List[Dict[str, Any]]:
     """One embed set per instance: summary, queue lists, then a diff per import."""
-    parts: List[Dict[str, Any]] = []
-    for name, run in (output or {}).items():
-        if not isinstance(run, dict):
-            continue
-        title = _clip(f"Upgradinatorr: {run.get('server_name') or name}", TITLE_CHARS)
-        lines = [
-            line
-            for line in (
-                _search_line(run),
-                _inflight_line(run),
-                _progress_line(run),
-                _limit_line(run),
-                _held_line(run),
-                _imported_line(run),
-            )
-            if line
-        ]
-        fields = (
-            _queue_fields(run.get("data") or [])
-            + _not_imported_fields(run.get("not_imported") or [])
-            + _import_fields(run.get("completed") or [])
-        )
-        description = _clip("\n".join(lines), DESCRIPTION_LIMIT) or None
-        if not description and not fields:
-            description = "Nothing to report this run."
-        color = _outcome_color(run)
-        for part in _embeds(title, description, fields):
-            if color is not None:
-                part["color"] = color
-            parts.append(part)
-    return parts
+    runs = [(n, run) for n, run in (output or {}).items() if isinstance(run, dict)]
+    parts = [part for name, run in runs for part in _instance_parts(name, run, True)]
+    if len(parts) <= SUMMARY_PART_THRESHOLD:
+        return parts
+    # Past the message budget every other module collapses at, the diffs become counts.
+    return [part for name, run in runs for part in _instance_parts(name, run, False)]

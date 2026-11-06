@@ -2,15 +2,8 @@ import datetime
 import os
 from typing import Any, Dict, List, Tuple, Union
 
-from backend.util.constants import NOTIFICATION_ITEM_CAP
+from backend.util.constants import NOTIFICATION_ITEM_CAP, SUMMARY_PART_THRESHOLD
 from backend.util.upgradinatorr_notification import build_upgradinatorr_embeds
-
-# When a run would fan out into more than this many Discord messages (embeds),
-# collapse the per-item detail into a single summary embed. A first-time bulk
-# poster apply of thousands of items would otherwise hammer the webhook and trip
-# Discord's rate limiter; normal runs (a handful of items → 1–2 parts) are
-# returned unchanged.
-SUMMARY_PART_THRESHOLD = 10
 
 
 def capped_lines(entries: list, tally: str) -> list:
@@ -830,7 +823,7 @@ def format_for_discord(
     formatter = formatter_entry["formatter"]
     output_type = formatter_entry["type"]
     formatted_output = formatter(output)
-    # "embeds" formatters size their own parts; "flat" ones are plain messages.
+    # "embeds" formatters size and cap their own parts; "flat" ones are plain messages.
     if output_type in ("flat", "embeds"):
         return formatted_output, True
     parts = split_fields(formatted_output)

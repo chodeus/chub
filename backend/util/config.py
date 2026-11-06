@@ -439,8 +439,8 @@ class UpgradinatorrInstance(BaseModel):
     queue_block_hours: int = 72
     # Stop a run once this many searched items have grabbed something. 0 = no limit.
     max_grabs: int = 0
-    # Skip what came out within this many days. 0 = off.
-    # A missing date counts as 1 January of the year; with no year either, skip it.
+    # Skip what came out within this many days. 0 = off. No date: Radarr/Sonarr
+    # use 1 January of the year (skipped with no year); Lidarr skips the album.
     min_age_days: int = 0
 
     @field_validator("season_monitored_threshold")

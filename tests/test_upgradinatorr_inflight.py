@@ -264,20 +264,34 @@ class _Answer(requests.adapters.BaseAdapter):
         pass
 
 
+class _ErrorLog(StubLogger):
+    def __init__(self):
+        super().__init__()
+        self.errors = []
+
+    def error(self, *args, **kwargs):
+        self.errors.append(args)
+
+
 @pytest.mark.parametrize(
     "status, body, expected",
-    [(200, {"status": "started"}, {"status": "started"}), (404, {}, {})],
+    [
+        (200, {"status": "started"}, {"status": "started"}),
+        (404, {}, {}),  # gone: no ERROR, which would send a failure notification
+        (500, {}, None),
+    ],
 )
 def test_command_state_through_the_real_request_path(status, body, expected):
     client = RadarrClient.__new__(RadarrClient)
     client.url = "http://radarr.test"
-    client.logger = StubLogger()
+    client.logger = _ErrorLog()
     client.retry_handler = RetryHandler()
     client.timeout = 5
     client.session = requests.Session()
     client.session.mount("http://", _Answer(status, body))
 
     assert client.get_command_state(7) == expected
+    assert client.logger.errors == []
 
 
 class _SonarrResumeARR(FakeARR):

@@ -200,6 +200,13 @@ suffixes: List[str] = [
 # keeps its tally and points at the server log, which always holds everything.
 NOTIFICATION_ITEM_CAP = 50
 
+# When a run would fan out into more than this many Discord messages (embeds),
+# collapse the per-item detail into a single summary embed. A first-time bulk
+# poster apply of thousands of items would otherwise hammer the webhook and trip
+# Discord's rate limiter; normal runs (a handful of items → 1–2 parts) are
+# returned unchanged.
+SUMMARY_PART_THRESHOLD = 10
+
 # (queue state, report tag, note, logger level) for the sections Upgradinatorr
 # reports. The run log and the Discord/Notifiarr embed both render from this —
 # a second copy in the formatter is how the notification kept shipping per-item

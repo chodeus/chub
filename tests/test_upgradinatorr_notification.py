@@ -1,7 +1,10 @@
 """Pins Upgradinatorr's Discord embeds: summary, capped lists, diffs and Discord's limits."""
 
-from backend.util.constants import NOTIFICATION_ITEM_CAP
+import pytest
+
+from backend.util.constants import NOTIFICATION_ITEM_CAP, SUMMARY_PART_THRESHOLD
 from backend.util.upgradinatorr_notification import (
+    _instance_parts,
     QUEUE_LINE_CAP,
     build_upgradinatorr_embeds,
 )
@@ -224,7 +227,8 @@ def test_imports_past_the_cap_point_at_the_server_log():
     assert "…and 3 more upgrades — see the server log" in text
 
 
-def test_every_part_fits_discord_limits_at_the_caps():
+@pytest.mark.parametrize("diffs", [True, False])
+def test_every_part_fits_discord_limits_at_the_caps(diffs):
     """At the caps' worst case, every part stays inside Discord's limits."""
     long_name = "_" * 400
     formats = [f"Custom Format Number {n}" for n in range(30)]
@@ -262,8 +266,10 @@ def test_every_part_fits_discord_limits_at_the_caps():
         inflight_finished={"label": long_name, "state": "failed"},
     )
 
-    parts = build_upgradinatorr_embeds({"radarr": run})
+    # Called directly: a run this big reaches build_upgradinatorr_embeds as counts only.
+    parts = _instance_parts("radarr", run, diffs)
 
+    assert ("```diff" in _text(parts)) is diffs
     assert len(parts) > 1
     for index, part in enumerate(parts, 1):
         assert part["part"] == f" (part {index} of {len(parts)})"
@@ -289,6 +295,34 @@ def test_many_small_fields_split_at_discords_field_count():
 
     assert [len(part["fields"]) for part in parts] == [25, 25, 1]
     assert parts[0]["description"] and parts[1]["description"] is None
+
+
+def test_a_run_past_the_message_budget_counts_its_imports_instead():
+    completed = [_upgrade(n, download="_" * 200) for n in range(NOTIFICATION_ITEM_CAP)]
+    output = {
+        name: _run(server_name=name, completed=completed, pending_grabs=len(completed))
+        for name in ("Radarr", "Radarr 4K")
+    }
+    full = [p for name, run in output.items() for p in _instance_parts(name, run, True)]
+    assert len(full) > SUMMARY_PART_THRESHOLD
+
+    parts = build_upgradinatorr_embeds(output)
+
+    assert [part["title"] for part in parts] == [
+        "Upgradinatorr: Radarr",
+        "Upgradinatorr: Radarr 4K",
+    ]
+    for part in parts:
+        assert "Imported: 50 of 50 grabs from earlier runs (50 upgraded)" in (
+            part["description"]
+        )
+        assert part["fields"] == [
+            {
+                "name": "Imports (50)",
+                "value": "Too many to show one by one: "
+                "the server log lists each import.",
+            }
+        ]
 
 
 def test_one_embed_set_per_instance():
