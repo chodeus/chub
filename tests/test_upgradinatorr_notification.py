@@ -291,3 +291,39 @@ def test_an_album_label_uses_the_release_year_and_primary_type():
     assert report_item_label({"title": "A", "album": {"title": "B"}}) == "A - B"
     assert report_item_label({"title": "Alien", "year": 1979}) == "Alien (1979)"
     assert report_item_label({}) == "Unknown"
+
+
+def _missed(n, reason="Duplicate NZB"):
+    return {
+        "media_id": n,
+        "title": f"Gone {n}",
+        "year": 2020,
+        "download": f"Gone.{n}.2020_1080p-GRP",
+        "reason": reason,
+    }
+
+
+def test_grabs_that_did_not_import_are_listed_and_counted():
+    run = _run(completed=[_upgrade(1)], not_imported=[_missed(2)], pending_grabs=3)
+
+    parts = build_upgradinatorr_embeds({"radarr": run})
+
+    assert parts[0]["description"].split("\n")[-1] == (
+        "Imported: 1 of 3 grabs from earlier runs (1 upgraded); 1 didn't import"
+    )
+    assert parts[0]["fields"][0] == {
+        "name": "Didn't import (1)",
+        "value": r"• Gone 2 (2020): Gone.2.2020\_1080p-GRP — Duplicate NZB",
+    }
+    assert parts[0]["fields"][1]["name"] == "Movie 1 (2001) — upgraded"
+
+
+def test_the_did_not_import_list_is_capped():
+    rows = [_missed(n) for n in range(QUEUE_LINE_CAP + 3)]
+
+    text = _text(build_upgradinatorr_embeds({"radarr": _run(not_imported=rows)}))
+
+    assert f"Didn't import ({QUEUE_LINE_CAP + 3})" in text
+    assert f"Gone {QUEUE_LINE_CAP - 1} (2020)" in text
+    assert f"Gone {QUEUE_LINE_CAP} (2020)" not in text
+    assert "…and 3 more — see the server log" in text

@@ -63,6 +63,9 @@ QUEUE_BLOCK_HOURS_DEFAULT = 72
 # How long a grab stays pending an import outcome. Also bounds the history
 # lookback: the window starts at the oldest grab still held.
 GRAB_RETENTION_DAYS = 7
+# Backstop only: a grab past GRAB_RETENTION_DAYS is reported as not imported and
+# settled; this deletes one whose settle kept failing.
+GRAB_PRUNE_DAYS = GRAB_RETENTION_DAYS * 2
 # Synthetic ids _history_record_to_download mints when an *arr reports no
 # downloadId. They can never match an import record, so they're never stored.
 SYNTHETIC_DOWNLOAD_ID_PREFIX = "history:"
@@ -72,12 +75,14 @@ UPGRADE_PAIR_WINDOW_SECONDS = 300
 
 
 class GrabReconcile(NamedTuple):
-    """Earlier runs' grabs: the imported rows, their download ids, and how many were held."""
+    """Earlier runs' grabs: imported rows, the ids to settle, how many were held."""
 
     completed: List[Dict[str, Any]]
     resolved: Set[str]
     # 0 whenever history went unread, so the report claims no "N of M".
     pending: int = 0
+    # Grabs whose download failed or outlived GRAB_RETENTION_DAYS, each with a reason.
+    not_imported: Tuple[Dict[str, Any], ...] = ()
 
 
 class _BufferingLogger:
@@ -603,7 +608,7 @@ class Upgradinatorr(ChubModule):
         """The completed imports among earlier runs' grabs."""
         # Each entry carries ``replaced``. Fails closed: an unreadable history
         # leaves grabs pending rather than resolving them as "nothing imported".
-        grabs_db.prune(app.instance_name, GRAB_RETENTION_DAYS)
+        grabs_db.prune(app.instance_name, GRAB_PRUNE_DAYS)
         pending = grabs_db.pending(app.instance_name)
         if not pending:
             return GrabReconcile([], set())
@@ -678,9 +683,62 @@ class Upgradinatorr(ChubModule):
         # run can still abort it and discard this report, and a cleared grab can
         # never be reported again. The caller settles them on a path that returns.
         resolved = {str(record.get("downloadId")) for record in ours}
+        not_imported, gone = self._unimported_grabs(app, pending, since, resolved)
         return GrabReconcile(
-            list(completed_by_download.values()), resolved, len(pending)
+            list(completed_by_download.values()),
+            resolved | gone,
+            len(pending),
+            tuple(not_imported),
         )
+
+    def _unimported_grabs(
+        self,
+        app: BaseARRClient,
+        pending: List[Dict[str, Any]],
+        since: str,
+        imported: Set[str],
+    ) -> Tuple[List[Dict[str, Any]], Set[str]]:
+        """(rows, download ids) of grabs whose download failed or outlived GRAB_RETENTION_DAYS."""
+        failed_event = getattr(app, "history_failed_event", None)
+        failures = (
+            app.get_history_since(since, failed_event) if failed_event is not None else []
+        )
+        if not isinstance(failures, list):
+            self.logger.warning(
+                f"Could not read {app.instance_name}'s failed downloads; "
+                "checking those grabs again next run."
+            )
+            return [], set()
+        reasons: Dict[str, str] = {}
+        for record in failures:
+            if isinstance(record, dict) and record.get("downloadId"):
+                message = (record.get("data") or {}).get("message")
+                reasons.setdefault(
+                    str(record["downloadId"]), str(message or "the download failed")
+                )
+        cutoff = datetime.now(timezone.utc) - timedelta(days=GRAB_RETENTION_DAYS)
+        rows: List[Dict[str, Any]] = []
+        for grab in pending:
+            download_id = str(grab["download_id"])
+            if download_id in imported:
+                continue
+            reason = reasons.get(download_id)
+            grabbed = self._parse_arr_datetime(grab.get("grabbed_at"))
+            if reason is None and grabbed is not None and grabbed < cutoff:
+                reason = f"not imported after {GRAB_RETENTION_DAYS} days"
+            if reason is None:
+                continue
+            rows.append(
+                {
+                    "download_id": download_id,
+                    "media_id": grab.get("media_id"),
+                    "title": grab.get("title"),
+                    "year": grab.get("year"),
+                    "download": grab.get("release_title"),
+                    "reason": reason,
+                }
+            )
+        return rows, {row["download_id"] for row in rows}
 
     def _attach_album_details(
         self,
@@ -1463,6 +1521,7 @@ class Upgradinatorr(ChubModule):
             # Grabs from EARLIER runs whose download imported, upgrade or
             # first acquisition. This run's own grabs haven't downloaded yet.
             "completed": grabs.completed,
+            "not_imported": list(grabs.not_imported),
             "pending_grabs": grabs.pending,
             # Grabs this result accounts for. run() pops it once print_output
             # has written the report, so it never reaches a notification.
@@ -1504,13 +1563,13 @@ class Upgradinatorr(ChubModule):
     ) -> Optional[Dict[str, Any]]:
         """Result for a run with nothing left to search, carrying any import the
         reconcile confirmed — returning None here would drop it."""
-        if not grabs.completed:
+        if not grabs.completed and not grabs.not_imported:
             # Nothing to report, so nothing to lose by settling now.
             self._settle_grabs(app.instance_name, grabs.resolved)
             return None
         self.logger.info(
-            f"{len(grabs.completed)} completed import(s) to report for "
-            f"{app.instance_name}."
+            f"{len(grabs.completed) + len(grabs.not_imported)} earlier grab(s) to "
+            f"report for {app.instance_name}."
         )
         return self._new_output(app.instance_name, grabs)
 
@@ -2064,6 +2123,14 @@ class Upgradinatorr(ChubModule):
             return f"{item['title']} ({year})"
         return str(item["title"])
 
+    def _print_not_imported(self, rows: List[Dict[str, Any]]) -> None:
+        if not rows:
+            return
+        self.logger.info(f"[NOT IMPORTED] {len(rows)} grab(s) from earlier runs:")
+        for row in rows:
+            self.logger.info(f"  {report_item_label(row)}")
+            self.logger.info(f"    {row.get('download')} — {row.get('reason')}")
+
     def print_output(self, output_dict: Dict[str, Any]) -> None:
         for instance, run_data in output_dict.items():
             if not run_data:
@@ -2072,7 +2139,7 @@ class Upgradinatorr(ChubModule):
             completed = run_data.get("completed") or []
             # Completed imports come from EARLIER runs' grabs, so they must
             # print even when this run searched nothing.
-            if not instance_data and not completed:
+            if not instance_data and not completed and not run_data.get("not_imported"):
                 self.logger.info(f"No items found for {instance}.")
                 continue
 
@@ -2120,6 +2187,7 @@ class Upgradinatorr(ChubModule):
                         ),
                     )
                     self.logger.info(f"    {prefix}{entry.get('download')}")
+            self._print_not_imported(run_data.get("not_imported") or [])
 
             if with_grabs:
                 grab_total = sum(len(it["grabs"]) for it in with_grabs)

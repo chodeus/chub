@@ -96,7 +96,10 @@ def _imported_line(run: Dict[str, Any]) -> Optional[str]:
         f"{len(rows)} {tag.lower()}"
         for tag, _noun, rows in import_report_sections(completed)
     ]
-    return f"{line} ({', '.join(kinds)})" if kinds else line
+    if kinds:
+        line += f" ({', '.join(kinds)})"
+    missed = len(run.get("not_imported") or [])
+    return f"{line}; {missed} didn't import" if missed else line
 
 
 def _queue_rows(
@@ -149,6 +152,20 @@ def _queue_fields(data: List[Dict[str, Any]]) -> List[Dict[str, str]]:
             lines.append(f"…and {len(rows) - QUEUE_LINE_CAP} more — see the server log")
         fields.extend(_line_fields(f"{tag.capitalize()} ({len(rows)})", lines))
     return fields
+
+
+def _not_imported_fields(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    if not rows:
+        return []
+    lines = [
+        f"• {_md(report_item_label(row))}: "
+        f"{_md(_clip(str(row.get('download') or ''), RELEASE_CHARS))} — "
+        f"{_md(_clip(str(row.get('reason') or ''), REASON_CHARS))}"
+        for row in rows[:QUEUE_LINE_CAP]
+    ]
+    if len(rows) > QUEUE_LINE_CAP:
+        lines.append(f"…and {len(rows) - QUEUE_LINE_CAP} more — see the server log")
+    return _line_fields(f"Didn't import ({len(rows)})", lines)
 
 
 def _wrap_formats(formats: List[str]) -> List[str]:
@@ -249,8 +266,10 @@ def build_upgradinatorr_embeds(output: Any) -> List[Dict[str, Any]]:
             for line in (_search_line(run), _progress_line(run), _imported_line(run))
             if line
         ]
-        fields = _queue_fields(run.get("data") or []) + _import_fields(
-            run.get("completed") or []
+        fields = (
+            _queue_fields(run.get("data") or [])
+            + _not_imported_fields(run.get("not_imported") or [])
+            + _import_fields(run.get("completed") or [])
         )
         description = _clip("\n".join(lines), DESCRIPTION_LIMIT) or None
         if not description and not fields:

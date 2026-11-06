@@ -209,10 +209,11 @@ class BaseARRClient:
     api_version = "v3"  # Override in subclasses (e.g. LidarrClient uses "v1")
 
     # History event ids the completed-upgrade report reads. The same int means
-    # different events per *arr, so subclasses MUST override all three. Ints
+    # different events per *arr, so subclasses MUST override all four. Ints
     # only: Lidarr rejects the string event names Radarr/Sonarr accept.
     history_import_event: Optional[int] = None
     history_upgrade_delete_event: Optional[int] = None
+    history_failed_event: Optional[int] = None
     # Record field pairing an import to the delete it replaced.
     upgrade_pair_field: Optional[str] = None
 
@@ -1011,6 +1012,7 @@ class RadarrClient(BaseARRClient):
 
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 6  # movieFileDeleted
+    history_failed_event = 4  # downloadFailed
     upgrade_pair_field = "movieId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:
@@ -1359,6 +1361,7 @@ class SonarrClient(BaseARRClient):
 
     history_import_event = 3  # downloadFolderImported
     history_upgrade_delete_event = 5  # episodeFileDeleted
+    history_failed_event = 4  # downloadFailed
     upgrade_pair_field = "episodeId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:
@@ -1902,6 +1905,7 @@ class LidarrClient(BaseARRClient):
     # track and would report one album as a dozen upgrades.
     history_import_event = 8  # downloadImported
     history_upgrade_delete_event = 5  # trackFileDeleted
+    history_failed_event = 4  # downloadFailed
     upgrade_pair_field = "albumId"
 
     def __init__(self, url: str, api: str, logger: Any) -> None:

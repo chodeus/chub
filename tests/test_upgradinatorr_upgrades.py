@@ -55,13 +55,15 @@ class _HistoryARR(FakeARR):
 
     history_import_event = 3
     history_upgrade_delete_event = 6
+    history_failed_event = 4
     upgrade_pair_field = "movieId"
 
-    def __init__(self, imports, deletes, media=None):
+    def __init__(self, imports, deletes, media=None, failures=()):
         super().__init__([[upgradinatorr_media_item([])] if media is None else media])
         self._by_event = {
             self.history_import_event: imports,
             self.history_upgrade_delete_event: deletes,
+            self.history_failed_event: list(failures),
         }
         self.since_calls = []
 
@@ -71,9 +73,8 @@ class _HistoryARR(FakeARR):
 
 
 def _collect(module, app, grabs):
-    """The collector returns (completed, resolved ids, pending); most tests want the first."""
-    completed, _resolved, _pending = module._collect_completed_imports(app, grabs)
-    return completed
+    """The completed rows of one reconcile; most tests want only those."""
+    return module._collect_completed_imports(app, grabs).completed
 
 
 def _pending_since(hours: float = 1.0) -> str:
@@ -91,7 +92,7 @@ def _grab(download_id="dl-1", **overrides):
         "year": 2024,
         "release_title": "Movie.2024.REMUX-GRP",
         "score": 4000,
-        "grabbed_at": "2026-08-29T09:00:00+00:00",
+        "grabbed_at": _pending_since(),
     }
     row.update(overrides)
     return row
@@ -145,7 +146,8 @@ def test_import_that_replaced_a_file_is_reported_with_both_scores():
         [_delete(formats=["x264", "AMZN"])],
     )
 
-    completed, resolved, pending = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, pending = seen.completed, seen.resolved, seen.pending
 
     assert resolved == {"dl-1"}
     assert pending == 1
@@ -173,7 +175,8 @@ def test_import_that_replaced_nothing_is_an_acquisition():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], [])
 
-    completed, resolved, _pending = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert [(it["download"], it["replaced"]) for it in completed] == [
         ("Movie.2024.REMUX-GRP", False)
@@ -219,7 +222,8 @@ def test_an_unrelated_import_is_ignored():
     grabs = _FakeGrabs([_grab(download_id="ours")])
     app = _HistoryARR([_import(download_id="someone-elses")], [_delete()])
 
-    completed, resolved, _pending = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert completed == []
     assert resolved == set()
@@ -265,7 +269,8 @@ def test_unreadable_history_fails_closed_and_keeps_the_grab_pending():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR(None, [_delete()])
 
-    completed, resolved, _pending = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert completed == []
     assert resolved == set()
@@ -279,7 +284,8 @@ def test_an_unreadable_delete_history_keeps_the_grab_pending():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], None)
 
-    completed, resolved, _pending = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert completed == []
     assert resolved == set()
@@ -292,7 +298,8 @@ def test_a_paged_delete_envelope_is_not_read_as_zero_deletes():
     grabs = _FakeGrabs([_grab()])
     app = _HistoryARR([_import()], {"records": [_delete()]})
 
-    completed, resolved, _pending = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert completed == []
     assert resolved == set()
@@ -321,9 +328,11 @@ def test_lookback_starts_at_the_oldest_pending_grab():
 
     _collect(module, app, grabs)
 
-    assert [date for date, _event in app.since_calls] == [
-        "2026-08-24T01:30:00Z",
-        "2026-08-24T01:30:00Z",
+    # Imports, upgrade deletes and failed downloads all read from the same start.
+    assert app.since_calls == [
+        ("2026-08-24T01:30:00Z", 3),
+        ("2026-08-24T01:30:00Z", 6),
+        ("2026-08-24T01:30:00Z", 4),
     ]
 
 
@@ -529,7 +538,8 @@ def test_an_import_that_was_itself_replaced_later_is_not_an_upgrade():
         [_delete(score=3525, date="2026-08-29T11:20:30Z")],
     )
 
-    completed, resolved, _pending = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     upgraded = [it for it in completed if it["replaced"]]
     assert [it["score"] for it in upgraded] == [3575]
@@ -615,25 +625,13 @@ def test_an_upgrade_diffs_both_files_even_when_the_quality_held():
 
 
 def _run_log(module, completed):
-    """print_output's lines for one instance, with a capturing logger."""
-
-    class _Capture(StubLogger):
-        def __init__(self):
-            super().__init__()
-            self.lines = []
-
-        def info(self, *args, **kwargs):
-            self.lines.append(" ".join(str(a) for a in args))
-
-    module.logger = _Capture()
-    module.print_output(
-        {
-            "radarr": upgradinatorr_module.Upgradinatorr._new_output(
-                "Radarr", upgradinatorr_module.GrabReconcile(completed, set())
-            )
-        }
+    """print_output's lines for one instance holding these completed imports."""
+    return _run_log_output(
+        module,
+        upgradinatorr_module.Upgradinatorr._new_output(
+            "Radarr", upgradinatorr_module.GrabReconcile(completed, set())
+        ),
     )
-    return "\n".join(module.logger.lines)
 
 
 def _embed_body(completed):
@@ -863,6 +861,7 @@ class _LidarrHistoryARR(_HistoryARR):
 
     history_import_event = 8
     history_upgrade_delete_event = 5
+    history_failed_event = 4
     upgrade_pair_field = "albumId"
 
     def __init__(self, imports, deletes, albums):
@@ -926,9 +925,113 @@ def test_a_failed_album_lookup_still_reports_the_import(albums):
     grabs = _FakeGrabs([_grab(title="Diplo", year=None)])
     app = _LidarrHistoryARR([_lidarr_import()], [_lidarr_delete()], albums)
 
-    completed, resolved, _pending = module._collect_completed_imports(app, grabs)
+    seen = module._collect_completed_imports(app, grabs)
+    completed, resolved, _pending = seen.completed, seen.resolved, seen.pending
 
     assert resolved == {"dl-1"}
     assert "album" not in completed[0]
     assert "Diplo — upgraded" in _embed_body(completed)
 
+
+
+def _failure(download_id="dl-1", message="Duplicate NZB"):
+    return {
+        "downloadId": download_id,
+        "movieId": 7,
+        "eventType": "downloadFailed",
+        "date": "2026-08-29T11:00:00Z",
+        "data": {"message": message},
+    }
+
+
+def test_a_failed_download_is_reported_with_the_arrs_reason_and_settled():
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab()])
+    app = _HistoryARR([], [], failures=[_failure()])
+
+    seen = module._collect_completed_imports(app, grabs)
+
+    assert seen.completed == []
+    assert seen.resolved == {"dl-1"}
+    assert [(row["download"], row["reason"]) for row in seen.not_imported] == [
+        ("Movie.2024.REMUX-GRP", "Duplicate NZB")
+    ]
+    assert grabs.pruned == [("radarr", upgradinatorr_module.GRAB_PRUNE_DAYS)]
+
+
+def test_a_grab_past_the_retention_window_is_reported_as_not_imported():
+    module = make_upgradinatorr(dry_run=False)
+    stale = _pending_since(hours=24 * upgradinatorr_module.GRAB_RETENTION_DAYS + 1)
+    fresh = _pending_since(hours=24 * upgradinatorr_module.GRAB_RETENTION_DAYS - 1)
+    grabs = _FakeGrabs(
+        [_grab("stale", grabbed_at=stale), _grab("fresh", grabbed_at=fresh)]
+    )
+    app = _HistoryARR([], [])
+
+    seen = module._collect_completed_imports(app, grabs)
+
+    assert seen.resolved == {"stale"}
+    assert [row["reason"] for row in seen.not_imported] == [
+        f"not imported after {upgradinatorr_module.GRAB_RETENTION_DAYS} days"
+    ]
+    assert seen.pending == 2
+
+
+def test_an_import_wins_over_an_earlier_failure_of_the_same_download():
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab()])
+    app = _HistoryARR([_import()], [], failures=[_failure()])
+
+    seen = module._collect_completed_imports(app, grabs)
+
+    assert [row["download"] for row in seen.completed] == ["Movie.2024.REMUX-GRP"]
+    assert seen.not_imported == ()
+
+
+def test_unreadable_failures_still_report_imports_and_keep_the_rest_pending():
+    """Only the failure read degrades: imports still report, and nothing else is
+    settled, so a failed or stale grab is judged again next run."""
+    module = make_upgradinatorr(dry_run=False)
+    old = _pending_since(hours=24 * upgradinatorr_module.GRAB_RETENTION_DAYS + 1)
+    grabs = _FakeGrabs([_grab("dl-1"), _grab("old", grabbed_at=old)])
+    app = _HistoryARR([_import()], [], failures=())
+    app._by_event[app.history_failed_event] = None
+
+    seen = module._collect_completed_imports(app, grabs)
+
+    assert [row["download"] for row in seen.completed] == ["Movie.2024.REMUX-GRP"]
+    assert seen.resolved == {"dl-1"}
+    assert seen.not_imported == ()
+
+
+def test_a_failed_grab_alone_survives_the_nothing_left_to_search_bail_out(isolated_db):
+    module = make_upgradinatorr(dry_run=False)
+    UpgradinatorrGrabs(StubLogger(), db_path=isolated_db).record(
+        "radarr", [_grab()], grabbed_at=_pending_since()
+    )
+    app = _HistoryARR([], [], media=[], failures=[_failure()])
+
+    result = module.process_instance("radarr", _upgrade_settings(unattended=False), app)
+
+    assert result is not None, "the bail-out dropped a failed grab"
+    assert [row["reason"] for row in result["not_imported"]] == ["Duplicate NZB"]
+    assert result["resolved_grabs"] == ["dl-1"]
+    log = _run_log_output(module, result)
+    assert "[NOT IMPORTED] 1 grab(s) from earlier runs:" in log
+    assert "Movie.2024.REMUX-GRP — Duplicate NZB" in log
+
+
+def _run_log_output(module, run):
+    """print_output's info lines for one instance's result, with a capturing logger."""
+
+    class _Capture(StubLogger):
+        def __init__(self):
+            super().__init__()
+            self.lines = []
+
+        def info(self, *args, **kwargs):
+            self.lines.append(" ".join(str(a) for a in args))
+
+    module.logger = _Capture()
+    module.print_output({"radarr": run})
+    return "\n".join(module.logger.lines)
