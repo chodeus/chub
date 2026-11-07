@@ -2,6 +2,23 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.55.0](https://github.com/chodeus/chub/compare/v2.54.3...v2.55.0) (2026-11-07)
+
+
+### Features
+
+* **upgradinatorr:** add Max Items Grabbed Per Run and Minimum Release Age settings ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+* **upgradinatorr:** finish a slow search on the next run instead of repeating it ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+* **upgradinatorr:** name the album and its type on Lidarr imports ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+* **upgradinatorr:** report grabs that failed to download or never imported ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+* **upgradinatorr:** show each import as an old/new diff with custom formats, one embed per instance coloured by outcome ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([bfcaea2](https://github.com/chodeus/chub/commit/bfcaea2be149766dab15426e5a7327ee744762e5))
+* **deps:** update all non-major dependencies (patch) ([#776](https://github.com/chodeus/chub/issues/776)) ([bfcaea2](https://github.com/chodeus/chub/commit/bfcaea2be149766dab15426e5a7327ee744762e5))
+
 ## [2.54.3](https://github.com/chodeus/chub/compare/v2.54.2...v2.54.3) (2026-11-04)
 
 
