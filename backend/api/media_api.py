@@ -30,7 +30,7 @@ from backend.api.utils import (
     worker_error,
 )
 from backend.util.arr import arr_api_version, create_arr_client
-from backend.util.arr_delete import ArrDeleter, DeleteFailure, instance_detail
+from backend.util.arr_delete import ArrDeleter, ArrOutcome, instance_detail
 from backend.util.config import ConfigError, load_config
 from backend.util.public_error import failure_text
 from backend.util.database import (
@@ -990,16 +990,20 @@ async def resolve_duplicates(
     if not isinstance(body, dict):
         return error("Invalid request body", code="INVALID_BODY", status_code=400)
 
-    keep_id = body.get("keepId")
-    remove_ids = body.get("removeIds", [])
+    keep_id = _media_id(body.get("keepId"))
+    remove_ids = _media_ids(body.get("removeIds"))
     delete_files = body_flag(body, "deleteFiles")
     add_exclusion = body_flag(body, "addImportExclusion")
 
-    if not keep_id:
-        return error("keepId is required", code="MISSING_KEEP_ID", status_code=400)
+    if keep_id is None:
+        return error(
+            "keepId must be a media id", code="MISSING_KEEP_ID", status_code=400
+        )
     if not remove_ids:
         return error(
-            "removeIds is required", code="MISSING_REMOVE_IDS", status_code=400
+            "removeIds must be a list of media ids",
+            code="MISSING_REMOVE_IDS",
+            status_code=400,
         )
 
     # Verify the kept item exists
@@ -1025,7 +1029,25 @@ async def resolve_duplicates(
     )
 
 
-def _delete_with_files(item: Dict[str, Any], logger: Any) -> Optional[DeleteFailure]:
+def _media_id(value: Any) -> Optional[int]:
+    """A positive media id, from an int or a digit string; None otherwise."""
+    # "1" != 1: an unparsed string id slipped past the keep-id check.
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str) and value.strip().isdigit():
+        value = int(value.strip())
+    return value if isinstance(value, int) and value > 0 else None
+
+
+def _media_ids(value: Any) -> Optional[List[int]]:
+    """Every entry as a media id, or None when the list is missing or any entry is not."""
+    if not isinstance(value, list):
+        return None
+    ids = [_media_id(entry) for entry in value]
+    return None if None in ids else ids
+
+
+def _delete_with_files(item: Dict[str, Any], logger: Any) -> ArrOutcome:
     """The single delete's *arr step, run off the event loop."""
     with ArrDeleter(logger) as deleter:
         return deleter.delete(item, True, False)
@@ -1039,10 +1061,10 @@ def _remove_media_item(db, deleter, rid, delete_files, add_exclusion):
     if not item:
         return False, "not found in cache"
 
-    failure = deleter.delete(item, delete_files, add_exclusion)
-    if failure:
+    outcome = deleter.delete(item, delete_files, add_exclusion)
+    if outcome.reason:
         # Nothing was deleted: the row stays, so the item can be retried.
-        return False, failure.reason
+        return False, outcome.reason
 
     # Remove from local cache
     try:
@@ -1060,7 +1082,7 @@ def _resolve_duplicates_sync(
     removed = []
     failed = []
 
-    with ArrDeleter(logger) as deleter:
+    with ArrDeleter(logger, keep=kept_item) as deleter:
         for rid in remove_ids:
             # The kept item must never be removed, and with delete_files that would
             # take it off disk while the response still reports it as kept.
@@ -1109,11 +1131,13 @@ async def bulk_delete_media(
     if not isinstance(body, dict):
         return error("Invalid request body", code="INVALID_BODY", status_code=400)
 
-    ids = body.get("ids", [])
+    ids = _media_ids(body.get("ids"))
     delete_files = body_flag(body, "deleteFiles")
     add_exclusion = body_flag(body, "addImportExclusion")
     if not ids:
-        return error("ids is required", code="MISSING_IDS", status_code=400)
+        return error(
+            "ids must be a list of media ids", code="MISSING_IDS", status_code=400
+        )
 
     # N blocking ARR connect+delete round trips — run off the event loop.
     return await run_in_threadpool(
@@ -1844,20 +1868,22 @@ async def delete_media_item(
 
         # With deleteFiles, the *arr delete comes first and must succeed: a cache
         # row removed after a failed delete reported an item that still exists.
+        outcome = ArrOutcome()
         if delete_files:
-            failure = await run_in_threadpool(_delete_with_files, item, logger)
-            if failure:
+            outcome = await run_in_threadpool(_delete_with_files, item, logger)
+            if outcome.reason:
                 return error(
-                    f"Media item {media_id} was not deleted: {failure.reason}",
+                    f"Media item {media_id} was not deleted: {outcome.reason}",
                     code="ARR_DELETE_FAILED",
-                    status_code=failure.status,
+                    status_code=outcome.status,
                 )
 
         db.media.delete_by_id(media_id)
 
+        # Only an *arr delete that ran now removed files: a 404 found none to remove.
         return ok(
             f"Media item {media_id} deleted",
-            {"deleted_id": media_id, "files_deleted": delete_files},
+            {"deleted_id": media_id, "files_deleted": outcome.deleted},
         )
 
     except ConfigError:

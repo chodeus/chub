@@ -134,6 +134,8 @@ def arrs(monkeypatch):
         return _Resp(404)
 
     monkeypatch.setattr(requests.Session, "request", request)
+    # The client backs off between probes of a down instance; no need to wait here.
+    monkeypatch.setattr("backend.util.arr.time.sleep", lambda *_: None)
     return state
 
 
@@ -266,6 +268,8 @@ def test_an_instance_pointing_at_another_arr_is_refused(db, arrs, monkeypatch):
     "asset_type, arr_type, extra",
     [
         ("show", "sonarr", {"season_number": 2}),
+        # Specials: season 0 is falsy and must still count as a season.
+        ("show", "sonarr", {"season_number": 0}),
         ("album", "lidarr", {}),
     ],
 )
@@ -282,27 +286,31 @@ def test_a_season_or_album_row_is_never_sent_to_the_arr(
     data = _bulk(db, [rid])
 
     assert data["failed"] == [
-        {"id": rid, "reason": "only a whole movie or series can be deleted from Radarr or Sonarr"}
+        {"id": rid, "reason": "only a whole movie, series or artist can be deleted from its *arr"}
     ]
     assert arrs.deletes == []
     assert db.media.get_by_id(rid) is not None
 
 
 @pytest.mark.parametrize("delete_files", [False, True])
-def test_an_unconfigured_instance_only_blocks_a_file_delete(db, arrs, monkeypatch, delete_files):
+def test_a_linked_row_on_an_unconfigured_instance_is_refused(db, arrs, monkeypatch, delete_files):
+    """Removing the row would leave the item in an *arr CHUB can no longer reach."""
     _configure(monkeypatch)
     rid = _seed_arr(db, "Dune")
 
     data = _bulk(db, [rid], delete_files=delete_files)
 
-    if delete_files:
-        assert data["failed"] == [
-            {"id": rid, "reason": "Radarr 4K is not configured, so its files were not deleted"}
-        ]
-        assert db.media.get_by_id(rid) is not None
-    else:
-        assert data == {"removed": [rid], "failed": []}
-        assert db.media.get_by_id(rid) is None
+    assert data["failed"] == [{"id": rid, "reason": "Radarr 4K is not configured"}]
+    assert db.media.get_by_id(rid) is not None
+
+
+def test_a_whole_lidarr_artist_is_deleted_from_lidarr(db, arrs, monkeypatch):
+    arrs.hosts["http://l:8686"] = ("Lidarr", {5}, None)
+    _configure(monkeypatch, lidarr={"Lidarr": "http://l:8686"})
+    rid = _seed_arr(db, "Artist", arr_id=5, asset_type="artist", arr_type="lidarr", name="Lidarr")
+
+    assert _bulk(db, [rid])["removed"] == [rid]
+    assert [url for url, _params in arrs.deletes] == ["http://l:8686/api/v1/artist/5"]
 
 
 def test_sonarr_gets_its_own_exclusion_parameter():
@@ -361,8 +369,66 @@ def test_a_single_delete_of_a_season_is_refused(db, arrs, monkeypatch):
     assert db.media.get_by_id(rid) is not None
 
 
-def test_a_single_delete_of_an_item_gone_from_the_arr_succeeds(db, radarr):
+def test_a_single_delete_of_an_item_gone_from_the_arr_deleted_no_files(db, radarr):
     rid = _seed_arr(db, "Dune", arr_id=99)
 
-    assert _single_delete(db, rid).status_code == 200
+    resp = _single_delete(db, rid)
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["files_deleted"] is False
     assert db.media.get_by_id(rid) is None
+
+
+def test_a_single_delete_reports_the_files_it_deleted(db, radarr):
+    rid = _seed_arr(db, "Dune")
+
+    assert _single_delete(db, rid).json()["data"]["files_deleted"] is True
+
+
+def _resolve(db, body):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+    app.state.logger = StubLogger()
+    app.state.db = db
+    app.include_router(router)
+    return TestClient(app).post("/api/media/duplicates/x/resolve", json=body)
+
+
+def test_a_string_id_cannot_remove_the_kept_item(db, radarr):
+    keep = _seed_arr(db, "Dune")
+    other = _seed_arr(db, "Dune copy", arr_id=43)
+
+    resp = _resolve(db, {"keepId": keep, "removeIds": [str(keep), other], "deleteFiles": True})
+
+    assert resp.json()["data"]["removed"] == [other]
+    assert db.media.get_by_id(keep) is not None
+    assert [url for url, _params in radarr.deletes] == ["http://r:7878/api/v3/movie/43"]
+
+
+def test_a_twin_of_the_kept_item_is_removed_from_chub_only(db, radarr):
+    """Two rows for one Radarr movie: deleting the twin there would delete the kept item."""
+    keep = _seed_arr(db, "Dune")
+    twin = _seed_arr(db, "Dune twin")
+
+    resp = _resolve(db, {"keepId": keep, "removeIds": [twin], "deleteFiles": True})
+
+    assert resp.json()["data"]["removed"] == [twin]
+    assert radarr.deletes == []
+    assert 42 in radarr.hosts["http://r:7878"][1]
+
+
+@pytest.mark.parametrize("ids", [[1, "x"], "1", [True], [0]])
+def test_bulk_delete_rejects_ids_that_are_not_media_ids(db, ids):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+    app.state.logger = StubLogger()
+    app.state.db = db
+    app.include_router(router)
+
+    resp = TestClient(app).post("/api/media/bulk-delete", json={"ids": ids})
+
+    assert resp.status_code == 400
