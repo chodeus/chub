@@ -55,7 +55,8 @@ def test_a_job_cancelled_while_it_runs_stays_cancelled(db, prior_attempts, outco
 
     def process(job, _log):
         # What DELETE /modules/{name}/execution/{id} does while the module runs.
-        assert db.worker.cancel_running_job(job["id"], "2026-11-10T00:00:00+00:00") == 1
+        cancelled = db.worker.cancel_running_job(job["id"], "2026-11-10T00:00:00+00:00")
+        assert cancelled == 1
         db.worker.running = False
         return outcome()
 
@@ -67,7 +68,8 @@ def test_a_job_cancelled_while_it_runs_stays_cancelled(db, prior_attempts, outco
         "cancelled", None, None, "2026-11-10T00:00:00+00:00"
     )
     assert (db.worker._jobs_processed, db.worker._jobs_failed) == (0, 0)
-    assert db.worker.claim_next_job("jobs") is None
+    requeued = db.worker.claim_next_job("jobs")
+    assert requeued is None
 
 
 def test_claim_stamps_running_and_increments_attempts(db):
