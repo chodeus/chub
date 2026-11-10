@@ -494,3 +494,18 @@ def test_overlapping_provisions_create_one_webhook(monkeypatch):
 
     assert len(arr.notifications) == 1
     assert sorted(row["action"] for row in rows) == ["created", "noop"]
+
+
+def test_a_status_read_does_not_wait_for_a_provision_in_flight(monkeypatch):
+    clients = {"http://r:7878": StubClient(notifications=[])}
+    monkeypatch.setattr(wp, "create_arr_client", lambda url, api, logger: clients.get(url))
+    lock, pool = wp._arr_lock("http://r:7878"), ThreadPoolExecutor(max_workers=1)
+    lock.acquire()
+    try:
+        run = pool.submit(provision_all, _fake_config(), "http://chub:8060", None, dry_run=True)
+        rows = run.result(timeout=5)
+    finally:
+        lock.release()
+        pool.shutdown()
+
+    assert next(r for r in rows if r["name"] == "Radarr")["status"] == "not_set_up"

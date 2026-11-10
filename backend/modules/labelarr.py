@@ -70,10 +70,10 @@ class Labelarr(ChubModule):
                 "recorded; refresh the media cache and try again",
                 "error_code": "NOT_TAGGABLE",
             }
-        if not whole_item(media_item) or row_kind(media_item) == "lidarr":
+        if not whole_item(media_item):
             return {
                 "success": False,
-                "message": "Labelarr tags whole movies and series only",
+                "message": "Labelarr tags whole movies, series and artists only",
                 "error_code": "NOT_TAGGABLE",
             }
         return None
@@ -88,7 +88,7 @@ class Labelarr(ChubModule):
             row_kind(media_item),
         )
         if not arr_id:
-            return f"it is not linked to {name}"
+            return f"it has no {name} id in the media cache; refresh the media cache and try again"
         detail = instance_detail(self.full_config.instances, media_item)
         if detail is None:
             return f"{name} is not configured"
@@ -98,21 +98,24 @@ class Labelarr(ChubModule):
         mismatch = wrong_client(client, kind, name)
         if mismatch:
             return mismatch
+        # Remove before add, the order the cache's updated_tags applies them in.
         writes = (
-            ("adding", add, lambda: client.add_tags_by_name(arr_id, add)),
-            ("removing", remove, lambda: client.remove_tags_by_name([arr_id], remove)),
+            ("removing", "removed", remove, lambda: client.remove_tags_by_name([arr_id], remove)),
+            ("adding", "added", add, lambda: client.add_tags_by_name(arr_id, add)),
         )
+        landed = ""
         # A request that runs out of retries returns None instead of raising.
-        for verb, tags, write in writes:
+        for verb, past, tags, write in writes:
             if not tags:
                 continue
             try:
                 confirmed = write()
             except Exception as e:
                 self.logger.error(f"{verb} tags on {kind} item {arr_id} in {name}: {e}")
-                return f"{verb} tags in {name} failed: {public_reason(e)} — see the server log"
+                return f"{landed}{verb} tags in {name} failed: {public_reason(e)} — see the server log"
             if confirmed is None:
-                return f"{name} did not confirm {verb} {', '.join(tags)} — see the server log"
+                return f"{landed}{name} did not confirm {verb} {', '.join(tags)} — see the server log"
+            landed = f"{name} {past} {', '.join(tags)}, but "
         return None
 
     def _parse_labels(self, raw: Any) -> List[str]:
