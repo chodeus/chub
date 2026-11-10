@@ -198,7 +198,8 @@ def test_a_confirmed_arr_delete_removes_the_row(db, radarr):
 def test_an_item_already_gone_from_the_arr_removes_the_row(db, radarr):
     rid = _seed_arr(db, "Dune", arr_id=99)
 
-    assert _bulk(db, [rid]) == {"removed": [rid], "failed": []}
+    data = _bulk(db, [rid])
+    assert data == {"removed": [rid], "failed": []}
     assert db.media.get_by_id(rid) is None
 
 
@@ -217,7 +218,8 @@ def test_a_failed_arr_delete_keeps_the_row_and_says_why(db, radarr, status, reas
     radarr.hosts["http://r:7878"] = ("Radarr", {42}, status)
     rid = _seed_arr(db, "Dune")
 
-    assert _bulk(db, [rid]) == {"removed": [], "failed": [{"id": rid, "reason": reason}]}
+    data = _bulk(db, [rid])
+    assert data == {"removed": [], "failed": [{"id": rid, "reason": reason}]}
     assert db.media.get_by_id(rid) is not None
 
 
@@ -225,7 +227,8 @@ def test_an_unreachable_instance_keeps_the_row(db, radarr):
     radarr.hosts["http://r:7878"] = (None, set(), None)
     rid = _seed_arr(db, "Dune")
 
-    assert _bulk(db, [rid])["failed"] == [{"id": rid, "reason": "could not connect to Radarr 4K"}]
+    data = _bulk(db, [rid])
+    assert data["failed"] == [{"id": rid, "reason": "could not connect to Radarr 4K"}]
     assert db.media.get_by_id(rid) is not None
 
 
@@ -239,7 +242,8 @@ def test_one_client_serves_every_row_of_an_instance(db, radarr, monkeypatch):
     )
     ids = [_seed_arr(db, "Dune"), _seed_arr(db, "Sicario", arr_id=43)]
 
-    assert _bulk(db, ids)["removed"] == ids
+    data = _bulk(db, ids)
+    assert data["removed"] == ids
     assert len(made) == 1
 
 
@@ -250,7 +254,8 @@ def test_a_shared_instance_name_deletes_from_the_rows_own_arr(db, arrs, monkeypa
     _configure(monkeypatch, radarr={"Main": "http://r:7878"}, sonarr={"Main": "http://s:8989"})
     rid = _seed_arr(db, "Severance", arr_id=7, asset_type="show", arr_type="sonarr", name="Main")
 
-    assert _bulk(db, [rid])["removed"] == [rid]
+    data = _bulk(db, [rid])
+    assert data["removed"] == [rid]
     assert [url for url, _params in arrs.deletes] == ["http://s:8989/api/v3/series/7"]
     assert 7 in arrs.hosts["http://r:7878"][1]
 
@@ -260,7 +265,8 @@ def test_an_instance_pointing_at_another_arr_is_refused(db, arrs, monkeypatch):
     _configure(monkeypatch, sonarr={"Main": "http://r:7878"})
     rid = _seed_arr(db, "Severance", arr_id=7, asset_type="show", arr_type="sonarr", name="Main")
 
-    assert _bulk(db, [rid])["failed"] == [{"id": rid, "reason": "Main is not a Sonarr instance"}]
+    data = _bulk(db, [rid])
+    assert data["failed"] == [{"id": rid, "reason": "Main is not a Sonarr instance"}]
     assert arrs.deletes == []
 
 
@@ -309,7 +315,8 @@ def test_a_whole_lidarr_artist_is_deleted_from_lidarr(db, arrs, monkeypatch):
     _configure(monkeypatch, lidarr={"Lidarr": "http://l:8686"})
     rid = _seed_arr(db, "Artist", arr_id=5, asset_type="artist", arr_type="lidarr", name="Lidarr")
 
-    assert _bulk(db, [rid])["removed"] == [rid]
+    data = _bulk(db, [rid])
+    assert data["removed"] == [rid]
     assert [url for url, _params in arrs.deletes] == ["http://l:8686/api/v1/artist/5"]
 
 
@@ -382,7 +389,8 @@ def test_a_single_delete_of_an_item_gone_from_the_arr_deleted_no_files(db, radar
 def test_a_single_delete_reports_the_files_it_deleted(db, radarr):
     rid = _seed_arr(db, "Dune")
 
-    assert _single_delete(db, rid).json()["data"]["files_deleted"] is True
+    resp = _single_delete(db, rid)
+    assert resp.json()["data"]["files_deleted"] is True
 
 
 def _resolve(db, body):
@@ -445,7 +453,7 @@ def _api(db):
     return TestClient(app, raise_server_exceptions=False)
 
 
-@pytest.mark.parametrize("bad", ["²", "①", 2**63])
+@pytest.mark.parametrize("bad", ["²", "①", 2**63, "9" * 5000], ids=["superscript", "circled", "2^63", "5000-digits"])
 def test_an_id_sqlite_cannot_hold_is_a_400_before_any_delete(db, radarr, bad):
     good = _seed_arr(db, "Dune")
 
@@ -455,12 +463,19 @@ def test_an_id_sqlite_cannot_hold_is_a_400_before_any_delete(db, radarr, bad):
     assert radarr.deletes == []
 
 
-def test_an_out_of_range_keep_id_is_a_400(db):
+@pytest.mark.parametrize("keep", [2**63, "9" * 5000], ids=["2^63", "5000-digits"])
+def test_an_out_of_range_keep_id_is_a_400(db, keep):
     resp = _api(db).post(
-        "/api/media/duplicates/x/resolve", json={"keepId": 2**63, "removeIds": [1]}
+        "/api/media/duplicates/x/resolve", json={"keepId": keep, "removeIds": [1]}
     )
 
     assert resp.status_code == 400
+
+
+def test_leading_zeros_never_make_a_valid_id_too_long_to_read():
+    from backend.api.media_api import _media_id
+
+    assert _media_id("0" * 5000 + "7") == 7
 
 
 def test_a_repeated_id_is_removed_once(db, radarr):

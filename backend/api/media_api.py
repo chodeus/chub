@@ -1040,7 +1040,10 @@ def _media_id(value: Any) -> Optional[int]:
         return None
     if isinstance(value, str):
         text = value.strip()
-        value = int(text) if text.isascii() and text.isdigit() else None
+        # int() refuses strings over 4300 digits, leading zeros included.
+        digits = text.lstrip("0") or "0"
+        ok = text.isascii() and text.isdigit() and len(digits) <= len(str(_MAX_MEDIA_ID))
+        value = int(digits) if ok else None
     return value if isinstance(value, int) and 0 < value <= _MAX_MEDIA_ID else None
 
 
