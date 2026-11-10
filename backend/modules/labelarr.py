@@ -82,17 +82,29 @@ class Labelarr(ChubModule):
         self, media_item: Dict[str, Any], add: List[str], remove: List[str]
     ) -> Optional[str]:
         """Apply the tag changes to the row's own *arr item; why it failed, or None."""
-        name, arr_id, kind = (
-            media_item.get("instance_name"),
-            media_item.get("arr_id"),
-            row_kind(media_item),
-        )
+        name, arr_id = media_item.get("instance_name"), media_item.get("arr_id")
         if not arr_id:
             return f"it has no {name} id in the media cache; refresh the media cache and try again"
         detail = instance_detail(self.full_config.instances, media_item)
         if detail is None:
             return f"{name} is not configured"
         client = create_arr_client(detail.url, detail.api, self.logger)
+        try:
+            return self._apply_tags(client, media_item, add, remove)
+        finally:
+            session = getattr(client, "session", None)
+            if session is not None:
+                session.close()
+
+    def _apply_tags(
+        self, client: Any, media_item: Dict[str, Any], add: List[str], remove: List[str]
+    ) -> Optional[str]:
+        """Remove then add tags through ``client``; why it failed, or None."""
+        name, arr_id, kind = (
+            media_item.get("instance_name"),
+            media_item.get("arr_id"),
+            row_kind(media_item),
+        )
         if not client or not client.is_connected():
             return f"could not connect to {name}"
         mismatch = wrong_client(client, kind, name)

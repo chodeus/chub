@@ -451,9 +451,18 @@ class _SharedArr:
 
     def __init__(self):
         self.notifications = []
-        self.readers = 0
+        self.runs = self.readers = 0
+        self.second_run = threading.Event()
         self.second_reader = threading.Event()
         self.guard = threading.Lock()
+
+    def open_client(self):
+        """A client for this *arr; the second run to open one sets ``second_run``."""
+        with self.guard:
+            self.runs += 1
+            if self.runs == 2:
+                self.second_run.set()
+        return _RacingClient(self)
 
 
 class _RacingClient(StubClient):
@@ -467,7 +476,9 @@ class _RacingClient(StubClient):
             self._arr.readers += 1
             if self._arr.readers == 2:
                 self._arr.second_reader.set()
-        # Hold this snapshot until a second run has read too, if one can.
+        # Wait for the other run to start (it opens its client before any lock), then
+        # hold this snapshot until it reads too: it only can when nothing serialises them.
+        self._arr.second_run.wait(timeout=5)
         self._arr.second_reader.wait(timeout=0.5)
         return snapshot
 
@@ -482,7 +493,7 @@ def test_overlapping_provisions_create_one_webhook(monkeypatch):
     monkeypatch.setattr(
         wp,
         "create_arr_client",
-        lambda url, api, logger: _RacingClient(arr) if url == "http://r:7878" else None,
+        lambda url, api, logger: arr.open_client() if url == "http://r:7878" else None,
     )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -492,6 +503,7 @@ def test_overlapping_provisions_create_one_webhook(monkeypatch):
         ]
         rows = [next(r for r in run.result() if r["name"] == "Radarr") for run in runs]
 
+    assert arr.second_run.is_set()
     assert len(arr.notifications) == 1
     assert sorted(row["action"] for row in rows) == ["created", "noop"]
 
@@ -509,3 +521,7 @@ def test_a_status_read_does_not_wait_for_a_provision_in_flight(monkeypatch):
         pool.shutdown()
 
     assert next(r for r in rows if r["name"] == "Radarr")["status"] == "not_set_up"
+
+
+def test_one_arr_written_with_spaces_or_a_slash_shares_one_lock():
+    assert wp._arr_lock(" http://R:7878/ ") is wp._arr_lock("http://r:7878")

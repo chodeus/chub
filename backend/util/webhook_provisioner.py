@@ -441,7 +441,7 @@ _ARR_LOCKS: "defaultdict[str, threading.Lock]" = defaultdict(threading.Lock)
 
 def _arr_lock(url: str) -> threading.Lock:
     with _ARR_LOCKS_GUARD:
-        return _ARR_LOCKS[str(url or "").rstrip("/").lower()]
+        return _ARR_LOCKS[str(url or "").strip().rstrip("/").lower()]
 
 
 def _run_over_instances(

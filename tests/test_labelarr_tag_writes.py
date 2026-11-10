@@ -306,3 +306,21 @@ def test_a_failed_tag_write_says_what_landed_and_leaves_the_cache_and_plex_alone
     assert [mode for _, mode, _ in _edits(arrs)] == landed
     assert plex == []
     assert _row(db, film) == (["old"], "radarr", "Main")
+
+
+@pytest.mark.parametrize("app", ["Radarr", "Sonarr"], ids=["write-done", "wrong-app"])
+def test_the_arr_session_is_closed_after_every_tag_write(db, arrs, plex, monkeypatch, app):
+    arrs.hosts = {"http://r": app}
+    film = _seed(db, "Film", "movie", "radarr", "Main", 4)
+    closed = []
+    real = labelarr_mod.create_arr_client
+
+    def tracked(*a, **k):
+        client = real(*a, **k)
+        client.session.close = lambda: closed.append(app)
+        return client
+
+    monkeypatch.setattr(labelarr_mod, "create_arr_client", tracked)
+    _sync(_module(plex), film)
+
+    assert closed == [app]
