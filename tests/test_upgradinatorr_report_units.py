@@ -6,7 +6,6 @@ from types import SimpleNamespace
 import pytest
 
 import backend.modules.upgradinatorr as upgradinatorr_module
-from backend.modules.upgradinatorr import Upgradinatorr
 from backend.util.arr import COMMAND_TIMEOUT
 from backend.util.database import ChubDB
 from backend.util.upgradinatorr_notification import build_upgradinatorr_embeds, summary_lines
@@ -274,13 +273,13 @@ def test_the_quality_names_its_revision(revision, expected):
         }
     }
 
-    assert Upgradinatorr._quality_name(record) == expected
+    assert upgradinatorr_module.Upgradinatorr._quality_name(record) == expected
 
 
 def test_a_dry_run_lists_what_it_would_search():
     module = make_upgradinatorr(dry_run=True)
     module.logger = _Capture()
-    run = Upgradinatorr._new_output(
+    run = upgradinatorr_module.Upgradinatorr._new_output(
         SimpleNamespace(instance_name="Radarr", instance_type="Radarr"),
         upgradinatorr_module.GrabReconcile([], set()),
     )
@@ -311,7 +310,7 @@ def test_a_staged_series_is_not_listed_as_searched_with_nothing_grabbed(isolated
 def test_a_season_mode_dry_run_names_the_count_not_every_candidate():
     module = make_upgradinatorr(dry_run=True)
     module.logger = _Capture()
-    run = Upgradinatorr._new_output(
+    run = upgradinatorr_module.Upgradinatorr._new_output(
         SimpleNamespace(instance_name="Sonarr", instance_type="Sonarr"),
         upgradinatorr_module.GrabReconcile([], set()),
     )
@@ -342,9 +341,12 @@ def test_a_finished_rotation_with_only_imports_to_report_still_says_why(
 
     result = module.process_instance("radarr", _settings(), app)
 
-    assert summary_lines(result) == [
+    rotation = (
         'Rotation finished: everything is tagged "checked" and Auto reset processed '
-        "tag is off, so nothing is searched until the tag is removed",
+        "tag is off, so nothing is searched until the tag is removed"
+    )
+    assert summary_lines(result) == [
+        rotation,
         "Imported: 1 of 1 grab from earlier runs (1 upgraded)",
     ]
 
