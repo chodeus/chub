@@ -1235,6 +1235,11 @@ def get_module_specific_stats(
         logger.debug(f"Serving GET /api/modules/{name}/stats")
         run_state = db.run_state.get_run_state(name)
         job_stats = db.worker.job_stats()
+        failed = worker_error(
+            job_stats, logger, "Error retrieving stats", "MODULE_STATS_ERROR"
+        )
+        if failed:
+            return failed
 
         return ok(
             f"Statistics for module '{name}'",

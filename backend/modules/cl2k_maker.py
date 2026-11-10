@@ -1034,8 +1034,8 @@ def _persist_poster(
                     logger.info(f"CL2K uploaded {filename} to Drive {folder_id}")
                 except Exception as exc:
                     # Deferred errors go only to the user's notification; inline ones
-                    # reach the browser, so they name the folder and nothing else.
-                    detail = exc if reload_config else "upload failed"
+                    # reach the browser, so they name the folder and the kind only.
+                    detail = exc if reload_config else public_reason(exc)
                     upload_errors.append(f"{folder_id}: {detail}")
                     logger.warning(
                         f"CL2K gdrive upload to {folder_id} failed for {filename}: {exc}"

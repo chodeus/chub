@@ -446,7 +446,7 @@ def test_drive_partial_failure_is_generated_with_upload_error(db, monkeypatch):
     assert res["uploaded"] is True
     assert res["uploaded_folders"] == ["GOOD"]
     # The folder that missed is named; the exception text stays in the log.
-    assert res["upload_error"] == "BAD: upload failed — see the CL2K Maker log"
+    assert res["upload_error"] == "BAD: unexpected error — see the CL2K Maker log"
 
 
 # --- _persist_poster: local write failures ---

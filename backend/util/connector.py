@@ -20,32 +20,32 @@ from backend.util.database import ChubDB
 from backend.util.helper import as_list
 from backend.util.logger import Logger
 from backend.util.plex import PlexClient
-from backend.util.public_error import failure_text, public_reason
+from backend.util.public_error import PublicError, failure_text, public_reason
 
 
 # Custom exceptions
-class ConnectorError(Exception):
+class ConnectorError(PublicError):
     """Base exception for connector operations"""
 
-    pass
+    public = "sync error"
 
 
 class InstanceConfigError(ConnectorError):
     """Raised when instance configuration is invalid"""
 
-    pass
+    public = "invalid instance settings"
 
 
 class DatabaseSyncError(ConnectorError):
     """Raised when database synchronization fails"""
 
-    pass
+    public = "database sync failed"
 
 
 class ConnectionPoolError(ConnectorError):
     """Raised when connection pool operations fail"""
 
-    pass
+    public = "could not connect"
 
 
 @dataclass

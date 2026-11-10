@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 
 from backend.util.log_redaction import redact
-from backend.util.public_error import failure_text
+from backend.util.public_error import PublicError, failure_text
 from backend.util.rate_limiter import Throttle
 
 # Mirror of config.ALL_MODULES_SENTINEL — a destination whose `modules` list
@@ -19,6 +19,10 @@ ALL_MODULES_SENTINEL = "__ALL__"
 
 # Shared by every webhook POST: calls start at most once per second, counted on entry as the old decorator did.
 _WEBHOOK_THROTTLE = Throttle(rate=1, burst=1)
+
+
+class NotificationURLBlocked(ValueError, PublicError):
+    public = "the URL was refused (private or unresolvable host)"
 
 
 def _part_color(part: Dict[str, Any], default: Any) -> Any:
@@ -279,7 +283,9 @@ class NotificationManager:
         _WEBHOOK_THROTTLE.acquire()
         safe, reason = is_safe_url(url)
         if not safe:
-            raise ValueError(f"Notification URL blocked by SSRF guard: {reason}")
+            raise NotificationURLBlocked(
+                f"Notification URL blocked by SSRF guard: {reason}"
+            )
         # A hung webhook must not stall the whole run: bound every POST.
         return requests.post(url, json=payload, timeout=15)
 

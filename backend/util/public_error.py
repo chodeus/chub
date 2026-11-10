@@ -2,10 +2,18 @@
 
 import errno
 import sqlite3
-from typing import Tuple, Type
+from typing import Iterator, Optional, Tuple, Type
 
 import pydantic
 import requests
+
+
+class PublicError(Exception):
+    """An error type whose class-level ``public`` phrase is safe for the browser."""
+
+    # Per class, never per instance: the message stays in the log.
+    public = "unexpected error"
+
 
 # Exception text quotes paths, hostnames and provider payloads (CodeQL
 # py/stack-trace-exposure): only the type picks the phrase, so log the exception itself.
@@ -33,13 +41,36 @@ _OS_REASONS = {
 }
 
 
-def public_reason(exc: BaseException) -> str:
-    """``permission denied``, ``timed out``: the kind of failure, never its text."""
+def _chain(exc: BaseException) -> Iterator[BaseException]:
+    """``exc``, then what it was raised from, outermost first."""
+    seen = set()
+    link: Optional[BaseException] = exc
+    while link is not None and id(link) not in seen and len(seen) < 10:
+        seen.add(id(link))
+        yield link
+        context = None if link.__suppress_context__ else link.__context__
+        link = link.__cause__ or context
+
+
+def _specific(exc: BaseException) -> Optional[str]:
+    if isinstance(exc, PublicError):
+        return type(exc).public
     for kind, reason in _REASONS:
         if isinstance(exc, kind):
             return reason
     if isinstance(exc, OSError):
-        return _OS_REASONS.get(exc.errno, "system error")
+        return _OS_REASONS.get(exc.errno)
+    return None
+
+
+def public_reason(exc: BaseException) -> str:
+    """``permission denied``, ``timed out``: the kind of failure, never its text."""
+    # The deepest known cause wins: a wrapper's phrase is vaguer than what it wraps.
+    reasons = [r for r in (_specific(link) for link in _chain(exc)) if r]
+    if reasons:
+        return reasons[-1]
+    if any(isinstance(link, OSError) for link in _chain(exc)):
+        return "system error"
     return "unexpected error"
 
 

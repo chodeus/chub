@@ -441,3 +441,164 @@ def test_failed_module_stats_return_no_worker_text():
 
     assert resp.status_code == 500
     assert "hunter2" not in resp.body.decode()
+
+
+# --- CHUB's own errors carry a fixed phrase; the deepest known cause wins ---
+
+
+def _raised(exc, cause=None):
+    try:
+        try:
+            if cause is not None:
+                raise cause
+        except BaseException as inner:
+            raise exc from inner
+        raise exc
+    except BaseException as caught:
+        return caught
+
+
+def test_the_deepest_known_cause_names_the_failure():
+    from backend.util.arr import ARRAuthenticationError
+    from backend.util.connector import ConnectionPoolError, ConnectorError, DatabaseSyncError
+
+    wrapped_auth = _raised(ConnectionPoolError("pool"), ARRAuthenticationError(_SECRET))
+    wrapped_timeout = _raised(
+        ConnectionPoolError("pool"), requests.exceptions.ConnectTimeout(_SECRET)
+    )
+    wrapped_db = _raised(DatabaseSyncError("sync"), sqlite3.OperationalError(_SECRET))
+    wrapped_os = _raised(RuntimeError(_SECRET), OSError(5, _SECRET))
+
+    assert public_error.public_reason(wrapped_auth) == "unauthorized: check the API key"
+    assert public_error.public_reason(wrapped_timeout) == "timed out"
+    assert public_error.public_reason(wrapped_db) == "database busy or unavailable"
+    assert public_error.public_reason(wrapped_os) == "system error"
+    assert public_error.public_reason(ConnectorError(_SECRET)) == "sync error"
+
+
+def test_a_missing_rclone_says_so(monkeypatch):
+    from backend.util.cl2k import gdrive_upload
+
+    monkeypatch.setenv("RCLONE_PATH", "/nonexistent/rclone")
+    with pytest.raises(FileNotFoundError) as caught:
+        gdrive_upload._rclone_path()
+
+    assert public_error.public_reason(caught.value) == "rclone is not installed"
+
+
+def test_a_drive_name_collision_is_stored_as_a_refusal(monkeypatch):
+    from backend.modules import poster_self_heal as heal_module
+
+    monkeypatch.setattr(heal_apply, "list_files", lambda *a, **k: ["New.jpg"])
+    module = object.__new__(heal_module.PosterSelfHeal)
+    module.logger = MagicMock()
+    prop = {
+        "current_filename": "Old.jpg",
+        "proposed_filename": "New.jpg",
+        "drive_folder_id": "FOLDER",
+        "poster_file": "",
+        "status": "proposed",
+    }
+
+    error = module._auto_apply(prop, None)
+
+    assert error == (
+        "Auto-apply failed: the new name is already taken in the Drive folder "
+        "— see the server log"
+    )
+
+
+def test_a_blocked_test_notification_says_why():
+    """Through the real SSRF guard: an IP literal is refused before any lookup."""
+    result = _manager().send_test_to("discord", {"webhook": "http://169.254.169.254/hook"})
+
+    assert result["error"] == (
+        "Discord send failed: the URL was refused (private or unresolvable host) "
+        "— see the server log"
+    )
+
+
+def test_a_failed_webhook_update_keeps_what_the_row_found(monkeypatch):
+    from backend.util.arr import ARRPermanentError
+
+    from tests.test_webhook_provisioner import StubClient, _existing
+
+    class _GoneOnPut(StubClient):
+        def update_notification(self, notification_id, body, force_save=False):
+            raise ARRPermanentError(f"Endpoint not found: {_SECRET}")
+
+    foreign = {
+        "id": 9,
+        "name": "Other hook",
+        "implementation": "Webhook",
+        "onMovieAdded": True,
+        "fields": [{"name": "url", "value": "http://x/api/webhooks/poster/add"}],
+    }
+    client = _GoneOnPut(notifications=[_existing("http://old/url"), foreign])
+    monkeypatch.setattr(wp, "create_arr_client", lambda url, api, logger: client)
+
+    rows = wp.provision_all(_fake_config(), "http://chub:8060", None, logger=MagicMock())
+
+    radarr = next(r for r in rows if r["name"] == "Radarr")
+    assert radarr["error"] == (
+        "The request to the instance failed: the instance rejected the request "
+        "— see the server log"
+    )
+    assert radarr["drift_fields"]
+    assert radarr["foreign_webhook"] == "Other hook"
+
+
+@pytest.fixture
+def chub_db(tmp_path):
+    from backend.util.database import ChubDB
+
+    log = SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+        get_adapter=lambda *a, **k: log,
+    )
+    with ChubDB(log, db_path=str(tmp_path / "chub.db")) as database:
+        yield database
+
+
+def test_a_failed_job_stats_read_leaks_nowhere(chub_db, monkeypatch):
+    from backend.api import modules
+
+    real = chub_db.worker.execute_query
+
+    def flaky(query, *args, **kwargs):
+        if "GROUP BY status" in query:
+            raise sqlite3.OperationalError(_SECRET)
+        return real(query, *args, **kwargs)
+
+    monkeypatch.setattr(chub_db.worker, "execute_query", flaky)
+
+    assert chub_db.worker.job_stats()["message"] == (
+        "Fetching job stats failed: database busy or unavailable — see the server log"
+    )
+    resp = modules.get_module_specific_stats(name="nohl", logger=MagicMock(), db=chub_db)
+    assert resp.status_code == 500
+    assert "hunter2" not in resp.body.decode()
+
+
+def test_a_failed_drive_sync_enqueue_is_not_reported_as_started(monkeypatch):
+    from backend.api.posters import gdrive
+
+    folders = [SimpleNamespace(name="Movies")]
+    monkeypatch.setattr(
+        gdrive,
+        "SyncGDrive",
+        lambda logger: SimpleNamespace(config=SimpleNamespace(gdrive_list=folders)),
+    )
+    worker = SimpleNamespace(
+        enqueue_job=lambda *a, **k: {"success": False, "message": _SECRET}
+    )
+
+    resp = gdrive.sync_gdrive_folders(
+        gdrive_names=["Movies"], logger=MagicMock(), db=SimpleNamespace(worker=worker)
+    )
+
+    assert resp.status_code == 500
+    assert json.loads(resp.body)["message"] == "Error starting the GDrive sync"

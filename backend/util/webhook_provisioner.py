@@ -235,6 +235,17 @@ def _save_failed_message(base_url: str) -> str:
 # ----- per-instance operations --------------------------------------------
 
 
+def _failed_on(
+    result: Dict[str, Any], exc: BaseException, logger: Any
+) -> Dict[str, Any]:
+    """``result`` with the failure's kind as its error; the error goes to the log."""
+    # Shown on the webhook setup screen; keeps what the row already found.
+    if logger:
+        logger.warning(f"Webhook setup on {result.get('name')} failed: {exc}")
+    result["error"] = failure_text("The request to the instance", exc)
+    return result
+
+
 def _base_result(instance_type: str, name: str) -> Dict[str, Any]:
     return {
         "name": name,
@@ -275,6 +286,7 @@ def provision_instance(
     include_upgrade: bool = False,
     dry_run: bool = False,
     force_save: bool = False,
+    logger: Any = None,
 ) -> Dict[str, Any]:
     """Create/update CHUB's webhook in one arr (or, in dry_run, just report).
 
@@ -282,87 +294,98 @@ def provision_instance(
     ``not_set_up`` (dry-run, no CHUB entry yet), ``drift`` (dry-run, present but
     stale), ``failed`` (unreachable or the arr rejected the save)."""
     result = _base_result(instance_type, name)
-    existing = client.get_notifications()
-    if existing is None:
-        result["error"] = (
-            "Couldn't read notifications from the instance (unreachable?)."
-        )
-        return result
-
-    for notif in existing:
-        if (
-            notif.get("name") or ""
-        ).strip().lower() != CHUB_NOTIFICATION_NAME.lower() and _targets_poster_add(
-            notif
-        ):
-            result["foreign_webhook"] = notif.get("name")
-
-    url = build_webhook_url(base_url, name, secret)
-    desired = desired_webhook_body(
-        instance_type, url, client.get_notification_schema(), include_upgrade
-    )
-    match = _find_chub_notification(existing)
-
-    if match is None:
-        if dry_run:
-            result["status"] = "not_set_up"
+    try:
+        existing = client.get_notifications()
+        if existing is None:
+            result["error"] = (
+                "Couldn't read notifications from the instance (unreachable?)."
+            )
             return result
-        desired.pop("id", None)
-        created = client.add_notification(desired, force_save=force_save)
-        if (isinstance(created, dict) and created.get("id")) or _write_landed(
+
+        for notif in existing:
+            if (
+                notif.get("name") or ""
+            ).strip().lower() != CHUB_NOTIFICATION_NAME.lower() and _targets_poster_add(
+                notif
+            ):
+                result["foreign_webhook"] = notif.get("name")
+
+        url = build_webhook_url(base_url, name, secret)
+        desired = desired_webhook_body(
+            instance_type, url, client.get_notification_schema(), include_upgrade
+        )
+        match = _find_chub_notification(existing)
+
+        if match is None:
+            if dry_run:
+                result["status"] = "not_set_up"
+                return result
+            desired.pop("id", None)
+            created = client.add_notification(desired, force_save=force_save)
+            if (isinstance(created, dict) and created.get("id")) or _write_landed(
+                client, desired, instance_type
+            ):
+                # Verify-after-write: the arr may have accepted the entry even if
+                # the HTTP reply was lost, so trust the arr's actual state.
+                result["status"], result["action"] = "connected", "created"
+            else:
+                result["error"] = _save_failed_message(base_url)
+            return result
+
+        drift = diff_notification(match, desired, instance_type)
+        if not drift:
+            result["status"], result["action"] = "connected", "noop"
+            return result
+        result["drift_fields"] = drift
+        if dry_run:
+            result["status"] = "drift"
+            return result
+        desired["id"] = match.get("id")
+        updated = client.update_notification(
+            match["id"], desired, force_save=force_save
+        )
+        if (isinstance(updated, dict) and updated.get("id")) or _write_landed(
             client, desired, instance_type
         ):
-            # Verify-after-write: the arr may have accepted the entry even if
-            # the HTTP reply was lost, so trust the arr's actual state.
-            result["status"], result["action"] = "connected", "created"
+            result["status"], result["action"] = "connected", "updated"
         else:
             result["error"] = _save_failed_message(base_url)
         return result
-
-    drift = diff_notification(match, desired, instance_type)
-    if not drift:
-        result["status"], result["action"] = "connected", "noop"
-        return result
-    result["drift_fields"] = drift
-    if dry_run:
-        result["status"] = "drift"
-        return result
-    desired["id"] = match.get("id")
-    updated = client.update_notification(
-        match["id"], desired, force_save=force_save
-    )
-    if (isinstance(updated, dict) and updated.get("id")) or _write_landed(
-        client, desired, instance_type
-    ):
-        result["status"], result["action"] = "connected", "updated"
-    else:
-        result["error"] = _save_failed_message(base_url)
-    return result
+    except Exception as exc:  # noqa: BLE001 - surfaced per-instance, never fatal
+        return _failed_on(result, exc, logger)
 
 
 def deprovision_instance(
-    client: Any, instance_type: str, name: str, *, dry_run: bool = False
+    client: Any,
+    instance_type: str,
+    name: str,
+    *,
+    dry_run: bool = False,
+    logger: Any = None,
 ) -> Dict[str, Any]:
     """Delete CHUB's own webhook from one arr. No-op if it isn't there."""
     result = _base_result(instance_type, name)
-    existing = client.get_notifications()
-    if existing is None:
-        result["error"] = (
-            "Couldn't read notifications from the instance (unreachable?)."
-        )
+    try:
+        existing = client.get_notifications()
+        if existing is None:
+            result["error"] = (
+                "Couldn't read notifications from the instance (unreachable?)."
+            )
+            return result
+        match = _find_chub_notification(existing)
+        if match is None:
+            result["status"], result["action"] = "not_set_up", "noop"
+            return result
+        if dry_run:
+            result["status"] = "connected"
+            return result
+        if client.delete_notification(match["id"]):
+            result["status"], result["action"] = "not_set_up", "removed"
+        else:
+            result["error"] = "The *arr rejected the delete."
         return result
-    match = _find_chub_notification(existing)
-    if match is None:
-        result["status"], result["action"] = "not_set_up", "noop"
-        return result
-    if dry_run:
-        result["status"] = "connected"
-        return result
-    if client.delete_notification(match["id"]):
-        result["status"], result["action"] = "not_set_up", "removed"
-    else:
-        result["error"] = "The *arr rejected the delete."
-    return result
+    except Exception as exc:  # noqa: BLE001
+        return _failed_on(result, exc, logger)
 
 
 # ----- fleet operations ---------------------------------------------------
@@ -425,12 +448,8 @@ def _run_over_instances(
                 row["error"] = "Couldn't connect to the instance."
                 return row
             return op(client, instance_type, name)
-        except Exception as exc:  # noqa: BLE001 - surfaced per instance, never fatal
-            if logger:
-                logger.warning(f"Webhook setup on {name} failed: {exc}")
-            row = _base_result(instance_type, name)
-            row["error"] = failure_text("The request to the instance", exc)
-            return row
+        except Exception as exc:  # noqa: BLE001
+            return _failed_on(_base_result(instance_type, name), exc, logger)
         finally:
             session = getattr(client, "session", None)
             if session is not None:
@@ -469,6 +488,7 @@ def provision_all(
             include_upgrade=include_upgrade,
             dry_run=dry_run,
             force_save=force_save,
+            logger=logger,
         )
 
     return _run_over_instances(eligible, _op, logger) + skipped
@@ -485,7 +505,9 @@ def deprovision_all(
     eligible, skipped = _eligible_instances(config, only)
 
     def _op(client, instance_type, name):
-        return deprovision_instance(client, instance_type, name, dry_run=dry_run)
+        return deprovision_instance(
+            client, instance_type, name, dry_run=dry_run, logger=logger
+        )
 
     return _run_over_instances(eligible, _op, logger) + skipped
 

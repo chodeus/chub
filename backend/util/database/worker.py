@@ -159,7 +159,7 @@ class DBWorker(DatabaseBase):
                         )
                     else:
                         raise JobFailed(
-                            f"Job failed: {result.get('message', 'Unknown error') if isinstance(result, dict) else str(result)}"
+                            f"Job failed: {result.get('message', 'Unknown error') if isinstance(result, dict) else 'no result'}"
                         )
 
                 except Exception as ex:
@@ -494,9 +494,11 @@ class DBWorker(DatabaseBase):
                 },
             }
         except Exception as e:
+            self.logger.error(f"Error fetching job stats: {e}")
+            # Callers forward this envelope's message; keep the error in the log.
             return {
                 "success": False,
-                "message": f"Error fetching job stats: {e}",
+                "message": failure_text("Fetching job stats", e),
                 "error_code": "DB_JOB_STATS_ERROR",
             }
 
@@ -783,9 +785,10 @@ class DBWorker(DatabaseBase):
                 "data": {"job_id": job_id},
             }
         except Exception as e:
+            self.logger.error(f"Error enqueuing job: {e}")
             return {
                 "success": False,
-                "message": f"Error enqueuing job: {e}",
+                "message": failure_text("Enqueuing the job", e),
                 "error_code": "ENQUEUE_JOB_ERROR",
             }
 
@@ -821,9 +824,10 @@ class DBWorker(DatabaseBase):
                 "data": {"deleted": deleted, "days": days},
             }
         except Exception as e:
+            self.logger.error(f"Error cleaning up jobs: {e}")
             return {
                 "success": False,
-                "message": f"Error cleaning up jobs: {e}",
+                "message": failure_text("Cleaning up jobs", e),
                 "error_code": "DB_CLEANUP_JOBS_ERROR",
             }
 
@@ -954,8 +958,9 @@ class DBWorker(DatabaseBase):
                 },
             }
         except Exception as e:
+            self.logger.error(f"Error listing jobs: {e}")
             return {
                 "success": False,
-                "message": f"Error listing jobs: {e}",
+                "message": failure_text("Listing jobs", e),
                 "error_code": "DB_LIST_JOBS_ERROR",
             }

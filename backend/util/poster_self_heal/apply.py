@@ -7,7 +7,11 @@ import os
 from typing import Any, Dict
 
 from backend.util.cl2k.gdrive_upload import list_files, move_file
-from backend.util.public_error import failure_text
+from backend.util.public_error import PublicError, failure_text
+
+
+class ApplyRefused(RuntimeError, PublicError):
+    public = "the new name is already taken in the Drive folder"
 
 
 def apply_proposal(row: Dict[str, Any], sync_cfg: Any, logger) -> str:
@@ -34,7 +38,7 @@ def apply_proposal(row: Dict[str, Any], sync_cfg: Any, logger) -> str:
         # strict=True: a listing FAILURE must not read as "the name is free", or a
         # transient Drive error would let the rename destroy the colliding poster.
         if proposed in list_files(folder_id, sync_cfg, logger, strict=True):
-            raise RuntimeError(
+            raise ApplyRefused(
                 f"refusing to apply: '{proposed}' already exists in Drive folder "
                 f"{folder_id}; renaming '{current}' onto it would overwrite a "
                 "different poster."
