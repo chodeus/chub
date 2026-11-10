@@ -50,28 +50,24 @@ def test_a_new_sync_is_reported_as_queued(db):
 
 
 @pytest.mark.parametrize(
-    "first, then, claim, expected",
+    "first, then, expected",
     [
         (
             ("Movies", "TV", "Anime"),
             ("Movies",),
-            False,
             "A GDrive sync covering 'Movies' is already queued (job {id})",
         ),
         (
             ("Movies", "TV"),
             ("TV", "Movies"),
-            True,
-            "A GDrive sync covering 2 folders: Movies, TV is already running (job {id})",
+            "A GDrive sync covering 2 folders: Movies, TV is already queued (job {id})",
         ),
     ],
-    ids=["all-folders-job-queued", "same-subset-running"],
+    ids=["all-folders-job-queued", "same-subset-queued"],
 )
-def test_a_sync_already_covering_the_folders_is_named(db, first, then, claim, expected):
+def test_a_queued_sync_covering_the_folders_is_named(db, first, then, expected):
     _, queued = _sync(db, *first)
     first_id = queued["data"]["job_id"]
-    if claim:
-        db.worker.claim_next_job("jobs")
 
     status, body = _sync(db, *then)
 
@@ -88,18 +84,25 @@ def test_a_sync_already_covering_the_folders_is_named(db, first, then, claim, ex
             ("TV",),
             ("Movies",),
             True,
-            "Another GDrive sync is already running (job {id}); "
+            "A GDrive sync is already running (job {id}); "
+            "sync 'Movies' again once it finishes",
+        ),
+        (
+            ("Movies", "TV", "Anime"),
+            ("Movies",),
+            True,
+            "A GDrive sync is already running (job {id}); "
             "sync 'Movies' again once it finishes",
         ),
         (
             ("Movies", "TV"),
             ("Movies", "TV", "Anime"),
             False,
-            "Another GDrive sync is already queued (job {id}); "
+            "A GDrive sync is already queued (job {id}); "
             "sync all 3 folders again once it finishes",
         ),
     ],
-    ids=["other-folder-running", "subset-queued-full-requested"],
+    ids=["other-folder-running", "all-folders-running", "subset-queued-full-requested"],
 )
 def test_a_sync_skipping_the_folders_is_refused_not_reported(
     db, first, then, claim, expected
@@ -114,3 +117,28 @@ def test_a_sync_skipping_the_folders_is_refused_not_reported(
     assert body["error_code"] == "GDRIVE_SYNC_BUSY"
     assert body["message"] == expected.format(id=queued["data"]["job_id"])
     assert len(_jobs(db)) == 1
+
+
+def test_a_sync_whose_other_job_finishes_before_it_is_read_is_queued_anew(
+    db, monkeypatch
+):
+    _, first = _sync(db, "TV")
+    db.worker.claim_next_job("jobs")
+    real_enqueue = db.worker.enqueue_job
+
+    def enqueue_then_finish(*a, **k):
+        out = real_enqueue(*a, **k)
+        db.worker.mark_job_complete("jobs", first["data"]["job_id"], {"success": True})
+        return out
+
+    monkeypatch.setattr(db.worker, "enqueue_job", enqueue_then_finish)
+
+    status, body = _sync(db, "Movies")
+
+    assert (status, body["message"]) == (200, "GDrive sync queued for 'Movies'")
+    assert body["data"]["job_id"] != first["data"]["job_id"]
+    assert len(_jobs(db)) == 2
+
+
+def test_a_job_seen_without_its_payload_never_counts_as_covering():
+    assert gdrive._covers({"id": 1, "status": "pending"}, {"Movies"}) is False

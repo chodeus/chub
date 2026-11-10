@@ -98,7 +98,7 @@ class Labelarr(ChubModule):
         mismatch = wrong_client(client, kind, name)
         if mismatch:
             return mismatch
-        # Remove before add, the order the cache's updated_tags applies them in.
+        # Remove before add, the order media_cache.change_tags applies them in.
         writes = (
             ("removing", "removed", remove, lambda: client.remove_tags_by_name([arr_id], remove)),
             ("adding", "added", add, lambda: client.add_tags_by_name(arr_id, add)),
@@ -684,18 +684,8 @@ class Labelarr(ChubModule):
                     }
                 plex_item = {**plex_item, "labels": live_labels}
 
-                # Apply tag actions to media item
-                current_tags = self._parse_tags(media_item.get("tags", []))
                 tags_to_add = tag_actions.get("add", [])
                 tags_to_remove = tag_actions.get("remove", [])
-
-                # Update tags
-                updated_tags = [
-                    tag for tag in current_tags if tag not in tags_to_remove
-                ]
-                updated_tags.extend(
-                    [tag for tag in tags_to_add if tag not in updated_tags]
-                )
 
                 # Update the media_cache database with new tags if there are changes
                 if tags_to_add or tags_to_remove:
@@ -715,9 +705,9 @@ class Labelarr(ChubModule):
                                 "error_code": "ARR_TAG_WRITE_FAILED",
                             }
                         log.info(f"{source_instance} confirmed the tags for media {media_cache_id}")
-                        db.media.set_tags(media_cache_id, updated_tags)
+                        updated = db.media.change_tags(media_cache_id, tags_to_add, tags_to_remove)
                         log.debug(
-                            f"Updated media_cache record {media_cache_id} with new tags: {updated_tags}"
+                            f"Updated media_cache record {media_cache_id} with new tags: {updated}"
                         )
 
                 # Only the tags named in tag_actions are managed here; any
@@ -860,6 +850,7 @@ class Labelarr(ChubModule):
                 )
 
         output: List[Dict[str, Any]] = []
+        failures: List[Dict[str, Any]] = []
         succeeded = 0
         failed = 0
 
@@ -888,6 +879,9 @@ class Labelarr(ChubModule):
                     )
             else:
                 failed += 1
+                failures.append(
+                    {"media_cache_id": media_cache_id, "message": result.get("message")}
+                )
                 log.warning(f"Labelarr sync of media {media_cache_id}: {result.get('message')}")
 
         if output and notify:
@@ -912,8 +906,12 @@ class Labelarr(ChubModule):
                 "succeeded": succeeded,
                 "failed": failed,
                 "changed": len(output),
+                "failures": failures,
             },
         }
         if failed:
             result["error_code"] = "LABELARR_ITEMS_FAILED"
+        # One item (the per-item /labelarr/sync path): its own reason is the job's message.
+        if len(media_cache_ids) == 1 and failures:
+            result["message"] = failures[0]["message"]
         return result

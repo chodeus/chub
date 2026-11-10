@@ -52,7 +52,7 @@ describe('PosterGDriveSearchPage sync toasts', () => {
         ['one folder', 'Sync Movies'],
     ])('%s shows the server message when refused', async (_label, name) => {
         const busy =
-            "Another GDrive sync is already running (job 7); sync 'Movies' again once it finishes";
+            "A GDrive sync is already running (job 7); sync 'Movies' again once it finishes";
         posters.syncGDriveFolders.mockRejectedValue(new Error(busy));
 
         await click(name);

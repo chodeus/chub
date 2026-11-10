@@ -23,12 +23,21 @@ from backend.util.config import ConfigError
 from backend.util.database import ChubDB
 
 
-def _covers(job: Optional[Dict[str, Any]], requested: Set[str]) -> bool:
-    """Whether a queued or running sync job syncs every requested folder."""
-    if not job:
+def _in_flight(db: ChubDB, job_result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The job a deduped enqueue collapsed onto, while it is still queued or running."""
+    if not job_result.get("deduped"):
+        return None
+    job = db.worker.get_job_by_id("jobs", job_result.get("data", {}).get("job_id"))
+    return job if job and job.get("status") in ("pending", "running") else None
+
+
+def _covers(job: Dict[str, Any], requested: Set[str]) -> bool:
+    """Whether a queued sync job will sync every requested folder."""
+    # A running job may be past a folder already, or read the folder list before it changed.
+    if job.get("status") != "pending" or not job.get("payload"):
         return False
     try:
-        args = json.loads(job.get("payload") or "{}").get("module_args") or {}
+        args = json.loads(job["payload"]).get("module_args") or {}
     except (AttributeError, ValueError):
         return False
     only = args.get("only_folders")
@@ -36,18 +45,18 @@ def _covers(job: Optional[Dict[str, Any]], requested: Set[str]) -> bool:
 
 
 def _already_queued(
-    db: ChubDB, queued: Dict[str, Any], requested: Set[str], scope: str, data: Dict[str, Any]
+    job: Dict[str, Any], requested: Set[str], scope: str, data: Dict[str, Any]
 ) -> JSONResponse:
     """The reply when enqueue_job collapsed this request onto another sync job."""
-    job_id = queued.get("job_id")
-    state = {"pending": "queued"}.get(queued.get("status"), queued.get("status"))
-    if _covers(db.worker.get_job_by_id("jobs", job_id), requested):
+    job_id = job.get("id")
+    state = {"pending": "queued"}.get(job.get("status"), job.get("status"))
+    if _covers(job, requested):
         return ok(
-            f"A GDrive sync covering {scope} is already {state} (job {job_id})",
+            f"A GDrive sync covering {scope} is already queued (job {job_id})",
             {**data, "deduped": True},
         )
     return error(
-        f"Another GDrive sync is already {state} (job {job_id}); "
+        f"A GDrive sync is already {state} (job {job_id}); "
         f"sync {scope} again once it finishes",
         code="GDRIVE_SYNC_BUSY",
         status_code=409,
@@ -121,7 +130,7 @@ def get_gdrive_stats(
     description="Queue one GDrive sync job for the selected folders.",
     responses={
         200: {
-            "description": "GDrive sync job queued, or one already covers these folders",
+            "description": "GDrive sync job queued, or a queued one already covers these folders",
             "content": {
                 "application/json": {
                     "example": {
@@ -133,7 +142,7 @@ def get_gdrive_stats(
             },
         },
         400: {"description": "No GDrive folder names provided"},
-        409: {"description": "Another GDrive sync that skips these folders is in flight"},
+        409: {"description": "A GDrive sync is running, or queued without these folders"},
     },
 )
 def sync_gdrive_folders(
@@ -193,6 +202,13 @@ def sync_gdrive_folders(
         job_result = db.worker.enqueue_job(
             "jobs", payload=payload, job_type="module_run"
         )
+        other = _in_flight(db, job_result)
+        if job_result.get("deduped") and other is None:
+            # The job it collapsed onto finished before it could be read: queue once more.
+            job_result = db.worker.enqueue_job(
+                "jobs", payload=payload, job_type="module_run"
+            )
+            other = _in_flight(db, job_result)
         # A failed enqueue used to answer "started" with no job behind it.
         failed = worker_error(
             job_result,
@@ -216,7 +232,8 @@ def sync_gdrive_folders(
             scope = f"{len(requested)} folders: {', '.join(sorted(requested))}"
             data = {"job_id": job_id, "queued_count": len(requested), "scope": "subset"}
         if job_result.get("deduped"):
-            return _already_queued(db, queued, requested, scope, data)
+            seen = {"id": job_id, "status": queued.get("status")}
+            return _already_queued(other or seen, requested, scope, data)
         return ok(f"GDrive sync queued for {scope}", data)
 
     except Exception as e:
