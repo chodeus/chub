@@ -8,7 +8,7 @@ fixes, duplicate detection, import/export, and ARR integration.
 
 import csv
 import io
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from fastapi import APIRouter, Depends, Query, Request
@@ -1029,22 +1029,27 @@ async def resolve_duplicates(
     )
 
 
+# SQLite's INTEGER ceiling: a larger id fails the lookup only after earlier deletes ran.
+_MAX_MEDIA_ID = 2**63 - 1
+
+
 def _media_id(value: Any) -> Optional[int]:
-    """A positive media id, from an int or a digit string; None otherwise."""
+    """A positive media id, from an int or an ASCII digit string; None otherwise."""
     # "1" != 1: an unparsed string id slipped past the keep-id check.
     if isinstance(value, bool):
         return None
-    if isinstance(value, str) and value.strip().isdigit():
-        value = int(value.strip())
-    return value if isinstance(value, int) and value > 0 else None
+    if isinstance(value, str):
+        text = value.strip()
+        value = int(text) if text.isascii() and text.isdigit() else None
+    return value if isinstance(value, int) and 0 < value <= _MAX_MEDIA_ID else None
 
 
 def _media_ids(value: Any) -> Optional[List[int]]:
-    """Every entry as a media id, or None when the list is missing or any entry is not."""
+    """Each entry once as a media id, or None when the list is missing or any entry is not."""
     if not isinstance(value, list):
         return None
     ids = [_media_id(entry) for entry in value]
-    return None if None in ids else ids
+    return None if None in ids else list(dict.fromkeys(ids))
 
 
 def _delete_with_files(item: Dict[str, Any], logger: Any) -> ArrOutcome:
@@ -1075,26 +1080,44 @@ def _remove_media_item(db, deleter, rid, delete_files, add_exclusion):
         return False, failure_text("cache delete", e)
 
 
+def _delete_each(
+    db: Any,
+    deleter: ArrDeleter,
+    ids: List[int],
+    delete_files: bool,
+    add_exclusion: bool,
+    keep_id: Optional[int] = None,
+) -> Tuple[List[int], List[Dict[str, Any]]]:
+    """(removed ids, failed entries); one id's error never costs the others' report."""
+    removed: List[int] = []
+    failed: List[Dict[str, Any]] = []
+    for rid in ids:
+        # The kept item must never be removed, and with delete_files that would
+        # take it off disk while the response still reports it as kept.
+        if rid == keep_id:
+            continue
+        try:
+            ok_, reason = _remove_media_item(db, deleter, rid, delete_files, add_exclusion)
+        except ConfigError:
+            raise
+        except Exception as e:
+            deleter.logger.error(f"Deleting media item {rid} failed: {e}")
+            ok_, reason = False, failure_text("Delete", e)
+        if ok_:
+            removed.append(rid)
+        else:
+            failed.append({"id": rid, "reason": reason})
+    return removed, failed
+
+
 def _resolve_duplicates_sync(
     db, logger, keep_id, kept_item, remove_ids, delete_files, add_exclusion
 ) -> JSONResponse:
     """Blocking body of resolve_duplicates — runs in a worker thread."""
-    removed = []
-    failed = []
-
     with ArrDeleter(logger, keep=kept_item) as deleter:
-        for rid in remove_ids:
-            # The kept item must never be removed, and with delete_files that would
-            # take it off disk while the response still reports it as kept.
-            if rid == keep_id:
-                continue
-            ok_, reason = _remove_media_item(
-                db, deleter, rid, delete_files, add_exclusion
-            )
-            if ok_:
-                removed.append(rid)
-            else:
-                failed.append({"id": rid, "reason": reason})
+        removed, failed = _delete_each(
+            db, deleter, remove_ids, delete_files, add_exclusion, keep_id=keep_id
+        )
 
     msg = f"Resolved duplicate group: kept 1, removed {len(removed)}"
     if failed:
@@ -1147,17 +1170,8 @@ async def bulk_delete_media(
 
 def _bulk_delete_sync(db, logger, ids, delete_files, add_exclusion) -> JSONResponse:
     """Blocking body of bulk_delete_media — runs in a worker thread."""
-    removed = []
-    failed = []
     with ArrDeleter(logger) as deleter:
-        for rid in ids:
-            ok_, reason = _remove_media_item(
-                db, deleter, rid, delete_files, add_exclusion
-            )
-            if ok_:
-                removed.append(rid)
-            else:
-                failed.append({"id": rid, "reason": reason})
+        removed, failed = _delete_each(db, deleter, ids, delete_files, add_exclusion)
     msg = f"Deleted {len(removed)} item(s)"
     if failed:
         msg += f", {len(failed)} failed"
@@ -1878,7 +1892,20 @@ async def delete_media_item(
                     status_code=outcome.status,
                 )
 
-        db.media.delete_by_id(media_id)
+        try:
+            db.media.delete_by_id(media_id)
+        except Exception as e:
+            if not outcome.deleted:
+                raise
+            # The *arr delete is done: a generic error would hide that the files are gone.
+            logger.error(f"Removing cache row {media_id} after its *arr delete failed: {e}")
+            return error(
+                f"Media item {media_id} and its files were deleted from "
+                f"{item.get('instance_name')}, but CHUB could not remove its own entry "
+                "— see the server log",
+                code="MEDIA_ROW_DELETE_FAILED",
+                status_code=500,
+            )
 
         # Only an *arr delete that ran now removed files: a 404 found none to remove.
         return ok(

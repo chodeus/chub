@@ -432,3 +432,105 @@ def test_bulk_delete_rejects_ids_that_are_not_media_ids(db, ids):
     resp = TestClient(app).post("/api/media/bulk-delete", json={"ids": ids})
 
     assert resp.status_code == 400
+
+
+def _api(db):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+    app.state.logger = StubLogger()
+    app.state.db = db
+    app.include_router(router)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.mark.parametrize("bad", ["²", "①", 2**63])
+def test_an_id_sqlite_cannot_hold_is_a_400_before_any_delete(db, radarr, bad):
+    good = _seed_arr(db, "Dune")
+
+    resp = _api(db).post("/api/media/bulk-delete", json={"ids": [good, bad], "deleteFiles": True})
+
+    assert resp.status_code == 400
+    assert radarr.deletes == []
+
+
+def test_an_out_of_range_keep_id_is_a_400(db):
+    resp = _api(db).post(
+        "/api/media/duplicates/x/resolve", json={"keepId": 2**63, "removeIds": [1]}
+    )
+
+    assert resp.status_code == 400
+
+
+def test_a_repeated_id_is_removed_once(db, radarr):
+    rid = _seed_arr(db, "Dune")
+
+    resp = _api(db).post("/api/media/bulk-delete", json={"ids": [rid, str(rid)]})
+
+    assert resp.json()["data"] == {"removed": [rid], "failed": []}
+
+
+def test_one_ids_error_keeps_the_others_report(db, radarr, monkeypatch):
+    first, second = _seed_arr(db, "Dune"), _seed_arr(db, "Sicario", arr_id=43)
+    real = db.media.get_by_id
+
+    def flaky(rid):
+        if rid == first:
+            raise RuntimeError("/srv token=hunter2")
+        return real(rid)
+
+    monkeypatch.setattr(db.media, "get_by_id", flaky)
+
+    data = _bulk(db, [first, second])
+
+    assert data["removed"] == [second]
+    assert data["failed"] == [
+        {"id": first, "reason": "Delete failed: unexpected error — see the server log"}
+    ]
+
+
+def test_a_title_cased_legacy_kept_row_still_protects_its_arr_item(db, arrs, monkeypatch):
+    """Rows written before upsert lowercased source carry "Sonarr"."""
+    arrs.hosts["http://s:8989"] = ("Sonarr", {7}, None)
+    _configure(monkeypatch, sonarr={"Main": "http://s:8989"})
+    show = {"arr_id": 7, "asset_type": "show", "arr_type": "sonarr", "name": "Main"}
+    keep = _seed_arr(db, "Severance", **show)
+    twin = _seed_arr(db, "Severance twin", **show)
+    db.media.execute_query("UPDATE media_cache SET source='Sonarr' WHERE id=?", (keep,))
+
+    resp = _resolve(db, {"keepId": keep, "removeIds": [twin], "deleteFiles": True})
+
+    assert resp.json()["data"]["removed"] == [twin]
+    assert arrs.deletes == []
+    assert 7 in arrs.hosts["http://s:8989"][1]
+
+
+def test_a_kept_album_does_not_shield_an_artist_with_the_same_id(db, arrs, monkeypatch):
+    """Album and artist ids are separate Lidarr sequences: album 5 is not artist 5."""
+    arrs.hosts["http://l:8686"] = ("Lidarr", {5}, None)
+    _configure(monkeypatch, lidarr={"Lidarr": "http://l:8686"})
+    lidarr = {"arr_id": 5, "arr_type": "lidarr", "name": "Lidarr"}
+    keep = _seed_arr(db, "Album", asset_type="album", **lidarr)
+    artist = _seed_arr(db, "Artist", asset_type="artist", **lidarr)
+
+    resp = _resolve(db, {"keepId": keep, "removeIds": [artist], "deleteFiles": True})
+
+    assert resp.json()["data"]["removed"] == [artist]
+    assert [url for url, _params in arrs.deletes] == ["http://l:8686/api/v1/artist/5"]
+
+
+def test_a_single_delete_whose_row_delete_fails_says_the_files_went(db, radarr, monkeypatch):
+    rid = _seed_arr(db, "Dune")
+
+    def boom(_rid):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(db.media, "delete_by_id", boom)
+    resp = _api(db).request("DELETE", f"/api/media/{rid}", json={"deleteFiles": True})
+
+    assert resp.status_code == 500
+    assert resp.json()["message"] == (
+        f"Media item {rid} and its files were deleted from Radarr 4K, but CHUB could "
+        "not remove its own entry — see the server log"
+    )

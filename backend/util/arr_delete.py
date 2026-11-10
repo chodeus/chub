@@ -14,10 +14,15 @@ ARR_TYPES = ("radarr", "sonarr", "lidarr")
 _DELETABLE = {("radarr", "movie"), ("sonarr", "show"), ("lidarr", "artist")}
 
 
+def _kind(row: Dict[str, Any]) -> str:
+    # Rows written before upsert lowercased it carry "Sonarr".
+    return str(row.get("source") or "").lower()
+
+
 def instance_detail(instances: Any, row: Dict[str, Any]) -> Any:
     """The row's own instance config: under its stored type, else the first name match."""
     # Names are unique only within a type, so a stored type is never second-guessed.
-    kind = row.get("source")
+    kind = _kind(row)
     kinds = (kind,) if kind in ARR_TYPES else ARR_TYPES
     for arr_type in kinds:
         detail = (getattr(instances, arr_type, None) or {}).get(row.get("instance_name"))
@@ -26,10 +31,11 @@ def instance_detail(instances: Any, row: Dict[str, Any]) -> Any:
     return None
 
 
-def _arr_key(row: Dict[str, Any]) -> Optional[Tuple[Any, Any, Any]]:
+def _arr_key(row: Dict[str, Any]) -> Optional[Tuple[Any, ...]]:
+    """What an *arr delete of ``row`` would remove; Lidarr album and artist ids overlap."""
     if not row.get("arr_id"):
         return None
-    return (row.get("source"), row.get("instance_name"), row.get("arr_id"))
+    return (_kind(row), row.get("instance_name"), row.get("asset_type"), row.get("arr_id"))
 
 
 class ArrOutcome(NamedTuple):
@@ -67,7 +73,7 @@ class ArrDeleter:
         self, item: Dict[str, Any], delete_files: bool, add_exclusion: bool
     ) -> ArrOutcome:
         """Remove ``item`` from its *arr, or say why it was not."""
-        name, arr_id, kind = item.get("instance_name"), item.get("arr_id"), item.get("source")
+        name, arr_id, kind = item.get("instance_name"), item.get("arr_id"), _kind(item)
         if not (name and arr_id):
             if delete_files:
                 return ArrOutcome(
