@@ -1,42 +1,50 @@
-"""Instance names must differ across service types: lookups by bare name rely on it."""
+"""Instance names must differ, even across service types: lookups by bare name rely on it."""
 
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-SERVICE_TYPES = ("radarr", "sonarr", "lidarr", "plex")
-
-
-def _kinds_by_name(instances: Any) -> Dict[str, List[str]]:
-    # Keyed ignoring case: some lookups (poster-cleanarr's) match names that way.
-    kinds: Dict[str, List[str]] = defaultdict(list)
-    for kind in SERVICE_TYPES:
-        for name in getattr(instances, kind, None) or {}:
-            if kind not in kinds[name.casefold()]:
-                kinds[name.casefold()].append(kind)
-    return kinds
+Entry = Tuple[str, str]  # (service type, instance name)
 
 
-def _clash(name: str, kinds: List[str]) -> str:
-    labels = [k.capitalize() for k in kinds]
-    joined = ", ".join(labels[:-1]) + " and " + labels[-1]
+def _key(name: str) -> str:
+    # Matches the loosest lookup (webhook_processor's .strip().lower()).
+    return name.strip().lower()
+
+
+def _entries(instances: Any) -> Dict[str, List[Entry]]:
+    found: Dict[str, List[Entry]] = defaultdict(list)
+    # Every dict field of InstancesConfig is a service type, so a new one is covered.
+    for kind, named in vars(instances).items():
+        if isinstance(named, dict):
+            for name in named:
+                found[_key(name)].append((kind, name))
+    return found
+
+
+def _clash(name: str, others: List[Entry]) -> str:
+    named = " and ".join(f"{kind.capitalize()} instance '{n}'" for kind, n in others)
     return (
-        f"'{name}' would name {joined} instances; each instance needs its own "
-        "name, even across services"
+        f"'{name}' is the same name as the {named}; instance names must differ, "
+        "ignoring case, even across services"
     )
 
 
-def name_taken(instances: Any, name: str, kind: str) -> Optional[str]:
-    """Why a ``kind`` instance may not be called ``name``, or None when it may."""
-    kinds = [k for k in _kinds_by_name(instances).get(name.casefold(), []) if k != kind]
-    return _clash(name, sorted(kinds + [kind], key=SERVICE_TYPES.index)) if kinds else None
+def name_taken(
+    instances: Any, name: str, kind: str, current: Optional[str] = None
+) -> Optional[str]:
+    """Why a ``kind`` instance (now ``current``, if renamed) may not be called ``name``."""
+    others = [
+        e for e in _entries(instances).get(_key(name), []) if e != (kind, current)
+    ]
+    return _clash(name, others) if others else None
 
 
 def new_shared_name(before: Any, after: Any) -> Optional[str]:
-    """Why ``after`` instances must not be saved: a name newly shared across types, or None."""
+    """Why ``after`` instances must not be saved: an instance newly sharing a name, or None."""
     # Only a new clash is refused, so a config that already has one still saves.
-    old = _kinds_by_name(before)
-    for key, kinds in _kinds_by_name(after).items():
-        if len(kinds) > 1 and not set(kinds) <= set(old.get(key, [])):
-            shown = next(n for k in kinds for n in getattr(after, k) if n.casefold() == key)
-            return _clash(shown, kinds)
+    old = {e for group in _entries(before).values() for e in group}
+    for group in _entries(after).values():
+        added = [e for e in group if e not in old]
+        if added and len(group) > 1:
+            return _clash(added[0][1], [e for e in group if e != added[0]])
     return None

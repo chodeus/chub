@@ -1303,7 +1303,7 @@ def update_instance(
                     code="INSTANCE_NAME_CONFLICT",
                     status_code=400,
                 )
-            clash = name_taken(config.instances, new_name, service)
+            clash = name_taken(config.instances, new_name, service, current=instance_id)
             if clash:
                 return error(clash, code="INSTANCE_NAME_CONFLICT", status_code=400)
 
