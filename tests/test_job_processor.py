@@ -7,6 +7,8 @@ than propagating out of the worker.
 
 from types import SimpleNamespace
 
+import pytest
+
 import backend.util.job_processor as jp
 from backend.util.config import ChubConfig, InstanceDetail
 
@@ -37,7 +39,7 @@ def test_handler_exception_is_wrapped(monkeypatch):
     res = jp.process_job({"id": 2, "type": "cache_refresh", "payload": "{}"}, _logger())
     assert res["success"] is False
     assert res["error_code"] == "JOB_EXCEPTION"
-    assert "kaboom" in res["message"]
+    assert res["message"] == "Job failed: unexpected error — see the server log"
 
 
 def test_dispatch_routes_to_matching_handler(monkeypatch):
@@ -563,3 +565,98 @@ def test_only_targeted_upload_jobs_recheck_the_posters_they_would_skip(monkeypat
         jp._process_upload_posters_job(payload, _logger(), 1)
 
     assert seen == [True, False]
+
+
+_SECRET = "http://radarr:7878/api?apikey=hunter2"
+
+
+class _Raising:
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError(_SECRET)
+
+
+def _raise(*args, **kwargs):
+    raise RuntimeError(_SECRET)
+
+
+
+@pytest.mark.parametrize(
+    "handler, target, replacement, payload, what",
+    [
+        (
+            "_process_webhook_job",
+            "backend.util.webhook_processor.WebhookProcessor",
+            _Raising,
+            {},
+            "Webhook processing",
+        ),
+        (
+            "_process_media_sync_job",
+            "backend.util.config.load_config",
+            _raise,
+            {},
+            "media_sync",
+        ),
+        (
+            "_process_labelarr_bulk_sync_job",
+            "backend.modules.labelarr.Labelarr",
+            _Raising,
+            {"source_instance": "radarr", "media_cache_ids": [1]},
+            "Bulk labelarr sync",
+        ),
+        (
+            "_process_cache_refresh_job",
+            "backend.util.connector.Connector",
+            _Raising,
+            {},
+            "Cache refresh",
+        ),
+    ],
+)
+def test_a_failed_job_reports_only_the_kind(
+    handler, target, replacement, payload, what, monkeypatch
+):
+    monkeypatch.setattr(target, replacement)
+
+    res = getattr(jp, handler)(payload, _logger(), 7, None)
+
+    assert res["success"] is False
+    assert res["message"] == f"{what} failed: unexpected error — see the server log"
+
+
+def test_a_module_that_raises_records_only_the_kind(monkeypatch):
+    finished = []
+
+    class _Module:
+        def __init__(self, logger):
+            pass
+
+        def set_job_context(self, job_id, db):
+            pass
+
+    monkeypatch.setattr("backend.modules.MODULES", {"fake": _Module})
+    monkeypatch.setattr("backend.util.config.load_config", _raise)
+    monkeypatch.setattr(jp, "_run_module_once", _raise)
+    db = SimpleNamespace(
+        run_state=SimpleNamespace(
+            record_run_start=lambda *a, **k: None,
+            record_run_finish=lambda *a, **k: finished.append(k["message"]),
+        )
+    )
+
+    res = jp._process_module_run_job({"module_name": "fake"}, _logger(), 0, db)
+
+    expected = "Module fake failed: unexpected error — see the server log"
+    assert (res["message"], res["data"]["error"], finished) == (expected, expected, [expected])
+
+
+def test_a_module_run_job_that_raises_reports_only_the_kind(monkeypatch):
+    class _Broken(dict):
+        def __contains__(self, key):
+            raise RuntimeError(_SECRET)
+
+    monkeypatch.setattr("backend.modules.MODULES", _Broken())
+
+    res = jp._process_module_run_job({"module_name": "fake"}, _logger(), 0, None)
+
+    assert res["message"] == "Module run job failed: unexpected error — see the server log"

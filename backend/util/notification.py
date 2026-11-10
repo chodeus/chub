@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 
 from backend.util.log_redaction import redact
+from backend.util.public_error import PublicError, failure_text
 from backend.util.rate_limiter import Throttle
 
 # Mirror of config.ALL_MODULES_SENTINEL — a destination whose `modules` list
@@ -18,6 +19,10 @@ ALL_MODULES_SENTINEL = "__ALL__"
 
 # Shared by every webhook POST: calls start at most once per second, counted on entry as the old decorator did.
 _WEBHOOK_THROTTLE = Throttle(rate=1, burst=1)
+
+
+class NotificationURLBlocked(ValueError, PublicError):
+    public = "the URL was refused (private or unresolvable host)"
 
 
 def _part_color(part: Dict[str, Any], default: Any) -> Any:
@@ -278,7 +283,9 @@ class NotificationManager:
         _WEBHOOK_THROTTLE.acquire()
         safe, reason = is_safe_url(url)
         if not safe:
-            raise ValueError(f"Notification URL blocked by SSRF guard: {reason}")
+            raise NotificationURLBlocked(
+                f"Notification URL blocked by SSRF guard: {reason}"
+            )
         # A hung webhook must not stall the whole run: bound every POST.
         return requests.post(url, json=payload, timeout=15)
 
@@ -342,11 +349,11 @@ class NotificationManager:
                 self.logger.info(f"[Notification] ✅ {label} notification sent.")
                 return True, "Notification sent successfully."
         except Exception as e:
-            tb_str = traceback.format_exc()
             self.logger.error(
-                f"[Notification] {label} send exception: {e}\n{tb_str}", exc_info=True
+                f"[Notification] {label} send exception: {e}", exc_info=True
             )
-            return False, f"{e}\n{tb_str}"
+            # Callers show this to the browser: never put exc or a traceback in it.
+            return False, failure_text(f"{label} send", e)
 
     def send_notifiarr_notification(
         self,
@@ -514,12 +521,9 @@ class NotificationManager:
                     entry["error"] = f"Unknown notification target: {method}"
                 results.append(entry)
             except Exception as ex:
-                tb_str = traceback.format_exc()
-                entry["error"] = f"Exception for {method}: {ex}\n{tb_str}"
+                entry["error"] = failure_text(f"Sending to {method}", ex)
                 results.append(entry)
-                self.logger.error(
-                    f"Exception for {method}: {ex}\n{tb_str}", exc_info=True
-                )
+                self.logger.error(f"Exception for {method}: {ex}", exc_info=True)
         success = any(r.get("ok") for r in results)
         out = {"success": success, "results": results}
         if not success:
@@ -560,9 +564,12 @@ class NotificationManager:
             if not ok:
                 entry["error"] = msg
         except Exception as ex:
-            tb_str = traceback.format_exc()
-            entry["message"] = f"Exception while testing {method}: {ex}\n{tb_str}"
-            entry["error"] = f"{ex}\n{tb_str}"
+            # method arrives from the request: no line breaks into the log.
+            logged = str(method).replace("\r", "").replace("\n", "")
+            self.logger.error(
+                f"[Notification] testing {logged} raised: {ex}", exc_info=True
+            )
+            entry["message"] = entry["error"] = failure_text(f"Testing {method}", ex)
         out: Dict[str, Any] = {"success": bool(entry["ok"]), "results": [entry]}
         if not entry["ok"]:
             out["error"] = entry["error"] or entry["message"]

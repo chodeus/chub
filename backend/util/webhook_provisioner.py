@@ -36,6 +36,7 @@ from urllib.parse import quote, urlparse
 
 from backend.util.arr import create_arr_client
 from backend.util.helper import as_list
+from backend.util.public_error import failure_text
 
 # The fixed Connect name CHUB owns in each arr. Matching/creating by this exact
 # (case-insensitive) name is what makes provisioning idempotent and keeps CHUB
@@ -234,6 +235,17 @@ def _save_failed_message(base_url: str) -> str:
 # ----- per-instance operations --------------------------------------------
 
 
+def _failed_on(
+    result: Dict[str, Any], exc: BaseException, logger: Any
+) -> Dict[str, Any]:
+    """``result`` with the failure's kind as its error; the error goes to the log."""
+    # Shown on the webhook setup screen; keeps what the row already found.
+    if logger:
+        logger.warning(f"Webhook setup on {result.get('name')} failed: {exc}")
+    result["error"] = failure_text("The request to the instance", exc)
+    return result
+
+
 def _base_result(instance_type: str, name: str) -> Dict[str, Any]:
     return {
         "name": name,
@@ -274,6 +286,7 @@ def provision_instance(
     include_upgrade: bool = False,
     dry_run: bool = False,
     force_save: bool = False,
+    logger: Any = None,
 ) -> Dict[str, Any]:
     """Create/update CHUB's webhook in one arr (or, in dry_run, just report).
 
@@ -339,12 +352,16 @@ def provision_instance(
             result["error"] = _save_failed_message(base_url)
         return result
     except Exception as exc:  # noqa: BLE001 - surfaced per-instance, never fatal
-        result["error"] = str(exc)
-        return result
+        return _failed_on(result, exc, logger)
 
 
 def deprovision_instance(
-    client: Any, instance_type: str, name: str, *, dry_run: bool = False
+    client: Any,
+    instance_type: str,
+    name: str,
+    *,
+    dry_run: bool = False,
+    logger: Any = None,
 ) -> Dict[str, Any]:
     """Delete CHUB's own webhook from one arr. No-op if it isn't there."""
     result = _base_result(instance_type, name)
@@ -368,8 +385,7 @@ def deprovision_instance(
             result["error"] = "The *arr rejected the delete."
         return result
     except Exception as exc:  # noqa: BLE001
-        result["error"] = str(exc)
-        return result
+        return _failed_on(result, exc, logger)
 
 
 # ----- fleet operations ---------------------------------------------------
@@ -433,9 +449,7 @@ def _run_over_instances(
                 return row
             return op(client, instance_type, name)
         except Exception as exc:  # noqa: BLE001
-            row = _base_result(instance_type, name)
-            row["error"] = str(exc)
-            return row
+            return _failed_on(_base_result(instance_type, name), exc, logger)
         finally:
             session = getattr(client, "session", None)
             if session is not None:
@@ -474,6 +488,7 @@ def provision_all(
             include_upgrade=include_upgrade,
             dry_run=dry_run,
             force_save=force_save,
+            logger=logger,
         )
 
     return _run_over_instances(eligible, _op, logger) + skipped
@@ -490,7 +505,9 @@ def deprovision_all(
     eligible, skipped = _eligible_instances(config, only)
 
     def _op(client, instance_type, name):
-        return deprovision_instance(client, instance_type, name, dry_run=dry_run)
+        return deprovision_instance(
+            client, instance_type, name, dry_run=dry_run, logger=logger
+        )
 
     return _run_over_instances(eligible, _op, logger) + skipped
 

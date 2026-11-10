@@ -20,10 +20,28 @@ from collections import defaultdict
 from shutil import which
 from typing import Any, Dict, List, Optional
 
+from backend.util.public_error import PublicError
+
 # Serialises writes per Drive folder: concurrent uploads both list "absent" and
 # both create, and Drive allows duplicate names. Thread lock — single process only.
 _FOLDER_LOCKS_GUARD = threading.Lock()
 _FOLDER_LOCKS: "defaultdict[str, threading.Lock]" = defaultdict(threading.Lock)
+
+
+class RcloneUnavailable(FileNotFoundError, PublicError):
+    public = "rclone is not installed"
+
+
+class RcloneError(RuntimeError, PublicError):
+    public = "rclone failed"
+
+
+class RcloneTimeout(RcloneError):
+    public = "timed out"
+
+
+class DriveNotSignedIn(RcloneError):
+    public = "Google Drive is not signed in"
 
 
 def _folder_lock(folder_id: str) -> threading.Lock:
@@ -36,10 +54,10 @@ def _rclone_path() -> str:
     if env:
         if os.path.isfile(env) and os.access(env, os.X_OK):
             return env
-        raise FileNotFoundError(f"RCLONE_PATH '{env}' is not an executable file.")
+        raise RcloneUnavailable(f"RCLONE_PATH '{env}' is not an executable file.")
     path = which("rclone")
     if path is None:
-        raise FileNotFoundError("rclone not found in PATH; set RCLONE_PATH.")
+        raise RcloneUnavailable("rclone not found in PATH; set RCLONE_PATH.")
     return path
 
 
@@ -83,7 +101,7 @@ def _run_rclone(
             timeout=_RCLONE_TIMEOUT,
         )
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"rclone timed out after {_RCLONE_TIMEOUT}s") from exc
+        raise RcloneTimeout(f"rclone timed out after {_RCLONE_TIMEOUT}s") from exc
 
 
 def _ensure_remote(rclone: str) -> None:
@@ -160,7 +178,7 @@ def upload_file(
     _reject_unsafe(local_path, "local_path")
     auth = _upload_auth_env(sync_cfg)
     if not auth:
-        raise RuntimeError(
+        raise DriveNotSignedIn(
             "no usable Google Drive OAuth token configured — set a token under "
             "Sync GDrive (a service account cannot own files in a personal Drive)"
         )
@@ -182,7 +200,7 @@ def upload_file(
     with _folder_lock(folder_id):
         result = _run_rclone(cmd, auth)
         if result.returncode != 0:
-            raise RuntimeError(
+            raise RcloneError(
                 f"rclone copy failed: {_rclone_error_detail(result.stderr)}"
             )
         _reap_duplicates(os.path.basename(local_path), folder_id, sync_cfg, logger)
@@ -260,7 +278,7 @@ def move_file(
     _reject_unsafe(new_name, "gdrive_new_name")
     auth = _upload_auth_env(sync_cfg)
     if not auth:
-        raise RuntimeError(
+        raise DriveNotSignedIn(
             "no usable Google Drive OAuth token configured — set a token under "
             "Sync GDrive (a service account cannot own files in a personal Drive)"
         )
@@ -282,7 +300,7 @@ def move_file(
     with _folder_lock(folder_id):
         result = _run_rclone(cmd, auth)
     if result.returncode != 0:
-        raise RuntimeError(
+        raise RcloneError(
             f"rclone moveto failed: {_rclone_error_detail(result.stderr)}"
         )
     logger.debug(f"renamed {old_name} -> {new_name} in drive {folder_id}")
@@ -309,7 +327,7 @@ def list_files(folder_id: str, sync_cfg: Any, logger, strict: bool = False) -> L
     auth = _upload_auth_env(sync_cfg)
     if not auth:
         if strict:
-            raise RuntimeError(
+            raise DriveNotSignedIn(
                 "no usable Google Drive OAuth token configured — cannot list "
                 "the folder to check for a name collision"
             )
@@ -332,7 +350,7 @@ def list_files(folder_id: str, sync_cfg: Any, logger, strict: bool = False) -> L
     if result.returncode != 0:
         detail = _rclone_error_detail(result.stderr)
         if strict:
-            raise RuntimeError(f"rclone lsf failed: {detail}")
+            raise RcloneError(f"rclone lsf failed: {detail}")
         logger.warning(f"poster_self_heal: rclone lsf failed: {detail}")
         return []
     return [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
@@ -357,7 +375,7 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
     auth = _upload_auth_env(sync_cfg)
     if not auth:
-        raise RuntimeError(
+        raise DriveNotSignedIn(
             "no usable Google Drive OAuth token configured — set a token under "
             "Sync GDrive (a service account cannot own files in a personal Drive)"
         )
@@ -377,7 +395,7 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
             auth,
         )
         if result.returncode != 0:
-            raise RuntimeError(
+            raise RcloneError(
                 f"rclone lsjson failed: {_rclone_error_detail(result.stderr)}"
             )
         # Keep only usable ids: a blank/absent/non-string ID must NOT register the
@@ -400,7 +418,7 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
             auth,
         )
         if result.returncode != 0:
-            raise RuntimeError(
+            raise RcloneError(
                 f"rclone mkdir '{name}' failed: {_rclone_error_detail(result.stderr)}"
             )
         made.append(name)
@@ -409,7 +427,7 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
     ids = _dir_ids() if made else existing
     missing = [n for n in TYPE_SUBFOLDERS.values() if n not in ids]
     if missing:
-        raise RuntimeError(f"Drive did not return an id for: {', '.join(missing)}")
+        raise RcloneError(f"Drive did not return an id for: {', '.join(missing)}")
     logger.info(
         f"cl2k: type subfolders under {folder_id} — created {made or 'none'}, "
         f"reused {[n for n in TYPE_SUBFOLDERS.values() if n not in made]}"
@@ -434,7 +452,7 @@ def delete_file(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
     _reject_unsafe(name, "gdrive_name")
     auth = _upload_auth_env(sync_cfg)
     if not auth:
-        raise RuntimeError("no usable Google Drive OAuth token configured")
+        raise DriveNotSignedIn("no usable Google Drive OAuth token configured")
     rclone = _rclone_path()
     _ensure_remote(rclone)
     cmd = [
@@ -447,7 +465,7 @@ def delete_file(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
     ]
     result = _run_rclone(cmd, auth)
     if result.returncode != 0:
-        raise RuntimeError(
+        raise RcloneError(
             f"rclone deletefile failed: {_rclone_error_detail(result.stderr)}"
         )
 
@@ -463,7 +481,7 @@ def test_drive_access(folder_id: str, sync_cfg: Any, logger) -> str:
     """
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
     if not has_upload_token(sync_cfg):
-        raise RuntimeError(
+        raise DriveNotSignedIn(
             "no usable Google Drive OAuth token configured — set a token under "
             "Sync GDrive (a service account cannot own files in a personal Drive)"
         )

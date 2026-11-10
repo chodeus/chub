@@ -15,6 +15,7 @@ from backend.api.utils import (
     get_logger,
     ok,
     read_json_object,
+    worker_error,
 )
 from backend.modules.sync_gdrive import SyncGDrive
 from backend.util.config import ConfigError
@@ -176,6 +177,15 @@ def sync_gdrive_folders(
         job_result = db.worker.enqueue_job(
             "jobs", payload=payload, job_type="module_run"
         )
+        # A failed enqueue used to answer "started" with no job behind it.
+        failed = worker_error(
+            job_result,
+            logger,
+            "Error starting the GDrive sync",
+            "GDRIVE_SYNC_ENQUEUE_ERROR",
+        )
+        if failed:
+            return failed
         job_id = job_result.get("data", {}).get("job_id")
 
         if is_full_set:

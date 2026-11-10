@@ -522,6 +522,49 @@ def test_health_snapshot_reads_live_config_not_the_init_capture(
         assert db.system_health.recent_snapshots() == []  # and nothing was recorded
 
 
+def test_a_probe_error_records_only_its_kind(tmp_path, monkeypatch):
+    """Snapshots reach the dashboard: the kind of failure, never its text."""
+    from backend.util.database import ChubDB
+
+    cfg = SimpleNamespace(
+        instances=SimpleNamespace(
+            plex={},
+            radarr={"Radarr": SimpleNamespace(url="http://radarr:7878", api="k")},
+            sonarr={},
+            lidarr={},
+        )
+    )
+    monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: cfg)
+
+    def boom(*a, **k):
+        raise ValueError("http://radarr:7878/api?apikey=hunter2")
+
+    monkeypatch.setattr("requests.get", boom)
+    monkeypatch.setattr("backend.util.ssrf_guard.is_safe_url", lambda url: (True, None))
+
+    class _Log:
+        def __getattr__(self, _):
+            return lambda *a, **k: None
+
+        def get_adapter(self, *_a, **_kw):
+            return self
+
+    s = ChubScheduler(cfg, logger=_Log(), module_orchestrator=SimpleNamespace())
+    db_path = str(tmp_path / "chub.db")
+    real_init = ChubDB.__init__
+    monkeypatch.setattr(
+        ChubDB,
+        "__init__",
+        lambda self, logger, quiet=False: real_init(self, _Log(), db_path=db_path),
+    )
+
+    s._write_health_snapshot()
+
+    with ChubDB(_Log()) as db:
+        [row] = db.system_health.recent_snapshots()
+    assert (row["status"], row["error"]) == ("error", "unexpected error")
+
+
 def test_tick_skips_everything_when_config_is_unreadable(monkeypatch):
     """Fail closed: a config read failure must not empty the disabled set and
     auto-run every module the admin turned off, destructive ones included."""

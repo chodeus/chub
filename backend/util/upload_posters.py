@@ -12,6 +12,7 @@ from backend.util.database import ChubDB
 from backend.util.helper import progress, YEAR_MATCH_TOLERANCE
 from backend.util.logger import Logger
 from backend.util.normalization import normalize_titles
+from backend.util.public_error import PublicError, failure_text
 from backend.util.plex_index import PlexMediaIndex, _coerce_year
 from backend.util.plex import PlexClient
 
@@ -33,16 +34,16 @@ def upload_enabled_instances(plex_scope) -> Dict[str, List[str]]:
     return enabled
 
 
-class PosterUploadError(Exception):
+class PosterUploadError(PublicError):
     """Base exception for poster upload operations"""
 
-    pass
+    public = "poster upload error"
 
 
 class PlexConnectionError(PosterUploadError):
     """Raised when Plex connection fails"""
 
-    pass
+    public = "could not connect to Plex"
 
 
 @dataclass
@@ -151,7 +152,7 @@ class PosterUploader:
             self.logger.error(f"Poster upload failed: {e}", exc_info=True)
             return self._create_result(
                 success=False,
-                message=f"Poster upload failed: {e}",
+                message=failure_text("Poster upload", e),
                 error_code="UPLOAD_EXCEPTION",
             )
         finally:
@@ -250,7 +251,7 @@ class PosterUploader:
                 enabled=True,
                 connected=False,
                 uploads=[],
-                error_message=str(e),
+                error_message=failure_text(f"Instance {instance_name}", e),
             )
 
     @contextmanager
@@ -439,7 +440,7 @@ class PosterUploader:
                             asset_type="movie",
                             success=False,
                             action="failed",
-                            reason=f"Processing error: {e}",
+                            reason=failure_text("Processing", e),
                         )
                     )
 
@@ -482,7 +483,7 @@ class PosterUploader:
                             asset_type="series",
                             success=False,
                             action="failed",
-                            reason=f"Processing error: {e}",
+                            reason=failure_text("Processing", e),
                         )
                     )
 
@@ -534,7 +535,7 @@ class PosterUploader:
                             asset_type="season",
                             success=False,
                             action="failed",
-                            reason=f"Processing error: {e}",
+                            reason=failure_text("Processing", e),
                         )
                     )
 
@@ -578,7 +579,7 @@ class PosterUploader:
                             asset_type="collection",
                             success=False,
                             action="failed",
-                            reason=f"Processing error: {e}",
+                            reason=failure_text("Processing", e),
                         )
                     )
 
@@ -621,7 +622,7 @@ class PosterUploader:
                             asset_type="artist",
                             success=False,
                             action="failed",
-                            reason=f"Processing error: {e}",
+                            reason=failure_text("Processing", e),
                         )
                     )
 
@@ -676,7 +677,7 @@ class PosterUploader:
                             asset_type="album",
                             success=False,
                             action="failed",
-                            reason=f"Processing error: {e}",
+                            reason=failure_text("Processing", e),
                         )
                     )
 
@@ -1000,7 +1001,7 @@ class PosterUploader:
                 asset_type=asset_type,
                 success=False,
                 action="failed",
-                reason=f"Processing error: {e}",
+                reason=failure_text("Processing", e),
             )
 
     # Plex section type(s) an asset of each type can live in — targets the LIVE

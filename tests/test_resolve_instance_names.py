@@ -140,9 +140,16 @@ def test_a_cache_lookup_error_is_a_refusal(configured):
         collection=SimpleNamespace(instance_names=boom),
     )
 
-    names, refusal = resolve_instance_names(db, _logger(), ["Radarr", "oldradarr"], "the scan")
+    log, errors = _logger(), []
+    log.error = lambda msg, *a, **k: errors.append(msg)
+    names, refusal = resolve_instance_names(db, log, ["Radarr", "oldradarr"], "the scan")
 
-    assert names == [] and "database is locked" in refusal
+    assert names == []
+    assert refusal == (
+        "Cannot check what CHUB has cached for oldradarr (unexpected error) "
+        "— see the server log."
+    )
+    assert "database is locked" in errors[0]
 
 
 def test_media_cached_under_another_case_still_blocks_a_removed_name(db, configured):

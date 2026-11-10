@@ -12,6 +12,7 @@ from backend.util.helper import create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex import PlexClient
+from backend.util.public_error import failure_text
 
 
 class Labelarr(ChubModule):
@@ -760,7 +761,7 @@ class Labelarr(ChubModule):
             log.error(f"Labelarr adhoc sync failed: {e}", exc_info=True)
             return {
                 "success": False,
-                "message": f"Labelarr sync failed: {str(e)}",
+                "message": failure_text("Labelarr sync", e),
                 "error_code": "LABELARR_SYNC_FAILED",
             }
 

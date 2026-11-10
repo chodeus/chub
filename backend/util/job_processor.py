@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from backend.util.database import ChubDB
+from backend.util.public_error import failure_text
 
 
 # Module-level cancel registry: maps job_id -> threading.Event
@@ -128,7 +129,7 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
         return {
             "status": 500,
             "success": False,
-            "message": f"Job failed: {str(e)}",
+            "message": failure_text("Job", e),
             "error_code": "JOB_EXCEPTION",
         }
     finally:
@@ -395,7 +396,7 @@ def _process_webhook_job(
         )
         return {
             "success": False,
-            "message": f"Webhook processing failed: {str(e)}",
+            "message": failure_text("Webhook processing", e),
             "error_code": "WEBHOOK_PROCESSING_EXCEPTION",
         }
 
@@ -847,7 +848,7 @@ def _process_media_sync_job(
         return {
             "status": 500,
             "success": False,
-            "message": f"media_sync failed: {e}",
+            "message": failure_text("media_sync", e),
             "error_code": "MEDIA_SYNC_FAILED",
         }
     finally:
@@ -1063,30 +1064,31 @@ def _process_module_run_job(
 
             except Exception as e:
                 duration = int(time.time() - start_time)
-                error_msg = str(e)
+                # Run states and job results reach the browser; the log gets the error.
+                public = failure_text(f"Module {module_name}", e)
 
                 # Record failure
                 db_context.run_state.record_run_finish(
                     module_name,
                     success=False,
                     status="error",
-                    message=error_msg,
+                    message=public,
                     duration=duration,
                     run_by=origin,
                 )
 
-                log.error(f"[JOB:{job_id}] Module {module_name} failed: {error_msg}")
+                log.error(f"[JOB:{job_id}] Module {module_name} failed: {e}")
 
                 return {
                     "status": 500,
                     "success": False,
-                    "message": f"Module {module_name} failed: {error_msg}",
+                    "message": public,
                     "error_code": "MODULE_EXECUTION_FAILED",
                     "data": {
                         "module": module_name,
                         "duration": duration,
                         "origin": origin,
-                        "error": error_msg,
+                        "error": public,
                     },
                 }
 
@@ -1107,7 +1109,7 @@ def _process_module_run_job(
         return {
             "status": 500,
             "success": False,
-            "message": f"Module run job failed: {str(e)}",
+            "message": failure_text("Module run job", e),
             "error_code": "MODULE_JOB_EXCEPTION",
         }
     finally:
@@ -1179,7 +1181,7 @@ def _process_labelarr_bulk_sync_job(
         return {
             "status": 500,
             "success": False,
-            "message": f"Bulk labelarr sync failed: {str(e)}",
+            "message": failure_text("Bulk labelarr sync", e),
             "error_code": "LABELARR_BULK_SYNC_FAILED",
         }
 
@@ -1397,6 +1399,6 @@ def _process_cache_refresh_job(
         return {
             "status": 500,
             "success": False,
-            "message": f"Cache refresh failed: {str(e)}",
+            "message": failure_text("Cache refresh", e),
             "error_code": "CACHE_REFRESH_FAILED",
         }

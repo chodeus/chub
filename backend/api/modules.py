@@ -24,6 +24,7 @@ from backend.api.utils import (
     ok,
     read_request_json,
     require_bool_field,
+    worker_error,
 )
 from backend.util.config import ConfigError, config_write_lock
 from backend.util.scheduler import new_invalid_schedule
@@ -317,6 +318,11 @@ def get_modules_stats(
     try:
         logger.debug("Serving GET /api/modules/stats")
         job_stats = db.worker.job_stats()
+        failed = worker_error(
+            job_stats, logger, "Error retrieving stats", "MODULE_STATS_ERROR"
+        )
+        if failed:
+            return failed
         run_states = db.run_state.get_all()
 
         stats = {
@@ -1229,6 +1235,11 @@ def get_module_specific_stats(
         logger.debug(f"Serving GET /api/modules/{name}/stats")
         run_state = db.run_state.get_run_state(name)
         job_stats = db.worker.job_stats()
+        failed = worker_error(
+            job_stats, logger, "Error retrieving stats", "MODULE_STATS_ERROR"
+        )
+        if failed:
+            return failed
 
         return ok(
             f"Statistics for module '{name}'",

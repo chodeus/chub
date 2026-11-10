@@ -106,7 +106,8 @@ def test_phase_context_manager_records_and_propagates(tmp_path):
                 raise ValueError("kaboom")
         boom = next(p for p in _phases(db, jid) if p["name"] == "boom")
         assert boom["status"] == "error"
-        assert "kaboom" in boom["error"]
+        # Phases reach the browser: the kind of failure, never its text.
+        assert boom["error"] == "boom failed: unexpected error — see the server log"
     finally:
         db.__exit__(None, None, None)
 

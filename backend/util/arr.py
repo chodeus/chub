@@ -14,6 +14,7 @@ from unidecode import unidecode
 from backend.util.constants import year_regex
 from backend.util.helper import extract_year
 from backend.util.normalization import normalize_titles
+from backend.util.public_error import PublicError
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 
@@ -83,40 +84,42 @@ def classify_queue_row(record: Dict[str, Any]) -> str:
 
 
 # Custom exception types for specific error categories
-class ARRConnectionError(Exception):
+class ARRConnectionError(PublicError):
     """Raised when cannot connect to ARR instance"""
 
-    pass
+    public = "could not connect"
 
 
-class ARRAuthenticationError(Exception):
+class ARRAuthenticationError(PublicError):
     """Raised when API key is invalid or unauthorized"""
 
-    pass
+    public = "unauthorized: check the API key"
 
 
-class ARRRateLimitError(Exception):
+class ARRRateLimitError(PublicError):
     """Raised when rate limited by ARR API.
 
     Optionally carries the server's Retry-After delay (seconds) so the
     retry loop can honor it instead of using its own backoff.
     """
 
+    public = "rate limited"
+
     def __init__(self, message: str, retry_after: Optional[float] = None) -> None:
         super().__init__(message)
         self.retry_after = retry_after
 
 
-class ARRTemporaryError(Exception):
+class ARRTemporaryError(PublicError):
     """Raised for temporary failures that should be retried"""
 
-    pass
+    public = "temporary error on the instance"
 
 
-class ARRPermanentError(Exception):
+class ARRPermanentError(PublicError):
     """Raised for permanent failures that should not be retried"""
 
-    pass
+    public = "the instance rejected the request"
 
 
 @dataclass

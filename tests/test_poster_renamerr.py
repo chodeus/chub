@@ -1231,6 +1231,40 @@ def test_adhoc_match_runs_under_rebuild_lock(monkeypatch):
     assert observed == [False], "match_item ran without the rebuild lock held"
 
 
+def test_a_failed_adhoc_rename_reports_only_the_kind(monkeypatch):
+    """The ad-hoc result reaches the browser through the job APIs."""
+    from backend.modules import poster_renamerr as pr_mod
+
+    class _StubDB:
+        def __init__(self, *a, **kw):
+            self.poster = SimpleNamespace(clear=lambda: None)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(pr_mod, "ChubDB", _StubDB)
+    m = object.__new__(PosterRenamerr)
+    m.logger = SimpleNamespace(
+        error=lambda *a, **k: None, get_adapter=lambda *a, **k: m.logger
+    )
+    m.full_config = None
+
+    def boom():
+        raise RuntimeError("/srv/posters token=hunter2")
+
+    m.ensure_destination_dir = boom
+
+    result = m.run_poster_rename_adhoc([{"asset_type": "movie", "id": 1}])
+
+    assert result == {
+        "success": False,
+        "message": "Poster rename failed: unexpected error — see the server log",
+    }
+
+
 # --- _build_plex_notify_output (plex-path notification payload) ---
 
 

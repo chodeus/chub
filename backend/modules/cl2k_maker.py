@@ -10,6 +10,7 @@ from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 from backend.util.cl2k import image_fetch, text_removal
 from backend.util.cl2k.naming import build_poster_filename
+from backend.util.public_error import public_reason
 from backend.util.cl2k import renderer
 from backend.util.cl2k.renderer import logo_is_usable, render_cl2k
 from backend.util.cl2k.tmdb_art import list_images
@@ -20,6 +21,8 @@ from backend.util.normalization import normalize_titles
 from backend.util.tmdb import TMDBClient
 
 _VALID_KINDS = ("movie", "show", "collection", "season")
+# Browser-facing errors name the target and kind only; this points at the reason.
+_SEE_LOG = " — see the CL2K Maker log"
 
 # Prompt for the "extend" framing's AI outpaint. The model must *continue the
 # existing scene downward* — never invent text, logos, or new subjects (those would
@@ -900,7 +903,7 @@ def _persist_poster(
             with open(out_path, "wb") as fh:
                 fh.write(blob)
         except OSError as exc:
-            write_errors.append(f"{out_dir}: {exc}")
+            write_errors.append(f"{out_dir}: {public_reason(exc)}")
             logger.warning(f"CL2K local save failed in {out_dir}: {exc}")
             continue
         written.append(out_path)
@@ -1030,7 +1033,10 @@ def _persist_poster(
                     uploaded_folders.append(folder_id)
                     logger.info(f"CL2K uploaded {filename} to Drive {folder_id}")
                 except Exception as exc:
-                    upload_errors.append(f"{folder_id}: {exc}")
+                    # Deferred errors go only to the user's notification; inline ones
+                    # reach the browser, so they name the folder and the kind only.
+                    detail = exc if reload_config else public_reason(exc)
+                    upload_errors.append(f"{folder_id}: {detail}")
                     logger.warning(
                         f"CL2K gdrive upload to {folder_id} failed for {filename}: {exc}"
                     )
@@ -1105,7 +1111,8 @@ def _persist_poster(
             "reason": "; ".join(
                 [f"local save failed: {e}" for e in write_errors]
                 + [f"Drive upload failed: {e}" for e in upload_errors]
-            ),
+            )
+            + _SEE_LOG,
             "logo_source": logo_source,
         }
 
@@ -1125,9 +1132,9 @@ def _persist_poster(
     # Surface non-fatal failures so the caller can tell the user which targets
     # missed while the generation still succeeded elsewhere.
     if upload_errors:
-        result["upload_error"] = "; ".join(upload_errors)
+        result["upload_error"] = "; ".join(upload_errors) + _SEE_LOG
     if write_errors:
-        result["save_error"] = "; ".join(write_errors)
+        result["save_error"] = "; ".join(write_errors) + _SEE_LOG
     return result
 
 

@@ -13,6 +13,7 @@ from dateutil import tz
 
 from backend.util.helper import create_table
 from backend.util.arr import arr_api_version
+from backend.util.public_error import public_reason
 
 # Scheduler configuration constants
 SCHEDULER_POLL_INTERVAL_SECONDS = 5
@@ -814,7 +815,12 @@ class ChubScheduler:
             except requests.exceptions.ConnectionError:
                 return (now_iso, service, name, "unreachable", None, None, None)
             except Exception as exc:
-                return (now_iso, service, name, "error", None, None, str(exc))
+                # Snapshots reach the dashboard; the log gets the error itself.
+                if self.logger:
+                    self.logger.get_adapter("SCHEDULER").warning(
+                        f"Health probe of {name} raised: {exc}"
+                    )
+                return (now_iso, service, name, "error", None, None, public_reason(exc))
 
         if probes:
             with ThreadPoolExecutor(max_workers=min(10, len(probes))) as pool:

@@ -125,7 +125,7 @@ def worker_error(
     result: Any, logger: Any, message: str, code: str, status_code: int = 500
 ) -> Optional[JSONResponse]:
     """Stable response for a failed worker envelope (detail to the log), else None."""
-    # Worker messages embed raw exception text, so they never reach the client.
+    # The worker's message goes to the log only: fixed text here, whatever it holds.
     if not isinstance(result, dict) or result.get("success"):
         return None
     logger.error(f"{message}: {result.get('message')}")

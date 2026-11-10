@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from backend.modules import MODULES
 from backend.util.database import ChubDB
 from backend.util.logger import Logger
+from backend.util.public_error import failure_text
 
 
 class ModuleOrchestrator:
@@ -45,6 +46,19 @@ class ModuleOrchestrator:
             "success": False,
             "disabled": True,
             "message": f"Module '{module_name}' is disabled",
+        }
+
+    def _enqueue_failed(
+        self, module_name: str, result: Dict[str, Any], origin: str
+    ) -> Dict[str, Any]:
+        """A failed enqueue's reply: the worker's message to the log, fixed text back."""
+        self._log(
+            "error", f"Failed to enqueue {module_name}: {result.get('message')}", origin
+        )
+        return {
+            "success": False,
+            "message": f"Failed to enqueue {module_name} — see the server log",
+            "error_code": "ENQUEUE_FAILED",
         }
 
     def run_module_immediate(
@@ -89,11 +103,7 @@ class ModuleOrchestrator:
                     )
 
             if not result["success"]:
-                return {
-                    "success": False,
-                    "message": f"Failed to enqueue module: {result['message']}",
-                    "error_code": "ENQUEUE_FAILED",
-                }
+                return self._enqueue_failed(module_name, result, origin)
 
             job_id = result["data"]["job_id"]
             if result.get("deduped"):
@@ -122,7 +132,7 @@ class ModuleOrchestrator:
             )
             return {
                 "success": False,
-                "message": f"Error running module: {str(e)}",
+                "message": failure_text("Running the module", e),
                 "error_code": "EXECUTION_ERROR",
             }
 
@@ -168,23 +178,24 @@ class ModuleOrchestrator:
                         extra_fields={"priority": 0},  # Normal priority
                     )
 
-            if result["success"]:
-                job_id = result["data"]["job_id"]
-                if result.get("deduped"):
-                    self._log(
-                        "info",
-                        f"Skipped duplicate async enqueue for {module_name}; "
-                        f"existing job {job_id} still in flight",
-                        origin,
-                    )
-                else:
-                    # debug, not info — the API enqueue path already logs an
-                    # "Enqueued module: … (job …)" line; this was a duplicate.
-                    self._log(
-                        "debug",
-                        f"Enqueued async module run: {module_name} (job {job_id})",
-                        origin,
-                    )
+            if not result["success"]:
+                return self._enqueue_failed(module_name, result, origin)
+            job_id = result["data"]["job_id"]
+            if result.get("deduped"):
+                self._log(
+                    "info",
+                    f"Skipped duplicate async enqueue for {module_name}; "
+                    f"existing job {job_id} still in flight",
+                    origin,
+                )
+            else:
+                # debug, not info — the API enqueue path already logs an
+                # "Enqueued module: … (job …)" line; this was a duplicate.
+                self._log(
+                    "debug",
+                    f"Enqueued async module run: {module_name} (job {job_id})",
+                    origin,
+                )
 
             return result
 
@@ -192,7 +203,7 @@ class ModuleOrchestrator:
             self._log("error", f"Error in run_module_async: {e}", origin, exc_info=True)
             return {
                 "success": False,
-                "message": f"Error queueing module: {str(e)}",
+                "message": failure_text("Queueing the module", e),
                 "error_code": "ENQUEUE_ERROR",
             }
 

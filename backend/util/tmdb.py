@@ -34,10 +34,6 @@ from backend.util.normalization import normalize_titles
 _TMDB_NOT_FOUND = object()
 
 
-class TMDBAuthError(Exception):
-    """API key was rejected by TMDB (HTTP 401)."""
-
-
 class TMDBClient:
     """Thin, synchronous TMDB client scoped to ID resolution.
 

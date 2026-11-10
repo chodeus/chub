@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from backend.util.paths import get_config_dir
+from backend.util.public_error import PublicError
 
 # Migrator + loader status messages go through this stdlib logger so callers
 # can attach a handler that routes them into their own logging system. The
@@ -1112,8 +1113,10 @@ def resolve_secret_path(data: Any, path: str) -> str:
 # ==== CONFIG EXCEPTIONS ====
 
 
-class ConfigError(Exception):
+class ConfigError(PublicError):
     """Base class for configuration errors; `.message` is response-safe text."""
+
+    public = "configuration error"
 
     def __init__(self, message: str = "") -> None:
         super().__init__(message)
@@ -1123,9 +1126,13 @@ class ConfigError(Exception):
 class ConfigNotFoundError(ConfigError):
     """Raised when the config file does not exist."""
 
+    public = "the configuration file is missing"
+
 
 class ConfigParseError(ConfigError):
     """Raised when the config file contains invalid YAML."""
+
+    public = "the configuration file could not be read"
 
 
 class ConfigValidationError(ConfigError):
