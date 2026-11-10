@@ -32,6 +32,7 @@ from backend.util.config import (
     strip_redacted_placeholders,
 )
 from backend.util.helper import dict_diff
+from backend.util.instance_names import new_shared_name
 from backend.util.scheduler import new_invalid_schedule
 
 
@@ -236,6 +237,9 @@ async def update_config(
                     code="INVALID_SCHEDULE",
                     status_code=400,
                 )
+            clash = new_shared_name(current_config.instances, updated_config.instances)
+            if clash:
+                return error(clash, code="INSTANCE_NAME_CONFLICT", status_code=400)
 
             diffs = dict_diff(old_config, new_config)
             config_logger = logger.get_adapter("CONFIG_UPDATE")
