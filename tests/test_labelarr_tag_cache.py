@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,7 @@ import requests
 
 import backend.modules.labelarr as labelarr_mod
 from backend.util.database import ChubDB
+from backend.util.database import media_cache as media_cache_mod
 
 
 class _Logger:
@@ -196,7 +198,7 @@ def test_adding_a_tag_named_in_other_case_keeps_one_lowercase_copy(db, radarr, p
 
 
 def test_overlapping_syncs_on_one_row_keep_both_tags_in_the_cache(db, radarr, plex):
-    # Sync B runs inside sync A's *arr write, after A read the row.
+    # Sync B runs entirely inside sync A's *arr write: A's cache update must keep B's tag.
     film = _seed_film(db, ["kids", "old"])
     m = _module()
     inner = []
@@ -235,3 +237,35 @@ def test_a_one_item_bulk_sync_reports_what_landed(db, radarr, plex, monkeypatch)
     assert radarr.writes == [("remove", [3])]
     assert (result["success"], result["message"]) == (False, reason)
     assert result["data"]["failures"] == [{"media_cache_id": film, "message": reason}]
+
+
+def test_two_jobs_changing_one_rows_tags_at_once_keep_both(tmp_path, monkeypatch, plex):
+    """Each job opens its own ChubDB, so only the database lock keeps their read-then-write apart."""
+    path = str(tmp_path / "chub.db")
+    real = media_cache_mod._changed_tags
+    b_read = threading.Event()
+    other = []
+
+    def interleaved(current, add, remove):
+        if threading.current_thread() is threading.main_thread():
+            # Job A, between its read and its write: start job B and give it a chance to read.
+            other.append(
+                threading.Thread(target=b_db.media.change_tags, args=(film, ["b"], []))
+            )
+            other[0].start()
+            b_read.wait(timeout=1)
+        else:
+            b_read.set()
+        return real(current, add, remove)
+
+    with (
+        ChubDB(_Logger(), db_path=path) as a_db,
+        ChubDB(_Logger(), db_path=path) as b_db,
+    ):
+        film = _seed_film(a_db, ["old"])
+        monkeypatch.setattr(media_cache_mod, "_changed_tags", interleaved)
+        a_db.media.change_tags(film, ["a"], [])
+        other[0].join(timeout=40)
+
+        assert not other[0].is_alive()
+        assert sorted(_tags(a_db, film)) == ["a", "b", "old"]

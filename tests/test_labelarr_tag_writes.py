@@ -309,7 +309,9 @@ def test_a_failed_tag_write_says_what_landed_and_leaves_the_cache_and_plex_alone
 
 
 @pytest.mark.parametrize("app", ["Radarr", "Sonarr"], ids=["write-done", "wrong-app"])
-def test_the_arr_session_is_closed_after_every_tag_write(db, arrs, plex, monkeypatch, app):
+def test_the_arr_session_is_closed_after_every_tag_write(
+    db, arrs, plex, monkeypatch, app
+):
     arrs.hosts = {"http://r": app}
     film = _seed(db, "Film", "movie", "radarr", "Main", 4)
     closed = []

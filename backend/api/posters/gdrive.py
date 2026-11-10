@@ -41,7 +41,8 @@ def _covers(job: Dict[str, Any], requested: Set[str]) -> bool:
     except (AttributeError, ValueError):
         return False
     only = args.get("only_folders")
-    return only is None or requested <= set(only)
+    # An empty list syncs every folder, as SyncGDrive.run reads it.
+    return not only or requested <= set(only)
 
 
 def _already_queued(

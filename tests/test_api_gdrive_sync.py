@@ -142,3 +142,12 @@ def test_a_sync_whose_other_job_finishes_before_it_is_read_is_queued_anew(
 
 def test_a_job_seen_without_its_payload_never_counts_as_covering():
     assert gdrive._covers({"id": 1, "status": "pending"}, {"Movies"}) is False
+
+
+def test_a_queued_job_with_an_empty_folder_list_covers_every_folder():
+    job = {
+        "id": 1,
+        "status": "pending",
+        "payload": '{"module_args": {"only_folders": []}}',
+    }
+    assert gdrive._covers(job, {"Movies"}) is True

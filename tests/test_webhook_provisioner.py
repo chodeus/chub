@@ -1,6 +1,7 @@
 """Tests for backend/util/webhook_provisioner.py — arr webhook auto-provisioning."""
 
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
@@ -451,18 +452,10 @@ class _SharedArr:
 
     def __init__(self):
         self.notifications = []
-        self.runs = self.readers = 0
-        self.second_run = threading.Event()
+        self.readers = 0
         self.second_reader = threading.Event()
+        self.blocked = threading.Event()
         self.guard = threading.Lock()
-
-    def open_client(self):
-        """A client for this *arr; the second run to open one sets ``second_run``."""
-        with self.guard:
-            self.runs += 1
-            if self.runs == 2:
-                self.second_run.set()
-        return _RacingClient(self)
 
 
 class _RacingClient(StubClient):
@@ -476,10 +469,12 @@ class _RacingClient(StubClient):
             self._arr.readers += 1
             if self._arr.readers == 2:
                 self._arr.second_reader.set()
-        # Wait for the other run to start (it opens its client before any lock), then
-        # hold this snapshot until it reads too: it only can when nothing serialises them.
-        self._arr.second_run.wait(timeout=5)
-        self._arr.second_reader.wait(timeout=0.5)
+        # Hold this snapshot until the other run reads too, or is seen waiting on the lock.
+        deadline = time.monotonic() + 5
+        while not (self._arr.second_reader.is_set() or self._arr.blocked.is_set()):
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.005)
         return snapshot
 
     def add_notification(self, body, force_save=False):
@@ -488,24 +483,54 @@ class _RacingClient(StubClient):
         return entry
 
 
-def test_overlapping_provisions_create_one_webhook(monkeypatch):
+class _Announcing:
+    """A run's lock that sets ``arr.blocked`` when the run has to wait for it."""
+
+    def __init__(self, arr, lock):
+        self._arr, self._lock = arr, lock
+
+    def __enter__(self):
+        if not self._lock.acquire(blocking=False):
+            self._arr.blocked.set()
+            self._lock.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self._lock.release()
+
+
+def _race(monkeypatch, lock_for):
     arr = _SharedArr()
     monkeypatch.setattr(
         wp,
         "create_arr_client",
-        lambda url, api, logger: arr.open_client() if url == "http://r:7878" else None,
+        lambda url, api, logger: _RacingClient(arr) if url == "http://r:7878" else None,
     )
-
+    monkeypatch.setattr(wp, "_arr_lock", lambda url: _Announcing(arr, lock_for(url)))
     with ThreadPoolExecutor(max_workers=2) as pool:
         runs = [
             pool.submit(provision_all, _fake_config(), "http://chub:8060", None)
             for _ in range(2)
         ]
         rows = [next(r for r in run.result() if r["name"] == "Radarr") for run in runs]
+    return arr, sorted(row["action"] for row in rows)
 
-    assert arr.second_run.is_set()
+
+def test_overlapping_provisions_create_one_webhook(monkeypatch):
+    arr, actions = _race(monkeypatch, wp._arr_lock)
+
+    assert arr.blocked.is_set()
     assert len(arr.notifications) == 1
-    assert sorted(row["action"] for row in rows) == ["created", "noop"]
+    assert actions == ["created", "noop"]
+
+
+def test_the_race_harness_catches_a_missing_lock(monkeypatch):
+    # Control: a fresh lock per run serialises nothing, so both runs read "no entry" and create.
+    arr, actions = _race(monkeypatch, lambda url: threading.Lock())
+
+    assert not arr.blocked.is_set()
+    assert len(arr.notifications) == 2
+    assert actions == ["created", "created"]
 
 
 def test_a_status_read_does_not_wait_for_a_provision_in_flight(monkeypatch):

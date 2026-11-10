@@ -799,9 +799,12 @@ class Labelarr(ChubModule):
         }
         if failures:
             result["error_code"] = "LABELARR_ITEMS_FAILED"
-        # One item (the per-item /labelarr/sync path): its own reason is the job's message.
-        if total == 1 and failures:
-            result["message"] = failures[0]["message"]
+            # A failed job keeps only its message, so the reasons go in it (a few; the rest are logged).
+            shown = "; ".join(f"media {f['media_cache_id']}: {f['message']}" for f in failures[:3])
+            more = f"; {len(failures) - 3} more in the server log" if len(failures) > 3 else ""
+            result["message"] = (
+                failures[0]["message"] if total == 1 else f"{result['message']}. {shown}{more}"
+            )
         return result
 
     def labelarr_bulk_sync_adhoc(
