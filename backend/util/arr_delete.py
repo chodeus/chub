@@ -8,9 +8,8 @@ from backend.util.public_error import failure_text
 
 ARR_TYPES = ("radarr", "sonarr", "lidarr")
 
-# The rows whose arr_id names exactly the item an *arr delete removes. A Sonarr
-# season row carries its series' id and a Lidarr album row an album id, which
-# the artist endpoint would read as some other artist.
+# Rows whose arr_id is the exact item an *arr delete removes; a Sonarr season row
+# carries its series' id and a Lidarr album row an album id, so both hit another item.
 _DELETABLE = {("radarr", "movie"), ("sonarr", "show"), ("lidarr", "artist")}
 
 
