@@ -765,6 +765,33 @@ class Labelarr(ChubModule):
                 "error_code": "LABELARR_SYNC_FAILED",
             }
 
+    @staticmethod
+    def _bulk_result(
+        total: int, succeeded: int, changed: int, failures: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """The bulk sync's reply, naming each failed item's reason."""
+        result = {
+            "success": not failures,
+            "message": (
+                f"Bulk labelarr sync complete: "
+                f"{succeeded} succeeded, {len(failures)} failed, "
+                f"{changed} items with changes"
+            ),
+            "data": {
+                "total": total,
+                "succeeded": succeeded,
+                "failed": len(failures),
+                "changed": changed,
+                "failures": failures,
+            },
+        }
+        if failures:
+            result["error_code"] = "LABELARR_ITEMS_FAILED"
+        # One item (the per-item /labelarr/sync path): its own reason is the job's message.
+        if total == 1 and failures:
+            result["message"] = failures[0]["message"]
+        return result
+
     def labelarr_bulk_sync_adhoc(
         self,
         source_instance: str,
@@ -852,7 +879,6 @@ class Labelarr(ChubModule):
         output: List[Dict[str, Any]] = []
         failures: List[Dict[str, Any]] = []
         succeeded = 0
-        failed = 0
 
         for media_cache_id in media_cache_ids:
             result = self.labelarr_sync_adhoc(
@@ -878,7 +904,6 @@ class Labelarr(ChubModule):
                         }
                     )
             else:
-                failed += 1
                 failures.append(
                     {"media_cache_id": media_cache_id, "message": result.get("message")}
                 )
@@ -894,24 +919,4 @@ class Labelarr(ChubModule):
             except Exception as e:
                 log.debug(f"labelarr bulk notification failed: {e}")
 
-        result = {
-            "success": failed == 0,
-            "message": (
-                f"Bulk labelarr sync complete: "
-                f"{succeeded} succeeded, {failed} failed, "
-                f"{len(output)} items with changes"
-            ),
-            "data": {
-                "total": len(media_cache_ids),
-                "succeeded": succeeded,
-                "failed": failed,
-                "changed": len(output),
-                "failures": failures,
-            },
-        }
-        if failed:
-            result["error_code"] = "LABELARR_ITEMS_FAILED"
-        # One item (the per-item /labelarr/sync path): its own reason is the job's message.
-        if len(media_cache_ids) == 1 and failures:
-            result["message"] = failures[0]["message"]
-        return result
+        return self._bulk_result(len(media_cache_ids), succeeded, len(output), failures)
