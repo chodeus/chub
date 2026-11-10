@@ -130,15 +130,22 @@ reviews:
           is the pattern.
         - The push trigger must not be self-referential, or a workflow edit
           republishes :latest. Pin third-party actions by commit SHA.
-    - path: "{scripts/start.sh,build_frontend.sh}"
+    - path: "{scripts/start.sh,scripts/config_perms.py,scripts/install_fonts.sh,build_frontend.sh}"
       instructions: |-
-        Container entrypoint and frontend staging:
+        Container entrypoint, the scripts it runs at start, and frontend staging:
         - start.sh fails closed on the OUTCOME: the runuser write probe on
           CONFIG_DIR must stay a hard exit 1, /app is never chowned, and the
           chmod -R 777 path stays behind CHUB_LEGACY_CHMOD=1. Flag a change that
           makes the probe advisory or chowns /app again.
         - Rootless (id -u != 0) overrides PUID/PGID from the real uid/gid; keep
           that, never pretend.
+        - config_perms.py changes ownership and modes under CONFIG_DIR through
+          O_NOFOLLOW directory fds, never by path: a path-based chown or chmod
+          follows a directory or file swapped for a symlink. Its lock step
+          keeps config.yml and the JSON files at 0600.
+        - install_fonts.sh runs unprivileged and never fails the start: every
+          path ends in exit 0, and a failed unpack leaves no partial font in
+          CONFIG_DIR/fonts.
         - build_frontend.sh rm -rf's templates/{assets,icons,img,posters} before
           copying — a missing posters dir must stay a hard exit 1, and the copy
           targets must remain inside templates/.
