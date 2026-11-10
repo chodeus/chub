@@ -1,7 +1,8 @@
 """Google Drive poster source sync endpoints."""
 
+import json
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import Depends, Query, Request
 from fastapi.responses import JSONResponse
@@ -20,6 +21,37 @@ from backend.api.utils import (
 from backend.modules.sync_gdrive import SyncGDrive
 from backend.util.config import ConfigError
 from backend.util.database import ChubDB
+
+
+def _covers(job: Optional[Dict[str, Any]], requested: Set[str]) -> bool:
+    """Whether a queued or running sync job syncs every requested folder."""
+    if not job:
+        return False
+    try:
+        args = json.loads(job.get("payload") or "{}").get("module_args") or {}
+    except (AttributeError, ValueError):
+        return False
+    only = args.get("only_folders")
+    return only is None or requested <= set(only)
+
+
+def _already_queued(
+    db: ChubDB, queued: Dict[str, Any], requested: Set[str], scope: str, data: Dict[str, Any]
+) -> JSONResponse:
+    """The reply when enqueue_job collapsed this request onto another sync job."""
+    job_id = queued.get("job_id")
+    state = {"pending": "queued"}.get(queued.get("status"), queued.get("status"))
+    if _covers(db.worker.get_job_by_id("jobs", job_id), requested):
+        return ok(
+            f"A GDrive sync covering {scope} is already {state} (job {job_id})",
+            {**data, "deduped": True},
+        )
+    return error(
+        f"Another GDrive sync is already {state} (job {job_id}); "
+        f"sync {scope} again once it finishes",
+        code="GDRIVE_SYNC_BUSY",
+        status_code=409,
+    )
 
 
 @router.get(
@@ -86,26 +118,22 @@ def get_gdrive_stats(
 @router.post(
     "/gdrive/sync",
     summary="Sync GDrive folders",
-    description="Enqueue GDrive synchronization jobs for selected folders.",
+    description="Queue one GDrive sync job for the selected folders.",
     responses={
         200: {
-            "description": "GDrive sync jobs created successfully",
+            "description": "GDrive sync job queued, or one already covers these folders",
             "content": {
                 "application/json": {
                     "example": {
                         "success": True,
-                        "message": "GDrive sync started for 2 folders: Movies, TV Shows",
-                        "data": {
-                            "jobs": [
-                                {"name": "Movies", "job_id": 123},
-                                {"name": "TV Shows", "job_id": 124},
-                            ]
-                        },
+                        "message": "GDrive sync queued for 2 folders: Movies, TV Shows",
+                        "data": {"job_id": 123, "queued_count": 2, "scope": "subset"},
                     }
                 }
             },
         },
         400: {"description": "No GDrive folder names provided"},
+        409: {"description": "Another GDrive sync that skips these folders is in flight"},
     },
 )
 def sync_gdrive_folders(
@@ -115,19 +143,7 @@ def sync_gdrive_folders(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
-    """
-    Enqueue GDrive synchronization jobs for selected folders.
-
-    Creates background sync jobs for each specified GDrive folder
-    to download and organize poster assets. Jobs can be monitored
-    through the job management endpoints.
-
-    Args:
-        gdrive_names: List of GDrive folder names to synchronize
-
-    Returns:
-        Job IDs and status for tracking sync operations
-    """
+    """Queue one sync job for the selected folders, or name the sync job already covering them."""
     try:
         gdrive_logger = logger.get_adapter("GDriveFolder")
         gdrive_logger.debug(
@@ -186,28 +202,22 @@ def sync_gdrive_folders(
         )
         if failed:
             return failed
-        job_id = job_result.get("data", {}).get("job_id")
+        queued = job_result.get("data", {})
+        job_id = queued.get("job_id")
 
         if is_full_set:
-            return ok(
-                f"GDrive sync started for all {len(configured)} folders",
-                {"job_id": job_id, "scope": "all"},
-            )
-        if is_single:
+            scope = f"all {len(configured)} folders"
+            data = {"job_id": job_id, "scope": "all"}
+        elif is_single:
             only = next(iter(requested))
-            return ok(
-                f"GDrive sync started for '{only}'",
-                {"job_id": job_id, "name": only, "scope": "single"},
-            )
-        return ok(
-            f"GDrive sync started for {len(requested)} folders: "
-            f"{', '.join(sorted(requested))}",
-            {
-                "job_id": job_id,
-                "queued_count": len(requested),
-                "scope": "subset",
-            },
-        )
+            scope = f"'{only}'"
+            data = {"job_id": job_id, "name": only, "scope": "single"}
+        else:
+            scope = f"{len(requested)} folders: {', '.join(sorted(requested))}"
+            data = {"job_id": job_id, "queued_count": len(requested), "scope": "subset"}
+        if job_result.get("deduped"):
+            return _already_queued(db, queued, requested, scope, data)
+        return ok(f"GDrive sync queued for {scope}", data)
 
     except Exception as e:
         logger.error(f"Error starting GDrive sync: {e}")

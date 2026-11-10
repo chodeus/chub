@@ -64,8 +64,11 @@ const PosterGDriveSearchPage = () => {
     const { execute: syncAll, isLoading: isSyncingAll } = useApiMutation(
         () => postersAPI.syncGDriveFolders(sources.map(s => s.name)),
         {
-            successMessage: 'All folders synced',
-            onSuccess: () => refresh(),
+            showSuccessToast: false,
+            onSuccess: result => {
+                toast.success(result?.message || 'GDrive sync queued');
+                refresh();
+            },
         }
     );
 
@@ -73,11 +76,11 @@ const PosterGDriveSearchPage = () => {
         if (!folderName) return;
         setSyncingFolders(prev => new Set([...prev, folderName]));
         try {
-            await postersAPI.syncGDriveFolders([folderName]);
-            toast.success(`Synced "${folderName}"`);
+            const result = await postersAPI.syncGDriveFolders([folderName]);
+            toast.success(result?.message || `GDrive sync queued for "${folderName}"`);
             refresh();
-        } catch {
-            toast.error(`Failed to sync "${folderName}"`);
+        } catch (err) {
+            toast.error(err?.message || `Failed to queue a sync for "${folderName}"`);
         } finally {
             setSyncingFolders(prev => {
                 const next = new Set(prev);
