@@ -144,19 +144,11 @@ class DBWorker(DatabaseBase):
                     # Handle different result types
                     if isinstance(result, JobResult):
                         if result.success:
-                            self.mark_job_complete(table_name, job_id, result.__dict__)
-                            self._jobs_processed += 1
-                            log.debug(
-                                f"Job {job_id} completed successfully in {duration:.2f}s"
-                            )
+                            self._finish(table_name, job_id, result.__dict__, duration, log)
                         else:
                             raise JobFailed(f"Job failed: {result.message}")
                     elif isinstance(result, dict) and result.get("success"):
-                        self.mark_job_complete(table_name, job_id, result)
-                        self._jobs_processed += 1
-                        log.debug(
-                            f"Job {job_id} completed successfully in {duration:.2f}s"
-                        )
+                        self._finish(table_name, job_id, result, duration, log)
                     else:
                         raise JobFailed(
                             f"Job failed: {result.get('message', 'Unknown error') if isinstance(result, dict) else 'no result'}"
@@ -174,6 +166,13 @@ class DBWorker(DatabaseBase):
                 self._shutdown_event.wait(timeout=timeout)
 
         log.info(f"Worker {self.worker_name} finished processing jobs")
+
+    def _finish(self, table_name: str, job_id: int, result, duration: float, log):
+        if not self.mark_job_complete(table_name, job_id, result):
+            log.info(f"Job {job_id} was cancelled while it ran; it stays cancelled")
+            return
+        self._jobs_processed += 1
+        log.debug(f"Job {job_id} completed successfully in {duration:.2f}s")
 
     def _handle_job_error(
         self, table_name: str, job_id: int, error: Exception, duration: float, log
@@ -195,15 +194,19 @@ class DBWorker(DatabaseBase):
                     + datetime.timedelta(seconds=delay)
                 ).isoformat()
 
-                self.mark_job_pending_with_error(
+                if not self.mark_job_pending_with_error(
                     table_name, job_id, stored, scheduled_at
-                )
+                ):
+                    log.info(f"Job {job_id} was cancelled while it ran; not retrying")
+                    return
                 log.warning(
                     f"Job {job_id} failed (attempt {attempts}/{max_attempts}) in {duration:.2f}s: {error}. "
                     f"Will retry in {delay}s"
                 )
             else:
-                self.mark_job_failed(table_name, job_id, stored)
+                if not self.mark_job_failed(table_name, job_id, stored):
+                    log.info(f"Job {job_id} was cancelled while it ran; it stays cancelled")
+                    return
                 self._jobs_failed += 1
                 log.error(
                     f"Job {job_id} failed permanently after {attempts} attempts in {duration:.2f}s: {error}",
@@ -228,12 +231,15 @@ class DBWorker(DatabaseBase):
         query += " ORDER BY received_at ASC"
         return self.execute_query(query, tuple(params), fetch_all=True)
 
-    def mark_job_complete(self, table_name: str, job_id: int, result):
+    # The finishing updates below apply only to a job still running: a cancel
+    # made mid-run must not turn into success or a retry. Each returns rows changed.
+    def mark_job_complete(self, table_name: str, job_id: int, result) -> int:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        self.execute_query(
-            f"UPDATE {table_name} SET status='success', result=?, completed_at=? WHERE id=?",
+        return self.execute_query(
+            f"UPDATE {table_name} SET status='success', result=?, completed_at=? "
+            "WHERE id=? AND status='running'",
             (json.dumps(result) if result else None, now, job_id),
-        )
+        ) or 0
 
     def get_attempts(self, table_name: str, job_id: int):
         return self.execute_query(
@@ -244,24 +250,26 @@ class DBWorker(DatabaseBase):
 
     def mark_job_pending_with_error(
         self, table_name: str, job_id: int, error, scheduled_at: str = None
-    ):
+    ) -> int:
         if scheduled_at:
-            self.execute_query(
-                f"UPDATE {table_name} SET status='pending', error=?, scheduled_at=? WHERE id=?",
+            return self.execute_query(
+                f"UPDATE {table_name} SET status='pending', error=?, scheduled_at=? "
+                "WHERE id=? AND status='running'",
                 (str(error), scheduled_at, job_id),
-            )
-        else:
-            self.execute_query(
-                f"UPDATE {table_name} SET status='pending', error=? WHERE id=?",
-                (str(error), job_id),
-            )
+            ) or 0
+        return self.execute_query(
+            f"UPDATE {table_name} SET status='pending', error=? "
+            "WHERE id=? AND status='running'",
+            (str(error), job_id),
+        ) or 0
 
-    def mark_job_failed(self, table_name: str, job_id: int, error):
+    def mark_job_failed(self, table_name: str, job_id: int, error) -> int:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        self.execute_query(
-            f"UPDATE {table_name} SET status='error', error=?, completed_at=? WHERE id=?",
+        return self.execute_query(
+            f"UPDATE {table_name} SET status='error', error=?, completed_at=? "
+            "WHERE id=? AND status='running'",
             (str(error), now, job_id),
-        )
+        ) or 0
 
     def reset_job_to_pending(self, table_name: str, job_id: int):
         """Reset a job to 'pending' status"""
@@ -744,7 +752,7 @@ class DBWorker(DatabaseBase):
                                     f"{existing_status} (job {existing_id}); "
                                     "skipped duplicate enqueue"
                                 ),
-                                "data": {"job_id": existing_id},
+                                "data": {"job_id": existing_id, "status": existing_status},
                             }
 
                 # Poster Cleanarr scans are idempotent cache-warmers; two scan
@@ -766,7 +774,7 @@ class DBWorker(DatabaseBase):
                                 f"{job_type} already {existing_status} "
                                 f"(job {existing_id}); skipped duplicate enqueue"
                             ),
-                            "data": {"job_id": existing_id},
+                            "data": {"job_id": existing_id, "status": existing_status},
                         }
 
                 cursor = conn.execute(
