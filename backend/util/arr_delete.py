@@ -66,8 +66,8 @@ class ArrDeleter:
             if session is not None:
                 try:
                     session.close()
-                except Exception:  # noqa: S110 - cleanup must not mask the real error
-                    pass
+                except Exception as e:  # cleanup must not mask the real error
+                    self.logger.debug(f"Closing an *arr session failed: {e}")
 
     def delete(
         self, item: Dict[str, Any], delete_files: bool, add_exclusion: bool
