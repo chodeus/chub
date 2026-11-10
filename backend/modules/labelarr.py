@@ -5,6 +5,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
 from backend.util.arr import create_arr_client
+from backend.util.arr_instances import instance_detail, row_kind, whole_item, wrong_client
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector, resync_media
 from backend.util.database import ChubDB
@@ -12,7 +13,7 @@ from backend.util.helper import create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex import PlexClient
-from backend.util.public_error import failure_text
+from backend.util.public_error import failure_text, public_reason
 
 
 class Labelarr(ChubModule):
@@ -49,23 +50,69 @@ class Labelarr(ChubModule):
                 return []
         return []
 
-    def _get_arr_config(self, instance_name: str) -> Optional[Any]:
-        """
-        Get ARR instance configuration for a given instance name.
+    @staticmethod
+    def _refuse_row(
+        media_item: Dict[str, Any], source_instance: str
+    ) -> Optional[Dict[str, Any]]:
+        """The failure reply for a row this sync must not tag, or None."""
+        name = media_item.get("instance_name")
+        if name != source_instance:
+            return {
+                "success": False,
+                "message": f"Media item {media_item.get('id')} belongs to "
+                f"{name}, not {source_instance}",
+                "error_code": "INSTANCE_MISMATCH",
+            }
+        if not row_kind(media_item):
+            return {
+                "success": False,
+                "message": f"The *arr type of '{media_item.get('title')}' is not "
+                "recorded; refresh the media cache and try again",
+                "error_code": "NOT_TAGGABLE",
+            }
+        if not whole_item(media_item) or row_kind(media_item) == "lidarr":
+            return {
+                "success": False,
+                "message": "Labelarr tags whole movies and series only",
+                "error_code": "NOT_TAGGABLE",
+            }
+        return None
 
-        Args:
-            instance_name: Name of the ARR instance to look up
-
-        Returns:
-            Instance configuration object, or None if not found
-        """
-        # Check ARR instances (Radarr, Sonarr, Lidarr)
-        for arr_type in ("radarr", "sonarr", "lidarr"):
-            if hasattr(
-                self.full_config.instances, arr_type
-            ) and instance_name in getattr(self.full_config.instances, arr_type, {}):
-                return getattr(self.full_config.instances, arr_type)[instance_name]
-
+    def _write_arr_tags(
+        self, media_item: Dict[str, Any], add: List[str], remove: List[str]
+    ) -> Optional[str]:
+        """Apply the tag changes to the row's own *arr item; why it failed, or None."""
+        name, arr_id, kind = (
+            media_item.get("instance_name"),
+            media_item.get("arr_id"),
+            row_kind(media_item),
+        )
+        if not arr_id:
+            return f"it is not linked to {name}"
+        detail = instance_detail(self.full_config.instances, media_item)
+        if detail is None:
+            return f"{name} is not configured"
+        client = create_arr_client(detail.url, detail.api, self.logger)
+        if not client or not client.is_connected():
+            return f"could not connect to {name}"
+        mismatch = wrong_client(client, kind, name)
+        if mismatch:
+            return mismatch
+        writes = (
+            ("adding", add, lambda: client.add_tags_by_name(arr_id, add)),
+            ("removing", remove, lambda: client.remove_tags_by_name([arr_id], remove)),
+        )
+        # A request that runs out of retries returns None instead of raising.
+        for verb, tags, write in writes:
+            if not tags:
+                continue
+            try:
+                confirmed = write()
+            except Exception as e:
+                self.logger.error(f"{verb} tags on {kind} item {arr_id} in {name}: {e}")
+                return f"{verb} tags in {name} failed: {public_reason(e)} — see the server log"
+            if confirmed is None:
+                return f"{name} did not confirm {verb} {', '.join(tags)} — see the server log"
         return None
 
     def _parse_labels(self, raw: Any) -> List[str]:
@@ -554,6 +601,9 @@ class Labelarr(ChubModule):
                         "message": f"Media item {media_cache_id} not found",
                         "error_code": "MEDIA_NOT_FOUND",
                     }
+                refused = self._refuse_row(media_item, source_instance)
+                if refused:
+                    return refused
 
                 # Get the corresponding Plex item
                 if plex_mapping_id:
@@ -651,61 +701,18 @@ class Labelarr(ChubModule):
                     )
 
                     if not dry_run:
-                        # Update ARR instance with new tags
-                        arr_id = media_item.get("arr_id")
-                        if arr_id and (tags_to_add or tags_to_remove):
-                            try:
-                                # Get ARR client for the source instance
-                                arr_config = self._get_arr_config(source_instance)
-                                if arr_config:
-                                    arr_client = create_arr_client(
-                                        arr_config.url, arr_config.api, self.logger
-                                    )
-
-                                    if arr_client and arr_client.is_connected():
-                                        # Add tags to ARR
-                                        if tags_to_add:
-                                            log.info(
-                                                f"Adding tags {tags_to_add} to ARR item {arr_id}"
-                                            )
-                                            arr_client.add_tags_by_name(
-                                                arr_id, tags_to_add
-                                            )
-
-                                        # Remove tags from ARR
-                                        if tags_to_remove:
-                                            log.info(
-                                                f"Removing tags {tags_to_remove} from ARR item {arr_id}"
-                                            )
-                                            arr_client.remove_tags_by_name(
-                                                [arr_id], tags_to_remove
-                                            )
-
-                                        log.info(
-                                            f"Successfully updated ARR instance {source_instance}"
-                                        )
-                                    else:
-                                        log.warning(
-                                            f"Failed to connect to ARR instance {source_instance}"
-                                        )
-                                else:
-                                    log.warning(
-                                        f"ARR config not found for instance {source_instance}"
-                                    )
-                            except Exception as e:
-                                log.error(
-                                    f"Failed to update ARR instance {source_instance}: {e}"
-                                )
-
-                        # Update database to reflect the new tag state
-                        updated_media_item = dict(media_item)
-                        updated_media_item["tags"] = updated_tags
-                        db.media.upsert(
-                            updated_media_item,
-                            asset_type=media_item.get("asset_type"),
-                            instance_type=media_item.get("instance_type"),
-                            instance_name=source_instance,
-                        )
+                        # The cache and Plex follow only a write the *arr confirmed.
+                        reason = self._write_arr_tags(media_item, tags_to_add, tags_to_remove)
+                        if reason:
+                            log.warning(f"Tags for media {media_cache_id} not changed: {reason}")
+                            return {
+                                "success": False,
+                                "message": f"Tag sync for '{media_item.get('title')}' "
+                                f"failed: {reason}",
+                                "error_code": "ARR_TAG_WRITE_FAILED",
+                            }
+                        log.info(f"{source_instance} confirmed the tags for media {media_cache_id}")
+                        db.media.set_tags(media_cache_id, updated_tags)
                         log.debug(
                             f"Updated media_cache record {media_cache_id} with new tags: {updated_tags}"
                         )
@@ -878,6 +885,7 @@ class Labelarr(ChubModule):
                     )
             else:
                 failed += 1
+                log.warning(f"Labelarr sync of media {media_cache_id}: {result.get('message')}")
 
         if output and notify:
             try:

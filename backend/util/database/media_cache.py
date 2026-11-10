@@ -441,6 +441,12 @@ class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, Databa
             (int(bool(ignored)), int(bool(ignored)), id),
         )
 
+    def set_tags(self, id: int, tags: List[str]) -> None:
+        """Replace one media row's tags, leaving every other field as stored."""
+        self.execute_query(
+            "UPDATE media_cache SET tags=? WHERE id=?", (json.dumps(list(tags)), id)
+        )
+
     def get_user_confirmed(self) -> list:
         """Return rows the user manually locked (user_confirmed=1) — surfaced in
         the Locked tab so they can be re-opened for review."""

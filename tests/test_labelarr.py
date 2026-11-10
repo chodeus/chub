@@ -84,36 +84,6 @@ def test_parse_labels_delegates_to_tags():
     assert m._parse_labels(["a", "b"]) == ["a", "b"]
 
 
-# --- _get_arr_config ---
-
-
-def test_get_arr_config_finds_radarr():
-    cfg = ChubConfig(
-        instances=InstancesConfig(
-            radarr={"r1": InstanceDetail(url="http://r:7878", api="k")},
-        )
-    )
-    m = make_module(full_config=cfg)
-    result = m._get_arr_config("r1")
-    assert result is not None
-    assert result.url == "http://r:7878"
-
-
-def test_get_arr_config_finds_sonarr():
-    cfg = ChubConfig(
-        instances=InstancesConfig(
-            sonarr={"s1": InstanceDetail(url="http://s", api="k")},
-        )
-    )
-    m = make_module(full_config=cfg)
-    assert m._get_arr_config("s1") is not None
-
-
-def test_get_arr_config_returns_none_for_missing():
-    m = make_module(full_config=ChubConfig())
-    assert m._get_arr_config("not_there") is None
-
-
 # --- _build_instance_map ---
 
 
@@ -374,7 +344,8 @@ def _adhoc_module(plex_instances):
         "tags": ["existing", "unrelated"],
         "arr_id": None,
         "asset_type": "movie",
-        "instance_type": "radarr",
+        "instance_name": "radarr_main",
+        "source": "radarr",
         "plex_mapping_id": 7,
     }
     plex_row = {"id": 7, "instance_name": "plex_main", "asset_type": "movie"}
