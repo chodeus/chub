@@ -13,6 +13,7 @@ import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintena
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
 import { downloadBlob } from '../../utils/download.js';
 import { POLL_UNREACHABLE, pollJobUntilDone } from '../../utils/jobPoll.js';
+import { showDeleteOutcome } from '../../utils/deleteOutcome.js';
 
 const fmtBytes = n => {
     if (!n) return '0 B';
@@ -268,7 +269,11 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
         try {
             const res = await mediaAPI.bulkDeleteMedia(selectedIds, { deleteFiles });
             const removed = res?.data?.removed?.length ?? selectedIds.length;
-            toast.success(`Deleted ${removed} cop${removed === 1 ? 'y' : 'ies'}`);
+            showDeleteOutcome(
+                toast,
+                res?.data,
+                `Deleted ${removed} cop${removed === 1 ? 'y' : 'ies'}`
+            );
             setSelected({});
             setMembersByKey({});
             setExpanded({});
@@ -491,7 +496,10 @@ const MediaManagePage = () => {
                 deleteFiles: resolveDeleteFiles,
             });
         },
-        { successMessage: 'Duplicate group resolved' }
+        {
+            showSuccessToast: false,
+            onSuccess: result => showDeleteOutcome(toast, result?.data, 'Duplicate group resolved'),
+        }
     );
 
     const { execute: runNestedScan, isLoading: isNestScanning } = useApiMutation(

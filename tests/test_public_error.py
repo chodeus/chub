@@ -15,6 +15,7 @@ import requests
 from backend.api import media_api, system
 from backend.util import public_error
 from backend.util import webhook_provisioner as wp
+from backend.util.arr_delete import ArrDeleter
 from backend.util.connector import Connector, InstanceConfig
 from backend.util.module_orchestrator import ModuleOrchestrator
 from backend.util.notification import NotificationManager
@@ -146,8 +147,9 @@ def test_a_failed_cache_delete_keeps_the_reason_in_the_log():
     media = types.SimpleNamespace(get_by_id=lambda rid: {"id": rid}, delete_by_id=boom)
     db = types.SimpleNamespace(media=media)
     logger = MagicMock()
+    deleter = ArrDeleter(logger)
 
-    removed, reason = media_api._remove_media_item(db, logger, 7, False, False)
+    removed, reason = media_api._remove_media_item(db, deleter, 7, False, False)
 
     assert removed is False
     assert reason == "cache delete failed: database busy or unavailable — see the server log"

@@ -8,7 +8,7 @@ fixes, duplicate detection, import/export, and ARR integration.
 
 import csv
 import io
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from fastapi import APIRouter, Depends, Query, Request
@@ -30,6 +30,7 @@ from backend.api.utils import (
     worker_error,
 )
 from backend.util.arr import arr_api_version, create_arr_client
+from backend.util.arr_delete import ArrDeleter, ArrOutcome, instance_detail
 from backend.util.config import ConfigError, load_config
 from backend.util.public_error import failure_text
 from backend.util.database import (
@@ -989,16 +990,20 @@ async def resolve_duplicates(
     if not isinstance(body, dict):
         return error("Invalid request body", code="INVALID_BODY", status_code=400)
 
-    keep_id = body.get("keepId")
-    remove_ids = body.get("removeIds", [])
+    keep_id = _media_id(body.get("keepId"))
+    remove_ids = _media_ids(body.get("removeIds"))
     delete_files = body_flag(body, "deleteFiles")
     add_exclusion = body_flag(body, "addImportExclusion")
 
-    if not keep_id:
-        return error("keepId is required", code="MISSING_KEEP_ID", status_code=400)
+    if keep_id is None:
+        return error(
+            "keepId must be a media id", code="MISSING_KEEP_ID", status_code=400
+        )
     if not remove_ids:
         return error(
-            "removeIds is required", code="MISSING_REMOVE_IDS", status_code=400
+            "removeIds must be a list of media ids",
+            code="MISSING_REMOVE_IDS",
+            status_code=400,
         )
 
     # Verify the kept item exists
@@ -1024,7 +1029,39 @@ async def resolve_duplicates(
     )
 
 
-def _remove_media_item(db, logger, rid, delete_files, add_exclusion):
+# SQLite's INTEGER ceiling: a larger id fails the lookup only after earlier deletes ran.
+_MAX_MEDIA_ID = 2**63 - 1
+
+
+def _media_id(value: Any) -> Optional[int]:
+    """A positive media id, from an int or an ASCII digit string; None otherwise."""
+    # "1" != 1: an unparsed string id slipped past the keep-id check.
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        # int() refuses strings over 4300 digits, leading zeros included.
+        digits = text.lstrip("0") or "0"
+        ok = text.isascii() and text.isdigit() and len(digits) <= len(str(_MAX_MEDIA_ID))
+        value = int(digits) if ok else None
+    return value if isinstance(value, int) and 0 < value <= _MAX_MEDIA_ID else None
+
+
+def _media_ids(value: Any) -> Optional[List[int]]:
+    """Each entry once as a media id, or None when the list is missing or any entry is not."""
+    if not isinstance(value, list):
+        return None
+    ids = [_media_id(entry) for entry in value]
+    return None if None in ids else list(dict.fromkeys(ids))
+
+
+def _delete_with_files(item: Dict[str, Any], logger: Any) -> ArrOutcome:
+    """The single delete's *arr step, run off the event loop."""
+    with ArrDeleter(logger) as deleter:
+        return deleter.delete(item, True, False)
+
+
+def _remove_media_item(db, deleter, rid, delete_files, add_exclusion):
     """Delete one media item from its ARR instance (optional file delete) and
     the local cache. Returns (removed: bool, reason: str | None). Shared by the
     duplicate-resolve and bulk-delete paths."""
@@ -1032,81 +1069,58 @@ def _remove_media_item(db, logger, rid, delete_files, add_exclusion):
     if not item:
         return False, "not found in cache"
 
-    # Delete from ARR instance if possible
-    if item.get("arr_id") and item.get("instance_name"):
-        try:
-            config = load_config()
-            instance_name = item["instance_name"]
-            arr_id = item["arr_id"]
-
-            instance_detail = None
-            if (
-                hasattr(config.instances, "radarr")
-                and instance_name in config.instances.radarr
-            ):
-                instance_detail = config.instances.radarr[instance_name]
-            elif (
-                hasattr(config.instances, "sonarr")
-                and instance_name in config.instances.sonarr
-            ):
-                instance_detail = config.instances.sonarr[instance_name]
-
-            if instance_detail and instance_detail.url and instance_detail.api:
-                arr_client = create_arr_client(
-                    url=instance_detail.url,
-                    api=instance_detail.api,
-                    logger=logger,
-                )
-                if arr_client:
-                    asset_type = item.get("asset_type", "movie")
-                    endpoint_type = "movie" if asset_type == "movie" else "series"
-                    params = f"deleteFiles={'true' if delete_files else 'false'}"
-                    if add_exclusion:
-                        params += "&addImportExclusion=true"
-                    endpoint = (
-                        f"{arr_client.url}/api/v3/{endpoint_type}/{arr_id}?{params}"
-                    )
-                    arr_client.make_delete_request(endpoint)
-                    logger.info(
-                        f"Deleted ARR media {arr_id} from {instance_name} "
-                        f"(deleteFiles={delete_files}, exclusion={add_exclusion})"
-                    )
-            else:
-                logger.warning(
-                    f"Instance {instance_name} not found in config, skipping ARR delete"
-                )
-        except ConfigError:
-            raise
-        except Exception as e:
-            logger.error(f"ARR delete failed for id={rid}: {e}")
-            # Continue with cache deletion even if ARR delete fails
+    outcome = deleter.delete(item, delete_files, add_exclusion)
+    if outcome.reason:
+        # Nothing was deleted: the row stays, so the item can be retried.
+        return False, outcome.reason
 
     # Remove from local cache
     try:
         db.media.delete_by_id(rid)
         return True, None
     except Exception as e:
-        logger.error(f"Cache delete failed for id={rid}: {e}")
+        deleter.logger.error(f"Cache delete failed for id={rid}: {e}")
         return False, failure_text("cache delete", e)
+
+
+def _delete_each(
+    db: Any,
+    deleter: ArrDeleter,
+    ids: List[int],
+    delete_files: bool,
+    add_exclusion: bool,
+    keep_id: Optional[int] = None,
+) -> Tuple[List[int], List[Dict[str, Any]]]:
+    """(removed ids, failed entries); one id's error never costs the others' report."""
+    removed: List[int] = []
+    failed: List[Dict[str, Any]] = []
+    for rid in ids:
+        # The kept item must never be removed, and with delete_files that would
+        # take it off disk while the response still reports it as kept.
+        if rid == keep_id:
+            continue
+        try:
+            ok_, reason = _remove_media_item(db, deleter, rid, delete_files, add_exclusion)
+        except ConfigError:
+            raise
+        except Exception as e:
+            deleter.logger.error(f"Deleting media item {rid} failed: {e}")
+            ok_, reason = False, failure_text("Delete", e)
+        if ok_:
+            removed.append(rid)
+        else:
+            failed.append({"id": rid, "reason": reason})
+    return removed, failed
 
 
 def _resolve_duplicates_sync(
     db, logger, keep_id, kept_item, remove_ids, delete_files, add_exclusion
 ) -> JSONResponse:
     """Blocking body of resolve_duplicates — runs in a worker thread."""
-    removed = []
-    failed = []
-
-    for rid in remove_ids:
-        # The kept item must never be removed, and with delete_files that would
-        # take it off disk while the response still reports it as kept.
-        if rid == keep_id:
-            continue
-        ok_, reason = _remove_media_item(db, logger, rid, delete_files, add_exclusion)
-        if ok_:
-            removed.append(rid)
-        else:
-            failed.append({"id": rid, "reason": reason})
+    with ArrDeleter(logger, keep=kept_item) as deleter:
+        removed, failed = _delete_each(
+            db, deleter, remove_ids, delete_files, add_exclusion, keep_id=keep_id
+        )
 
     msg = f"Resolved duplicate group: kept 1, removed {len(removed)}"
     if failed:
@@ -1143,11 +1157,13 @@ async def bulk_delete_media(
     if not isinstance(body, dict):
         return error("Invalid request body", code="INVALID_BODY", status_code=400)
 
-    ids = body.get("ids", [])
+    ids = _media_ids(body.get("ids"))
     delete_files = body_flag(body, "deleteFiles")
     add_exclusion = body_flag(body, "addImportExclusion")
     if not ids:
-        return error("ids is required", code="MISSING_IDS", status_code=400)
+        return error(
+            "ids must be a list of media ids", code="MISSING_IDS", status_code=400
+        )
 
     # N blocking ARR connect+delete round trips — run off the event loop.
     return await run_in_threadpool(
@@ -1157,14 +1173,8 @@ async def bulk_delete_media(
 
 def _bulk_delete_sync(db, logger, ids, delete_files, add_exclusion) -> JSONResponse:
     """Blocking body of bulk_delete_media — runs in a worker thread."""
-    removed = []
-    failed = []
-    for rid in ids:
-        ok_, reason = _remove_media_item(db, logger, rid, delete_files, add_exclusion)
-        if ok_:
-            removed.append(rid)
-        else:
-            failed.append({"id": rid, "reason": reason})
+    with ArrDeleter(logger) as deleter:
+        removed, failed = _delete_each(db, deleter, ids, delete_files, add_exclusion)
     msg = f"Deleted {len(removed)} item(s)"
     if failed:
         msg += f", {len(failed)} failed"
@@ -1373,17 +1383,12 @@ def _fetch_duplicate_member(cache_row: dict, config, logger) -> dict:
         out["error"] = "missing_cache_fields"
         return out
 
-    instance_detail = None
-    for t in ("radarr", "sonarr", "lidarr"):
-        m = getattr(config.instances, t, {})
-        if instance_name in m:
-            instance_detail = m[instance_name]
-            break
-    if not instance_detail or not instance_detail.url or not instance_detail.api:
+    detail = instance_detail(config.instances, cache_row)
+    if not detail or not detail.url or not detail.api:
         out["error"] = "instance_not_found"
         return out
 
-    client = create_arr_client(instance_detail.url, instance_detail.api, logger)
+    client = create_arr_client(detail.url, detail.api, logger)
     if not client or not client.connect_status:
         out["error"] = "unreachable"
         return out
@@ -1778,17 +1783,10 @@ def get_media_poster(
         fetch_url = poster_url
         is_external = True
     else:
-        instance_name = item.get("instance_name")
-        config = load_config()
-        instance_detail = None
-        for arr_type in ("radarr", "sonarr", "lidarr"):
-            instances = getattr(config.instances, arr_type, None) or {}
-            if instance_name in instances:
-                instance_detail = instances[instance_name]
-                break
-        if not instance_detail or not instance_detail.url or not instance_detail.api:
+        detail = instance_detail(load_config().instances, item)
+        if not detail or not detail.url or not detail.api:
             return Response(status_code=404)
-        base = instance_detail.url.rstrip("/")
+        base = detail.url.rstrip("/")
         path = poster_url if poster_url.startswith("/") else f"/{poster_url}"
         # Lidarr (and some older Radarr/Sonarr configs) leak the container's
         # disk prefix `/config/MediaCover/...` into poster_url. The HTTP path
@@ -1796,7 +1794,7 @@ def get_media_poster(
         if path.startswith("/config/MediaCover/"):
             path = path[len("/config") :]
         fetch_url = f"{base}{path}"
-        headers["X-Api-Key"] = instance_detail.api
+        headers["X-Api-Key"] = detail.api
         # Trusted ARR instance on the LAN — private addresses are expected.
         is_external = False
 
@@ -1885,58 +1883,37 @@ async def delete_media_item(
             return body_too_large_error()
         delete_files = body_flag(body, "deleteFiles")
 
-        # If deleteFiles requested, remove from ARR first. The connect probe +
-        # delete request are blocking, so run them off the event loop.
-        def _delete_from_arr() -> None:
-            """Best-effort removal of the item from its source ARR instance."""
-            if not (delete_files and item.get("arr_id") and item.get("instance_name")):
-                return
-            try:
-                config = load_config()
-                instance_name = item["instance_name"]
-                arr_id = item["arr_id"]
+        # With deleteFiles, the *arr delete comes first and must succeed: a cache
+        # row removed after a failed delete reported an item that still exists.
+        outcome = ArrOutcome()
+        if delete_files:
+            outcome = await run_in_threadpool(_delete_with_files, item, logger)
+            if outcome.reason:
+                return error(
+                    f"Media item {media_id} was not deleted: {outcome.reason}",
+                    code="ARR_DELETE_FAILED",
+                    status_code=outcome.status,
+                )
 
-                # Look up instance URL/API from config (check radarr, sonarr, lidarr)
-                instance_detail = None
-                for arr_type in ("radarr", "sonarr", "lidarr"):
-                    if hasattr(config.instances, arr_type) and instance_name in getattr(
-                        config.instances, arr_type, {}
-                    ):
-                        instance_detail = getattr(config.instances, arr_type)[
-                            instance_name
-                        ]
-                        break
-
-                if instance_detail and instance_detail.url and instance_detail.api:
-                    arr_client = create_arr_client(
-                        url=instance_detail.url,
-                        api=instance_detail.api,
-                        logger=logger,
-                    )
-                    if arr_client:
-                        # Use deleteFiles query param on the ARR delete endpoint
-                        endpoint = f"{arr_client.url}/api/v3/{'movie' if item.get('asset_type') == 'movie' else 'series'}/{arr_id}?deleteFiles=true"
-                        arr_client.make_delete_request(endpoint)
-                        logger.info(
-                            f"Deleted ARR media {arr_id} with files from {instance_name}"
-                        )
-                else:
-                    logger.warning(
-                        f"Instance {instance_name} not found in config, skipping ARR delete"
-                    )
-            except ConfigError:
+        try:
+            db.media.delete_by_id(media_id)
+        except Exception as e:
+            if not outcome.deleted:
                 raise
-            except Exception as arr_err:
-                logger.error(f"ARR delete failed for {media_id}: {arr_err}")
-                # Continue with cache deletion even if ARR delete fails
+            # The *arr delete is done: a generic error would hide that the files are gone.
+            logger.error(f"Removing cache row {media_id} after its *arr delete failed: {e}")
+            return error(
+                f"Media item {media_id} and its files were deleted from "
+                f"{item.get('instance_name')}, but CHUB could not remove its own entry "
+                "— see the server log",
+                code="MEDIA_ROW_DELETE_FAILED",
+                status_code=500,
+            )
 
-        await run_in_threadpool(_delete_from_arr)
-
-        db.media.delete_by_id(media_id)
-
+        # Only an *arr delete that ran now removed files: a 404 found none to remove.
         return ok(
             f"Media item {media_id} deleted",
-            {"deleted_id": media_id, "files_deleted": delete_files},
+            {"deleted_id": media_id, "files_deleted": outcome.deleted},
         )
 
     except ConfigError:
