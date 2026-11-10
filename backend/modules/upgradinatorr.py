@@ -2460,17 +2460,17 @@ class Upgradinatorr(ChubModule):
                 continue
             instance_data = run_data.get("data") or []
             completed = run_data.get("completed") or []
-            # Completed imports come from EARLIER runs' grabs, so they must
-            # print even when this run searched nothing.
-            if not instance_data and not completed and not run_data.get("not_imported"):
+            # The same summary the notification sends, so the two never disagree:
+            # a run that searched nothing (busy *arr, search still running) still has one.
+            lines = summary_lines(run_data)
+            if not (lines or instance_data or completed or run_data.get("not_imported")):
                 self.logger.info(f"No items found for {instance}.")
                 continue
 
             table = [[f"{run_data['server_name']}"]]
             self.logger.info(create_table(table))
             kind = run_data.get("instance_type")
-            # The same summary the notification sends, so the two never disagree.
-            for line in summary_lines(run_data):
+            for line in lines:
                 self.logger.info(line)
             deferred = run_data.get("searches_deferred", 0)
             if deferred:

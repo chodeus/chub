@@ -120,7 +120,7 @@ def nothing_to_search_text(
 ) -> str:
     """The run log's reason a profile with no candidates searches nothing."""
     if not total:
-        if wanted is not None:
+        if wanted == 0:
             return f"Nothing to search on {name}: its {search_mode} list is empty."
         return f"Nothing to search on {name}: {counted(0, kind)} found."
     if not untagged:

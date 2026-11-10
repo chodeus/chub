@@ -8,6 +8,7 @@ import pytest
 import backend.modules.upgradinatorr as upgradinatorr_module
 from backend.modules.upgradinatorr import Upgradinatorr
 from backend.util.arr import COMMAND_TIMEOUT
+from backend.util.database import ChubDB
 from backend.util.upgradinatorr_notification import build_upgradinatorr_embeds, summary_lines
 
 from tests.test_config import FakeARR, StubLogger, make_upgradinatorr
@@ -357,3 +358,49 @@ def test_an_empty_wanted_list_is_named_as_the_wanted_list(isolated_db, monkeypat
     assert module.process_instance("radarr", _settings(search_mode="cutoff"), app) is None
 
     assert module.logger.warnings == ["Nothing to search on radarr: its cutoff list is empty."]
+
+
+class _BusyARR(FakeARR):
+    def count_queued_commands(self, _names):
+        return None
+
+
+class _RunningARR(FakeARR):
+    def get_command_state(self, command_id):
+        return {"status": "started"}
+
+
+def _logged_summary(module, result):
+    """(log lines, summary lines missing from the log) for one instance."""
+    module.logger = _Capture()
+    module.print_output({"radarr": result})
+    log = module.logger.lines
+    return log, [line for line in summary_lines(result) if line not in log]
+
+
+def test_a_run_that_searched_nothing_still_logs_the_summary(isolated_db):
+    """An unreadable command queue stops the searches; the log must still say so."""
+    module = make_upgradinatorr(dry_run=False)
+    result = module.process_instance("radarr", _settings(), _BusyARR([[_movie(1), _movie(2)]]))
+
+    log, missing = _logged_summary(module, result)
+
+    assert result["data"] == []
+    assert missing == [], log
+    assert "Upgrade search: nothing searched this run" in log
+
+
+def test_a_search_still_running_logs_the_waiting_line(isolated_db):
+    module = make_upgradinatorr(dry_run=False)
+    started = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    with ChubDB(logger=StubLogger(), db_path=isolated_db) as db:
+        db.upgradinatorr_inflight.stage("radarr", 2, None, 502, "Movie 2 (2001)", started)
+
+    result = module.process_instance("radarr", _settings(), _RunningARR([[_movie(1), _movie(2)]]))
+    log, missing = _logged_summary(module, result)
+
+    assert missing == [], log
+    assert (
+        "Waiting on the last run's search of Movie 2 (2001): nothing new is searched "
+        "until it finishes"
+    ) in log
