@@ -236,7 +236,7 @@ class DBWorker(DatabaseBase):
     def mark_job_complete(self, table_name: str, job_id: int, result) -> int:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         return self.execute_query(
-            f"UPDATE {table_name} SET status='success', result=?, completed_at=? "
+            f"UPDATE {table_name} SET status='success', result=?, completed_at=? "  # nosec B608  # table_name passed _check_table in process_pending_jobs
             "WHERE id=? AND status='running'",
             (json.dumps(result) if result else None, now, job_id),
         ) or 0
@@ -253,12 +253,12 @@ class DBWorker(DatabaseBase):
     ) -> int:
         if scheduled_at:
             return self.execute_query(
-                f"UPDATE {table_name} SET status='pending', error=?, scheduled_at=? "
+                f"UPDATE {table_name} SET status='pending', error=?, scheduled_at=? "  # nosec B608  # table_name passed _check_table in process_pending_jobs
                 "WHERE id=? AND status='running'",
                 (str(error), scheduled_at, job_id),
             ) or 0
         return self.execute_query(
-            f"UPDATE {table_name} SET status='pending', error=? "
+            f"UPDATE {table_name} SET status='pending', error=? "  # nosec B608  # table_name passed _check_table in process_pending_jobs
             "WHERE id=? AND status='running'",
             (str(error), job_id),
         ) or 0
@@ -266,7 +266,7 @@ class DBWorker(DatabaseBase):
     def mark_job_failed(self, table_name: str, job_id: int, error) -> int:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         return self.execute_query(
-            f"UPDATE {table_name} SET status='error', error=?, completed_at=? "
+            f"UPDATE {table_name} SET status='error', error=?, completed_at=? "  # nosec B608  # table_name passed _check_table in process_pending_jobs
             "WHERE id=? AND status='running'",
             (str(error), now, job_id),
         ) or 0
