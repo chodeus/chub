@@ -36,6 +36,7 @@ from backend.util.config import (
 from backend.util import plex_library_cache
 from backend.util.database import ChubDB
 from backend.util.arr import arr_api_version
+from backend.util.instance_names import name_taken
 from backend.util.paths import get_log_base_dir
 
 
@@ -1162,6 +1163,9 @@ def create_instance(
                 code="INSTANCE_ALREADY_EXISTS",
                 status_code=400,
             )
+        clash = name_taken(config.instances, name, service)
+        if clash:
+            return error(clash, code="INSTANCE_NAME_CONFLICT", status_code=400)
 
         # Create new instance detail. A brand-new Plex server starts OPTED OUT
         # (enabled_libraries=[]) so nothing surfaces in CHUB until the user opts
@@ -1299,6 +1303,9 @@ def update_instance(
                     code="INSTANCE_NAME_CONFLICT",
                     status_code=400,
                 )
+            clash = name_taken(config.instances, new_name, service, current=instance_id)
+            if clash:
+                return error(clash, code="INSTANCE_NAME_CONFLICT", status_code=400)
 
             # Remove old instance
             del service_instances[instance_id]
