@@ -19,7 +19,7 @@ from backend.util.connector import Connector, InstanceConfig
 from backend.util.module_orchestrator import ModuleOrchestrator
 from backend.util.notification import NotificationManager
 from backend.util.poster_self_heal import apply as heal_apply
-from backend.util.upload_posters import PosterUploader
+from backend.util.upload_posters import PlexConnectionError, PosterUploader
 
 from tests.test_asset_renamerr import _make_src, _media, make_module
 from tests.test_webhook_provisioner import _fake_config
@@ -59,6 +59,7 @@ def _validation_error():
         (_validation_error(), "invalid settings"),
         (sqlite3.OperationalError(_SECRET), "database busy or unavailable"),
         (sqlite3.IntegrityError(_SECRET), "database error"),
+        (PlexConnectionError(_SECRET), "could not connect to Plex"),
         (RuntimeError(_SECRET), "unexpected error"),
     ],
 )
@@ -443,18 +444,15 @@ def test_failed_module_stats_return_no_worker_text():
     assert "hunter2" not in resp.body.decode()
 
 
-# --- CHUB's own errors carry a fixed phrase; the deepest known cause wins ---
-
-
 def _raised(exc, cause=None):
     try:
         try:
             if cause is not None:
                 raise cause
-        except BaseException as inner:
+        except Exception as inner:
             raise exc from inner
         raise exc
-    except BaseException as caught:
+    except Exception as caught:
         return caught
 
 

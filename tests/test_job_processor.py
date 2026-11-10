@@ -567,8 +567,6 @@ def test_only_targeted_upload_jobs_recheck_the_posters_they_would_skip(monkeypat
     assert seen == [True, False]
 
 
-# --- job results reach the browser: the kind of failure, never its text ---
-
 _SECRET = "http://radarr:7878/api?apikey=hunter2"
 
 

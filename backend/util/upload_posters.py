@@ -12,7 +12,7 @@ from backend.util.database import ChubDB
 from backend.util.helper import progress, YEAR_MATCH_TOLERANCE
 from backend.util.logger import Logger
 from backend.util.normalization import normalize_titles
-from backend.util.public_error import failure_text
+from backend.util.public_error import PublicError, failure_text
 from backend.util.plex_index import PlexMediaIndex, _coerce_year
 from backend.util.plex import PlexClient
 
@@ -34,16 +34,16 @@ def upload_enabled_instances(plex_scope) -> Dict[str, List[str]]:
     return enabled
 
 
-class PosterUploadError(Exception):
+class PosterUploadError(PublicError):
     """Base exception for poster upload operations"""
 
-    pass
+    public = "poster upload error"
 
 
 class PlexConnectionError(PosterUploadError):
     """Raised when Plex connection fails"""
 
-    pass
+    public = "could not connect to Plex"
 
 
 @dataclass

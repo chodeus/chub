@@ -564,8 +564,10 @@ class NotificationManager:
             if not ok:
                 entry["error"] = msg
         except Exception as ex:
+            # method arrives from the request: no line breaks into the log.
+            logged = str(method).replace("\r", "").replace("\n", "")
             self.logger.error(
-                f"[Notification] testing {method} raised: {ex}", exc_info=True
+                f"[Notification] testing {logged} raised: {ex}", exc_info=True
             )
             entry["message"] = entry["error"] = failure_text(f"Testing {method}", ex)
         out: Dict[str, Any] = {"success": bool(entry["ok"]), "results": [entry]}
