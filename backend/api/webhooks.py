@@ -23,6 +23,7 @@ from backend.api.utils import (
     get_logger,
     ok,
     read_request_json,
+    worker_error,
 )
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
@@ -251,7 +252,6 @@ async def process_poster_webhook(
         result = db.worker.enqueue_job("jobs", job_data, job_type="webhook")
 
         if not result.get("success"):
-            logger.error(f"Error persisting webhook: {result.get('message')}")
             # Roll back the dedup row recorded above so the arr's retry
             # isn't debounced; best-effort — a second DB failure here must
             # not mask the original 500.
@@ -263,9 +263,11 @@ async def process_poster_webhook(
                         "Failed to roll back webhook dedup row after enqueue failure",
                         exc_info=True,
                     )
-            return error(
-                f"Error enqueuing webhook: {result.get('message', 'Unknown error')}",
-                code="WEBHOOK_ENQUEUE_ERROR",
+            return worker_error(
+                result,
+                logger,
+                "Error enqueuing webhook",
+                "WEBHOOK_ENQUEUE_ERROR",
                 status_code=result.get("status", 500),
             )
 

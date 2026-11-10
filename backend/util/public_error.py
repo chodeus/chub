@@ -1,7 +1,10 @@
 """Exception → a fixed phrase that is safe to send to the browser."""
 
+import errno
+import sqlite3
 from typing import Tuple, Type
 
+import pydantic
 import requests
 
 # Exception text quotes paths, hostnames and provider payloads (CodeQL
@@ -11,6 +14,10 @@ _REASONS: Tuple[Tuple[Type[BaseException], str], ...] = (
     (requests.exceptions.Timeout, "timed out"),
     (requests.exceptions.ConnectionError, "could not connect"),
     (requests.exceptions.RequestException, "request failed"),
+    # A ValidationError's text quotes the input, which can be a webhook URL.
+    (pydantic.ValidationError, "invalid settings"),
+    (sqlite3.OperationalError, "database busy or unavailable"),
+    (sqlite3.Error, "database error"),
     (PermissionError, "permission denied"),
     (FileNotFoundError, "not found"),
     (FileExistsError, "already exists"),
@@ -18,8 +25,12 @@ _REASONS: Tuple[Tuple[Type[BaseException], str], ...] = (
     (NotADirectoryError, "not a folder"),
     (TimeoutError, "timed out"),
     (ConnectionError, "could not connect"),
-    (OSError, "system error"),
 )
+_OS_REASONS = {
+    errno.EXDEV: "cross-device link",
+    errno.ENOSPC: "disk full",
+    errno.EROFS: "read-only file system",
+}
 
 
 def public_reason(exc: BaseException) -> str:
@@ -27,6 +38,8 @@ def public_reason(exc: BaseException) -> str:
     for kind, reason in _REASONS:
         if isinstance(exc, kind):
             return reason
+    if isinstance(exc, OSError):
+        return _OS_REASONS.get(exc.errno, "system error")
     return "unexpected error"
 
 

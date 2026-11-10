@@ -542,6 +542,9 @@ def test_adhoc_sync_reports_a_failed_plex_read_as_a_failure_not_a_missing_item(
     )
 
     assert (result["success"], result["error_code"]) == (False, "LABELARR_SYNC_FAILED")
+    assert result["message"] == (
+        "Labelarr sync failed: unexpected error — see the server log"
+    )
 
 
 def _bulk_module(monkeypatch, resynced):

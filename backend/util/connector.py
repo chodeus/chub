@@ -20,6 +20,7 @@ from backend.util.database import ChubDB
 from backend.util.helper import as_list
 from backend.util.logger import Logger
 from backend.util.plex import PlexClient
+from backend.util.public_error import failure_text, public_reason
 
 
 # Custom exceptions
@@ -379,6 +380,22 @@ class Connector:
         self._record_sync_completion(results)
         return results
 
+    @staticmethod
+    def _failed_sync(
+        name: str, kind: str, started: float, exc: BaseException, logger, what: str
+    ) -> SyncResult:
+        """A failed SyncResult: the error to the log, only its kind to the result."""
+        # Sync results reach the browser through job results.
+        if logger:
+            logger.warning(f"{what} of {name} raised: {exc}")
+        return SyncResult(
+            instance_name=name,
+            instance_type=kind,
+            success=False,
+            error_message=failure_text(what, exc),
+            duration=time.time() - started,
+        )
+
     def _sync_single_arr_instance(
         self, instance_config: InstanceConfig, logger
     ) -> SyncResult:
@@ -464,30 +481,33 @@ class Connector:
                     raise DatabaseSyncError(f"Database sync failed: {db_error}")
 
         except ConnectionPoolError as e:
-            return SyncResult(
-                instance_name=instance_config.name,
-                instance_type=instance_config.type,
-                success=False,
-                error_message=f"Connection error: {e}",
-                duration=time.time() - start_time,
+            return self._failed_sync(
+                instance_config.name,
+                instance_config.type,
+                start_time,
+                e,
+                logger,
+                "Connection",
             )
 
         except DatabaseSyncError as e:
-            return SyncResult(
-                instance_name=instance_config.name,
-                instance_type=instance_config.type,
-                success=False,
-                error_message=str(e),
-                duration=time.time() - start_time,
+            return self._failed_sync(
+                instance_config.name,
+                instance_config.type,
+                start_time,
+                e,
+                logger,
+                "Sync",
             )
 
         except Exception as e:
-            return SyncResult(
-                instance_name=instance_config.name,
-                instance_type=instance_config.type,
-                success=False,
-                error_message=f"Unexpected error: {e}",
-                duration=time.time() - start_time,
+            return self._failed_sync(
+                instance_config.name,
+                instance_config.type,
+                start_time,
+                e,
+                logger,
+                "Sync",
             )
 
     def _process_arr_media(self, raw_media: List[Dict], asset_type: str) -> List[Dict]:
@@ -714,21 +734,23 @@ class Connector:
                 )
 
         except ConnectionPoolError as e:
-            return SyncResult(
-                instance_name=instance_config.name,
-                instance_type=instance_config.type,
-                success=False,
-                error_message=str(e),
-                duration=time.time() - start_time,
+            return self._failed_sync(
+                instance_config.name,
+                instance_config.type,
+                start_time,
+                e,
+                logger,
+                "Connection",
             )
 
         except Exception as e:
-            return SyncResult(
-                instance_name=instance_config.name,
-                instance_type=instance_config.type,
-                success=False,
-                error_message=f"Unexpected error: {e}",
-                duration=time.time() - start_time,
+            return self._failed_sync(
+                instance_config.name,
+                instance_config.type,
+                start_time,
+                e,
+                logger,
+                "Sync",
             )
 
     def update_collections_database(self) -> List[SyncResult]:
@@ -805,12 +827,13 @@ class Connector:
                 )
 
         except Exception as e:
-            return SyncResult(
-                instance_name=instance_config.name,
-                instance_type="plex_collections",
-                success=False,
-                error_message=str(e),
-                duration=time.time() - start_time,
+            return self._failed_sync(
+                instance_config.name,
+                "plex_collections",
+                start_time,
+                e,
+                logger,
+                "Collections sync",
             )
 
     @staticmethod
@@ -1284,7 +1307,7 @@ class Connector:
             except Exception as e:
                 if self.logger:
                     self.logger.warning(f"Plex mapping update failed: {e}")
-                results["mappings"] = {"error": str(e)}
+                results["mappings"] = {"error": failure_text("Plex mapping update", e)}
 
             if self.logger:
                 # Only count sync results, not mapping results which is a dict
@@ -1393,7 +1416,11 @@ def resolve_instance_names(
     try:
         known = load_config().instances
     except Exception as e:
-        return [], f"Cannot load the config to check the instances for {purpose} ({e})."
+        logger.error(f"Cannot load the config to check instances for {purpose}: {e}")
+        return [], (
+            f"Cannot load the config to check the instances for {purpose} "
+            f"({public_reason(e)}) — see the server log."
+        )
     # dict.fromkeys: a Radarr and a Plex instance may share a name
     configured = list(
         dict.fromkeys(
@@ -1427,7 +1454,11 @@ def resolve_instance_names(
             try:
                 cached = db.media.instance_names() + db.collection.instance_names()
             except Exception as e:
-                return [], f"Cannot check what CHUB has cached for {name} ({e})."
+                logger.error(f"Cannot read the cached instance names: {e}")
+                return [], (
+                    f"Cannot check what CHUB has cached for {name} "
+                    f"({public_reason(e)}) — see the server log."
+                )
             cached_folded = {str(n).casefold() for n in cached}
         # Ignoring case: "OldRadarr" rows belong to a listed "oldradarr"
         if str(name).casefold() in cached_folded:

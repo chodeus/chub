@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 from backend.util.config import load_config
 from backend.util.logger import Logger
+from backend.util.public_error import failure_text
 
 
 class ChubModule(ABC):
@@ -162,7 +163,9 @@ class ChubModule(ABC):
             yield
         except Exception as e:
             try:
-                db.worker.finish_phase("jobs", job_id, name, status="error", error=e)
+                db.worker.finish_phase(
+                    "jobs", job_id, name, status="error", error=failure_text(name, e)
+                )
             except Exception:  # noqa: S110
                 pass
             raise

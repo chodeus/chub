@@ -446,7 +446,7 @@ def test_drive_partial_failure_is_generated_with_upload_error(db, monkeypatch):
     assert res["uploaded"] is True
     assert res["uploaded_folders"] == ["GOOD"]
     # The folder that missed is named; the exception text stays in the log.
-    assert res["upload_error"] == "BAD: unexpected error"
+    assert res["upload_error"] == "BAD: upload failed — see the CL2K Maker log"
 
 
 # --- _persist_poster: local write failures ---
@@ -484,7 +484,7 @@ def test_local_write_failure_is_partial(db, tmp_path):
     assert res["saved_local"] is True
     assert len(res["saved_paths"]) == 1
     assert res["saved_paths"][0].startswith(str(good_dir))
-    assert res["save_error"] == f"{bad_dir}: not a folder"
+    assert res["save_error"] == f"{bad_dir}: not a folder — see the CL2K Maker log"
     rows = db.poster.get_all()
     assert len(rows) == 1 and rows[0]["file"] == res["saved_paths"][0]
 

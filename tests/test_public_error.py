@@ -1,5 +1,6 @@
 """Pins that exception text stays in the log; each path here once sent it to the browser."""
 
+import errno
 import json
 import os
 import sqlite3
@@ -7,19 +8,38 @@ import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pydantic
 import pytest
 import requests
 
 from backend.api import media_api, system
 from backend.util import public_error
+from backend.util import webhook_provisioner as wp
+from backend.util.connector import Connector, InstanceConfig
+from backend.util.module_orchestrator import ModuleOrchestrator
 from backend.util.notification import NotificationManager
 from backend.util.poster_self_heal import apply as heal_apply
+from backend.util.upload_posters import PosterUploader
 
 from tests.test_asset_renamerr import _make_src, _media, make_module
+from tests.test_webhook_provisioner import _fake_config
 
 # What a real exception carries: a path, a host and a credential.
 _SECRET = "/srv/media/x.jpg via https://hooks.example/abc?token=hunter2"
 _HOOK = "https://discord.com/api/webhooks/1/a"
+
+
+
+class _Model(pydantic.BaseModel):
+    webhook: int
+
+
+def _validation_error():
+    try:
+        _Model(webhook=_SECRET)
+    except pydantic.ValidationError as exc:
+        return exc
+    raise AssertionError("no ValidationError")
 
 
 @pytest.mark.parametrize(
@@ -33,6 +53,12 @@ _HOOK = "https://discord.com/api/webhooks/1/a"
         (NotADirectoryError(20, _SECRET), "not a folder"),
         (TimeoutError(_SECRET), "timed out"),
         (OSError(5, _SECRET), "system error"),
+        (OSError(errno.EXDEV, _SECRET), "cross-device link"),
+        (OSError(errno.ENOSPC, _SECRET), "disk full"),
+        (OSError(errno.EROFS, _SECRET), "read-only file system"),
+        (_validation_error(), "invalid settings"),
+        (sqlite3.OperationalError(_SECRET), "database busy or unavailable"),
+        (sqlite3.IntegrityError(_SECRET), "database error"),
         (RuntimeError(_SECRET), "unexpected error"),
     ],
 )
@@ -123,7 +149,7 @@ def test_a_failed_cache_delete_keeps_the_reason_in_the_log():
     removed, reason = media_api._remove_media_item(db, logger, 7, False, False)
 
     assert removed is False
-    assert reason == "cache delete failed: unexpected error — see the server log"
+    assert reason == "cache delete failed: database busy or unavailable — see the server log"
     assert "hunter2" in str(logger.error.call_args)
 
 
@@ -172,3 +198,246 @@ def test_a_failed_local_rename_note_holds_no_path(tmp_path, monkeypatch):
         "it will refresh on the next scan)"
     )
     assert os.path.exists(old)
+
+
+class _RaisingArr:
+    """An arr client that connects, then raises on the first real call."""
+
+    session = None
+
+    def is_connected(self):
+        return True
+
+    def get_notifications(self):
+        raise RuntimeError(_SECRET)
+
+
+def test_a_failed_webhook_setup_reports_only_the_kind(monkeypatch):
+    monkeypatch.setattr(wp, "create_arr_client", lambda url, api, logger: _RaisingArr())
+    logger = MagicMock()
+
+    rows = wp.provision_all(_fake_config(), "http://chub:8060", None, logger=logger)
+
+    radarr = next(r for r in rows if r["name"] == "Radarr")
+    assert radarr["status"] == "failed"
+    assert radarr["error"] == (
+        "The request to the instance failed: unexpected error — see the server log"
+    )
+    assert "hunter2" in str(logger.warning.call_args_list)
+
+
+def test_a_failed_arr_sync_reports_only_the_kind():
+    connector = object.__new__(Connector)
+
+    def boom(config):
+        raise RuntimeError(_SECRET)
+
+    connector.connection_manager = SimpleNamespace(get_arr_client=boom)
+    logger = MagicMock()
+    instance = InstanceConfig(name="Radarr", type="radarr", url="http://r", api_key="k")
+
+    result = connector._sync_single_arr_instance(instance, logger)
+
+    assert result.success is False
+    assert result.error_message == "Sync failed: unexpected error — see the server log"
+    assert "hunter2" in str(logger.warning.call_args)
+
+
+def test_a_module_that_raises_reports_only_the_kind(monkeypatch):
+    def boom(**kwargs):
+        raise RuntimeError(_SECRET)
+
+    db = SimpleNamespace(worker=SimpleNamespace(enqueue_job=boom))
+    orchestrator = ModuleOrchestrator(logger=MagicMock(), db=db)
+    monkeypatch.setattr("backend.util.config.module_is_disabled", lambda name: False)
+
+    result = orchestrator.run_module_immediate("nohl", "web")
+
+    assert result["success"] is False
+    assert result["message"] == (
+        "Running the module failed: unexpected error — see the server log"
+    )
+
+
+def test_a_failed_enqueue_reports_no_worker_text(monkeypatch):
+    worker = SimpleNamespace(
+        enqueue_job=lambda **kwargs: {
+            "success": False,
+            "message": f"Error enqueuing job: {_SECRET}",
+        }
+    )
+    orchestrator = ModuleOrchestrator(logger=MagicMock(), db=SimpleNamespace(worker=worker))
+    monkeypatch.setattr("backend.util.config.module_is_disabled", lambda name: False)
+
+    result = orchestrator.run_module_async("nohl", origin="web")
+
+    assert result == {
+        "success": False,
+        "message": "Failed to enqueue nohl — see the server log",
+        "error_code": "ENQUEUE_FAILED",
+    }
+
+
+def _boom(*args, **kwargs):
+    raise RuntimeError(_SECRET)
+
+
+def _uploader():
+    uploader = object.__new__(PosterUploader)
+    uploader.logger = MagicMock()
+    uploader._plex_clients, uploader._media_indexes = {}, {}
+    uploader.manifest = {}
+    return uploader
+
+
+@pytest.mark.parametrize(
+    "method, extra",
+    [
+        ("_sync_movies", ()),
+        ("_sync_series", ()),
+        ("_sync_seasons", ({},)),
+        ("_sync_collections", ()),
+        ("_sync_artists", ()),
+        ("_sync_albums", ()),
+    ],
+)
+def test_a_failed_poster_item_reports_only_the_kind(method, extra, monkeypatch):
+    uploader = _uploader()
+    monkeypatch.setattr(uploader, "_sync_single_asset", _boom)
+    item = {"title": "T", "asset_type": "movie", "season_number": 1}
+
+    [result] = getattr(uploader, method)([item], None, {}, *extra, False)
+
+    assert result.reason == "Processing failed: unexpected error — see the server log"
+
+
+def test_a_failed_poster_match_reports_only_the_kind(monkeypatch):
+    uploader = _uploader()
+    monkeypatch.setattr(uploader, "match_asset", _boom)
+    asset = {"title": "T", "asset_type": "movie", "renamed_file": "/x.jpg"}
+
+    result = uploader._sync_single_asset(asset, None, {}, ["tmdb"], False)
+
+    assert result.reason == "Processing failed: unexpected error — see the server log"
+
+
+def test_a_failed_poster_upload_run_reports_only_the_kind(monkeypatch):
+    uploader = _uploader()
+    monkeypatch.setattr(uploader, "_get_enabled_instances", _boom)
+
+    result = uploader.run()
+
+    assert result["message"] == "Poster upload failed: unexpected error — see the server log"
+
+
+def test_a_failed_poster_instance_reports_only_the_kind():
+    uploader = _uploader()
+    plex = SimpleNamespace(get=_boom)
+    uploader.full_config = SimpleNamespace(instances=SimpleNamespace(plex=plex))
+
+    result = uploader._process_instance("plex", ["Movies"])
+
+    assert result.error_message == (
+        "Instance plex failed: unexpected error — see the server log"
+    )
+
+
+def test_a_failed_plex_mapping_update_reports_only_the_kind():
+    connector = object.__new__(Connector)
+    connector.logger = None
+    connector.connection_manager = SimpleNamespace(close_all_connections=lambda: None)
+    connector.update_arr_database = lambda: []
+    connector.update_plex_database = lambda: []
+    connector.update_collections_database = lambda: []
+    connector.update_media_plex_mappings = _boom
+
+    results = connector.sync_all_databases()
+
+    assert results["mappings"] == {
+        "error": "Plex mapping update failed: unexpected error — see the server log"
+    }
+
+
+def test_an_unreadable_config_refuses_with_only_the_kind(monkeypatch):
+    from backend.util.connector import resolve_instance_names
+
+    monkeypatch.setattr("backend.util.config.load_config", _boom)
+    logger = MagicMock()
+
+    names, refusal = resolve_instance_names(None, logger, ["Radarr"], "the scan")
+
+    assert names == []
+    assert refusal == (
+        "Cannot load the config to check the instances for the scan "
+        "(unexpected error) — see the server log."
+    )
+    assert "hunter2" in str(logger.error.call_args)
+
+
+def test_a_module_that_cannot_be_queued_reports_only_the_kind(monkeypatch):
+    db = SimpleNamespace(worker=SimpleNamespace(enqueue_job=_boom))
+    orchestrator = ModuleOrchestrator(logger=MagicMock(), db=db)
+    monkeypatch.setattr("backend.util.config.module_is_disabled", lambda name: False)
+
+    result = orchestrator.run_module_async("nohl", origin="web")
+
+    assert result["message"] == (
+        "Queueing the module failed: unexpected error — see the server log"
+    )
+
+
+def test_a_failed_auto_apply_stores_only_the_kind(monkeypatch):
+    from backend.modules import poster_self_heal as heal_module
+
+    monkeypatch.setattr(heal_module, "apply_proposal", _boom)
+    module = object.__new__(heal_module.PosterSelfHeal)
+    module.logger = MagicMock()
+    prop = {"current_filename": "Old.jpg", "proposed_filename": "New.jpg", "status": "proposed"}
+
+    error = module._auto_apply(prop, None)
+
+    assert error == "Auto-apply failed: unexpected error — see the server log"
+    assert prop["status"] == "proposed"
+    assert "hunter2" in str(module.logger.warning.call_args)
+
+
+def test_a_failed_webhook_enqueue_returns_no_worker_text(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from backend.api import webhooks
+
+    monkeypatch.setattr(
+        webhooks, "load_config",
+        lambda: SimpleNamespace(general=SimpleNamespace(trusted_proxies=[])),
+    )
+    monkeypatch.setattr(webhooks, "_is_duplicate_webhook", lambda *a, **k: False)
+    monkeypatch.setattr(webhooks, "_webhook_dedup_identity", lambda *a, **k: None)
+    worker = SimpleNamespace(
+        enqueue_job=lambda *a, **k: {"success": False, "message": _SECRET, "status": 503}
+    )
+    app = FastAPI()
+    app.state.logger = MagicMock()
+    app.state.db = SimpleNamespace(worker=worker)
+    app.dependency_overrides[webhooks.verify_webhook_secret] = lambda: None
+    app.include_router(webhooks.router)
+
+    resp = TestClient(app).post("/api/webhooks/poster/add", json={"eventType": "Download"})
+
+    assert resp.status_code == 503
+    assert resp.json()["message"] == "Error enqueuing webhook"
+    assert "hunter2" not in resp.text
+
+
+def test_failed_module_stats_return_no_worker_text():
+    from backend.api import modules
+
+    db = SimpleNamespace(
+        worker=SimpleNamespace(job_stats=lambda: {"success": False, "message": _SECRET}),
+        run_state=SimpleNamespace(get_all=lambda: []),
+    )
+
+    resp = modules.get_modules_stats(module=None, logger=MagicMock(), db=db)
+
+    assert resp.status_code == 500
+    assert "hunter2" not in resp.body.decode()

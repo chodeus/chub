@@ -21,6 +21,8 @@ from backend.util.normalization import normalize_titles
 from backend.util.tmdb import TMDBClient
 
 _VALID_KINDS = ("movie", "show", "collection", "season")
+# Browser-facing errors name the target and kind only; this points at the reason.
+_SEE_LOG = " — see the CL2K Maker log"
 
 # Prompt for the "extend" framing's AI outpaint. The model must *continue the
 # existing scene downward* — never invent text, logos, or new subjects (those would
@@ -1031,7 +1033,10 @@ def _persist_poster(
                     uploaded_folders.append(folder_id)
                     logger.info(f"CL2K uploaded {filename} to Drive {folder_id}")
                 except Exception as exc:
-                    upload_errors.append(f"{folder_id}: {public_reason(exc)}")
+                    # Deferred errors go only to the user's notification; inline ones
+                    # reach the browser, so they name the folder and nothing else.
+                    detail = exc if reload_config else "upload failed"
+                    upload_errors.append(f"{folder_id}: {detail}")
                     logger.warning(
                         f"CL2K gdrive upload to {folder_id} failed for {filename}: {exc}"
                     )
@@ -1106,7 +1111,8 @@ def _persist_poster(
             "reason": "; ".join(
                 [f"local save failed: {e}" for e in write_errors]
                 + [f"Drive upload failed: {e}" for e in upload_errors]
-            ),
+            )
+            + _SEE_LOG,
             "logo_source": logo_source,
         }
 
@@ -1125,11 +1131,10 @@ def _persist_poster(
     }
     # Surface non-fatal failures so the caller can tell the user which targets
     # missed while the generation still succeeded elsewhere.
-    # Each failure is logged in full where it happened; the browser gets its kind.
     if upload_errors:
-        result["upload_error"] = "; ".join(upload_errors)
+        result["upload_error"] = "; ".join(upload_errors) + _SEE_LOG
     if write_errors:
-        result["save_error"] = "; ".join(write_errors)
+        result["save_error"] = "; ".join(write_errors) + _SEE_LOG
     return result
 
 

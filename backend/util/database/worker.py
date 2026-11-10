@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from backend.util.public_error import failure_text
+
 from .db_base import DatabaseBase
+
+
+class JobFailed(Exception):
+    """A job that returned a failure; its message is already safe for the browser."""
 
 
 class JobStatus(Enum):
@@ -144,7 +150,7 @@ class DBWorker(DatabaseBase):
                                 f"Job {job_id} completed successfully in {duration:.2f}s"
                             )
                         else:
-                            raise Exception(f"Job failed: {result.message}")
+                            raise JobFailed(f"Job failed: {result.message}")
                     elif isinstance(result, dict) and result.get("success"):
                         self.mark_job_complete(table_name, job_id, result)
                         self._jobs_processed += 1
@@ -152,7 +158,7 @@ class DBWorker(DatabaseBase):
                             f"Job {job_id} completed successfully in {duration:.2f}s"
                         )
                     else:
-                        raise Exception(
+                        raise JobFailed(
                             f"Job failed: {result.get('message', 'Unknown error') if isinstance(result, dict) else str(result)}"
                         )
 
@@ -173,6 +179,10 @@ class DBWorker(DatabaseBase):
         self, table_name: str, job_id: int, error: Exception, duration: float, log
     ):
         """Simple error handling with retry"""
+        # The stored error reaches the browser through the job APIs.
+        stored = (
+            str(error) if isinstance(error, JobFailed) else failure_text("Job", error)
+        )
         try:
             row = self.get_attempts(table_name, job_id)
             attempts = row["attempts"]
@@ -186,14 +196,14 @@ class DBWorker(DatabaseBase):
                 ).isoformat()
 
                 self.mark_job_pending_with_error(
-                    table_name, job_id, error, scheduled_at
+                    table_name, job_id, stored, scheduled_at
                 )
                 log.warning(
                     f"Job {job_id} failed (attempt {attempts}/{max_attempts}) in {duration:.2f}s: {error}. "
                     f"Will retry in {delay}s"
                 )
             else:
-                self.mark_job_failed(table_name, job_id, error)
+                self.mark_job_failed(table_name, job_id, stored)
                 self._jobs_failed += 1
                 log.error(
                     f"Job {job_id} failed permanently after {attempts} attempts in {duration:.2f}s: {error}",

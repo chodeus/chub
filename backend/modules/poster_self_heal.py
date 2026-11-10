@@ -15,11 +15,13 @@ manual pick. A run sends a Discord notification summarising the outcome.
 """
 
 import os
+from typing import Any, Dict, Optional
 
 from backend.util.base_module import ChubModule
 from backend.util.cl2k.gdrive_upload import list_files
 from backend.util.connector import build_sync_instance_map, resync_media
 from backend.util.database import ChubDB
+from backend.util.public_error import failure_text
 from backend.util.database.poster_heal_review import poster_heal_review_for
 from backend.util.notification import NotificationManager
 from backend.util.poster_self_heal.apply import apply_proposal
@@ -109,6 +111,21 @@ def drive_twins(cl2k) -> tuple:
 
 class PosterSelfHeal(ChubModule):
     """Detect stale ids / changed titles / missing ids on CL2K posters."""
+
+    def _auto_apply(self, prop: Dict[str, Any], sync_cfg: Any) -> Optional[str]:
+        """Apply one confident proposal: None on success, else the review's error."""
+        try:
+            note = apply_proposal(prop, sync_cfg, self.logger)
+        except Exception as exc:
+            self.logger.warning(
+                f"auto-apply failed for {prop['current_filename']}: {exc}"
+                " — reopened for manual review"
+            )
+            # Stored on the review, which the browser shows.
+            return failure_text("Auto-apply", exc)
+        prop["status"] = "applied"
+        self.logger.info(f"auto-applied {prop['proposed_filename']}{note}")
+        return None
 
     def _fresh_media_index(self, db: ChubDB):
         """Index of the configured ARR instances' media, re-synced now; None if it could not be."""
@@ -279,20 +296,11 @@ class PosterSelfHeal(ChubModule):
                             f"skipping dismissed {prop['current_filename']}"
                         )
                     elif should_auto_apply(prop, auto, dismissed_files):
-                        try:
-                            note = apply_proposal(prop, sync_cfg, self.logger)
-                            prop["status"] = "applied"
+                        apply_error = self._auto_apply(prop, sync_cfg)
+                        if apply_error is None:
                             applied += 1
-                            self.logger.info(
-                                f"auto-applied {prop['proposed_filename']}{note}"
-                            )
-                        except Exception as exc:
-                            apply_error = str(exc)
+                        else:
                             failed += 1
-                            self.logger.warning(
-                                f"auto-apply failed for {prop['current_filename']}: {exc}"
-                                " — reopened for manual review"
-                            )
                     # Count a failed apply once, as failed; a dismissed skip isn't
                     # open either.
                     if apply_error is None and not skipped:

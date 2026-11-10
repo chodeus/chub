@@ -15,6 +15,7 @@ from backend.api.utils import (
     get_logger,
     ok,
     read_request_json,
+    worker_error,
 )
 from backend.util.database import ChubDB
 
@@ -254,12 +255,12 @@ async def refresh_cache(
                 "Cache refresh initiated",
                 {"job_id": job_id},
             )
-        else:
-            return error(
-                f"Error enqueuing cache refresh: {result.get('message', 'Unknown error')}",
-                code="CACHE_REFRESH_ENQUEUE_ERROR",
-                status_code=500,
-            )
+        return worker_error(
+            result,
+            logger,
+            "Error enqueuing cache refresh",
+            "CACHE_REFRESH_ENQUEUE_ERROR",
+        )
 
     except Exception as e:
         logger.error(f"Error serving POST /api/cache/refresh: {e}")

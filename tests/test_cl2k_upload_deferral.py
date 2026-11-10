@@ -133,6 +133,8 @@ def test_a_deferred_upload_failure_notifies(monkeypatch, tmp_path):
 
     captured[0]()  # BackgroundTasks would call this after the response
     assert any(e == "failure" for e, _ in notes), "a failed deferred upload must notify"
+    # The notice goes to the user's own channel, so it keeps the reason.
+    assert "drive is down" in str(notes)
     assert any("FAILED" in m for m in errors), "and must log at error level"
 
 

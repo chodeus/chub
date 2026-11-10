@@ -27,6 +27,7 @@ from backend.api.utils import (
     ok,
     read_json_object,
     read_request_json,
+    worker_error,
 )
 from backend.util.arr import arr_api_version, create_arr_client
 from backend.util.config import ConfigError, load_config
@@ -580,10 +581,8 @@ async def refresh_media(
             logger.info(f"Media refresh job queued: {job_id}")
             return ok("Media refresh initiated", {"job_id": job_id})
 
-        return error(
-            f"Error enqueuing refresh: {result.get('message', 'Unknown')}",
-            code="MEDIA_REFRESH_ERROR",
-            status_code=500,
+        return worker_error(
+            result, logger, "Error enqueuing refresh", "MEDIA_REFRESH_ERROR"
         )
 
     except Exception as e:

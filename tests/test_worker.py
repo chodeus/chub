@@ -73,6 +73,27 @@ def test_handle_job_error_retries_then_fails_permanently(db):
     assert row["status"] == "error"
 
 
+def test_a_stored_job_error_never_holds_exception_text(db):
+    """The jobs table's error reaches the browser through the job APIs."""
+    from backend.util.database.worker import JobFailed
+
+    jid = _enqueue(db, "cache_refresh")
+    db.worker.execute_query("UPDATE jobs SET attempts=3 WHERE id=?", (jid,))
+    db.worker._handle_job_error(
+        "jobs", jid, RuntimeError("/srv token=hunter2"), 0.1, _logger()
+    )
+    row = db.worker.execute_query("SELECT error FROM jobs WHERE id=?", (jid,), fetch_one=True)
+    assert row["error"] == "Job failed: unexpected error — see the server log"
+
+    # A job's own failure message is already worded for the browser: kept as is.
+    jid2 = _enqueue(db, "cache_refresh")
+    db.worker.execute_query("UPDATE jobs SET attempts=3 WHERE id=?", (jid2,))
+    failed = JobFailed("Job failed: Cache refresh failed: timed out")
+    db.worker._handle_job_error("jobs", jid2, failed, 0.1, _logger())
+    row = db.worker.execute_query("SELECT error FROM jobs WHERE id=?", (jid2,), fetch_one=True)
+    assert row["error"] == "Job failed: Cache refresh failed: timed out"
+
+
 def test_cleanup_deletes_only_old_finished_jobs(db):
     old = "2000-01-01T00:00:00+00:00"
     for status in ("success", "error", "pending"):

@@ -343,11 +343,10 @@ class NotificationManager:
                 self.logger.info(f"[Notification] ✅ {label} notification sent.")
                 return True, "Notification sent successfully."
         except Exception as e:
-            tb_str = traceback.format_exc()
             self.logger.error(
-                f"[Notification] {label} send exception: {e}\n{tb_str}", exc_info=True
+                f"[Notification] {label} send exception: {e}", exc_info=True
             )
-            # The traceback stays in the log; callers can show this to the browser.
+            # Callers show this to the browser: never put exc or a traceback in it.
             return False, failure_text(f"{label} send", e)
 
     def send_notifiarr_notification(
@@ -516,12 +515,9 @@ class NotificationManager:
                     entry["error"] = f"Unknown notification target: {method}"
                 results.append(entry)
             except Exception as ex:
-                tb_str = traceback.format_exc()
                 entry["error"] = failure_text(f"Sending to {method}", ex)
                 results.append(entry)
-                self.logger.error(
-                    f"Exception for {method}: {ex}\n{tb_str}", exc_info=True
-                )
+                self.logger.error(f"Exception for {method}: {ex}", exc_info=True)
         success = any(r.get("ok") for r in results)
         out = {"success": success, "results": results}
         if not success:

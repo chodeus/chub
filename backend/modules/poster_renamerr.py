@@ -42,6 +42,7 @@ from backend.util.normalization import parse_asset_filename
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
+from backend.util.public_error import failure_text
 from backend.util.upload_posters import PosterUploader, upload_enabled_instances
 
 # Process-global lock serializing the destructive poster_cache clear()+rebuild.
@@ -1847,7 +1848,7 @@ class PosterRenamerr(ChubModule):
             log.error(f"Error during adhoc poster rename: {e}", exc_info=True)
             return {
                 "success": False,
-                "message": f"Error during poster rename: {str(e)}",
+                "message": failure_text("Poster rename", e),
             }
 
     def run(self):
