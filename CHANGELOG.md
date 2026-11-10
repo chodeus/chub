@@ -2,6 +2,37 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.55.0](https://github.com/chodeus/chub/compare/v2.54.3...v2.55.0) (2026-11-10)
+
+
+### Features
+
+* **upgradinatorr:** add Max Items Grabbed Per Run and Minimum Release Age settings ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+* **upgradinatorr:** finish a slow search on the next run instead of repeating it ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+* **upgradinatorr:** name the album and its type on Lidarr imports ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+* **upgradinatorr:** report grabs that failed to download or never imported ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+* **upgradinatorr:** show each import as an old/new diff with custom formats, one embed per instance coloured by outcome ([af0fdc5](https://github.com/chodeus/chub/commit/af0fdc56fed512a9375fa48cb1f06d7a46efe2fa))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([bfcaea2](https://github.com/chodeus/chub/commit/bfcaea2be149766dab15426e5a7327ee744762e5))
+* **deps:** update all non-major dependencies (patch) ([#776](https://github.com/chodeus/chub/issues/776)) ([bfcaea2](https://github.com/chodeus/chub/commit/bfcaea2be149766dab15426e5a7327ee744762e5))
+* **gdrive:** report a failed sync enqueue instead of "started" ([49a4c4f](https://github.com/chodeus/chub/commit/49a4c4f382d267242995b4c9010113740788c8e8))
+* **gdrive:** say when a sync is queued, or which queued sync covers the folders ([7fd14b5](https://github.com/chodeus/chub/commit/7fd14b553dbf79442220b3a799863c70b0bc5402))
+* **instances:** refuse a save that gives two instances the same name, even across service types ([23818c2](https://github.com/chodeus/chub/commit/23818c2bdcafdd343df76d0644b7d2afb05de98b))
+* **jobs:** keep a job cancelled while it ran from turning into success or a retry ([7fd14b5](https://github.com/chodeus/chub/commit/7fd14b553dbf79442220b3a799863c70b0bc5402))
+* keep exception text and tracebacks out of every browser-facing error ([49a4c4f](https://github.com/chodeus/chub/commit/49a4c4f382d267242995b4c9010113740788c8e8))
+* **labelarr:** write tags to the row's own *arr item and report a failed write ([7fd14b5](https://github.com/chodeus/chub/commit/7fd14b553dbf79442220b3a799863c70b0bc5402))
+* **media:** never delete a whole series for a season row, or another item with the same id ([62f7891](https://github.com/chodeus/chub/commit/62f7891de1bbce713e48076e81acace3d7096473))
+* **media:** report a failed Radarr/Sonarr/Lidarr delete instead of removing the item ([62f7891](https://github.com/chodeus/chub/commit/62f7891de1bbce713e48076e81acace3d7096473))
+* **media:** send Sonarr's import list exclusion when deleting a series ([62f7891](https://github.com/chodeus/chub/commit/62f7891de1bbce713e48076e81acace3d7096473))
+* name the kind of failure (timed out, permission denied, bad API key) in web UI errors ([49a4c4f](https://github.com/chodeus/chub/commit/49a4c4f382d267242995b4c9010113740788c8e8))
+* **upgradinatorr:** name what each count means in the log and notification ([05e09e0](https://github.com/chodeus/chub/commit/05e09e0e99cd7e65f71adacc333ef00d3363c184))
+* **upgradinatorr:** say why nothing is searched once a rotation finishes with auto reset off ([05e09e0](https://github.com/chodeus/chub/commit/05e09e0e99cd7e65f71adacc333ef00d3363c184))
+* **upgradinatorr:** show a same-score upgrade's revision (REPACK, v2, REAL) ([05e09e0](https://github.com/chodeus/chub/commit/05e09e0e99cd7e65f71adacc333ef00d3363c184))
+* **webhooks:** run one provisioning pass per *arr at a time so none is created twice ([7fd14b5](https://github.com/chodeus/chub/commit/7fd14b553dbf79442220b3a799863c70b0bc5402))
+
 ## [2.54.3](https://github.com/chodeus/chub/compare/v2.54.2...v2.54.3) (2026-11-04)
 
 
