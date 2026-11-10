@@ -602,3 +602,29 @@ def test_a_failed_drive_sync_enqueue_is_not_reported_as_started(monkeypatch):
 
     assert resp.status_code == 500
     assert json.loads(resp.body)["message"] == "Error starting the GDrive sync"
+
+
+def test_a_failed_config_save_is_not_reported_as_a_read(tmp_path, monkeypatch):
+    import yaml
+
+    from backend.util import config as cfg
+
+    def boom(*a, **k):
+        raise yaml.representer.RepresenterError(_SECRET)
+
+    monkeypatch.setattr(cfg.yaml, "safe_dump", boom)
+    with pytest.raises(cfg.ConfigError) as caught:
+        cfg.save_config(cfg.ChubConfig(), path=str(tmp_path / "config.yml"))
+
+    assert public_error.public_reason(caught.value) == "configuration error"
+
+
+def test_an_invalid_config_reads_as_invalid_settings(tmp_path):
+    from backend.util import config as cfg
+
+    path = tmp_path / "config.yml"
+    path.write_text("general:\n  log_level: [not, a, string]\n")
+    with pytest.raises(cfg.ConfigValidationError) as caught:
+        cfg.load_config(str(path))
+
+    assert public_error.public_reason(caught.value) == "invalid settings"

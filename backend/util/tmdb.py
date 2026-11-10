@@ -24,7 +24,6 @@ import requests
 from backend.util.config import TMDBConfig
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
-from backend.util.public_error import PublicError
 
 
 # Sentinel returned by _fetch_details for a genuine HTTP 404 (TMDB truly has
@@ -33,12 +32,6 @@ from backend.util.public_error import PublicError
 # reported as "not found", or a real id gets mislabelled when the bulk verify
 # pass hits a blip.
 _TMDB_NOT_FOUND = object()
-
-
-class TMDBAuthError(PublicError):
-    """API key was rejected by TMDB (HTTP 401)."""
-
-    public = "TMDB rejected the API key"
 
 
 class TMDBClient:

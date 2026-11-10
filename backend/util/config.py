@@ -1116,7 +1116,7 @@ def resolve_secret_path(data: Any, path: str) -> str:
 class ConfigError(PublicError):
     """Base class for configuration errors; `.message` is response-safe text."""
 
-    public = "the configuration could not be read"
+    public = "configuration error"
 
     def __init__(self, message: str = "") -> None:
         super().__init__(message)
@@ -1126,15 +1126,17 @@ class ConfigError(PublicError):
 class ConfigNotFoundError(ConfigError):
     """Raised when the config file does not exist."""
 
+    public = "the configuration file is missing"
+
 
 class ConfigParseError(ConfigError):
     """Raised when the config file contains invalid YAML."""
 
+    public = "the configuration file could not be read"
+
 
 class ConfigValidationError(ConfigError):
     """Raised when config content fails Pydantic validation."""
-
-    public = "the configuration is invalid"
 
     def __init__(
         self, message: str, validation_error: Optional[ValidationError] = None
