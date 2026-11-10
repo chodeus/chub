@@ -21,6 +21,8 @@ from backend.util.arr import (
 from backend.util.base_module import ChubModule
 from backend.util.constants import (
     QUEUE_REPORT_SECTIONS,
+    counted,
+    plural,
     report_item_label,
     import_quality_text,
     import_report_sections,
@@ -34,6 +36,13 @@ from backend.util.database.upgradinatorr_progress import UpgradinatorrProgress
 from backend.util.helper import as_list, create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+from backend.util.upgradinatorr_notification import (
+    held_line,
+    nothing_to_search_text,
+    searched_text,
+    selection_text,
+    summary_lines,
+)
 
 VALID_STATUSES = {"continuing", "airing", "ended", "canceled", "released"}
 VALID_SEARCH_MODES = {"upgrade", "missing", "cutoff"}
@@ -222,9 +231,8 @@ class Upgradinatorr(ChubModule):
         if not max_grabs or grabbed < max_grabs:
             return False
         self.logger.info(
-            f"Max items grabbed ({max_grabs}) reached on {app.instance_name}: "
-            "stopping here; "
-            "the rest of the batch stays untagged for the next run."
+            f"Max Items Grabbed Per Run ({max_grabs}) reached on {app.instance_name}: "
+            "stopping here; the rest stays untagged for the next run."
         )
         return True
 
@@ -508,6 +516,30 @@ class Upgradinatorr(ChubModule):
         return True
 
     @staticmethod
+    def _new_search_stats() -> Dict[str, int]:
+        """Search commands sent, by outcome, plus the parents and seasons/albums they covered."""
+        return {
+            "searches_attempted": 0,
+            "searches_succeeded": 0,
+            "searches_failed": 0,
+            "searches_deferred": 0,
+            "items_searched": 0,
+            "child_searches": 0,
+        }
+
+    @staticmethod
+    def _count_searched(
+        search_stats: Dict[str, int], item: Dict[str, Any], attempted_before: int
+    ) -> None:
+        """Count a parent once it sent a search; per-season/album searches also count as children."""
+        sent = search_stats["searches_attempted"] - attempted_before
+        if not sent:
+            return
+        search_stats["items_searched"] += 1
+        if item.get("seasons") is not None:
+            search_stats["child_searches"] += sent
+
+    @staticmethod
     def _record_search_attempt(
         search_stats: Optional[Dict[str, int]], outcome: str
     ) -> None:
@@ -589,7 +621,7 @@ class Upgradinatorr(ChubModule):
                 downloads.append(download)
         if out_of_scope:
             self.logger.warning(
-                f"Discarded {out_of_scope} history record(s) belonging to other media "
+                f"Discarded {plural(out_of_scope, 'history record')} belonging to other media "
                 f"while reading grabs for {instance_type} ID {media_id} — "
                 f"{app.instance_name} ignored the history scope filter."
             )
@@ -661,7 +693,7 @@ class Upgradinatorr(ChubModule):
         if not isinstance(imports, list) or not isinstance(deletes, list):
             self.logger.warning(
                 f"Could not read {app.instance_name} history since {since}; "
-                f"{len(pending)} grab(s) stay pending for the next run."
+                f"{plural(len(pending), 'grab')} stay pending for the next run."
             )
             return GrabReconcile([], set())
 
@@ -821,9 +853,24 @@ class Upgradinatorr(ChubModule):
 
     @staticmethod
     def _quality_name(record: Dict[str, Any]) -> Optional[str]:
-        """The *arr's quality name for a history record, e.g. ``Remux-1080p``."""
-        quality = (record.get("quality") or {}).get("quality") or {}
-        return quality.get("name")
+        """The *arr's quality for a history record, e.g. ``WEBDL-1080p REPACK``."""
+        quality = record.get("quality") or {}
+        name = (quality.get("quality") or {}).get("name")
+        if not name:
+            return None
+        # A higher revision upgrades at the same quality and score, so it must show.
+        # Only isRepack is certain; a PROPER and an anime v2 share version 2.
+        revision = quality.get("revision") or {}
+        version, real = revision.get("version"), revision.get("real")
+        parts = [name]
+        if isinstance(version, int) and version > 1:
+            if revision.get("isRepack"):
+                parts.append("REPACK" if version == 2 else f"REPACK{version - 1}")
+            else:
+                parts.append(f"v{version}")
+        if isinstance(real, int) and real > 0:
+            parts.extend(["REAL"] * real)
+        return " ".join(parts)
 
     @staticmethod
     def _custom_format_names(record: Dict[str, Any]) -> Optional[List[str]]:
@@ -1515,11 +1562,9 @@ class Upgradinatorr(ChubModule):
                     item["release_hold"] = f"released {released or 'on no known date'}"
                 else:
                     target["monitored"] = False
-        if any(holds.values()):
-            self.logger.info(
-                f"Held back {holds['too_new']} released in the last {min_age_days} "
-                f"day(s) and {holds['no_date']} with no release date."
-            )
+        line = held_line({"days": min_age_days, **holds}, instance_type)
+        if line:
+            self.logger.info(f"{line}.")
         return holds
 
     def _convert_wanted_to_media_dict(
@@ -1634,18 +1679,16 @@ class Upgradinatorr(ChubModule):
         return []
 
     @staticmethod
-    def _new_output(server_name: str, grabs: GrabReconcile) -> Dict[str, Any]:
+    def _new_output(app: BaseARRClient, grabs: GrabReconcile) -> Dict[str, Any]:
         """The per-instance result shape. One definition so a bail-out and a full
         run can't drift apart."""
         return {
-            "server_name": server_name,
+            "server_name": app.instance_name,
+            "instance_type": str(app.instance_type or "").lower(),
             "tagged_count": 0,
             "untagged_count": 0,
             "total_count": 0,
-            "searches_attempted": 0,
-            "searches_succeeded": 0,
-            "searches_failed": 0,
-            "searches_deferred": 0,
+            **Upgradinatorr._new_search_stats(),
             "data": [],
             # Grabs from EARLIER runs whose download imported, upgrade or
             # first acquisition. This run's own grabs haven't downloaded yet.
@@ -1828,10 +1871,16 @@ class Upgradinatorr(ChubModule):
             self._settle_grabs(app.instance_name, grabs.resolved)
             return None
         self.logger.info(
-            f"{len(grabs.completed) + len(grabs.not_imported)} earlier grab(s) to "
+            f"{plural(len(grabs.completed) + len(grabs.not_imported), 'earlier grab')} to "
             f"report for {app.instance_name}."
         )
-        return self._new_output(app.instance_name, grabs)
+        return self._new_output(app, grabs)
+
+    def _tag_counts(self, media: List[Dict[str, Any]], tag_name: str) -> Tuple[int, int]:
+        """(tagged, untagged) parents for the marker tag."""
+        tag = tag_name.strip().lower()
+        tagged = sum(1 for item in media if tag in self._tag_names(item))
+        return tagged, len(media) - tagged
 
     def process_instance(
         self,
@@ -1839,9 +1888,6 @@ class Upgradinatorr(ChubModule):
         instance_settings: Dict[str, Any],
         app: BaseARRClient,
     ) -> Optional[Dict[str, Any]]:
-        tagged_count: int = 0
-        untagged_count: int = 0
-        total_count: int = 0
         count: int = self._get_setting(instance_settings, "count", 0) or 0
         checked_tag_name: str = (
             self._get_setting(instance_settings, "tag_name", "") or "checked"
@@ -1943,9 +1989,10 @@ class Upgradinatorr(ChubModule):
             app, instance_type, queue_block_hours
         )
         if blocked_downloads:
+            skipped = counted(len(blocked_downloads), instance_type, "child")
             self.logger.info(
-                f"{len(blocked_downloads)} item(s) skipped this run — already "
-                f"downloaded and waiting on {app.instance_name} to import."
+                f"{skipped} skipped this run — a download is already waiting "
+                f"on {app.instance_name} to import."
             )
 
         filtered_media_dict: List[Dict[str, Any]] = self.filter_media(
@@ -1998,44 +2045,53 @@ class Upgradinatorr(ChubModule):
                 blocked_downloads,
             )
 
+        total_count = len(media_dict)
+        tagged_count, untagged_count = self._tag_counts(media_dict, checked_tag_name)
+        rotation = {
+            "tag_name": checked_tag_name,
+            # total_count keeps an empty or unread media list from reading as "all tagged".
+            "rotation_done": bool(total_count and not untagged_count and not unattended),
+        }
         # blocked_rows still have to be reported, so only bail when there is
         # genuinely nothing to say.
         if not filtered_media_dict and not unattended and not blocked_rows:
-            self.logger.info(f"No media left to process for {app.instance_name}.")
             self.logger.warning(
-                f"No media found for {app.instance_name}. Reason: nothing left to tag."
+                nothing_to_search_text(
+                    app.instance_name,
+                    instance_type,
+                    search_mode,
+                    wanted_count,
+                    total_count,
+                    untagged_count,
+                    checked_tag_name,
+                )
             )
-            return self._completed_only(app, earlier_grabs)
+            result = self._completed_only(app, earlier_grabs)
+            if result is not None:
+                result.update(rotation)
+            return result
 
-        if wanted_count is not None:
-            self.logger.info(
-                f"Found {wanted_count} {search_mode} item(s); "
-                f"selected {len(filtered_media_dict)} candidate(s) (search budget: {count})."
+        self.logger.info(
+            selection_text(
+                instance_type,
+                search_mode,
+                wanted_count,
+                total_count,
+                len(filtered_media_dict),
+                count,
+                granular,
             )
-        else:
-            self.logger.info(
-                f"Selected {len(filtered_media_dict)} candidate(s) from "
-                f"{len(media_dict)} total (search budget: {count})."
-            )
-        if media_dict:
-            total_count = len(media_dict)
-            for item in media_dict:
-                if checked_tag_name.strip().lower() in self._tag_names(item):
-                    tagged_count += 1
-                else:
-                    untagged_count += 1
-
-        output_dict: Dict[str, Any] = self._new_output(
-            app.instance_name, earlier_grabs
         )
+
+        output_dict: Dict[str, Any] = self._new_output(app, earlier_grabs)
         output_dict["tagged_count"] = tagged_count
         output_dict["untagged_count"] = untagged_count
         output_dict["total_count"] = total_count
         output_dict["tagged_in_run"] = 0
-        output_dict["instance_type"] = instance_type
         output_dict["search_mode"] = search_mode
         output_dict["budget"] = count
         output_dict["granular"] = granular
+        output_dict.update(rotation)
         if any(release_holds.values()):
             output_dict["release_holds"] = {"days": min_age_days, **release_holds}
 
@@ -2044,12 +2100,8 @@ class Upgradinatorr(ChubModule):
             searched_items: List[Dict[str, Any]] = []
             grabbed_downloads: Dict[int, List[Dict[str, Any]]] = {}
             failed_searches: Dict[int, List[str]] = {}
-            search_stats: Dict[str, int] = {
-                "searches_attempted": 0,
-                "searches_succeeded": 0,
-                "searches_failed": 0,
-                "searches_deferred": 0,
-            }
+            staged_id: Optional[int] = None
+            search_stats = self._new_search_stats()
             progress_db: Optional[UpgradinatorrProgress] = None
             db_ctx: Optional[ChubDB] = None
             # Open the progress DB for any sonarr/lidarr run so that leftover
@@ -2080,7 +2132,7 @@ class Upgradinatorr(ChubModule):
                     reason = (
                         "its command queue could not be read"
                         if backlog is None
-                        else f"{backlog} search command(s) already queued or running"
+                        else f"{plural(backlog, 'search command')} already queued or running"
                     )
                     self.logger.warning(
                         f"Skipping {app.instance_name}: {reason}. Nothing is lost — "
@@ -2106,6 +2158,7 @@ class Upgradinatorr(ChubModule):
                     self._add_searched(searched_items, item)
 
                     budget_hit = False
+                    attempted_before = search_stats["searches_attempted"]
 
                     if item["seasons"] is None:
                         # Movies (Radarr) or artists without album data
@@ -2173,13 +2226,16 @@ class Upgradinatorr(ChubModule):
                             failed_searches,
                             search_stats,
                         )
+                    self._count_searched(search_stats, item, attempted_before)
 
                     if self._deferred_count(search_stats):
+                        searched = searched_text({**search_stats, "instance_type": instance_type})
                         self.logger.warning(
                             f"{app.instance_name} is not keeping up — stopping this run "
-                            f"after {search_count} search(es). The staged work is "
-                            "untagged and unrecorded, so the next run resumes from here."
+                            f"with {searched}. The staged work is untagged and "
+                            "unrecorded, so the next run resumes from here."
                         )
+                        staged_id = item["media_id"]
                         break
 
                     if budget_hit:
@@ -2284,17 +2340,18 @@ class Upgradinatorr(ChubModule):
                         "search_failures": failed_searches.get(item["media_id"], []),
                     }
                 )
+                if item["media_id"] == staged_id:
+                    # Its search is still running on the *arr and may yet grab.
+                    output_dict["data"][-1]["staged"] = True
             output_dict.update(search_stats)
             # A staged item records no failure, so it is subtracted on its own.
             deferred = self._deferred_count(search_stats)
             tagged_in_run = self._tagged_in_run(searched_items, failed_searches, deferred)
             output_dict["tagged_in_run"] = tagged_in_run
-            summary = (
-                f"   → {search_stats['searches_attempted']} searched, "
-                f"{tagged_in_run} tagged"
-            )
+            summary = f"   → {searched_text(output_dict)}, {tagged_in_run} tagged"
             if deferred:
-                summary += f", {deferred} staged for the next run"
+                staged = plural(deferred, "search", "searches")
+                summary += f", {staged} staged for the next run"
             self.logger.info(summary)
             # Opened after the search loop's db_ctx has closed — the searches
             # can run for minutes and nothing here needs a connection held open.
@@ -2392,7 +2449,7 @@ class Upgradinatorr(ChubModule):
     def _print_not_imported(self, rows: List[Dict[str, Any]]) -> None:
         if not rows:
             return
-        self.logger.info(f"[NOT IMPORTED] {len(rows)} grab(s) from earlier runs:")
+        self.logger.info(f"[NOT IMPORTED] {plural(len(rows), 'grab')} from earlier runs:")
         for row in rows:
             self.logger.info(f"  {report_item_label(row)}")
             self.logger.info(f"    {row.get('download')} — {row.get('reason')}")
@@ -2411,19 +2468,14 @@ class Upgradinatorr(ChubModule):
 
             table = [[f"{run_data['server_name']}"]]
             self.logger.info(create_table(table))
+            kind = run_data.get("instance_type")
+            # The same summary the notification sends, so the two never disagree.
+            for line in summary_lines(run_data):
+                self.logger.info(line)
             deferred = run_data.get("searches_deferred", 0)
-            self.logger.info(
-                f"Searches: {run_data.get('searches_attempted', 0)} attempted, "
-                f"{run_data.get('searches_succeeded', 0)} completed, "
-                f"{run_data.get('searches_failed', 0)} failed"
-                + (f", {deferred} staged" if deferred else "")
-                + f" | Parents: {run_data.get('untagged_count', 0)} untagged, "
-                f"{run_data.get('tagged_count', 0)} tagged, "
-                f"{run_data.get('total_count', 0)} total."
-            )
             if deferred:
                 self.logger.info(
-                    f"[STAGED] {deferred} search(es) left with "
+                    f"[STAGED] {plural(deferred, 'search', 'searches')} left with "
                     f"{run_data['server_name']} — they finish there on their own and "
                     "the next run resumes the untagged work. Not a failure."
                 )
@@ -2436,12 +2488,13 @@ class Upgradinatorr(ChubModule):
                 if not it.get("grabs")
                 and not it.get("search_failures")
                 and not it.get("queue_imports")
+                and not it.get("staged")
             ]
 
             for tag, noun, section in import_report_sections(completed):
-                items = {it.get("media_id") for it in section}
+                items = counted(len({it.get("media_id") for it in section}), kind)
                 self.logger.info(
-                    f"[{tag}] {import_report_tally(len(section), len(items), noun)}:"
+                    f"[{tag}] {import_report_tally(len(section), items, noun)}:"
                 )
                 for entry in section:
                     self.logger.info(f"  {report_item_label(entry)}")
@@ -2458,7 +2511,8 @@ class Upgradinatorr(ChubModule):
             if with_grabs:
                 grab_total = sum(len(it["grabs"]) for it in with_grabs)
                 self.logger.info(
-                    f"[GRABBED] {grab_total} download(s) across {len(with_grabs)} item(s):"
+                    f"[GRABBED] {plural(grab_total, 'download')} across "
+                    f"{counted(len(with_grabs), kind)}:"
                 )
                 for item in with_grabs:
                     self.logger.info(f"  {self._format_item_title(item)}")
@@ -2480,7 +2534,7 @@ class Upgradinatorr(ChubModule):
                 # the listing is what buries the grabs and upgrades this run made.
                 total = sum(len(entries) for _it, entries in grouped)
                 getattr(self.logger, level)(
-                    f"[{tag}] {queue_report_tally(total, len(grouped), note)}"
+                    f"[{tag}] {queue_report_tally(total, counted(len(grouped), kind), note)}"
                 )
                 for item, entries in grouped:
                     self.logger.debug(f"  {self._format_item_title(item)}")
@@ -2488,18 +2542,33 @@ class Upgradinatorr(ChubModule):
                         self.logger.debug(f"    {self._format_queue_entry(entry)}")
 
             if with_failures:
-                self.logger.info(f"[FAILED] {len(with_failures)} item(s):")
+                self.logger.info(
+                    f"[FAILED] {counted(len(with_failures), kind)} with a failed search:"
+                )
                 for item in with_failures:
                     failures = ", ".join(item["search_failures"])
                     self.logger.warning(
                         f"  {self._format_item_title(item)} — {failures}"
                     )
 
-            if no_grabs:
-                titles = ", ".join(self._format_item_title(it) for it in no_grabs)
-                self.logger.info(
-                    f"[NO GRABS] {len(no_grabs)} item(s) searched, nothing grabbed: {titles}"
-                )
+            self._print_no_grabs(no_grabs, run_data)
+
+    def _print_no_grabs(self, items: List[Dict[str, Any]], run: Dict[str, Any]) -> None:
+        if not items:
+            return
+        kind = run.get("instance_type")
+        titles = ", ".join(self._format_item_title(it) for it in items)
+        # A dry run lists what it would search; season/album mode lists every candidate.
+        if self.config.dry_run:
+            budget = counted(run.get("budget") or 0, kind, "child")
+            limit = f"up to {budget} from " if run.get("granular") else ""
+            self.logger.info(
+                f"[DRY RUN] Would search {limit}{counted(len(items), kind)}: {titles}"
+            )
+            return
+        self.logger.info(
+            f"[NO GRABS] {counted(len(items), kind)} searched, nothing grabbed: {titles}"
+        )
 
     def run(self):
         try:

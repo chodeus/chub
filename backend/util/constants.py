@@ -217,9 +217,42 @@ QUEUE_REPORT_SECTIONS: Tuple[Tuple[str, str, str, str], ...] = (
 )
 
 
-def queue_report_tally(download_count: int, item_count: int, note: str) -> str:
-    """The run log's one-line queue-section summary."""
-    return f"{download_count} download(s) across {item_count} item(s) — {note}"
+def plural(count: int, word: str, words: Optional[str] = None) -> str:
+    """``1 search`` / ``2 searches``; ``words`` defaults to ``word`` + "s"."""
+    return f"{count} {word if count == 1 else words or word + 's'}"
+
+
+# (singular, plural) per *arr: the parent a run tags, the target one search
+# covers when it searches per season/album, and the record a wanted list returns.
+ARR_UNITS: Dict[str, Dict[str, Tuple[str, str]]] = {
+    "radarr": {
+        "parent": ("movie", "movies"),
+        "child": ("movie", "movies"),
+        "wanted": ("movie", "movies"),
+    },
+    "sonarr": {
+        "parent": ("series", "series"),
+        "child": ("season", "seasons"),
+        "wanted": ("episode", "episodes"),
+    },
+    "lidarr": {
+        "parent": ("artist", "artists"),
+        "child": ("album", "albums"),
+        "wanted": ("album", "albums"),
+    },
+}
+
+
+def counted(count: int, instance_type: Any, unit: str = "parent") -> str:
+    """``1 series``, ``4 seasons``: a count in the *arr's own word for ``unit``."""
+    units = ARR_UNITS.get(str(instance_type or "").lower(), {})
+    word, words = units.get(unit, ("item", "items"))
+    return plural(count, word, words)
+
+
+def queue_report_tally(download_count: int, items: str, note: str) -> str:
+    """The run log's one-line queue-section summary; ``items`` is a ``counted`` text."""
+    return f"{plural(download_count, 'download')} across {items} — {note}"
 
 
 # (replaced, report tag, noun) — an import that deleted a file "for Upgrade"
@@ -240,11 +273,11 @@ def import_report_sections(
             yield tag, noun, rows
 
 
-def import_report_tally(count: int, item_count: int, noun: str) -> str:
-    """The run log's one-line import-section summary."""
+def import_report_tally(count: int, items: str, noun: str) -> str:
+    """The run log's one-line import-section summary; ``items`` is a ``counted`` text."""
     # Counts imported releases, not parents — a tally naming a different noun
     # from the lines beneath it put "1 items with grabs" above seven rows.
-    return f"{count} {noun}(s) across {item_count} item(s)"
+    return f"{plural(count, noun)} across {items}"
 
 
 def report_item_label(entry: Dict[str, Any]) -> str:

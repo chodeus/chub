@@ -97,7 +97,8 @@ def test_the_run_stops_once_max_grabs_items_have_grabbed(isolated_db):
     assert result["max_grabs_hit"] == 2
     [part] = build_upgradinatorr_embeds({"radarr": result})
     assert (
-        "Max items grabbed (2) reached: stopped early, the rest is searched next run"
+        "Max Items Grabbed Per Run reached: 2 movies grabbed something, "
+        "the rest is searched next run"
         in part["description"]
     )
 
@@ -141,7 +142,7 @@ def test_items_inside_the_minimum_age_are_held_back(isolated_db):
     assert result["release_holds"] == {"days": 30, "too_new": 1, "no_date": 1}
     [part] = build_upgradinatorr_embeds({"radarr": result})
     assert (
-        "Held back: 1 released in the last 30 days, 1 with no release date"
+        "Held back: 1 movie released in the last 30 days, 1 movie with no release date"
         in part["description"]
     )
 

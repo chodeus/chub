@@ -633,7 +633,8 @@ def _run_log(module, completed):
     return _run_log_output(
         module,
         upgradinatorr_module.Upgradinatorr._new_output(
-            "Radarr", upgradinatorr_module.GrabReconcile(completed, set())
+            SimpleNamespace(instance_name="Radarr", instance_type="Radarr"),
+            upgradinatorr_module.GrabReconcile(completed, set()),
         ),
     )
 
@@ -650,6 +651,26 @@ def _embed_body(completed):
     text = [part.get("description") or "" for part in parts]
     text += [f"{f['name']}\n{f['value']}" for part in parts for f in part["fields"]]
     return "\n".join(text)
+
+
+def test_a_same_score_repack_upgrade_names_the_revision():
+    """Sonarr upgrades to a repack at an unchanged score; only the revision says why."""
+    module = make_upgradinatorr(dry_run=False)
+    grabs = _FakeGrabs([_grab()])
+    imported = _import(score=3585)
+    imported["quality"]["revision"] = {"version": 2, "real": 0, "isRepack": True}
+    deleted = _delete(score=3585)
+    deleted["quality"]["revision"] = {"version": 1, "real": 0, "isRepack": False}
+    app = _HistoryARR([imported], [deleted])
+
+    completed = _collect(module, app, grabs)
+
+    assert completed[0]["replaced"] is True
+    log = _run_log(module, completed)
+    body = _embed_body(completed)
+    assert "Score 3585 (was 3585), WEBDL-1080p → WEBDL-1080p REPACK —" in log
+    assert "- WEBDL-1080p\n" in body
+    assert "+ WEBDL-1080p REPACK\n" in body
 
 
 def test_an_acquisition_names_the_quality_it_got():
@@ -1022,7 +1043,7 @@ def test_a_failed_grab_alone_survives_the_nothing_left_to_search_bail_out(isolat
     assert [row["reason"] for row in result["not_imported"]] == ["Duplicate NZB"]
     assert result["resolved_grabs"] == ["dl-1"]
     log = _run_log_output(module, result)
-    assert "[NOT IMPORTED] 1 grab(s) from earlier runs:" in log
+    assert "[NOT IMPORTED] 1 grab from earlier runs:" in log
     assert "Movie.2024.REMUX-GRP — Duplicate NZB" in log
 
 
