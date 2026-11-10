@@ -277,7 +277,7 @@ def test_update_mappings_is_dropped_but_siblings_survive(refresh, value):
 
 
 def test_a_failed_enqueue_returns_no_worker_text(refresh):
-    """The worker's message embeds the exception; only the log may see it."""
+    """The worker's message goes to the log only, whatever it holds."""
     client, path, db = refresh
     db.worker.enqueue_job = lambda *a, **k: {
         "success": False,

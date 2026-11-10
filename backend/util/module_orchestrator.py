@@ -51,7 +51,7 @@ class ModuleOrchestrator:
     def _enqueue_failed(
         self, module_name: str, result: Dict[str, Any], origin: str
     ) -> Dict[str, Any]:
-        """A failed enqueue's reply; the worker's message embeds exception text."""
+        """A failed enqueue's reply: the worker's message to the log, fixed text back."""
         self._log(
             "error", f"Failed to enqueue {module_name}: {result.get('message')}", origin
         )
