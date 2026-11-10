@@ -30,6 +30,8 @@ in; this module never guesses it.
 
 from __future__ import annotations
 
+import threading
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlparse
@@ -430,6 +432,17 @@ def _eligible_instances(
     return eligible, skipped
 
 
+# Serialises runs per *arr: two overlapping provisions both read "no CHUB entry"
+# and both create one. Thread lock — single process only (mirrors cl2k _folder_lock).
+_ARR_LOCKS_GUARD = threading.Lock()
+_ARR_LOCKS: "defaultdict[str, threading.Lock]" = defaultdict(threading.Lock)
+
+
+def _arr_lock(url: str) -> threading.Lock:
+    with _ARR_LOCKS_GUARD:
+        return _ARR_LOCKS[str(url or "").rstrip("/").lower()]
+
+
 def _run_over_instances(
     eligible: List[Tuple[str, str, str, str]],
     op,
@@ -447,7 +460,8 @@ def _run_over_instances(
                 row = _base_result(instance_type, name)
                 row["error"] = "Couldn't connect to the instance."
                 return row
-            return op(client, instance_type, name)
+            with _arr_lock(url):
+                return op(client, instance_type, name)
         except Exception as exc:  # noqa: BLE001
             return _failed_on(_base_result(instance_type, name), exc, logger)
         finally:

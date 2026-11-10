@@ -1,5 +1,7 @@
 """Tests for backend/util/webhook_provisioner.py — arr webhook auto-provisioning."""
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 from backend.util import webhook_provisioner as wp
@@ -442,3 +444,53 @@ def test_status_report_reconciles_against_detected_base(monkeypatch):
     assert report["detected_base_url"] == "http://detected:8060"
     names = {r["name"] for r in report["instances"]}
     assert {"Radarr", "Sonarr"} <= names
+
+
+class _SharedArr:
+    """One *arr's notification list, seen by every client opened against it."""
+
+    def __init__(self):
+        self.notifications = []
+        self.readers = 0
+        self.second_reader = threading.Event()
+        self.guard = threading.Lock()
+
+
+class _RacingClient(StubClient):
+    def __init__(self, arr):
+        super().__init__()
+        self._arr = arr
+
+    def get_notifications(self):
+        snapshot = list(self._arr.notifications)
+        with self._arr.guard:
+            self._arr.readers += 1
+            if self._arr.readers == 2:
+                self._arr.second_reader.set()
+        # Hold this snapshot until a second run has read too, if one can.
+        self._arr.second_reader.wait(timeout=0.5)
+        return snapshot
+
+    def add_notification(self, body, force_save=False):
+        entry = {"id": len(self._arr.notifications) + 1, **body}
+        self._arr.notifications.append(entry)
+        return entry
+
+
+def test_overlapping_provisions_create_one_webhook(monkeypatch):
+    arr = _SharedArr()
+    monkeypatch.setattr(
+        wp,
+        "create_arr_client",
+        lambda url, api, logger: _RacingClient(arr) if url == "http://r:7878" else None,
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        runs = [
+            pool.submit(provision_all, _fake_config(), "http://chub:8060", None)
+            for _ in range(2)
+        ]
+        rows = [next(r for r in run.result() if r["name"] == "Radarr") for run in runs]
+
+    assert len(arr.notifications) == 1
+    assert sorted(row["action"] for row in rows) == ["created", "noop"]
