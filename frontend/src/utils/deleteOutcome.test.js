@@ -24,4 +24,10 @@ describe('showDeleteOutcome', () => {
             'Deleted 1, 2 not deleted: could not connect to Radarr 4K'
         );
     });
+
+    it('leaves no dangling colon when no reason came back', () => {
+        const t = toast();
+        showDeleteOutcome(t, { removed: [1], failed: [{ id: 2 }] }, 'Deleted 2 copies');
+        expect(t.error).toHaveBeenCalledWith('Deleted 1, 1 not deleted');
+    });
 });

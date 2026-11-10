@@ -7,5 +7,5 @@ export const showDeleteOutcome = (toast, data, doneText) => {
     }
     const removed = data?.removed?.length ?? 0;
     const reasons = [...new Set(failed.map(f => f.reason).filter(Boolean))].join('; ');
-    toast.error(`Deleted ${removed}, ${failed.length} not deleted: ${reasons}`);
+    toast.error(`Deleted ${removed}, ${failed.length} not deleted${reasons ? `: ${reasons}` : ''}`);
 };

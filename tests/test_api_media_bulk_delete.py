@@ -11,11 +11,12 @@ import tempfile
 from types import SimpleNamespace
 
 import pytest
+import requests
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.api.media_api import _bulk_delete_sync, router  # noqa: E402
-from backend.util.arr import ARRConnectionError, SonarrClient  # noqa: E402
+from backend.util.arr import SonarrClient  # noqa: E402
 from backend.util.database import ChubDB  # noqa: E402
 
 
@@ -89,104 +90,219 @@ def test_bulk_delete_reports_missing_ids(db):
     assert db.media.get_by_id(a) is None
 
 
-# --- a failed *arr delete reports the true status and keeps the row ---
 
-def _seed_arr(db, title, arr_id=42):
+
+class _Resp:
+    def __init__(self, status, body=None):
+        self.status_code, self._body = status, body
+        self.headers, self.ok = {}, status < 400
+        self.text = json.dumps(body) if body is not None else ""
+
+    def __bool__(self):
+        return self.ok
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("no body")
+        return self._body
+
+    def raise_for_status(self):
+        if not self.ok:
+            raise requests.HTTPError(str(self.status_code))
+
+
+@pytest.fixture
+def arrs(monkeypatch):
+    """The *arr HTTP side only: hosts map to (app name, ids present, DELETE status)."""
+    state = SimpleNamespace(hosts={}, deletes=[])
+
+    def request(self, method, url, **kw):
+        app, present, forced = state.hosts[next(h for h in state.hosts if url.startswith(h))]
+        if app is None:
+            return _Resp(503)
+        if url.endswith("/system/status"):
+            return _Resp(200, {"appName": app, "version": "5"})
+        if method == "DELETE":
+            state.deletes.append((url, kw.get("params")))
+            if forced:
+                return _Resp(forced)
+            arr_id = int(url.rsplit("/", 1)[1])
+            if arr_id not in present:
+                return _Resp(404, {"message": "NotFound"})
+            present.discard(arr_id)
+            return _Resp(200)
+        return _Resp(404)
+
+    monkeypatch.setattr(requests.Session, "request", request)
+    return state
+
+
+def _configure(monkeypatch, **types):
+    instances = SimpleNamespace(radarr={}, sonarr={}, lidarr={})
+    for arr_type, names in types.items():
+        setattr(
+            instances,
+            arr_type,
+            {name: SimpleNamespace(url=url, api="k") for name, url in names.items()},
+        )
+    monkeypatch.setattr(
+        "backend.util.arr_delete.load_config", lambda: SimpleNamespace(instances=instances)
+    )
+
+
+def _seed_arr(
+    db, title, arr_id=42, asset_type="movie", arr_type="radarr", name="Radarr 4K", **extra
+):
+    row = {"title": title, "normalized_title": title.lower(), "year": 2021}
     db.media.upsert(
-        {"title": title, "normalized_title": title.lower(), "year": 2021, "arr_id": arr_id},
-        "movie",
-        "radarr",
-        "Radarr 4K",
+        {**row, "arr_id": arr_id, **extra},
+        asset_type,
+        arr_type,
+        name,
     )
     row = db.media.execute_query(
         "SELECT id FROM media_cache WHERE title=?", (title,), fetch_one=True
     )
-    assert db.media.get_by_id(row["id"])["arr_id"] == arr_id
     return row["id"]
 
 
-@pytest.fixture
-def radarr(monkeypatch):
-    """Configures "Radarr 4K"; ``client`` stands in for what create_arr_client returns."""
-    instances = SimpleNamespace(
-        radarr={"Radarr 4K": SimpleNamespace(url="http://r:7878", api="k")},
-        sonarr={},
-        lidarr={},
-    )
-    monkeypatch.setattr(
-        "backend.api.media_api.load_config", lambda: SimpleNamespace(instances=instances)
-    )
-    state = SimpleNamespace(client=None, calls=[])
-    monkeypatch.setattr("backend.api.media_api.create_arr_client", lambda **kw: state.client)
-    return state
-
-
-def _client(state, outcome):
-    def delete_media(*args):
-        state.calls.append(args)
-        if isinstance(outcome, Exception):
-            raise outcome
-        return outcome
-
-    return SimpleNamespace(delete_media=delete_media)
-
-
-def _bulk(db, rid, delete_files=True, add_exclusion=False):
-    res = _bulk_delete_sync(db, StubLogger(), [rid], delete_files, add_exclusion)
+def _bulk(db, ids, delete_files=True, add_exclusion=False):
+    res = _bulk_delete_sync(db, StubLogger(), ids, delete_files, add_exclusion)
     return json.loads(res.body)["data"]
 
 
-@pytest.mark.parametrize(
-    "outcome, reason",
-    [
-        (None, "Radarr 4K did not confirm the delete — see the server log"),
-        (
-            ARRConnectionError("http://r:7878/api/v3/movie/42?apikey=hunter2"),
-            "Deleting from Radarr 4K failed: could not connect — see the server log",
-        ),
-    ],
-)
-def test_a_failed_arr_delete_keeps_the_row_and_says_why(db, radarr, outcome, reason):
-    rid = _seed_arr(db, "Dune")
-    radarr.client = _client(radarr, outcome)
-
-    data = _bulk(db, rid)
-
-    assert data == {"removed": [], "failed": [{"id": rid, "reason": reason}]}
-    assert db.media.get_by_id(rid) is not None
-
-
-def test_an_unreachable_instance_keeps_the_row(db, radarr):
-    rid = _seed_arr(db, "Dune")
-
-    data = _bulk(db, rid)
-
-    assert data["failed"] == [{"id": rid, "reason": "could not connect to Radarr 4K"}]
-    assert db.media.get_by_id(rid) is not None
-
-
-def test_an_unconfigured_instance_keeps_the_row(db, monkeypatch):
-    rid = _seed_arr(db, "Dune")
-    empty = SimpleNamespace(radarr={}, sonarr={}, lidarr={})
-    monkeypatch.setattr(
-        "backend.api.media_api.load_config", lambda: SimpleNamespace(instances=empty)
-    )
-
-    data = _bulk(db, rid)
-
-    assert data["failed"] == [{"id": rid, "reason": "Radarr 4K is not configured"}]
-    assert db.media.get_by_id(rid) is not None
+@pytest.fixture
+def radarr(monkeypatch, arrs):
+    arrs.hosts["http://r:7878"] = ("Radarr", {42, 43}, None)
+    _configure(monkeypatch, radarr={"Radarr 4K": "http://r:7878"})
+    return arrs
 
 
 def test_a_confirmed_arr_delete_removes_the_row(db, radarr):
     rid = _seed_arr(db, "Dune")
-    radarr.client = _client(radarr, SimpleNamespace(ok=True))
 
-    data = _bulk(db, rid, delete_files=True, add_exclusion=True)
+    data = _bulk(db, [rid], delete_files=True, add_exclusion=True)
 
     assert data == {"removed": [rid], "failed": []}
-    assert radarr.calls == [(42, True, True)]
+    assert radarr.deletes == [
+        (
+            "http://r:7878/api/v3/movie/42",
+            {"deleteFiles": True, "addImportExclusion": True},
+        )
+    ]
     assert db.media.get_by_id(rid) is None
+
+
+def test_an_item_already_gone_from_the_arr_removes_the_row(db, radarr):
+    rid = _seed_arr(db, "Dune", arr_id=99)
+
+    assert _bulk(db, [rid]) == {"removed": [rid], "failed": []}
+    assert db.media.get_by_id(rid) is None
+
+
+@pytest.mark.parametrize(
+    "status, reason",
+    [
+        (500, "Radarr 4K did not confirm the delete — see the server log"),
+        (
+            401,
+            "Deleting from Radarr 4K failed: unauthorized: check the API key "
+            "— see the server log",
+        ),
+    ],
+)
+def test_a_failed_arr_delete_keeps_the_row_and_says_why(db, radarr, status, reason):
+    radarr.hosts["http://r:7878"] = ("Radarr", {42}, status)
+    rid = _seed_arr(db, "Dune")
+
+    assert _bulk(db, [rid]) == {"removed": [], "failed": [{"id": rid, "reason": reason}]}
+    assert db.media.get_by_id(rid) is not None
+
+
+def test_an_unreachable_instance_keeps_the_row(db, radarr):
+    radarr.hosts["http://r:7878"] = (None, set(), None)
+    rid = _seed_arr(db, "Dune")
+
+    assert _bulk(db, [rid])["failed"] == [{"id": rid, "reason": "could not connect to Radarr 4K"}]
+    assert db.media.get_by_id(rid) is not None
+
+
+def test_one_client_serves_every_row_of_an_instance(db, radarr, monkeypatch):
+    from backend.util import arr_delete
+
+    made = []
+    real = arr_delete.create_arr_client
+    monkeypatch.setattr(
+        arr_delete, "create_arr_client", lambda **kw: made.append(kw) or real(**kw)
+    )
+    ids = [_seed_arr(db, "Dune"), _seed_arr(db, "Sicario", arr_id=43)]
+
+    assert _bulk(db, ids)["removed"] == ids
+    assert len(made) == 1
+
+
+def test_a_shared_instance_name_deletes_from_the_rows_own_arr(db, arrs, monkeypatch):
+    """Names are unique per type only: a Sonarr row must never hit Radarr's movie 7."""
+    arrs.hosts["http://r:7878"] = ("Radarr", {7}, None)
+    arrs.hosts["http://s:8989"] = ("Sonarr", {7}, None)
+    _configure(monkeypatch, radarr={"Main": "http://r:7878"}, sonarr={"Main": "http://s:8989"})
+    rid = _seed_arr(db, "Severance", arr_id=7, asset_type="show", arr_type="sonarr", name="Main")
+
+    assert _bulk(db, [rid])["removed"] == [rid]
+    assert [url for url, _params in arrs.deletes] == ["http://s:8989/api/v3/series/7"]
+    assert 7 in arrs.hosts["http://r:7878"][1]
+
+
+def test_an_instance_pointing_at_another_arr_is_refused(db, arrs, monkeypatch):
+    arrs.hosts["http://r:7878"] = ("Radarr", {7}, None)
+    _configure(monkeypatch, sonarr={"Main": "http://r:7878"})
+    rid = _seed_arr(db, "Severance", arr_id=7, asset_type="show", arr_type="sonarr", name="Main")
+
+    assert _bulk(db, [rid])["failed"] == [{"id": rid, "reason": "Main is not a Sonarr instance"}]
+    assert arrs.deletes == []
+
+
+@pytest.mark.parametrize(
+    "asset_type, arr_type, extra",
+    [
+        ("show", "sonarr", {"season_number": 2}),
+        ("album", "lidarr", {}),
+    ],
+)
+def test_a_season_or_album_row_is_never_sent_to_the_arr(
+    db, arrs, monkeypatch, asset_type, arr_type, extra
+):
+    """A season row carries its series' id and an album row an album id."""
+    arrs.hosts["http://x:1"] = ("Sonarr" if arr_type == "sonarr" else "Lidarr", {7}, None)
+    _configure(monkeypatch, **{arr_type: {"Main": "http://x:1"}})
+    rid = _seed_arr(
+        db, "Item", arr_id=7, asset_type=asset_type, arr_type=arr_type, name="Main", **extra
+    )
+
+    data = _bulk(db, [rid])
+
+    assert data["failed"] == [
+        {"id": rid, "reason": "only a whole movie or series can be deleted from Radarr or Sonarr"}
+    ]
+    assert arrs.deletes == []
+    assert db.media.get_by_id(rid) is not None
+
+
+@pytest.mark.parametrize("delete_files", [False, True])
+def test_an_unconfigured_instance_only_blocks_a_file_delete(db, arrs, monkeypatch, delete_files):
+    _configure(monkeypatch)
+    rid = _seed_arr(db, "Dune")
+
+    data = _bulk(db, [rid], delete_files=delete_files)
+
+    if delete_files:
+        assert data["failed"] == [
+            {"id": rid, "reason": "Radarr 4K is not configured, so its files were not deleted"}
+        ]
+        assert db.media.get_by_id(rid) is not None
+    else:
+        assert data == {"removed": [rid], "failed": []}
+        assert db.media.get_by_id(rid) is None
 
 
 def test_sonarr_gets_its_own_exclusion_parameter():
@@ -206,18 +322,22 @@ def test_sonarr_gets_its_own_exclusion_parameter():
     ]
 
 
-def test_a_single_delete_with_files_reports_a_failed_arr_delete(db, radarr):
+def _single_delete(db, rid):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    rid = _seed_arr(db, "Dune")
-    radarr.client = _client(radarr, None)
     app = FastAPI()
     app.state.logger = StubLogger()
     app.state.db = db
     app.include_router(router)
+    return TestClient(app).request("DELETE", f"/api/media/{rid}", json={"deleteFiles": True})
 
-    resp = TestClient(app).request("DELETE", f"/api/media/{rid}", json={"deleteFiles": True})
+
+def test_a_single_delete_reports_an_unconfirmed_arr_delete(db, radarr):
+    radarr.hosts["http://r:7878"] = ("Radarr", {42}, 500)
+    rid = _seed_arr(db, "Dune")
+
+    resp = _single_delete(db, rid)
 
     assert resp.status_code == 502
     assert resp.json()["message"] == (
@@ -225,3 +345,24 @@ def test_a_single_delete_with_files_reports_a_failed_arr_delete(db, radarr):
         "— see the server log"
     )
     assert db.media.get_by_id(rid) is not None
+
+
+def test_a_single_delete_of_a_season_is_refused(db, arrs, monkeypatch):
+    arrs.hosts["http://s:8989"] = ("Sonarr", {7}, None)
+    _configure(monkeypatch, sonarr={"Main": "http://s:8989"})
+    rid = _seed_arr(
+        db, "Show", arr_id=7, asset_type="show", arr_type="sonarr", name="Main", season_number=3
+    )
+
+    resp = _single_delete(db, rid)
+
+    assert resp.status_code == 409
+    assert arrs.deletes == []
+    assert db.media.get_by_id(rid) is not None
+
+
+def test_a_single_delete_of_an_item_gone_from_the_arr_succeeds(db, radarr):
+    rid = _seed_arr(db, "Dune", arr_id=99)
+
+    assert _single_delete(db, rid).status_code == 200
+    assert db.media.get_by_id(rid) is None
