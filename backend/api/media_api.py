@@ -8,7 +8,7 @@ fixes, duplicate detection, import/export, and ARR integration.
 
 import csv
 import io
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 from fastapi import APIRouter, Depends, Query, Request
@@ -1024,6 +1024,41 @@ async def resolve_duplicates(
     )
 
 
+def _delete_from_arr(
+    item: Dict[str, Any], logger: Any, delete_files: bool, add_exclusion: bool
+) -> Optional[str]:
+    """Delete ``item`` from its *arr: None once the *arr confirms, else why not."""
+    instance_name = item["instance_name"]
+    try:
+        instances = load_config().instances
+        detail = next(
+            (
+                getattr(instances, arr_type, {})[instance_name]
+                for arr_type in ("radarr", "sonarr", "lidarr")
+                if instance_name in (getattr(instances, arr_type, {}) or {})
+            ),
+            None,
+        )
+        if not (detail and detail.url and detail.api):
+            return f"{instance_name} is not configured"
+        client = create_arr_client(url=detail.url, api=detail.api, logger=logger)
+        if not client:
+            return f"could not connect to {instance_name}"
+        # A request that runs out of retries returns None instead of raising.
+        if not client.delete_media(item["arr_id"], delete_files, add_exclusion):
+            return f"{instance_name} did not confirm the delete — see the server log"
+    except ConfigError:
+        raise
+    except Exception as e:
+        logger.error(f"ARR delete failed for id={item.get('id')}: {e}")
+        return failure_text(f"Deleting from {instance_name}", e)
+    logger.info(
+        f"Deleted ARR media {item['arr_id']} from {instance_name} "
+        f"(deleteFiles={delete_files}, exclusion={add_exclusion})"
+    )
+    return None
+
+
 def _remove_media_item(db, logger, rid, delete_files, add_exclusion):
     """Delete one media item from its ARR instance (optional file delete) and
     the local cache. Returns (removed: bool, reason: str | None). Shared by the
@@ -1032,54 +1067,11 @@ def _remove_media_item(db, logger, rid, delete_files, add_exclusion):
     if not item:
         return False, "not found in cache"
 
-    # Delete from ARR instance if possible
     if item.get("arr_id") and item.get("instance_name"):
-        try:
-            config = load_config()
-            instance_name = item["instance_name"]
-            arr_id = item["arr_id"]
-
-            instance_detail = None
-            if (
-                hasattr(config.instances, "radarr")
-                and instance_name in config.instances.radarr
-            ):
-                instance_detail = config.instances.radarr[instance_name]
-            elif (
-                hasattr(config.instances, "sonarr")
-                and instance_name in config.instances.sonarr
-            ):
-                instance_detail = config.instances.sonarr[instance_name]
-
-            if instance_detail and instance_detail.url and instance_detail.api:
-                arr_client = create_arr_client(
-                    url=instance_detail.url,
-                    api=instance_detail.api,
-                    logger=logger,
-                )
-                if arr_client:
-                    asset_type = item.get("asset_type", "movie")
-                    endpoint_type = "movie" if asset_type == "movie" else "series"
-                    params = f"deleteFiles={'true' if delete_files else 'false'}"
-                    if add_exclusion:
-                        params += "&addImportExclusion=true"
-                    endpoint = (
-                        f"{arr_client.url}/api/v3/{endpoint_type}/{arr_id}?{params}"
-                    )
-                    arr_client.make_delete_request(endpoint)
-                    logger.info(
-                        f"Deleted ARR media {arr_id} from {instance_name} "
-                        f"(deleteFiles={delete_files}, exclusion={add_exclusion})"
-                    )
-            else:
-                logger.warning(
-                    f"Instance {instance_name} not found in config, skipping ARR delete"
-                )
-        except ConfigError:
-            raise
-        except Exception as e:
-            logger.error(f"ARR delete failed for id={rid}: {e}")
-            # Continue with cache deletion even if ARR delete fails
+        reason = _delete_from_arr(item, logger, delete_files, add_exclusion)
+        if reason:
+            # Nothing was deleted: the row stays, so the item can be retried.
+            return False, reason
 
     # Remove from local cache
     try:
@@ -1885,52 +1877,18 @@ async def delete_media_item(
             return body_too_large_error()
         delete_files = body_flag(body, "deleteFiles")
 
-        # If deleteFiles requested, remove from ARR first. The connect probe +
-        # delete request are blocking, so run them off the event loop.
-        def _delete_from_arr() -> None:
-            """Best-effort removal of the item from its source ARR instance."""
-            if not (delete_files and item.get("arr_id") and item.get("instance_name")):
-                return
-            try:
-                config = load_config()
-                instance_name = item["instance_name"]
-                arr_id = item["arr_id"]
-
-                # Look up instance URL/API from config (check radarr, sonarr, lidarr)
-                instance_detail = None
-                for arr_type in ("radarr", "sonarr", "lidarr"):
-                    if hasattr(config.instances, arr_type) and instance_name in getattr(
-                        config.instances, arr_type, {}
-                    ):
-                        instance_detail = getattr(config.instances, arr_type)[
-                            instance_name
-                        ]
-                        break
-
-                if instance_detail and instance_detail.url and instance_detail.api:
-                    arr_client = create_arr_client(
-                        url=instance_detail.url,
-                        api=instance_detail.api,
-                        logger=logger,
-                    )
-                    if arr_client:
-                        # Use deleteFiles query param on the ARR delete endpoint
-                        endpoint = f"{arr_client.url}/api/v3/{'movie' if item.get('asset_type') == 'movie' else 'series'}/{arr_id}?deleteFiles=true"
-                        arr_client.make_delete_request(endpoint)
-                        logger.info(
-                            f"Deleted ARR media {arr_id} with files from {instance_name}"
-                        )
-                else:
-                    logger.warning(
-                        f"Instance {instance_name} not found in config, skipping ARR delete"
-                    )
-            except ConfigError:
-                raise
-            except Exception as arr_err:
-                logger.error(f"ARR delete failed for {media_id}: {arr_err}")
-                # Continue with cache deletion even if ARR delete fails
-
-        await run_in_threadpool(_delete_from_arr)
+        # With deleteFiles, the *arr delete comes first and must succeed: a cache
+        # row removed after a failed delete reported an item that still exists.
+        if delete_files and item.get("arr_id") and item.get("instance_name"):
+            reason = await run_in_threadpool(
+                _delete_from_arr, item, logger, True, False
+            )
+            if reason:
+                return error(
+                    f"Media item {media_id} was not deleted: {reason}",
+                    code="ARR_DELETE_FAILED",
+                    status_code=502,
+                )
 
         db.media.delete_by_id(media_id)
 
