@@ -19,7 +19,8 @@ def _tracked_json_files():
             ["git", "ls-files", "*.json"], cwd=REPO_ROOT, text=True
         )
     except (OSError, subprocess.CalledProcessError) as exc:
-        pytest.skip(f"git checkout unavailable: {exc}")
+        # A raise, not pytest.skip(): CodeQL can't tell skip() never returns.
+        raise pytest.skip.Exception(f"git checkout unavailable: {exc}") from exc
     return [p for p in out.splitlines() if p and p not in EXCLUDED]
 
 
