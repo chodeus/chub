@@ -752,6 +752,7 @@ def _upgradinatorr_output():
     return {
         "lidarr_main": {
             "server_name": "Lidarr (Music)",
+            "instance_type": "lidarr",
             "data": [
                 {
                     "title": "Anastacia",
@@ -800,7 +801,7 @@ def _upgradinatorr_text(output):
 def test_upgradinatorr_notification_lists_a_waiting_item_on_one_line():
     """A waiting download is one line; the *arr's reasons and the release name stay in the log."""
     blob = _upgradinatorr_text(_upgradinatorr_output())
-    assert "Awaiting import (1)\n• Armin van Buuren: waiting 40h" in blob
+    assert "Awaiting import (1 artist)\n• Armin van Buuren: waiting 40h" in blob
     # A grab is still downloading at run end — it is counted, never listed.
     assert "Anastacia - Resurrection" not in blob
     assert "Has unmatched tracks" not in blob
@@ -813,7 +814,7 @@ def test_upgradinatorr_queue_headings_come_from_the_log_section_table():
     from backend.util.constants import QUEUE_REPORT_SECTIONS
 
     _state, tag, _note, _level = QUEUE_REPORT_SECTIONS[0]
-    assert f"{tag.capitalize()} (1)" in _upgradinatorr_text(_upgradinatorr_output())
+    assert f"{tag.capitalize()} (1 artist)" in _upgradinatorr_text(_upgradinatorr_output())
 
 
 def _upgradinatorr_destination(method, config):

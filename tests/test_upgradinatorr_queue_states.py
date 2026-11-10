@@ -257,6 +257,7 @@ def test_notification_splits_upgraded_and_acquired_from_stuck():
     output = {
         "radarr": {
             "server_name": "Radarr",
+            "instance_type": "radarr",
             "completed": [
                 {
                     "media_id": 7,
@@ -312,7 +313,7 @@ def test_notification_splits_upgraded_and_acquired_from_stuck():
     names = [name for name, _ in rendered]
     body = "\n".join(value for _, value in rendered)
 
-    assert names[0] == "Import stuck (1)"
+    assert names[0] == "Import stuck (1 movie)"
     # A completed import is what the run has to show for itself — it stays,
     # whether it replaced a file or filled an empty slot.
     assert "Serum — upgraded" in names

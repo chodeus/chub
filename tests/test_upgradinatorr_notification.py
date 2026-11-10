@@ -19,6 +19,8 @@ def _run(**overrides):
         "completed": [],
         "pending_grabs": 0,
         "searches_attempted": 5,
+        "items_searched": 5,
+        "child_searches": 0,
         "searches_failed": 0,
         "searches_deferred": 0,
         "tagged_count": 40,
@@ -92,7 +94,7 @@ def test_the_summary_states_the_search_the_rotation_and_the_imports():
 
     assert part["title"] == "Upgradinatorr: Radarr"
     assert part["description"].split("\n") == [
-        "Upgrade search: searched 5 this run, 2 grabbed, 1 failed",
+        "Upgrade search: 5 movies searched, 2 grabbed, 1 search failed",
         "Progress: 45 of 120 movies searched, 75 left (15 more runs at 5 a run)",
         "Imported: 2 of 3 grabs from earlier runs (1 upgraded, 1 acquired)",
     ]
@@ -192,7 +194,7 @@ def test_stuck_items_show_the_first_reason_and_cap_the_list():
     parts = build_upgradinatorr_embeds({"radarr": _run(data=data)})
     text = _text(parts)
 
-    assert f"Import stuck ({QUEUE_LINE_CAP + 2})" in text
+    assert f"Import stuck ({QUEUE_LINE_CAP + 2} movies)" in text
     assert "• Stuck 0 (1992): Not an upgrade for existing movie file." in text
     assert f"Stuck {QUEUE_LINE_CAP - 1} (1992)" in text
     assert f"Stuck {QUEUE_LINE_CAP} (1992)" not in text
@@ -213,10 +215,12 @@ def test_a_waiting_item_with_several_downloads_names_the_oldest():
         ],
     }
 
-    [part] = build_upgradinatorr_embeds({"sonarr": _run(data=[item])})
+    [part] = build_upgradinatorr_embeds(
+        {"sonarr": _run(data=[item], instance_type="sonarr")}
+    )
 
     assert part["fields"][0] == {
-        "name": "Awaiting import (1)",
+        "name": "Awaiting import (1 series)",
         "value": "• Show: 2 downloads, oldest waiting 42h",
     }
 
@@ -368,7 +372,7 @@ def test_grabs_that_did_not_import_are_listed_and_counted():
         "Imported: 1 of 3 grabs from earlier runs (1 upgraded); 1 didn't import"
     )
     assert parts[0]["fields"][0] == {
-        "name": "Didn't import (1)",
+        "name": "Didn't import (1 grab)",
         "value": r"• Gone 2 (2020): Gone.2.2020\_1080p-GRP — Duplicate NZB",
     }
     assert parts[0]["fields"][1]["name"] == "Movie 1 (2001) — upgraded"
@@ -379,7 +383,7 @@ def test_the_did_not_import_list_is_capped():
 
     text = _text(build_upgradinatorr_embeds({"radarr": _run(not_imported=rows)}))
 
-    assert f"Didn't import ({QUEUE_LINE_CAP + 3})" in text
+    assert f"Didn't import ({QUEUE_LINE_CAP + 3} grabs)" in text
     assert f"Gone {QUEUE_LINE_CAP - 1} (2020)" in text
     assert f"Gone {QUEUE_LINE_CAP} (2020)" not in text
     assert "…and 3 more — see the server log" in text

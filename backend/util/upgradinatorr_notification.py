@@ -1,13 +1,15 @@
-"""Upgradinatorr's Discord/Notifiarr embeds: a run summary, queue lists, a diff per import."""
+"""Upgradinatorr's report text: the run log's summary lines and its Discord/Notifiarr embeds."""
 
 import math
 import textwrap
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backend.util.constants import (
     NOTIFICATION_ITEM_CAP,
     QUEUE_REPORT_SECTIONS,
     SUMMARY_PART_THRESHOLD,
+    counted,
+    plural,
     report_item_label,
     import_report_sections,
 )
@@ -33,7 +35,6 @@ BLANK = "​"
 RED = 0xE74C3C
 GREEN = 0x2ECC71
 
-_NOUNS = {"radarr": "movies", "sonarr": "series", "lidarr": "artists"}
 # Brackets too: an escaped [ can't open a masked link.
 _MARKDOWN = str.maketrans({char: f"\\{char}" for char in "\\*_~`|[]"})
 
@@ -51,8 +52,12 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _plural(count: int, word: str) -> str:
-    return f"{count} {word}" if count == 1 else f"{count} {word}s"
+def searched_text(run: Dict[str, Any]) -> str:
+    """``1 series searched (4 seasons)``: parents searched, then their season/album searches."""
+    kind = run.get("instance_type")
+    text = f"{counted(run.get('items_searched') or 0, kind)} searched"
+    children = run.get("child_searches") or 0
+    return f"{text} ({counted(children, kind, 'child')})" if children else text
 
 
 def _search_line(run: Dict[str, Any]) -> Optional[str]:
@@ -60,15 +65,15 @@ def _search_line(run: Dict[str, Any]) -> Optional[str]:
     if "budget" not in run:
         return None
     mode = str(run.get("search_mode") or "upgrade").capitalize()
-    attempted = run.get("searches_attempted") or 0
-    if not attempted:
+    if not run.get("searches_attempted"):
         return f"{mode} search: nothing searched this run"
     grabbed = sum(len(item.get("grabs") or []) for item in run.get("data") or [])
-    parts = [f"searched {attempted} this run", f"{grabbed} grabbed"]
+    parts = [searched_text(run), f"{grabbed} grabbed"]
     if run.get("searches_failed"):
-        parts.append(f"{run['searches_failed']} failed")
+        parts.append(f"{plural(run['searches_failed'], 'search', 'searches')} failed")
     if run.get("searches_deferred"):
-        parts.append(f"{run['searches_deferred']} staged for the next run")
+        staged = plural(run["searches_deferred"], "search", "searches")
+        parts.append(f"{staged} staged for the next run")
     return f"{mode} search: " + ", ".join(parts)
 
 
@@ -76,19 +81,85 @@ def _progress_line(run: Dict[str, Any]) -> Optional[str]:
     total = run.get("total_count") or 0
     if "budget" not in run or not total:
         return None
-    noun = _NOUNS.get(run.get("instance_type"), "items")
+    of_total = counted(total, run.get("instance_type"))
     tagged = run.get("tagged_count") or 0
     if run.get("granular"):
         # Season/album mode can stop mid-parent untagged, so this run's tag count is unknown.
-        return f"Progress: {tagged} of {total} {noun} done before this run"
+        return f"Progress: {tagged} of {of_total} done before this run"
     tagged = min(tagged + (run.get("tagged_in_run") or 0), total)
     left = total - tagged
-    line = f"Progress: {tagged} of {total} {noun} searched, {left} left"
+    line = f"Progress: {tagged} of {of_total} searched, {left} left"
     budget = run.get("budget") or 0
     if left and budget > 0:
-        runs = _plural(math.ceil(left / budget), "more run")
+        runs = plural(math.ceil(left / budget), "more run")
         line += f" ({runs} at {budget} a run)"
     return line
+
+
+def _all_tagged(tag: str) -> str:
+    return f'everything is tagged "{tag}" and Auto reset processed tag is off'
+
+
+def _rotation_line(run: Dict[str, Any], escape: Callable[[Any], str]) -> Optional[str]:
+    if not run.get("rotation_done"):
+        return None
+    return (
+        f"Rotation finished: {_all_tagged(escape(run.get('tag_name')))}, "
+        "so nothing is searched until the tag is removed"
+    )
+
+
+def nothing_to_search_text(
+    name: str,
+    kind: Any,
+    search_mode: str,
+    wanted: Optional[int],
+    total: int,
+    untagged: int,
+    tag: str,
+) -> str:
+    """The run log's reason a profile with no candidates searches nothing."""
+    if not total:
+        if wanted == 0:
+            return f"Nothing to search on {name}: its {search_mode} list is empty."
+        return f"Nothing to search on {name}: {counted(0, kind)} found."
+    if not untagged:
+        return (
+            f"Nothing to search on {name} ({counted(total, kind)}): {_all_tagged(tag)}. "
+            "Remove the tag or turn on Auto reset to start a new rotation."
+        )
+    return (
+        f"Nothing to search on {name}: {counted(untagged, kind)} untagged, all skipped "
+        "by the filters (debug logging names each reason)."
+    )
+
+
+def selection_text(
+    kind: Any,
+    search_mode: str,
+    wanted: Optional[int],
+    total: int,
+    candidates: int,
+    count: int,
+    granular: bool,
+) -> str:
+    """The run log's line on what the wanted list held and what this run searches."""
+    if granular:
+        line = (
+            f"{counted(candidates, kind)} left to search; this run searches up to "
+            f"{counted(count, kind, 'child')}."
+        )
+    else:
+        line = (
+            f"Selected {candidates} of {counted(total, kind)} to search "
+            f"(Count: {counted(count, kind)} a run)."
+        )
+    if wanted is None:
+        return line
+    found = counted(wanted, kind, "wanted")
+    if kind in ("sonarr", "lidarr"):
+        found += f" across {counted(total, kind)}"
+    return f"Wanted ({search_mode}): {found}. {line}"
 
 
 def _limit_line(run: Dict[str, Any]) -> Optional[str]:
@@ -96,33 +167,36 @@ def _limit_line(run: Dict[str, Any]) -> Optional[str]:
     if not cap:
         return None
     return (
-        f"Max items grabbed ({cap}) reached: stopped early, "
-        "the rest is searched next run"
+        f"Max Items Grabbed Per Run reached: {counted(cap, run.get('instance_type'))} "
+        "grabbed something, the rest is searched next run"
     )
 
 
-def _inflight_line(run: Dict[str, Any]) -> Optional[str]:
+def _inflight_line(run: Dict[str, Any], escape: Callable[[Any], str]) -> Optional[str]:
     if run.get("inflight_running"):
         return (
-            f"Waiting on the last run's search of {_md(run['inflight_running'])}: "
+            f"Waiting on the last run's search of {escape(run['inflight_running'])}: "
             "nothing new is searched until it finishes"
         )
     finished = run.get("inflight_finished") or {}
     if not finished:
         return None
-    label = _md(finished.get("label"))
+    label = escape(finished.get("label"))
     if finished.get("state") == "failed":
         return f"The last run's search of {label} failed"
     return f"Finished the last run's search of {label}"
 
 
-def _held_line(run: Dict[str, Any]) -> Optional[str]:
-    holds = run.get("release_holds") or {}
+def held_line(holds: Dict[str, Any], instance_type: Any) -> Optional[str]:
+    """``Held back: 2 movies released in the last 7 days``, or None when nothing was held."""
+    # Lidarr artists carry no date, so its albums are what gets held.
+    unit = "child" if instance_type == "lidarr" else "parent"
     parts = []
     if holds.get("too_new"):
-        parts.append(f"{holds['too_new']} released in the last {holds.get('days')} days")
+        too_new = counted(holds["too_new"], instance_type, unit)
+        parts.append(f"{too_new} released in the last {plural(holds.get('days') or 0, 'day')}")
     if holds.get("no_date"):
-        parts.append(f"{holds['no_date']} with no release date")
+        parts.append(f"{counted(holds['no_date'], instance_type, unit)} with no release date")
     return f"Held back: {', '.join(parts)}" if parts else None
 
 
@@ -131,7 +205,7 @@ def _imported_line(run: Dict[str, Any]) -> Optional[str]:
     if not pending:
         return None
     completed = run.get("completed") or []
-    line = f"Imported: {len(completed)} of {_plural(pending, 'grab')} from earlier runs"
+    line = f"Imported: {len(completed)} of {plural(pending, 'grab')} from earlier runs"
     kinds = [
         f"{len(rows)} {tag.lower()}"
         for tag, _noun, rows in import_report_sections(completed)
@@ -181,7 +255,7 @@ def _line_fields(name: str, lines: List[str]) -> List[Dict[str, str]]:
     ]
 
 
-def _queue_fields(data: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def _queue_fields(data: List[Dict[str, Any]], kind: Any) -> List[Dict[str, str]]:
     fields: List[Dict[str, str]] = []
     for state, tag, _note, _level in QUEUE_REPORT_SECTIONS:
         rows = _queue_rows(data, state)
@@ -190,7 +264,7 @@ def _queue_fields(data: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         lines = [_queue_line(item, entries, state) for item, entries in rows[:QUEUE_LINE_CAP]]
         if len(rows) > QUEUE_LINE_CAP:
             lines.append(f"…and {len(rows) - QUEUE_LINE_CAP} more — see the server log")
-        fields.extend(_line_fields(f"{tag.capitalize()} ({len(rows)})", lines))
+        fields.extend(_line_fields(f"{tag.capitalize()} ({counted(len(rows), kind)})", lines))
     return fields
 
 
@@ -205,7 +279,7 @@ def _not_imported_fields(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     ]
     if len(rows) > QUEUE_LINE_CAP:
         lines.append(f"…and {len(rows) - QUEUE_LINE_CAP} more — see the server log")
-    return _line_fields(f"Didn't import ({len(rows)})", lines)
+    return _line_fields(f"Didn't import ({plural(len(rows), 'grab')})", lines)
 
 
 def _wrap_formats(formats: List[str]) -> List[str]:
@@ -267,7 +341,7 @@ def _import_fields(completed: List[Dict[str, Any]]) -> List[Dict[str, str]]:
             )
         extra = len(rows) - NOTIFICATION_ITEM_CAP
         if extra > 0:
-            more = _plural(extra, f"more {noun}")
+            more = plural(extra, f"more {noun}")
             fields.append({"name": BLANK, "value": f"…and {more} — see the server log"})
     return fields
 
@@ -314,26 +388,29 @@ def _import_count_field(completed: List[Dict[str, Any]]) -> List[Dict[str, str]]
     ]
 
 
+def summary_lines(run: Dict[str, Any], escape: Callable[[Any], str] = str) -> List[str]:
+    """The run summary the log and the embed both print; ``escape`` guards names for Discord."""
+    lines = (
+        _search_line(run),
+        _inflight_line(run, escape),
+        _progress_line(run),
+        _rotation_line(run, escape),
+        _limit_line(run),
+        held_line(run.get("release_holds") or {}, run.get("instance_type")),
+        _imported_line(run),
+    )
+    return [line for line in lines if line]
+
+
 def _instance_parts(
     name: str, run: Dict[str, Any], diffs: bool
 ) -> List[Dict[str, Any]]:
     """One instance's embeds; without ``diffs`` its imports are only counted."""
     title = _clip(f"Upgradinatorr: {run.get('server_name') or name}", TITLE_CHARS)
-    lines = [
-        line
-        for line in (
-            _search_line(run),
-            _inflight_line(run),
-            _progress_line(run),
-            _limit_line(run),
-            _held_line(run),
-            _imported_line(run),
-        )
-        if line
-    ]
+    lines = summary_lines(run, _md)
     completed = run.get("completed") or []
     fields = (
-        _queue_fields(run.get("data") or [])
+        _queue_fields(run.get("data") or [], run.get("instance_type"))
         + _not_imported_fields(run.get("not_imported") or [])
         + (_import_fields(completed) if diffs else _import_count_field(completed))
     )
