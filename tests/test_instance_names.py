@@ -129,7 +129,8 @@ def test_renaming_only_the_case_of_an_instances_own_name_is_allowed(saved):
     seed, names = saved
     seed(radarr=["Main"])
 
-    assert _rename("radarr", "Main", "MAIN").status_code == 200
+    resp = _rename("radarr", "Main", "MAIN")
+    assert resp.status_code == 200
     assert names()["radarr"] == ["MAIN"]
 
 
@@ -143,7 +144,8 @@ def test_an_existing_clash_can_be_renamed_away_but_not_into_another_spelling(sav
         _settings_save(radarr=["Main"], sonarr=["MAIN"]),
         _same("MAIN", ("Radarr", "Main"), ("Sonarr", "Main")),
     )
-    assert _rename("sonarr", "Main", "TV").status_code == 200
+    resp = _rename("sonarr", "Main", "TV")
+    assert resp.status_code == 200
     assert names()["sonarr"] == ["TV"]
 
 
