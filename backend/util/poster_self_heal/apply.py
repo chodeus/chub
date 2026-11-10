@@ -7,6 +7,7 @@ import os
 from typing import Any, Dict
 
 from backend.util.cl2k.gdrive_upload import list_files, move_file
+from backend.util.public_error import failure_text
 
 
 def apply_proposal(row: Dict[str, Any], sync_cfg: Any, logger) -> str:
@@ -57,6 +58,7 @@ def apply_proposal(row: Dict[str, Any], sync_cfg: Any, logger) -> str:
             os.replace(old_path, new_path)
             logger.info(f"renamed local {current} -> {proposed}")
     except OSError as exc:
-        note = f" (local rename failed: {exc}; it will refresh on the next scan)"
+        reason = failure_text("local rename", exc)
+        note = f" ({reason}; it will refresh on the next scan)"
         logger.warning(f"local rename failed for {old_path}: {exc}")
     return note

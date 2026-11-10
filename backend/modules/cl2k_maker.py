@@ -10,6 +10,7 @@ from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 from backend.util.cl2k import image_fetch, text_removal
 from backend.util.cl2k.naming import build_poster_filename
+from backend.util.public_error import public_reason
 from backend.util.cl2k import renderer
 from backend.util.cl2k.renderer import logo_is_usable, render_cl2k
 from backend.util.cl2k.tmdb_art import list_images
@@ -900,7 +901,7 @@ def _persist_poster(
             with open(out_path, "wb") as fh:
                 fh.write(blob)
         except OSError as exc:
-            write_errors.append(f"{out_dir}: {exc}")
+            write_errors.append(f"{out_dir}: {public_reason(exc)}")
             logger.warning(f"CL2K local save failed in {out_dir}: {exc}")
             continue
         written.append(out_path)
@@ -1030,7 +1031,7 @@ def _persist_poster(
                     uploaded_folders.append(folder_id)
                     logger.info(f"CL2K uploaded {filename} to Drive {folder_id}")
                 except Exception as exc:
-                    upload_errors.append(f"{folder_id}: {exc}")
+                    upload_errors.append(f"{folder_id}: {public_reason(exc)}")
                     logger.warning(
                         f"CL2K gdrive upload to {folder_id} failed for {filename}: {exc}"
                     )
@@ -1124,6 +1125,7 @@ def _persist_poster(
     }
     # Surface non-fatal failures so the caller can tell the user which targets
     # missed while the generation still succeeded elsewhere.
+    # Each failure is logged in full where it happened; the browser gets its kind.
     if upload_errors:
         result["upload_error"] = "; ".join(upload_errors)
     if write_errors:

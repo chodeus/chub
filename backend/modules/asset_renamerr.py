@@ -13,6 +13,7 @@ from backend.util.helper import create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex import PlexClient
+from backend.util.public_error import failure_text
 from backend.util.fanart import FanartClient
 from backend.util.release_readiness import is_release_ready
 
@@ -660,7 +661,10 @@ class AssetRenamerr(ChubModule):
                 os.makedirs(os.path.dirname(new_path), exist_ok=True)
                 self._file_op(src, new_path, self.config.action_type)
             except OSError as exc:
-                return False, f"file op failed: {exc}"
+                self.logger.warning(
+                    f"Asset file op failed for {src} -> {new_path}: {exc}"
+                )
+                return False, failure_text("file op", exc)
         return True, new_path
 
     def apply_chosen_asset(

@@ -30,6 +30,7 @@ from backend.api.utils import (
 )
 from backend.util.arr import arr_api_version, create_arr_client
 from backend.util.config import ConfigError, load_config
+from backend.util.public_error import failure_text
 from backend.util.database import (
     INCOMPLETE_METADATA_FIELDS,
     NEVER_POPULATED_FIELDS,
@@ -1086,7 +1087,8 @@ def _remove_media_item(db, logger, rid, delete_files, add_exclusion):
         db.media.delete_by_id(rid)
         return True, None
     except Exception as e:
-        return False, str(e)
+        logger.error(f"Cache delete failed for id={rid}: {e}")
+        return False, failure_text("cache delete", e)
 
 
 def _resolve_duplicates_sync(

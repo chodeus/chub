@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 
 from backend.util.log_redaction import redact
+from backend.util.public_error import failure_text
 from backend.util.rate_limiter import Throttle
 
 # Mirror of config.ALL_MODULES_SENTINEL — a destination whose `modules` list
@@ -346,7 +347,8 @@ class NotificationManager:
             self.logger.error(
                 f"[Notification] {label} send exception: {e}\n{tb_str}", exc_info=True
             )
-            return False, f"{e}\n{tb_str}"
+            # The traceback stays in the log; callers can show this to the browser.
+            return False, failure_text(f"{label} send", e)
 
     def send_notifiarr_notification(
         self,
@@ -515,7 +517,7 @@ class NotificationManager:
                 results.append(entry)
             except Exception as ex:
                 tb_str = traceback.format_exc()
-                entry["error"] = f"Exception for {method}: {ex}\n{tb_str}"
+                entry["error"] = failure_text(f"Sending to {method}", ex)
                 results.append(entry)
                 self.logger.error(
                     f"Exception for {method}: {ex}\n{tb_str}", exc_info=True
@@ -560,9 +562,10 @@ class NotificationManager:
             if not ok:
                 entry["error"] = msg
         except Exception as ex:
-            tb_str = traceback.format_exc()
-            entry["message"] = f"Exception while testing {method}: {ex}\n{tb_str}"
-            entry["error"] = f"{ex}\n{tb_str}"
+            self.logger.error(
+                f"[Notification] testing {method} raised: {ex}", exc_info=True
+            )
+            entry["message"] = entry["error"] = failure_text(f"Testing {method}", ex)
         out: Dict[str, Any] = {"success": bool(entry["ok"]), "results": [entry]}
         if not entry["ok"]:
             out["error"] = entry["error"] or entry["message"]

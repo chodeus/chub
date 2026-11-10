@@ -31,6 +31,7 @@ from backend.util.config import (
 )
 from backend.util.database import ChubDB
 from backend.util.path_safety import get_browse_roots, is_path_allowed
+from backend.util.public_error import public_reason
 from backend.util.version import check_for_update, get_version
 
 router = APIRouter(
@@ -226,7 +227,7 @@ def health_check(request: Request) -> JSONResponse:
         "Used by the dashboard for at-a-glance health."
     ),
 )
-def system_disk() -> JSONResponse:
+def system_disk(logger: Any = Depends(get_logger)) -> JSONResponse:
     """Return disk usage for the standard CHUB mount points.
 
     Any mount that doesn't exist (i.e. not bind-mounted by the user) is
@@ -250,7 +251,8 @@ def system_disk() -> JSONResponse:
                 # frontend can dedupe (Unraid bind-mounts often share /mnt/cache).
                 seen_devices.setdefault(st.st_dev, []).append(path)
             except OSError as exc:
-                entry["error"] = str(exc)
+                logger.warning(f"Disk usage unreadable for {path}: {exc}")
+                entry["error"] = public_reason(exc)
         out.append(entry)
     # Annotate each entry with its "siblings" on the same device.
     for entry in out:
