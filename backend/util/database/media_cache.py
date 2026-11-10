@@ -10,6 +10,27 @@ from .media_metadata import MetadataCompletenessMixin
 from .media_stats import StatsMixin
 
 
+def _stored_tags(raw: Any) -> List[str]:
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        return []
+    return [t for t in value if isinstance(t, str)] if isinstance(value, list) else []
+
+
+def _changed_tags(current: List[str], add: List[str], remove: List[str]) -> List[str]:
+    """``current`` minus ``remove``, then plus ``add``, ignoring case; added tags stored lowercase."""
+    # *arr tag labels are lowercase while Plex-style labels are not ("Kids" is "kids").
+    gone = {t.lower() for t in remove}
+    tags = [t for t in current if t.lower() not in gone]
+    have = {t.lower() for t in tags}
+    for tag in (t.lower() for t in add):
+        if tag not in have:
+            tags.append(tag)
+            have.add(tag)
+    return tags
+
+
 class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, DatabaseBase):
     """
     Interface for the media_cache table.
@@ -440,6 +461,21 @@ class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, Databa
             "user_confirmed=CASE WHEN ? THEN 0 ELSE user_confirmed END WHERE id=?",
             (int(bool(ignored)), int(bool(ignored)), id),
         )
+
+    def change_tags(
+        self, id: int, add: List[str], remove: List[str]
+    ) -> Optional[List[str]]:
+        """Remove then add tags on one row in one write; its new tags, or None if gone."""
+        # Read under the write lock: two syncs on one row must not drop each other's tag.
+        with self.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT tags FROM media_cache WHERE id=?", (id,)).fetchone()
+            if row is None:
+                return None
+            tags = _changed_tags(_stored_tags(row["tags"]), add, remove)
+            conn.execute("UPDATE media_cache SET tags=? WHERE id=?", (json.dumps(tags), id))
+            conn.commit()
+        return tags
 
     def get_user_confirmed(self) -> list:
         """Return rows the user manually locked (user_confirmed=1) — surfaced in

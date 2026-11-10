@@ -30,7 +30,10 @@ in; this module never guesses it.
 
 from __future__ import annotations
 
+import threading
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlparse
 
@@ -430,10 +433,22 @@ def _eligible_instances(
     return eligible, skipped
 
 
+# Serialises writing runs per *arr: two overlapping provisions both read "no CHUB
+# entry" and both create one. Thread lock — single process only (mirrors cl2k _folder_lock).
+_ARR_LOCKS_GUARD = threading.Lock()
+_ARR_LOCKS: "defaultdict[str, threading.Lock]" = defaultdict(threading.Lock)
+
+
+def _arr_lock(url: str) -> threading.Lock:
+    with _ARR_LOCKS_GUARD:
+        return _ARR_LOCKS[str(url or "").strip().rstrip("/").lower()]
+
+
 def _run_over_instances(
     eligible: List[Tuple[str, str, str, str]],
     op,
     logger: Any,
+    writes: bool,
 ) -> List[Dict[str, Any]]:
     """Run ``op(client, type, name)`` per instance, concurrently, each with its
     own arr client that is always closed. A dead instance isolates to one row."""
@@ -447,7 +462,8 @@ def _run_over_instances(
                 row = _base_result(instance_type, name)
                 row["error"] = "Couldn't connect to the instance."
                 return row
-            return op(client, instance_type, name)
+            with _arr_lock(url) if writes else nullcontext():
+                return op(client, instance_type, name)
         except Exception as exc:  # noqa: BLE001
             return _failed_on(_base_result(instance_type, name), exc, logger)
         finally:
@@ -491,7 +507,7 @@ def provision_all(
             logger=logger,
         )
 
-    return _run_over_instances(eligible, _op, logger) + skipped
+    return _run_over_instances(eligible, _op, logger, writes=not dry_run) + skipped
 
 
 def deprovision_all(
@@ -509,7 +525,7 @@ def deprovision_all(
             client, instance_type, name, dry_run=dry_run, logger=logger
         )
 
-    return _run_over_instances(eligible, _op, logger) + skipped
+    return _run_over_instances(eligible, _op, logger, writes=not dry_run) + skipped
 
 
 # ----- base-URL auto-detection --------------------------------------------

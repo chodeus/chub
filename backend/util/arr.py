@@ -207,6 +207,8 @@ class BaseARRClient:
     REFRESH_COMMANDS: Sequence[str] = ()
     # The endpoint and query field that list one item's file records
     FILE_RECORDS: Optional[Tuple[str, str]] = None
+    # The bulk editor endpoint and its id field, for tag changes
+    TAG_EDITOR: Optional[Tuple[str, str]] = None
     """Improved base class with better error handling"""
 
     api_version = "v3"  # Override in subclasses (e.g. LidarrClient uses "v1")
@@ -701,6 +703,33 @@ class BaseARRClient:
         tag_id = self.create_tag(tag_name)
         return tag_id
 
+    def _edit_tags(self, media_ids: List[int], tag_ids: List[int], mode: str) -> Any:
+        endpoint, id_field = self.TAG_EDITOR
+        payload = {id_field: media_ids, "tags": tag_ids, "applyTags": mode}
+        self.logger.debug(f"Tag {mode} payload: {payload}")
+        return self.make_put_request(f"{self.api_base}/{endpoint}", json=payload)
+
+    def add_tags_by_name(
+        self, media_id: Union[int, List[int]], tag_names: Union[str, List[str]]
+    ) -> Any:
+        """Add tags by name, creating any the *arr lacks; None when the edit failed."""
+        names = [tag_names] if isinstance(tag_names, str) else list(tag_names)
+        ids = [media_id] if isinstance(media_id, int) else list(media_id)
+        return self._edit_tags(ids, [self.get_tag_id_from_name(n) for n in names], "add")
+
+    def remove_tags_by_name(
+        self, media_ids: List[int], tag_names: Union[str, List[str]]
+    ) -> Any:
+        """Remove tags by name; a tag the *arr lacks is skipped, never created."""
+        names = {n.lower() for n in ([tag_names] if isinstance(tag_names, str) else tag_names)}
+        all_tags = self.get_all_tags()
+        if all_tags is None:
+            return None
+        tag_ids = [t["id"] for t in all_tags if str(t.get("label", "")).lower() in names]
+        if not tag_ids:
+            return []
+        return self._edit_tags(list(media_ids), tag_ids, "remove")
+
     def _initialize_session(self) -> None:
         """Initialize HTTP session with proper configuration"""
         try:
@@ -1024,6 +1053,7 @@ class RadarrClient(BaseARRClient):
     """Client for interacting with Radarr API."""
 
     RENAME_COMMAND = "RenameMovie"
+    TAG_EDITOR = ("movie/editor", "movieIds")
     FOLDER_MOVE_COMMAND = "BulkMoveMovie"
     REFRESH_COMMANDS = ("RefreshMovie", "RescanMovie")
     FILE_RECORDS = ("moviefile", "movieId")
@@ -1090,33 +1120,6 @@ class RadarrClient(BaseARRClient):
             )
         return resp
 
-    def add_tags_by_name(
-        self, media_id: Union[int, List[int]], tag_names: Union[str, List[str]]
-    ) -> Any:
-        """
-        Add tag(s) to one or more movies by tag name(s).
-        Args:
-            media_id (Union[int, List[int]]): Movie ID(s).
-            tag_names (Union[str, List[str]]): Tag name(s).
-        Returns:
-            Any: API response.
-        """
-        if isinstance(tag_names, str):
-            tag_names = [tag_names]
-
-        tag_ids = []
-        for tag_name in tag_names:
-            tag_id = self.get_tag_id_from_name(tag_name)
-            tag_ids.append(tag_id)
-
-        if isinstance(media_id, int):
-            media_id = [media_id]
-
-        payload = {"movieIds": media_id, "tags": tag_ids, "applyTags": "add"}
-        self.logger.debug(f"Add tags by name payload: {payload}")
-        endpoint = f"{self.api_base}/movie/editor"
-        return self.make_put_request(endpoint, json=payload)
-
     def remove_tags(self, media_ids: List[int], tag_id: int) -> Any:
         """
         Remove a tag from movies.
@@ -1128,30 +1131,6 @@ class RadarrClient(BaseARRClient):
         """
         payload = {"movieIds": media_ids, "tags": [tag_id], "applyTags": "remove"}
         self.logger.debug(f"Remove tag payload: {payload}")
-        endpoint = f"{self.api_base}/movie/editor"
-        return self.make_put_request(endpoint, json=payload)
-
-    def remove_tags_by_name(
-        self, media_ids: List[int], tag_names: Union[str, List[str]]
-    ) -> Any:
-        """
-        Remove tag(s) from movies by tag name(s).
-        Args:
-            media_ids (List[int]): Movie IDs.
-            tag_names (Union[str, List[str]]): Tag name(s).
-        Returns:
-            Any: API response.
-        """
-        if isinstance(tag_names, str):
-            tag_names = [tag_names]
-
-        tag_ids = []
-        for tag_name in tag_names:
-            tag_id = self.get_tag_id_from_name(tag_name)
-            tag_ids.append(tag_id)
-
-        payload = {"movieIds": media_ids, "tags": tag_ids, "applyTags": "remove"}
-        self.logger.debug(f"Remove tags by name payload: {payload}")
         endpoint = f"{self.api_base}/movie/editor"
         return self.make_put_request(endpoint, json=payload)
 
@@ -1373,6 +1352,7 @@ class SonarrClient(BaseARRClient):
     """Client for interacting with Sonarr API."""
 
     RENAME_COMMAND = "RenameSeries"
+    TAG_EDITOR = ("series/editor", "seriesIds")
     FOLDER_MOVE_COMMAND = "BulkMoveSeries"
     REFRESH_COMMANDS = ("RefreshSeries", "RescanSeries")
     FILE_RECORDS = ("episodefile", "seriesId")
@@ -1436,33 +1416,6 @@ class SonarrClient(BaseARRClient):
             )
         return resp
 
-    def add_tags_by_name(
-        self, media_id: Union[int, List[int]], tag_names: Union[str, List[str]]
-    ) -> Any:
-        """
-        Add tag(s) to one or more series by tag name(s).
-        Args:
-            media_id (Union[int, List[int]]): Series ID(s).
-            tag_names (Union[str, List[str]]): Tag name(s).
-        Returns:
-            Any: API response.
-        """
-        if isinstance(tag_names, str):
-            tag_names = [tag_names]
-
-        tag_ids = []
-        for tag_name in tag_names:
-            tag_id = self.get_tag_id_from_name(tag_name)
-            tag_ids.append(tag_id)
-
-        if isinstance(media_id, int):
-            media_id = [media_id]
-
-        payload = {"seriesIds": media_id, "tags": tag_ids, "applyTags": "add"}
-        self.logger.debug(f"Add tags by name payload: {payload}")
-        endpoint = f"{self.api_base}/series/editor"
-        return self.make_put_request(endpoint, json=payload)
-
     def remove_tags(self, media_ids: List[int], tag_id: int) -> Any:
         """
         Remove a tag from series.
@@ -1474,30 +1427,6 @@ class SonarrClient(BaseARRClient):
         """
         payload = {"seriesIds": media_ids, "tags": [tag_id], "applyTags": "remove"}
         self.logger.debug(f"Remove tag payload: {payload}")
-        endpoint = f"{self.api_base}/series/editor"
-        return self.make_put_request(endpoint, json=payload)
-
-    def remove_tags_by_name(
-        self, media_ids: List[int], tag_names: Union[str, List[str]]
-    ) -> Any:
-        """
-        Remove tag(s) from series by tag name(s).
-        Args:
-            media_ids (List[int]): Series IDs.
-            tag_names (Union[str, List[str]]): Tag name(s).
-        Returns:
-            Any: API response.
-        """
-        if isinstance(tag_names, str):
-            tag_names = [tag_names]
-
-        tag_ids = []
-        for tag_name in tag_names:
-            tag_id = self.get_tag_id_from_name(tag_name)
-            tag_ids.append(tag_id)
-
-        payload = {"seriesIds": media_ids, "tags": tag_ids, "applyTags": "remove"}
-        self.logger.debug(f"Remove tags by name payload: {payload}")
         endpoint = f"{self.api_base}/series/editor"
         return self.make_put_request(endpoint, json=payload)
 
@@ -1913,6 +1842,7 @@ class LidarrClient(BaseARRClient):
     """Client for interacting with Lidarr API (uses API v1)."""
 
     RENAME_COMMAND = "RenameArtist"
+    TAG_EDITOR = ("artist/editor", "artistIds")
     FOLDER_MOVE_COMMAND = "BulkMoveArtist"
     # RescanFolders takes disk access, so the queue already keeps it off renames and moves
     REFRESH_COMMANDS = ("RefreshArtist",)

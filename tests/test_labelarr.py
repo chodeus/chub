@@ -84,36 +84,6 @@ def test_parse_labels_delegates_to_tags():
     assert m._parse_labels(["a", "b"]) == ["a", "b"]
 
 
-# --- _get_arr_config ---
-
-
-def test_get_arr_config_finds_radarr():
-    cfg = ChubConfig(
-        instances=InstancesConfig(
-            radarr={"r1": InstanceDetail(url="http://r:7878", api="k")},
-        )
-    )
-    m = make_module(full_config=cfg)
-    result = m._get_arr_config("r1")
-    assert result is not None
-    assert result.url == "http://r:7878"
-
-
-def test_get_arr_config_finds_sonarr():
-    cfg = ChubConfig(
-        instances=InstancesConfig(
-            sonarr={"s1": InstanceDetail(url="http://s", api="k")},
-        )
-    )
-    m = make_module(full_config=cfg)
-    assert m._get_arr_config("s1") is not None
-
-
-def test_get_arr_config_returns_none_for_missing():
-    m = make_module(full_config=ChubConfig())
-    assert m._get_arr_config("not_there") is None
-
-
 # --- _build_instance_map ---
 
 
@@ -374,7 +344,8 @@ def _adhoc_module(plex_instances):
         "tags": ["existing", "unrelated"],
         "arr_id": None,
         "asset_type": "movie",
-        "instance_type": "radarr",
+        "instance_name": "radarr_main",
+        "source": "radarr",
         "plex_mapping_id": 7,
     }
     plex_row = {"id": 7, "instance_name": "plex_main", "asset_type": "movie"}
@@ -565,7 +536,7 @@ def _bulk_module(monkeypatch, resynced):
         mid = kwargs["media_cache_id"]
         calls.events.append(("item", mid))
         if mid in calls.failing:
-            return {"success": False, "error_code": "PLEX_ITEM_NOT_FOUND"}
+            return {"success": False, "message": f"no Plex item for {mid}"}
         return {"success": True, "data": {}}
 
     m.labelarr_sync_adhoc = fake_item
@@ -621,3 +592,29 @@ def test_bulk_sync_fails_when_any_item_fails(monkeypatch):
 
     assert (result["success"], result["error_code"]) == (False, "LABELARR_ITEMS_FAILED")
     assert (result["data"]["succeeded"], result["data"]["failed"]) == (2, 1)
+
+
+@pytest.mark.parametrize(
+    "failing, message",
+    [
+        ({2}, "Bulk labelarr sync complete: 4 succeeded, 1 failed, 0 items with changes. "
+              "media 2: no Plex item for 2"),
+        ({1, 2, 3, 4, 5}, "Bulk labelarr sync complete: 0 succeeded, 5 failed, 0 items with changes. "
+                          "media 1: no Plex item for 1; media 2: no Plex item for 2; "
+                          "media 3: no Plex item for 3; 2 more in the server log"),
+    ],
+    ids=["one-of-five", "all-five"],
+)
+def test_a_failed_bulk_job_names_its_failed_items(monkeypatch, failing, message):
+    m, calls = _bulk_module(monkeypatch, resynced=True)
+    calls.failing = failing
+
+    result = m.labelarr_bulk_sync_adhoc(
+        source_instance="radarr_main",
+        media_cache_ids=[1, 2, 3, 4, 5],
+        tag_actions={"add": ["new-tag"], "remove": []},
+        plex_instance="plex_main",
+        notify=False,
+    )
+
+    assert result["message"] == message

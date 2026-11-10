@@ -1,5 +1,8 @@
 """Tests for backend/util/webhook_provisioner.py — arr webhook auto-provisioning."""
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 from backend.util import webhook_provisioner as wp
@@ -442,3 +445,108 @@ def test_status_report_reconciles_against_detected_base(monkeypatch):
     assert report["detected_base_url"] == "http://detected:8060"
     names = {r["name"] for r in report["instances"]}
     assert {"Radarr", "Sonarr"} <= names
+
+
+class _SharedArr:
+    """One *arr's notification list, seen by every client opened against it."""
+
+    def __init__(self):
+        self.notifications = []
+        self.readers = 0
+        self.second_reader = threading.Event()
+        self.blocked = threading.Event()
+        self.guard = threading.Lock()
+
+
+class _RacingClient(StubClient):
+    def __init__(self, arr):
+        super().__init__()
+        self._arr = arr
+
+    def get_notifications(self):
+        snapshot = list(self._arr.notifications)
+        with self._arr.guard:
+            self._arr.readers += 1
+            if self._arr.readers == 2:
+                self._arr.second_reader.set()
+        # Hold this snapshot until the other run reads too, or is seen waiting on the lock.
+        deadline = time.monotonic() + 5
+        while not (self._arr.second_reader.is_set() or self._arr.blocked.is_set()):
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.005)
+        return snapshot
+
+    def add_notification(self, body, force_save=False):
+        entry = {"id": len(self._arr.notifications) + 1, **body}
+        self._arr.notifications.append(entry)
+        return entry
+
+
+class _Announcing:
+    """A run's lock that sets ``arr.blocked`` when the run has to wait for it."""
+
+    def __init__(self, arr, lock):
+        self._arr, self._lock = arr, lock
+
+    def __enter__(self):
+        if not self._lock.acquire(blocking=False):
+            self._arr.blocked.set()
+            self._lock.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self._lock.release()
+
+
+def _race(monkeypatch, lock_for):
+    arr = _SharedArr()
+    monkeypatch.setattr(
+        wp,
+        "create_arr_client",
+        lambda url, api, logger: _RacingClient(arr) if url == "http://r:7878" else None,
+    )
+    monkeypatch.setattr(wp, "_arr_lock", lambda url: _Announcing(arr, lock_for(url)))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        runs = [
+            pool.submit(provision_all, _fake_config(), "http://chub:8060", None)
+            for _ in range(2)
+        ]
+        rows = [next(r for r in run.result() if r["name"] == "Radarr") for run in runs]
+    return arr, sorted(row["action"] for row in rows)
+
+
+def test_overlapping_provisions_create_one_webhook(monkeypatch):
+    arr, actions = _race(monkeypatch, wp._arr_lock)
+
+    assert arr.blocked.is_set()
+    assert len(arr.notifications) == 1
+    assert actions == ["created", "noop"]
+
+
+def test_the_race_harness_catches_a_missing_lock(monkeypatch):
+    # Control: a fresh lock per run serialises nothing, so both runs read "no entry" and create.
+    arr, actions = _race(monkeypatch, lambda url: threading.Lock())
+
+    assert not arr.blocked.is_set()
+    assert len(arr.notifications) == 2
+    assert actions == ["created", "created"]
+
+
+def test_a_status_read_does_not_wait_for_a_provision_in_flight(monkeypatch):
+    clients = {"http://r:7878": StubClient(notifications=[])}
+    monkeypatch.setattr(wp, "create_arr_client", lambda url, api, logger: clients.get(url))
+    lock, pool = wp._arr_lock("http://r:7878"), ThreadPoolExecutor(max_workers=1)
+    lock.acquire()
+    try:
+        run = pool.submit(provision_all, _fake_config(), "http://chub:8060", None, dry_run=True)
+        rows = run.result(timeout=5)
+    finally:
+        lock.release()
+        pool.shutdown()
+
+    assert next(r for r in rows if r["name"] == "Radarr")["status"] == "not_set_up"
+
+
+def test_one_arr_written_with_spaces_or_a_slash_shares_one_lock():
+    assert wp._arr_lock(" http://R:7878/ ") is wp._arr_lock("http://r:7878")

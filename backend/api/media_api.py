@@ -30,7 +30,8 @@ from backend.api.utils import (
     worker_error,
 )
 from backend.util.arr import arr_api_version, create_arr_client
-from backend.util.arr_delete import ArrDeleter, ArrOutcome, instance_detail
+from backend.util.arr_delete import ArrDeleter, ArrOutcome
+from backend.util.arr_instances import instance_detail
 from backend.util.config import ConfigError, load_config
 from backend.util.public_error import failure_text
 from backend.util.database import (
