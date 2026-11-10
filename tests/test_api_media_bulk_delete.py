@@ -513,6 +513,8 @@ def test_a_title_cased_legacy_kept_row_still_protects_its_arr_item(db, arrs, mon
     keep = _seed_arr(db, "Severance", **show)
     twin = _seed_arr(db, "Severance twin", **show)
     db.media.execute_query("UPDATE media_cache SET source='Sonarr' WHERE id=?", (keep,))
+    stored = db.media.get_by_id(keep)["source"]
+    assert stored == "Sonarr"
 
     resp = _resolve(db, {"keepId": keep, "removeIds": [twin], "deleteFiles": True})
 
