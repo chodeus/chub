@@ -235,8 +235,9 @@ def test_a_fully_tagged_library_warns_with_the_reason(isolated_db):
     module = make_upgradinatorr(dry_run=False)
     app = FakeARR([[_movie(1, tags=["checked"]), _movie(2, tags=["checked"])]])
 
-    assert module.process_instance("radarr", _settings(), app) is None
+    result = module.process_instance("radarr", _settings(), app)
 
+    assert result is None
     assert module.logger.warnings == [
         'Nothing to search on radarr (2 movies): everything is tagged "checked" and '
         "Auto reset processed tag is off. Remove the tag or turn on Auto reset to "
@@ -248,8 +249,9 @@ def test_an_empty_library_is_not_reported_as_fully_tagged(isolated_db):
     module = make_upgradinatorr(dry_run=False)
     app = FakeARR([[]])
 
-    assert module.process_instance("radarr", _settings(), app) is None
+    result = module.process_instance("radarr", _settings(), app)
 
+    assert result is None
     assert module.logger.warnings == ["Nothing to search on radarr: 0 movies found."]
 
 
@@ -357,8 +359,9 @@ def test_an_empty_wanted_list_is_named_as_the_wanted_list(isolated_db, monkeypat
     app = FakeARR([[]])
     app.get_all_tags = lambda: []
 
-    assert module.process_instance("radarr", _settings(search_mode="cutoff"), app) is None
+    result = module.process_instance("radarr", _settings(search_mode="cutoff"), app)
 
+    assert result is None
     assert module.logger.warnings == ["Nothing to search on radarr: its cutoff list is empty."]
 
 
