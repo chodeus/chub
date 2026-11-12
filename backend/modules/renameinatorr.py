@@ -408,7 +408,19 @@ class Renameinatorr(ChubModule):
             logger.info(f"No media to rename on {app.instance_name}...")
             self._tag(app, chunk, config, tag_id, logger)
             return None
-        return self._apply_changes(app, chunk, changes, config, tag_id, logger)
+        stop = self._apply_changes(app, chunk, changes, config, tag_id, logger)
+        self._free_left_folders(changes, taken)
+        return stop
+
+    @staticmethod
+    def _free_left_folders(changes: List[_Change], taken: Set[str]) -> None:
+        """Free each folder the arr shows an item moved out of, so a later batch can use it."""
+        for change in changes:
+            old = change.item["path"].rstrip("/")
+            # change.folder is the arr's path after the move, set by _check; empty when unchecked
+            if change.folder and fold(change.folder) != fold(old):
+                taken.discard(fold(old))
+                taken.add(fold(change.folder))
 
     def _plan_chunk(
         self,
