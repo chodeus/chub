@@ -308,6 +308,81 @@ def test_swapped_folder_names_are_both_blocked(sonarr):
     assert report["Show 1"]["blocked"] and report["Show 2"]["blocked"]
 
 
+def _chain(fake):
+    fake.add(1, "Show (2011)", "Show A (2011)")
+    fake.add(2, "Show B", "Show (2011)")
+
+
+def test_a_folder_left_in_the_same_batch_stays_taken(sonarr):
+    fake, client = sonarr
+    _chain(fake)
+
+    report, _ = _run(client)
+
+    assert fake.series[1]["path"] == "/tv/Show A (2011)"
+    assert fake.series[2]["path"] == "/tv/Show B"
+    assert report["Show 2"]["blocked"] == "another item already uses that folder"
+
+
+def test_a_later_batch_can_use_a_folder_an_earlier_batch_left(sonarr):
+    fake, client = sonarr
+    _chain(fake)
+
+    report, stopped = _run(client, enable_batching=True, count=1)
+
+    assert fake.series[1]["path"] == "/tv/Show A (2011)"
+    assert fake.series[2]["path"] == "/tv/Show (2011)"
+    assert report["Show 2"]["blocked"] is None
+    assert stopped is None
+
+
+def test_an_ignored_item_still_holds_its_folder(sonarr):
+    fake, client = sonarr
+    fake.add(1, "Show (2011)")
+    fake.add(2, "Show B", "Show (2011)")
+    fake.tags.append({"id": 1, "label": "skip"})
+    fake.series[1]["tags"] = [1]
+    # Not on disk, so only the arr's record stands in the way
+    del fake.disk["/tv/Show (2011)"]
+
+    report, _ = _run(client, ignore_tags="skip")
+
+    assert "Show 1" not in report
+    assert fake.series[2]["path"] == "/tv/Show B"
+    assert report["Show 2"]["blocked"] == "another item already uses that folder"
+
+
+def test_a_folder_the_arr_did_not_move_out_of_stays_taken(sonarr):
+    fake, client = sonarr
+    _chain(fake)
+    original = fake._editor
+
+    def leave_show_one(body):
+        if body.get("moveFiles"):
+            body = {**body, "seriesIds": [s for s in body["seriesIds"] if s != 1]}
+        return original(body)
+
+    fake._editor = leave_show_one
+
+    report, _ = _run(client, enable_batching=True, count=1)
+
+    assert fake.series[1]["path"] == "/tv/Show (2011)"
+    assert fake.series[2]["path"] == "/tv/Show B"
+    assert report["Show 2"]["blocked"] == "another item already uses that folder"
+
+
+def test_a_batched_dry_run_gives_a_folder_to_one_item_only(sonarr):
+    fake, client = sonarr
+    fake.add(1, "Show X", "Show (2011)")
+    fake.add(2, "Show Y", "Show (2011)")
+
+    report, _ = _run(client, dry_run=True, enable_batching=True, count=1)
+
+    assert report["Show 1"]["new_path_name"] == "Show (2011)"
+    assert report["Show 2"]["new_path_name"] is None
+    assert report["Show 2"]["blocked"] == "another item already uses that folder"
+
+
 def test_verify_read_failure_after_rename_stops_and_flags(sonarr):
     fake, client = sonarr
     fake.add(1, "Show", renames={"Season 01/a.mkv": "Season 01/b.mkv"})
