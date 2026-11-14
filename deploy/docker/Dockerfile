@@ -3,7 +3,7 @@
 # -------------------------
 # Official Node image, not NodeSource's apt repo: no third-party repo or GPG key in the build.
 # Must match the Python base's Debian release (trixie, glibc 2.41): the copied binaries use its libc.
-FROM node:26.13.0-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS node
+FROM node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS node
 
 # -------------------------
 # Stage 1a: Frontend bundle (BUILD platform, never emulated)
@@ -13,7 +13,7 @@ FROM node:26.13.0-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68
 # chunks..." for 2h55m (its threaded Rust binding deadlocks under qemu-user)
 # until the 6h job timeout. Pinned to $BUILDPLATFORM, one bundle serves both
 # target arches. `npm ci` keeps optional native bindings strict per the lockfile.
-FROM --platform=$BUILDPLATFORM node:26.13.0-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS frontend
+FROM --platform=$BUILDPLATFORM node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS frontend
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
