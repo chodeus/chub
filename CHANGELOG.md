@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.55.1](https://github.com/chodeus/chub/compare/v2.55.0...v2.55.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **renameinatorr:** let a later batch use a folder an earlier batch moved out of ([08e5c5d](https://github.com/chodeus/chub/commit/08e5c5dcdfc2ce4bd37c3c1b6a47bd6a7252d511))
+
 ## [2.55.0](https://github.com/chodeus/chub/compare/v2.54.3...v2.55.0) (2026-11-10)
 
 
