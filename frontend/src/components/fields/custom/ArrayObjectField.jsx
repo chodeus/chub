@@ -774,6 +774,7 @@ export const ArrayObjectField = ({
                                     label: 'Directory Browser',
                                     type: 'dir_picker',
                                     description: 'Browse and select a directory',
+                                    checkWritable: true,
                                 }}
                                 value={
                                     gdrivePickerRow !== null

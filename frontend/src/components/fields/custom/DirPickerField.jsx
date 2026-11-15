@@ -31,6 +31,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [writeError, setWriteError] = useState(null);
     const [newDirName, setNewDirName] = useState('');
     const [creating, setCreating] = useState(false);
     // All allowed top-level roots fetched from /api/allowed-roots. Drives
@@ -39,31 +40,36 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     // The root the user is currently browsing under. "Go up" can't ascend
     // past this; changing the dropdown jumps to a different root.
     const [activeRoot, setActiveRoot] = useState(null);
+    // Destinations only: the probe creates a file, which a cloud mount may upload.
+    const checkWrite = !!field.checkWritable;
 
-    const loadDirectory = useCallback(async (rawPath, { skipCache = false } = {}) => {
-        // Roots arrive trimmed; a saved "/media/" must equal the root "/media" or Go up escapes it.
-        const path = rawPath.replace(/(.)\/+$/, '$1');
-        setLoading(true);
-        setError(null);
-        try {
-            // listDirectory caches results for 5 minutes by default. That's
-            // fine for normal browsing but breaks the post-Create refresh —
-            // the new folder won't appear until the cache expires. Callers
-            // mutating the filesystem must pass skipCache: true.
-            const result = await systemAPI.listDirectory(
-                path,
-                skipCache ? { useCache: false } : {}
-            );
-            const dirs = result?.data?.directories || result?.data || [];
-            setEntries(Array.isArray(dirs) ? dirs : []);
-            setCurrentPath(path);
-        } catch (err) {
-            setError(err.message || 'Failed to load directory');
-            setEntries([]);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    const loadDirectory = useCallback(
+        async (rawPath, { skipCache = false } = {}) => {
+            // Roots arrive trimmed; a saved "/media/" must equal the root "/media" or Go up escapes it.
+            const path = rawPath.replace(/(.)\/+$/, '$1');
+            setLoading(true);
+            setError(null);
+            setWriteError(null);
+            try {
+                // listDirectory caches for 5 minutes: a refresh after Create
+                // (any filesystem change) must pass skipCache: true.
+                const result = await systemAPI.listDirectory(path, {
+                    ...(skipCache ? { useCache: false } : {}),
+                    checkWrite,
+                });
+                const dirs = result?.data?.directories || result?.data || [];
+                setEntries(Array.isArray(dirs) ? dirs : []);
+                setWriteError(result?.data?.write_error ?? null);
+                setCurrentPath(path);
+            } catch (err) {
+                setError(err.message || 'Failed to load directory');
+                setEntries([]);
+            } finally {
+                setLoading(false);
+            }
+        },
+        [checkWrite]
+    );
 
     // One-shot initialization: fetch allowed roots, decide which root we're
     // browsing under, and load the initial directory.
@@ -243,6 +249,15 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     Select
                 </button>
             </div>
+
+            {writeError && (
+                <p role="alert" className="mb-2 flex items-start gap-1.5 text-xs text-warning">
+                    <span className="material-symbols-outlined text-sm" aria-hidden="true">
+                        warning
+                    </span>
+                    <span>{writeError}</span>
+                </p>
+            )}
 
             {/* Directory listing */}
             <div className="border border-border rounded-lg max-h-48 overflow-y-auto bg-surface">

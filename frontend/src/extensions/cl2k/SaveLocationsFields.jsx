@@ -405,6 +405,7 @@ export const Cl2kLocalFoldersField = ({ value, onChange, disabled = false }) => 
                                 label: 'Directory Browser',
                                 type: 'dir_picker',
                                 description: 'Browse and select a directory',
+                                checkWritable: true,
                             }}
                             value={entries[browseIndex]?.path || ''}
                             onChange={newPath => {

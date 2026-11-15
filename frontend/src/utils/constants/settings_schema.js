@@ -295,6 +295,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'destination_dir',
                 label: 'Destination Directory',
                 type: 'dir',
+                checkWritable: true,
                 section: 'output',
                 conditional: KOMETA_ONLY,
                 required: true,
@@ -648,6 +649,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'destination_dir',
                 label: 'Destination Directory',
                 type: 'dir',
+                checkWritable: true,
                 section: 'apply',
                 conditional: KOMETA_ONLY,
                 description: 'Kometa assets directory for renamed assets.',
@@ -738,6 +740,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'destination_dir',
                 label: 'Destination Directory',
                 type: 'dir',
+                checkWritable: true,
                 section: 'Paths',
                 description:
                     'Where re-bordered posters are written when Border Replacerr is run on its own. When triggered via Poster Renamerr, the manifest path is used instead and this field is ignored.',
