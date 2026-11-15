@@ -1,5 +1,6 @@
 """Unit tests for BorderReplacerr's image-border helpers."""
 
+import errno
 import os
 
 import pytest
@@ -992,6 +993,33 @@ def test_every_composite_failing_is_an_error_but_not_a_failed_job(tmp_path, monk
         "see the ERROR lines above."
     )
     assert len(holiday_saves) == 1
+
+
+def test_a_destination_refusing_every_write_fails_the_job(tmp_path, monkeypatch):
+    """A full disk passes the folder check (an empty file needs no space), then refuses each poster."""
+    dest = tmp_path / "dest"
+    renamed = [dest / "a" / "poster.jpg", dest / "b" / "poster.jpg"]
+    br, encodes, holiday_saves = _colour_run(tmp_path, monkeypatch, renamed)
+
+    def _disk_full(self, fp, *a, **k):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(Image.Image, "save", _disk_full)
+    with pytest.raises(NoPosterWritten) as raised:
+        br.run(process_all=True)
+
+    assert br.logger.messages["error"] == [
+        f"Cannot write {renamed[0]}: No space left on device",
+        f"Cannot write {renamed[1]}: No space left on device",
+        "Border replacerr failed: all 2 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above.",
+    ]
+    assert len(encodes) == 2
+    assert failure_text("Module border_replacerr", raised.value) == (
+        "Module border_replacerr failed: disk full — see the server log"
+    )
+    assert holiday_saves == [], "a run that wrote nothing recorded the holiday"
+    assert [p for p in dest.rglob("*") if p.is_file()] == [], "a temp file was left"
 
 
 @pytest.mark.parametrize(

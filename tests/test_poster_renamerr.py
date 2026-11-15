@@ -1436,7 +1436,6 @@ def test_ensure_destination_dir_lets_a_dry_run_use_a_read_only_mount(tmp_path):
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
 def test_run_fails_the_job_when_the_destination_cannot_be_written(tmp_path, monkeypatch):
     """run() used to log the error and return, so the job showed success."""
-    import backend.modules.poster_renamerr as pr_mod
     from tests.conftest import StubLogger
 
     class _StubDB:
@@ -1449,7 +1448,7 @@ def test_run_fails_the_job_when_the_destination_cannot_be_written(tmp_path, monk
         def __exit__(self, *a):
             return False
 
-    monkeypatch.setattr(pr_mod, "ChubDB", _StubDB)
+    monkeypatch.setattr("backend.modules.poster_renamerr.ChubDB", _StubDB)
     dest = tmp_path / "kometa"
     dest.mkdir()
     m = make_module()
