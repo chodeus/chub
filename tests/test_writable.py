@@ -51,7 +51,7 @@ def test_the_refusal_names_the_fix_for_its_cause(tmp_path, monkeypatch, code, st
 
 
 @pytest.mark.parametrize("code", [errno.ENOSPC, errno.EDQUOT, errno.EROFS])
-def test_a_full_or_read_only_disk_is_always_the_destination(tmp_path, code):
+def test_a_full_or_read_only_disk_naming_no_path_is_the_destination(tmp_path, code):
     refused = destination_refused(OSError(code, "refused"), str(tmp_path / "logo.png"))
     assert refused is True
 

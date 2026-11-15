@@ -9,8 +9,10 @@ Covers:
   method called otherwise) and the Kometa rename path.
 """
 
+import errno
 import os
 import sqlite3
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -655,6 +657,7 @@ _OWNER_HINT = "Check the volume's host path, and that the folder's owner matches
 @_SKIP_AS_ROOT
 def test_title_folders_refusing_every_logo_log_once_and_fail_the_run(db, monkeypatch, tmp_path):
     from backend.modules.asset_renamerr import NoAssetWritten
+    from backend.util.public_error import failure_text
 
     dest = tmp_path / "kometa"
     m = _standalone_run(db, monkeypatch, tmp_path, dest, asset_folders=True)
@@ -670,6 +673,9 @@ def test_title_folders_refusing_every_logo_log_once_and_fail_the_run(db, monkeyp
         for folder in locked:
             folder.chmod(0o755)
     assert str(raised.value) == "All 2 asset(s) asset renamerr tried were refused by their destination"
+    assert failure_text("Module asset_renamerr", raised.value) == (
+        "Module asset_renamerr failed: permission denied — see the server log"
+    )
     assert m.logger.messages["warning"] == []
     assert m.logger.messages["error"] == [
         f"Cannot write {dest}/Dune (2021)/logo.png: Permission denied. {_OWNER_HINT} "
@@ -734,6 +740,32 @@ def test_a_destination_on_a_missing_volume_says_to_check_the_mount(db, monkeypat
     )
 
 
+def test_a_copy_over_an_asset_another_user_owns_is_applied(db, monkeypatch, tmp_path):
+    """Unraid's New Permissions leaves 0666 files CHUB can write but, as a non-owner, not chmod."""
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    target = dest / "Dune (2021)_logo.png"
+    target.write_bytes(b"old")
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    real_chmod = os.chmod
+
+    def _chmod(path, *a, **k):
+        if os.fspath(path) == str(target):
+            raise PermissionError(errno.EPERM, "Operation not permitted", str(target))
+        return real_chmod(path, *a, **k)
+
+    monkeypatch.setattr(os, "chmod", _chmod)
+    m.run()
+    status = db.media_asset_matches.get_one("media", 1, "logo")["match_status"]
+
+    assert (target.read_bytes(), status, os.listdir(dest)) == (
+        b"png",
+        "applied",
+        ["Dune (2021)_logo.png"],
+    )
+    assert (m.logger.messages["warning"], m.logger.messages["error"]) == ([], [])
+
+
 @_SKIP_AS_ROOT
 def test_a_single_chosen_asset_keeps_its_own_warning(db, tmp_path):
     from tests.conftest import StubLogger
@@ -754,7 +786,7 @@ def test_a_single_chosen_asset_keeps_its_own_warning(db, tmp_path):
     assert db.media_asset_matches.get_one("media", 1, "logo")["match_status"] == "failed"
     assert m.logger.messages["warning"] == [
         f"Asset file op failed for {logo} -> {dest}/Dune (2021)_logo.png: "
-        f"[Errno 13] Permission denied: '{dest}/Dune (2021)_logo.png'"
+        f"[Errno 13] Permission denied: '{dest}/Dune (2021)_logo.png.chub-tmp-{os.getpid()}-{threading.get_ident()}'"
     ]
 
 

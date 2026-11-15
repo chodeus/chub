@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.util.base_module import ChubModule
@@ -745,22 +746,21 @@ class AssetRenamerr(ChubModule):
     def _file_op(self, src: str, dest: str, action_type: str) -> None:
         if action_type == "move":
             shutil.move(src, dest)
-        elif action_type in ("hardlink", "symlink"):
-            # Create the link under a temp name and os.replace() it over the
-            # destination — never remove dest first, so a failed link (source
-            # vanished, ENOSPC, cross-device) can't destroy the existing file.
-            tmp = f"{dest}.chub-tmp-{os.getpid()}"
+        else:
+            # Per-thread temp, never dest: a failed op can't truncate dest, a copy chmods only
+            # CHUB's own file, and a chosen-asset apply racing a scheduled run can't share it.
+            tmp = f"{dest}.chub-tmp-{os.getpid()}-{threading.get_ident()}"
             try:
                 if action_type == "hardlink":
                     os.link(src, tmp)
-                else:
+                elif action_type == "symlink":
                     os.symlink(src, tmp)
+                else:  # copy (default)
+                    shutil.copy(src, tmp)
                 os.replace(tmp, dest)
             except OSError:
                 self._cleanup(tmp)
                 raise
-        else:  # copy (default)
-            shutil.copy(src, dest)
         self.logger.debug(f"[{action_type.upper()}] {dest} ← {src}")
 
     def _cleanup(self, path: Optional[str]) -> None:

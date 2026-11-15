@@ -1564,7 +1564,26 @@ def test_chained_assets_on_writable_folders_notify_both_modules(tmp_path, monkey
     m.run()
     assert os.listdir(posters) == ["Dune (2021).jpg"]
     assert os.listdir(logos) == ["Dune (2021)_logo.png"]
-    assert sent == ["asset_renamerr", "poster_renamerr"]
+    assert sent == ["poster_renamerr", "asset_renamerr"]
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_posters_written_before_a_chained_asset_refusal_are_still_reported(tmp_path, monkeypatch):
+    """The root asset folder passes its check; the title folder then refuses the only logo."""
+    from backend.modules.asset_renamerr import NoAssetWritten
+
+    m, sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.full_config.asset_renamerr.asset_folders = True
+    locked = logos / "Dune (2021)"
+    locked.mkdir()
+    locked.chmod(0o555)
+    try:
+        with pytest.raises(NoAssetWritten):
+            m.run()
+    finally:
+        locked.chmod(0o755)
+
+    assert (os.listdir(posters), sent) == (["Dune (2021).jpg"], ["poster_renamerr"])
 
 
 def test_chained_assets_use_asset_settings_saved_during_the_poster_pass(tmp_path, monkeypatch):

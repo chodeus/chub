@@ -30,6 +30,8 @@ class WriteRefused(Exception):
     def __init__(self, path: str, err: OSError) -> None:
         super().__init__(f"Cannot write {path}: {err.strerror or err}")
         self.errno = err.errno
+        # public_reason walks causes, so the Jobs page names the OS reason ("permission denied", "disk full").
+        self.__cause__ = err
 
 
 def refusal_hint(err: Optional[int]) -> str:

@@ -1864,7 +1864,7 @@ class PosterRenamerr(ChubModule):
                 if self.config.run_asset_renamerr:
                     from backend.modules.asset_renamerr import AssetRenamerr
 
-                    # Before any poster lands, so a refused asset folder fails nothing half-applied.
+                    # Before any poster lands, so an asset folder CHUB cannot write stops the run first.
                     AssetRenamerr(logger=self.logger).ensure_destination_writable()
 
                 if self.config.dry_run:
@@ -2034,34 +2034,7 @@ class PosterRenamerr(ChubModule):
                             db=db, logger=self.logger, manifest=manifest
                         ).run()
 
-                # Additional asset types (logo / squareart / background /
-                # banner) ride this run when enabled: the gdrive sync, the single
-                # image_type-aware merge_assets scan (poster_cache already holds
-                # the asset rows), and the loaded media/Plex snapshot are all
-                # reused, so no second sync/scan/fetch happens. See AssetRenamerr.
-                if self.config.run_asset_renamerr:
-                    with self._phase("asset_renamerr"):
-                        self.logger.info("Running asset_renamerr")
-                        # Built here, not at the probe: asset settings saved during the poster pass apply.
-                        asset_module = AssetRenamerr(logger=self.logger)
-                        # Drive the reserved tail of the parent's bar so the %
-                        # advances through this long phase instead of sitting at
-                        # 100. No-ops cleanly when this run has no job context.
-                        asset_module.set_job_context(
-                            getattr(self, "_job_id", None),
-                            getattr(self, "_job_db", None),
-                        )
-                        asset_module.set_progress_window(*tail_windows["asset"])
-                        asset_output = asset_module.match_and_apply_assets(db)
-                        # Same summary a standalone run prints; without it the
-                        # chained path emits nothing above DEBUG.
-                        asset_module.handle_output(asset_output)
-                        self.logger.info("Finished running asset_renamerr")
-                    # Notify under asset_renamerr so its own notification config
-                    # governs (mirrors how each chained module owns its policy).
-                    NotificationManager(
-                        self.full_config, self.logger, module_name="asset_renamerr"
-                    ).send_notification(asset_output)
+                # Posters are reported before the chained asset step, so its failure can't drop them.
                 # Always notify on a successful run, even when nothing
                 # happened — gives the user a heartbeat that the module fired.
                 # kometa: the rename output IS the outcome (files written for
@@ -2095,6 +2068,30 @@ class PosterRenamerr(ChubModule):
                     self.full_config, self.logger, module_name="poster_renamerr"
                 )
                 manager.send_notification(notify_output)
+
+                # Chained asset types reuse this run's gdrive sync, merge_assets scan and
+                # media/Plex snapshot, so nothing is fetched twice. See AssetRenamerr.
+                if self.config.run_asset_renamerr:
+                    with self._phase("asset_renamerr"):
+                        self.logger.info("Running asset_renamerr")
+                        # Built here, not at the probe: asset settings saved during the poster pass apply.
+                        asset_module = AssetRenamerr(logger=self.logger)
+                        # Drives the reserved tail of the parent's progress bar; no-op without a job.
+                        asset_module.set_job_context(
+                            getattr(self, "_job_id", None),
+                            getattr(self, "_job_db", None),
+                        )
+                        asset_module.set_progress_window(*tail_windows["asset"])
+                        asset_output = asset_module.match_and_apply_assets(db)
+                        # Same summary a standalone run prints; without it the
+                        # chained path emits nothing above DEBUG.
+                        asset_module.handle_output(asset_output)
+                        self.logger.info("Finished running asset_renamerr")
+                    # Notify under asset_renamerr so its own notification config
+                    # governs (mirrors how each chained module owns its policy).
+                    NotificationManager(
+                        self.full_config, self.logger, module_name="asset_renamerr"
+                    ).send_notification(asset_output)
 
         except KeyboardInterrupt:
             self.logger.info("Keyboard Interrupt detected. Exiting...")
