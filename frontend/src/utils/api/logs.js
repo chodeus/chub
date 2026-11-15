@@ -1,4 +1,4 @@
-/** Logs API: module and file listing, tailed content, and downloads. */
+/** Logs API: module and file listing, content read by offset, and downloads. */
 
 import { apiCore } from './core.js';
 import { downloadBlob } from '../download.js';
@@ -26,10 +26,15 @@ export const logsAPI = {
         return response.data?.files || [];
     },
 
-    /** Log content, sending `tail=N` so multi-MB files don't ship whole each poll.
-     *  `tail = 0` requests the full file. */
-    fetchLogContent: async (moduleName, fileName, signal, tail = 5000) => {
-        if (!moduleName || !fileName) return '';
+    /** One view read: from `offset` 0 the log (its last VIEW_CAP bytes when bigger), then the lines added since,
+     *  or a new view when `reset`. Resolves `{text, offset, id, start, reset}`; pass `offset`, `id` and `start` back. */
+    fetchLogContent: async (
+        moduleName,
+        fileName,
+        signal,
+        { offset = 0, id = '', start = 0 } = {}
+    ) => {
+        if (!moduleName || !fileName) return { text: '', offset: 0, id: '', start: 0, reset: true };
 
         try {
             const headers = {};
@@ -41,15 +46,27 @@ export const logsAPI = {
             } catch {
                 /* localStorage unavailable */
             }
-            const qs = tail > 0 ? `?tail=${tail}` : '';
-            const res = await fetch(`/api/logs/${moduleName}/${fileName}${qs}`, {
+            const qs = new URLSearchParams({ offset: String(offset), id, start: String(start) });
+            const res = await fetch(`/api/logs/${moduleName}/${fileName}?${qs}`, {
                 headers,
                 signal,
             });
             // Reject like downloadLogFile does: '' is a legitimate empty file, so
             // returning it for a failure hid the error from useLogContent's catch.
             if (!res.ok) throw new Error(`Log request failed with status ${res.status}`);
-            return await res.text();
+            const text = await res.text();
+            const position = name => {
+                const n = Number.parseInt(res.headers.get(name), 10);
+                if (!Number.isFinite(n)) throw new Error(`Log response has no ${name} header`);
+                return n;
+            };
+            return {
+                text,
+                offset: position('X-Log-Offset'),
+                id: res.headers.get('X-Log-Id') ?? '',
+                start: position('X-Log-Start'),
+                reset: res.headers.get('X-Log-Reset') === '1',
+            };
         } catch (error) {
             // AbortError is the caller cancelling, not a failure worth logging.
             if (error?.name !== 'AbortError') console.error('Failed to fetch log content:', error);

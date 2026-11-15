@@ -11,9 +11,13 @@ vi.mock('../hooks/useLogFiles.js', () => ({
         setSelectedLogFile: vi.fn(),
     }),
 }));
-vi.mock('../hooks/useLogContent.js', () => ({
-    useLogContent: () => ({ logText: 'a line', refresh: vi.fn(), inFlightRef: { current: false } }),
-}));
+const mockContent = {
+    logText: 'a line',
+    skippedBytes: 0,
+    refresh: vi.fn(),
+    inFlightRef: { current: false },
+};
+vi.mock('../hooks/useLogContent.js', () => ({ useLogContent: () => mockContent }));
 // Spread the real module: LOG_POLL_INTERVAL_MS must come from the hook that
 // owns it, or the badge assertion below tests a number written twice.
 vi.mock('../hooks/useLogPolling.js', async importOriginal => ({
@@ -69,5 +73,24 @@ describe('Logs live-tail badge', () => {
 
         expect(screen.getByText(/live tail · 5s/)).toBeTruthy();
         expect(screen.queryByText(/live tail · 1s/)).toBeNull();
+    });
+});
+
+describe('Logs large-file notice', () => {
+    afterEach(() => {
+        mockContent.skippedBytes = 0;
+    });
+
+    it('says the top of the log was left out when the server skipped some of it', () => {
+        mockContent.skippedBytes = 4096;
+        render(<Logs />);
+
+        expect(screen.getByText(/Showing only the end of this large log/)).toBeTruthy();
+    });
+
+    it('says nothing when the whole log is shown', () => {
+        render(<Logs />);
+
+        expect(screen.queryByText(/Showing only the end/)).toBeNull();
     });
 });

@@ -1,6 +1,7 @@
+import hashlib
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
@@ -14,6 +15,53 @@ from backend.util.paths import get_log_base_dir
 def _log_base_dir() -> str:
     """Read per request, so it always matches where the logger writes."""
     return str(Path(get_log_base_dir()).resolve())
+
+
+# A view's first read; above the 10 MB default rotation size, so a normal log loads whole.
+VIEW_CAP = 16 * 1024 * 1024
+
+
+def _log_id(f: Any, st: os.stat_result) -> str:
+    """Inode plus a hash of the first line, which starts with its timestamp: a new log on a reused inode differs unless that line matches."""
+    f.seek(0)
+    first = f.read(512).partition(b"\n")[0]
+    return f"{st.st_ino}:{hashlib.sha256(first).hexdigest()[:12]}"
+
+
+def _view(path: str, offset: int, log_id: str, view_start: int) -> PlainTextResponse:
+    """Whole lines after ``offset``, or the last VIEW_CAP bytes when the client must start over."""
+    with open(path, "rb") as f:
+        st = os.fstat(f.fileno())
+        size = st.st_size
+        cur_id = _log_id(f, st)
+        # Past twice the cap, so a view stays bounded without re-sending it on every poll.
+        reset = (
+            offset == 0
+            or log_id != cur_id
+            or offset > size
+            or size - view_start > 2 * VIEW_CAP
+        )
+        start = offset
+        if reset:
+            start = max(0, size - VIEW_CAP)
+            if start:
+                f.seek(start - 1)
+                f.readline()
+                start = f.tell()
+            view_start = start
+        f.seek(start)
+        data = f.read(max(0, size - start))
+    # A line still being written waits for its newline; a newline is never inside a UTF-8 sequence.
+    data = data[: data.rfind(b"\n") + 1]
+    return PlainTextResponse(
+        data.decode("utf-8", errors="replace"),
+        headers={
+            "X-Log-Id": cur_id,
+            "X-Log-Offset": str(start + len(data)),
+            "X-Log-Start": str(view_start),
+            "X-Log-Reset": "1" if reset else "0",
+        },
+    )
 
 
 # Allow-list of module names accepted by the log-reading endpoints. Anything
@@ -131,11 +179,14 @@ def list_logs_for_module(
 def read_log(
     module: str,
     filename: str,
-    tail: int = Query(
-        0,
-        ge=0,
-        le=200_000,
-        description="If > 0, return only the last N lines.",
+    offset: Optional[int] = Query(
+        None, ge=0, description="View mode: the X-Log-Offset of the last read; 0 starts over."
+    ),
+    log_id: str = Query(
+        "", alias="id", max_length=64, description="View mode: the X-Log-Id of the last read."
+    ),
+    view_start: int = Query(
+        0, alias="start", ge=0, description="View mode: the X-Log-Start of the last read."
     ),
     logger: Any = Depends(get_logger),
 ) -> PlainTextResponse:
@@ -145,8 +196,9 @@ def read_log(
     Returns the raw log file content as plain text. Security measures prevent
     access to debug logs and directory traversal attacks.
 
-    When `tail` is > 0, only the last N lines are returned. Useful for
-    multi-MB logs where the frontend only needs the most recent chunk.
+    With `offset`, returns only whole lines added since that read, with X-Log-* headers
+    for the next one; X-Log-Reset 1 means replace the view (offset 0, rotation, truncation,
+    or a view past twice VIEW_CAP). X-Log-Start is the view's first byte.
     """
     try:
         # Allow-list the module name (same guard as list_logs_for_module).
@@ -190,14 +242,11 @@ def read_log(
                 status_code=403,
             )
 
-        with open(resolved_path, "r", encoding="utf-8", errors="ignore") as f:
-            if tail > 0:
-                # Deque-based tail keeps memory bounded for multi-MB logs.
-                from collections import deque
+        if offset is not None:
+            return _view(resolved_path, offset, log_id, view_start)
 
-                content = "".join(deque(f, maxlen=tail))
-            else:
-                content = f.read()
+        with open(resolved_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
 
         return PlainTextResponse(content)
 

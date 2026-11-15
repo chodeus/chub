@@ -24,7 +24,10 @@ export default function Logs() {
     // them, and %2F decodes before route matching, so only a listed name is used.
     const selectedModule = modules.includes(requestedModule) ? requestedModule : '';
     const { logFiles, selectedLogFile, setSelectedLogFile } = useLogFiles(selectedModule);
-    const { logText, refresh, inFlightRef } = useLogContent(selectedModule, selectedLogFile);
+    const { logText, skippedBytes, error, refresh, inFlightRef } = useLogContent(
+        selectedModule,
+        selectedLogFile
+    );
     useLogPolling(selectedModule, selectedLogFile, refresh, inFlightRef);
 
     // Search state
@@ -195,14 +198,25 @@ export default function Logs() {
                     </button>
                 </div>
 
+                {skippedBytes > 0 && (
+                    <p className="px-4 py-2 border-t border-border text-meta text-fg-subtle">
+                        Showing only the end of this large log. Download it to see the whole file.
+                    </p>
+                )}
                 <div ref={logOutputRef} className="flex flex-col flex-1 min-h-0">
-                    <LogOutput
-                        logText={logText}
-                        searchTerm={searchTerm}
-                        activeLevels={activeLevels}
-                        hideHeartbeat={hideHeartbeat}
-                        sortNewestFirst={sortNewestFirst}
-                    />
+                    {error ? (
+                        <p role="alert" className="flex-1 p-3 font-mono text-sm text-error">
+                            Could not load this log: {error.message}
+                        </p>
+                    ) : (
+                        <LogOutput
+                            logText={logText}
+                            searchTerm={searchTerm}
+                            activeLevels={activeLevels}
+                            hideHeartbeat={hideHeartbeat}
+                            sortNewestFirst={sortNewestFirst}
+                        />
+                    )}
                 </div>
             </div>
         </div>
