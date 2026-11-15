@@ -5,7 +5,7 @@ import json
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from backend.util.database import ChubDB
 from backend.util.public_error import failure_text
@@ -349,32 +349,42 @@ def _process_webhook_job(
                 # re-stages and re-uploads only what's still missing, and the
                 # worker's backoff covers repeat failures. Never forced:
                 # already-covered posters skip via their recorded hashes.
-                try:
-                    retry_at = (
+                label, _message, code = _apply_failure(up)
+                retry = {
+                    "payload": {"media_items": media_items},
+                    "job_type": "poster_rename",
+                    "scheduled_at": (
                         datetime.now(timezone.utc) + timedelta(seconds=60)
-                    ).isoformat()
+                    ).isoformat(),
+                }
+                try:
                     if db is not None:
-                        db.worker.enqueue_job(
-                            "jobs",
-                            {"media_items": media_items},
-                            job_type="poster_rename",
-                            scheduled_at=retry_at,
-                        )
+                        queued = db.worker.enqueue_job("jobs", **retry)
                     else:
                         with ChubDB(logger=logger, quiet=True) as tdb:
-                            tdb.worker.enqueue_job(
-                                "jobs",
-                                {"media_items": media_items},
-                                job_type="poster_rename",
-                                scheduled_at=retry_at,
-                            )
-                    log.warning(
-                        f"[JOB:{job_id}] Plex upload failed "
-                        f"({up.get('message')}); queued a poster_rename retry"
-                    )
-                    message += " (Plex upload failed; retry queued)"
+                            queued = tdb.worker.enqueue_job("jobs", **retry)
                 except Exception as e:
-                    log.error(f"[JOB:{job_id}] Failed to enqueue upload retry: {e}")
+                    queued = {"success": False, "message": str(e)}
+                # enqueue_job reports a locked or broken jobs table in its result, not by raising.
+                if not (queued or {}).get("success"):
+                    log.error(
+                        f"[JOB:{job_id}] Failed to enqueue upload retry: "
+                        f"{(queued or {}).get('message')}"
+                    )
+                    # Nothing else will retry it: fail so the worker reruns this webhook.
+                    return {
+                        "success": False,
+                        "message": (
+                            f"Webhook for {media['title']} failed: {label}, "
+                            "and its retry could not be queued"
+                        ),
+                        "error_code": code,
+                    }
+                log.warning(
+                    f"[JOB:{job_id}] {label} "
+                    f"({up.get('message')}); queued a poster_rename retry"
+                )
+                message += f" ({label}; retry queued)"
             return {
                 "success": True,
                 "message": message,
@@ -542,11 +552,12 @@ def _process_poster_rename_job(
     if result.get("success") and up and not up.get("success"):
         # Fail the job so the worker's backoff retry re-stages (a fresh
         # apply_staging per attempt) and re-uploads; capped at max_attempts.
+        _label, message, code = _apply_failure(up)
         return {
             "status": 500,
             "success": False,
-            "message": f"Poster upload failed: {up.get('message')}",
-            "error_code": "UPLOAD_FAILED",
+            "message": message,
+            "error_code": code,
         }
     return result
 
@@ -631,7 +642,7 @@ def _adhoc_rename_and_post(
             )
             if upload_result is not None:
                 # The rename itself succeeded; each caller decides how a
-                # failed upload affects its job result.
+                # failed upload or apply affects its job result.
                 result["upload_result"] = upload_result
     return result
 
@@ -655,14 +666,16 @@ def _handle_post_rename_actions(
             the uploader skips its hash-equal short-circuit. Webhook flows
             set this from the *arr instance's `webhook_force_reupload`.
 
-    Returns the synchronous plex-path upload result dict (None on the kometa
-    path or when no upload ran) so callers can react to a failed upload.
+    Returns the synchronous plex-path upload result dict, or a POST_RENAME_FAILED
+    result when the border or upload step raised (None on the kometa path when it
+    worked, or when no upload ran) so callers can react; see _apply_failure.
     """
     log = logger.get_adapter("POST_RENAME")
 
     upload_result: Optional[Dict[str, Any]] = None
+    output = rename_result.get("output", {})
+    landed = False
     try:
-        output = rename_result.get("output", {})
         manifest = rename_result.get("manifest", {})
 
         # Border replacer first, so a notified success reflects the FINISHED
@@ -681,7 +694,6 @@ def _handle_post_rename_actions(
         # `landed` records the real OUTCOME so the notification below fires only
         # on success (poster in Plex / written to disk), never on a failed upload
         # — terminal failures are reported by the on-failure error handler.
-        landed = False
         apply_method = getattr(renamer.config, "apply_method", "kometa")
         if apply_method != "plex":
             log.info(f"[JOB:{job_id}] apply_method=kometa - no Plex upload")
@@ -711,11 +723,18 @@ def _handle_post_rename_actions(
                 f"[JOB:{job_id}] Plex upload not enabled or no manifest - task complete"
             )
             landed = True
+    except Exception as e:
+        log.error(f"[JOB:{job_id}] Error in post-rename actions: {e}")
+        return {
+            "success": False,
+            "message": failure_text("Poster apply", e),
+            "error_code": "POST_RENAME_FAILED",
+        }
 
-        # Outcome-based notification: fire ONCE, only after the poster actually
-        # landed (Plex upload succeeded, or the kometa write completed) — never on
-        # the intermediate rename step, and never on a failed/retried upload.
-        if landed and any(output.values()):
+    # Notify once, only after the poster landed (Plex upload or kometa write);
+    # never on the intermediate rename or a failed/retried upload.
+    if landed and any(output.values()):
+        try:
             from backend.util.notification import NotificationManager
 
             manager = NotificationManager(
@@ -723,10 +742,17 @@ def _handle_post_rename_actions(
             )
             manager.send_notification(output)
             log.info(f"[JOB:{job_id}] Notifications sent")
-
-    except Exception as e:
-        log.error(f"[JOB:{job_id}] Error in post-rename actions: {e}")
+        except Exception as e:
+            # The poster is in place; a lost notification must not fail the job.
+            log.warning(f"[JOB:{job_id}] Notification failed: {e}")
     return upload_result
+
+
+def _apply_failure(up: Dict[str, Any]) -> Tuple[str, str, str]:
+    """(short label, job message, error code) for a failed post-rename result."""
+    if up.get("error_code") == "POST_RENAME_FAILED":
+        return "poster not applied", up["message"], "POST_RENAME_FAILED"
+    return "Plex upload failed", f"Poster upload failed: {up.get('message')}", "UPLOAD_FAILED"
 
 
 def _instance_force_reupload(instance_info: Dict[str, Any]) -> bool:
