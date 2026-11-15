@@ -510,6 +510,17 @@ def test_kometa_action_types(tmp_path, action):
     assert applied and os.path.exists(path)
 
 
+def test_a_move_of_an_asset_already_at_its_destination_keeps_it(tmp_path):
+    """A destination also listed in source_dirs rescans each placed file as its own source."""
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    copy = make_module(action_type="copy", asset_folders=True, destination_dir=str(dest))
+    _applied, placed = copy._apply_kometa(_media(), "logo", "local", _make_src(tmp_path), None)
+    move = make_module(action_type="move", asset_folders=True, destination_dir=str(dest))
+    applied, path = move._apply_kometa(_media(), "logo", "local", placed, None)
+    assert (applied, path, open(placed, "rb").read()) == (True, placed, b"img")
+
+
 def test_kometa_requires_destination():
     m = make_module(apply_method="kometa", destination_dir="")
     applied, reason = m._apply_kometa(_media(), "logo", "local", "/x/l.png", None)

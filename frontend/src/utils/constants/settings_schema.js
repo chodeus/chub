@@ -293,7 +293,7 @@ const CORE_SETTINGS_SCHEMA = [
                 required: true,
                 description: 'How Kometa places files at the destination.',
                 helpText:
-                    'Kometa method: how matched posters reach the destination. "hardlink" is fastest and saves disk space, but only works when source and destination are inside the same container volume (e.g. one /data mount): separate /posters and /kometa volumes cannot hardlink, even on one disk. "move" deletes each source poster once it is placed (not while Border Replacerr runs after rename), so the Source Directories and Music Art Source Directories must be writable. "copy" is safest if you are unsure.',
+                    'Kometa method: how matched posters reach the destination. "hardlink" is fastest and saves disk space, but only works when source and destination are inside the same container volume (e.g. one /data mount): separate /posters and /kometa volumes cannot hardlink, even on one disk. "move" deletes each source poster once it is placed (not while Border Replacerr runs after rename); a poster CHUB cannot delete from the Source Directories or Music Art Source Directories is still placed, stays in its source folder, and is logged as a warning. "copy" is safest if you are unsure.',
             },
             {
                 key: 'destination_dir',
@@ -329,7 +329,7 @@ const CORE_SETTINGS_SCHEMA = [
                 priorityOrder: true,
                 description: 'Folders scanned for posters — bottom of the list wins on conflicts.',
                 helpText:
-                    'Folders scanned for poster assets. Bulk-add the Google Drives you configured in Sync GDrive, or add directories individually. Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence). With File Action "move" (and Border Replacerr not run after rename), CHUB deletes each poster from here once it is placed, so it must be able to delete files in these folders.',
+                    'Folders scanned for poster assets. Bulk-add the Google Drives you configured in Sync GDrive, or add directories individually. Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence). With File Action "move" (and Border Replacerr not run after rename), CHUB deletes each poster from here once it is placed; one it cannot delete is still placed, stays here, and is logged as a warning.',
             },
             {
                 key: 'sync_posters',
@@ -467,7 +467,7 @@ const CORE_SETTINGS_SCHEMA = [
                 },
                 description: 'Folders holding your custom artist / album art.',
                 helpText:
-                    'Folders holding your custom ARTIST/ALBUM art. Files here are recognized as music by folder layout (<Artist>/artist.jpg or poster.jpg, <Artist>/<Album>/cover.jpg) or a flat "Artist.jpg" / "Artist - Album.jpg" name; an {mbid-<id>} tag overrides identity (and works in the regular Source Directories too). Kept separate so a flat "Title.jpg" is never mistaken for a movie poster. With File Action "move" (and Border Replacerr not run after rename), CHUB deletes each file from here once it is placed, so it must be able to delete files in these folders.',
+                    'Folders holding your custom ARTIST/ALBUM art. Files here are recognized as music by folder layout (<Artist>/artist.jpg or poster.jpg, <Artist>/<Album>/cover.jpg) or a flat "Artist.jpg" / "Artist - Album.jpg" name; an {mbid-<id>} tag overrides identity (and works in the regular Source Directories too). Kept separate so a flat "Title.jpg" is never mistaken for a movie poster. With File Action "move" (and Border Replacerr not run after rename), CHUB deletes each file from here once it is placed; one it cannot delete is still placed, stays here, and is logged as a warning.',
             },
             {
                 key: 'music_lock_artist_art',
@@ -589,7 +589,7 @@ const CORE_SETTINGS_SCHEMA = [
                 section: 'source',
                 description: 'Folders scanned for local asset files. Bottom of the list wins.',
                 helpText:
-                    'Folders scanned for asset files named like "Title (Year) {tmdb-123} - Logo.png". Drag to set priority — later directories win when multiple sources have the same asset (bottom takes precedence). Used by the "local" source. With File Action "move" on the Kometa path, CHUB deletes each asset from here once it is placed, so it must be able to delete files in these folders.',
+                    'Folders scanned for asset files named like "Title (Year) {tmdb-123} - Logo.png". Drag to set priority — later directories win when multiple sources have the same asset (bottom takes precedence). Used by the "local" source. With File Action "move" on the Kometa path, CHUB deletes each asset from here once it is placed; one it cannot delete is still placed, stays here, and is logged as a warning.',
             },
             {
                 key: 'sync_assets',
@@ -673,7 +673,7 @@ const CORE_SETTINGS_SCHEMA = [
                 required: true,
                 description: 'How Kometa places files at the destination.',
                 helpText:
-                    'How matched assets reach the destination on the "kometa" path. "hardlink" is fastest and saves disk, but only works when source and destination are inside the same container volume (e.g. one /data mount): separate /posters and /kometa volumes cannot hardlink, even on one disk. "move" deletes each source file once it is placed, so the Source Directories must be writable. "copy" is safest.',
+                    'How matched assets reach the destination on the "kometa" path. "hardlink" is fastest and saves disk, but only works when source and destination are inside the same container volume (e.g. one /data mount): separate /posters and /kometa volumes cannot hardlink, even on one disk. "move" deletes each source file once it is placed; one CHUB cannot delete is still placed, stays in its Source Directory, and is logged as a warning. "copy" is safest.',
             },
             {
                 key: 'asset_folders',

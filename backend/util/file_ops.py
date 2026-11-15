@@ -55,8 +55,20 @@ def _same_inode(src: str, dest: str) -> bool:
         return False
 
 
+def _same_entry(src: str, dest: str) -> bool:
+    # dest's own name, not a hard link or a symlink to it: removing src would remove the file.
+    try:
+        return os.path.basename(src) == os.path.basename(dest) and os.path.samefile(
+            os.path.dirname(src) or ".", os.path.dirname(dest) or "."
+        )
+    except OSError:
+        return False
+
+
 def move_into_place(src: str, dest: str) -> Optional[OSError]:
     """Move ``src`` to ``dest``; once it has landed, return why ``src`` could not be deleted, if it could not."""
+    if _same_entry(src, dest):
+        return None
     if not _same_inode(src, dest):
         try:
             os.replace(src, dest)

@@ -120,6 +120,13 @@ def test_a_move_onto_a_hard_link_of_the_source_deletes_the_source(tmp_path):
     assert (kept, os.listdir(src_dir), dest.read_bytes()) == (None, [], b"img")
 
 
+@pytest.mark.parametrize("spelling", ["{d}/a.png", "{d}/../posters/a.png"])
+def test_a_move_onto_its_own_path_keeps_the_file(tmp_path, spelling):
+    src_dir, src, _dest_dir, _dest = _folders(tmp_path)
+    kept = move_into_place(str(src), spelling.format(d=src_dir))
+    assert (kept, src.read_bytes()) == (None, b"img")
+
+
 def test_a_move_onto_a_symlink_to_the_source_puts_the_file_there(tmp_path):
     src_dir, src, dest_dir, dest = _folders(tmp_path)
     os.symlink(src, dest)
