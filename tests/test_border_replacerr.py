@@ -998,23 +998,28 @@ def test_every_composite_failing_is_an_error_but_not_a_failed_job(tmp_path, monk
 def test_a_destination_refusing_every_write_fails_the_job(tmp_path, monkeypatch):
     """A destination that passes the folder check, then refuses each poster (a disk filling mid-run)."""
     dest = tmp_path / "dest"
-    renamed = [dest / "a" / "poster.jpg", dest / "b" / "poster.jpg"]
+    renamed = [dest / f / "poster.jpg" for f in ("a", "b", "c")]
     br, encodes, holiday_saves = _colour_run(tmp_path, monkeypatch, renamed)
 
-    def _disk_full(self, fp, *a, **k):
+    def _refuse(self, fp, *a, **k):
+        if os.path.basename(os.path.dirname(fp)) == "c":
+            raise OSError(errno.EROFS, "Read-only file system")
         raise OSError(errno.ENOSPC, "No space left on device")
 
-    monkeypatch.setattr(Image.Image, "save", _disk_full)
+    monkeypatch.setattr(Image.Image, "save", _refuse)
     with pytest.raises(NoPosterWritten) as raised:
         br.run(process_all=True)
 
     assert br.logger.messages["error"] == [
-        f"Cannot write {renamed[0]}: No space left on device",
-        f"Cannot write {renamed[1]}: No space left on device",
-        "Border replacerr failed: all 2 poster(s) it tried failed, 0 skipped — "
+        f"Cannot write {renamed[0]}: No space left on device. The disk is full; free "
+        "some space on it. 2 poster(s) failed this way.",
+        f"Cannot write {renamed[2]}: Read-only file system. The folder is on a read-only "
+        "mount: set the volume to read/write, or check the disk if it went read-only on "
+        "errors. 1 poster(s) failed this way.",
+        "Border replacerr failed: all 3 poster(s) it tried failed, 0 skipped — "
         "see the ERROR lines above.",
     ]
-    assert len(encodes) == 2
+    assert len(encodes) == 3
     assert failure_text("Module border_replacerr", raised.value) == (
         "Module border_replacerr failed: disk full — see the server log"
     )

@@ -17,6 +17,12 @@ _HINTS = {
     errno.ENOSPC: "The disk is full; free some space on it.",
     errno.EDQUOT: "The disk quota is used up; free some space or raise the quota.",
 }
+_DEFAULT_HINT = "Check the volume's host path, and that its disk or mount is working."
+
+
+def refusal_hint(err: Optional[int]) -> str:
+    """What a user can do about a write refused with this errno."""
+    return _HINTS.get(err, _DEFAULT_HINT)
 
 
 def nearest_existing_dir(path: str) -> str:
@@ -44,9 +50,7 @@ def _describe(folder: str, e: OSError) -> str:
         owner = f"owned by {st.st_uid}:{st.st_gid}, {stat.filemode(st.st_mode)}"
     except OSError:
         owner = "of unknown owner"
-    hint = _HINTS.get(
-        e.errno, "Check the volume's host path, and that its disk or mount is working."
-    )
+    hint = refusal_hint(e.errno)
     return (
         f"Cannot create files in {folder}: {e.strerror or e} (CHUB runs as "
         f"{os.getuid()}:{os.getgid()}; the folder is {owner}). {hint}"

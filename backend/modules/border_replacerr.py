@@ -23,7 +23,7 @@ from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.public_error import PublicError
 from backend.util.scheduler import md_range_contains
-from backend.util.writable import nearest_existing_dir, writable_error
+from backend.util.writable import nearest_existing_dir, refusal_hint, writable_error
 
 # Path to bundled borders: backend/assets/borders/<holiday>/<name>.png
 _BUNDLED_BORDERS_DIR = Path(__file__).resolve().parents[1] / "assets" / "borders"
@@ -60,6 +60,10 @@ class NoPosterWritten(PublicError):
 
 class PosterWriteRefused(Exception):
     """The destination refused a finished poster (disk full, a folder that lets CHUB create but not replace)."""
+
+    def __init__(self, path: str, err: OSError) -> None:
+        super().__init__(f"Cannot write {path}: {err.strerror or err}")
+        self.errno = err.errno
 
 
 class BorderReplacerr(ChubModule):
@@ -194,9 +198,7 @@ class BorderReplacerr(ChubModule):
         try:
             return self._replace_if_changed(out_img, renamed_file)
         except OSError as e:
-            raise PosterWriteRefused(
-                f"Cannot write {renamed_file}: {e.strerror or e}"
-            ) from e
+            raise PosterWriteRefused(renamed_file, e) from e
 
     def _replace_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
         dest_dir = os.path.dirname(renamed_file)
@@ -471,6 +473,17 @@ class BorderReplacerr(ChubModule):
         first = verdicts[next(iter(refused))] if refused else None
         return kept, sum(refused.values()), first
 
+    def _log_write_refusals(self, refusals: List[PosterWriteRefused]) -> None:
+        """One ERROR per cause, naming the first poster it refused and how many."""
+        by_cause: Dict[Optional[int], List[PosterWriteRefused]] = {}
+        for refusal in refusals:
+            by_cause.setdefault(refusal.errno, []).append(refusal)
+        for group in by_cause.values():
+            self.logger.error(
+                f"{group[0]}. {refusal_hint(group[0].errno)} "
+                f"{len(group)} poster(s) failed this way."
+            )
+
     def _log_completion(
         self, tally: Dict[str, int], attempted: int, all_failed: bool
     ) -> None:
@@ -731,11 +744,11 @@ class BorderReplacerr(ChubModule):
             write_refusals: List[PosterWriteRefused] = []
 
             def _process_or_refuse(item: Tuple[dict, object, str]):
-                """_process, with a refused write logged, kept for the verdict and returned as a failure."""
+                """_process, with a refused write kept for the verdict and returned as a failure."""
                 try:
                     return _process(item)
                 except PosterWriteRefused as e:
-                    self.logger.error(str(e))
+                    self.logger.debug(str(e))
                     write_refusals.append(e)
                     asset, _variant, sig = item
                     return None, asset["title"], "", "", asset["original_file"], asset["renamed_file"], sig
@@ -820,6 +833,7 @@ class BorderReplacerr(ChubModule):
                         if total_work and (done % 25 == 0 or done == total_work):
                             self._report_progress(int(done / total_work * 100))
 
+            self._log_write_refusals(write_refusals)
             if new_states:
                 db.border.bulk_record(new_states)
 
