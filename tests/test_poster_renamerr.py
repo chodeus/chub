@@ -1590,13 +1590,24 @@ def test_chained_assets_use_asset_settings_saved_during_the_poster_pass(tmp_path
     moved = tmp_path / "logos-new"
     moved.mkdir()
 
+    saved = []
+
     def _user_saves_a_new_asset_folder(live):
-        saved = live["config"].model_copy(deep=True)
-        saved.asset_renamerr.destination_dir = str(moved)
-        live["config"] = saved
+        saved.append(live["config"].model_copy(deep=True))
+        saved[0].asset_renamerr.destination_dir = str(moved)
+        live["config"] = saved[0]
 
     m, _sent, _posters, logos = _poster_run_with_chained_assets(
         tmp_path, monkeypatch, sync=_user_saves_a_new_asset_folder
     )
+    used = {}
+    monkeypatch.setattr(
+        "backend.modules.poster_renamerr.NotificationManager",
+        lambda cfg, log, module_name=None: SimpleNamespace(
+            send_notification=lambda out: used.update({module_name: cfg})
+        ),
+    )
+    started_with = m.full_config
     m.run()
     assert (os.listdir(logos), os.listdir(moved)) == ([], ["Dune (2021)_logo.png"])
+    assert used == {"poster_renamerr": started_with, "asset_renamerr": saved[0]}

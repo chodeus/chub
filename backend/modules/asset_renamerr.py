@@ -747,16 +747,20 @@ class AssetRenamerr(ChubModule):
         if action_type == "move":
             shutil.move(src, dest)
         else:
-            # Per-thread temp, never dest: a failed op can't truncate dest, a copy chmods only
-            # CHUB's own file, and a chosen-asset apply racing a scheduled run can't share it.
-            tmp = f"{dest}.chub-tmp-{os.getpid()}-{threading.get_ident()}"
+            # Short per-thread temp beside dest, never dest: a failed op leaves dest whole, a copy
+            # chmods only its own file, and "xb" never follows a path already at tmp.
+            tmp = os.path.join(
+                os.path.dirname(dest), f".chub-tmp-{os.getpid()}-{threading.get_ident()}"
+            )
             try:
                 if action_type == "hardlink":
                     os.link(src, tmp)
                 elif action_type == "symlink":
                     os.symlink(src, tmp)
                 else:  # copy (default)
-                    shutil.copy(src, tmp)
+                    with open(src, "rb") as fsrc, open(tmp, "xb") as fdst:
+                        shutil.copyfileobj(fsrc, fdst)
+                    shutil.copymode(src, tmp)
                 os.replace(tmp, dest)
             except OSError:
                 self._cleanup(tmp)

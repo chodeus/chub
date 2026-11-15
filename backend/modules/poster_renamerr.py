@@ -2090,7 +2090,7 @@ class PosterRenamerr(ChubModule):
                     # Notify under asset_renamerr so its own notification config
                     # governs (mirrors how each chained module owns its policy).
                     NotificationManager(
-                        self.full_config, self.logger, module_name="asset_renamerr"
+                        asset_module.full_config, self.logger, module_name="asset_renamerr"
                     ).send_notification(asset_output)
 
         except KeyboardInterrupt:

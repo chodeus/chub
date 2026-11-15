@@ -7,7 +7,12 @@ import tempfile
 
 import pytest
 
-from backend.util.writable import destination_refused, nearest_existing_dir, writable_error
+from backend.util.writable import (
+    destination_refused,
+    ensure_writable_dir,
+    nearest_existing_dir,
+    writable_error,
+)
 
 
 def test_a_writable_folder_passes_and_keeps_no_probe_file(tmp_path):
@@ -86,3 +91,24 @@ def test_a_link_its_folder_refuses_is_the_destination(tmp_path):
     finally:
         folder.chmod(0o755)
     assert (raised.value.errno, refused) == (errno.EACCES, True)
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_folder_it_creates_that_refuses_files_is_refused(tmp_path):
+    from tests.conftest import StubLogger
+
+    made = tmp_path / "kometa"
+    old = os.umask(0o222)
+    try:
+        with pytest.raises(PermissionError) as raised:
+            ensure_writable_dir(str(made), StubLogger())
+        st = os.stat(made)
+    finally:
+        os.umask(old)
+        made.chmod(0o755)
+    assert str(raised.value) == (
+        f"[Errno 13] Cannot create files in {made}: Permission denied (CHUB runs as "
+        f"{os.getuid()}:{os.getgid()}; the folder is owned by {st.st_uid}:{st.st_gid}, "
+        "dr-xr-xr-x). Check the volume's host path, and that the folder's owner "
+        "matches PUID/PGID."
+    )

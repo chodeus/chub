@@ -740,6 +740,29 @@ def test_a_destination_on_a_missing_volume_says_to_check_the_mount(db, monkeypat
     )
 
 
+@pytest.mark.parametrize("action", ["copy", "hardlink", "symlink"])
+def test_an_asset_name_near_the_length_limit_is_still_placed(tmp_path, action):
+    src = _make_src(tmp_path)
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    target = dest / ("a" * 240 + "_logo.png")
+    make_module(destination_dir=str(dest))._file_op(src, str(target), action)
+    assert (os.listdir(dest), target.read_bytes()) == ([target.name], b"img")
+
+
+def test_a_copy_never_writes_through_a_link_already_at_its_temp_name(tmp_path):
+    src = _make_src(tmp_path)
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    victim = tmp_path / "victim.txt"
+    victim.write_bytes(b"keep")
+    os.symlink(victim, dest / f".chub-tmp-{os.getpid()}-{threading.get_ident()}")
+    m = make_module(destination_dir=str(dest))
+    with pytest.raises(FileExistsError):
+        m._file_op(src, str(dest / "Dune (2021)_logo.png"), "copy")
+    assert (victim.read_bytes(), os.listdir(dest)) == (b"keep", [])
+
+
 def test_a_copy_over_an_asset_another_user_owns_is_applied(db, monkeypatch, tmp_path):
     """Unraid's New Permissions leaves 0666 files CHUB can write but, as a non-owner, not chmod."""
     dest = tmp_path / "kometa"
@@ -786,7 +809,7 @@ def test_a_single_chosen_asset_keeps_its_own_warning(db, tmp_path):
     assert db.media_asset_matches.get_one("media", 1, "logo")["match_status"] == "failed"
     assert m.logger.messages["warning"] == [
         f"Asset file op failed for {logo} -> {dest}/Dune (2021)_logo.png: "
-        f"[Errno 13] Permission denied: '{dest}/Dune (2021)_logo.png.chub-tmp-{os.getpid()}-{threading.get_ident()}'"
+        f"[Errno 13] Permission denied: '{dest}/.chub-tmp-{os.getpid()}-{threading.get_ident()}'"
     ]
 
 

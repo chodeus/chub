@@ -69,22 +69,21 @@ def ensure_writable_dir(path: str, logger: Logger, check_write: bool = True) -> 
     """Create ``path`` when missing; raise when CHUB cannot create it, or (check_write) create files in it."""
     if os.path.isdir(path):
         logger.debug(f"Destination directory already exists: {path}")
-        # An existing folder may belong to another user (a mount Docker made as root).
-        refusal = writable_error(path) if check_write else None
-        if refusal:
-            raise refusal
-        return
-
-    logger.info(f"Creating destination directory: {path}")
-    try:
-        # exist_ok: a concurrent pass (webhook worker vs the scheduled run) can create it first.
-        os.makedirs(path, exist_ok=True)
-    except OSError as e:
-        # A bare "[Errno 13] Permission denied" never says the volume is not mounted.
-        raise FileNotFoundError(
-            f"Could not create destination directory: {path} ({e}). "
-            "Check the path is correct and its volume is mounted."
-        ) from e
+    else:
+        logger.info(f"Creating destination directory: {path}")
+        try:
+            # exist_ok: a concurrent pass (webhook worker vs the scheduled run) can create it first.
+            os.makedirs(path, exist_ok=True)
+        except OSError as e:
+            # A bare "[Errno 13] Permission denied" never says the volume is not mounted.
+            raise FileNotFoundError(
+                f"Could not create destination directory: {path} ({e}). "
+                "Check the path is correct and its volume is mounted."
+            ) from e
+    # A folder may belong to another user (a mount Docker made as root), or refuse files once made.
+    refusal = writable_error(path) if check_write else None
+    if refusal:
+        raise refusal
 
 
 def nearest_existing_dir(path: str) -> str:
