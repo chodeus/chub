@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import sqlite3
 import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -454,6 +455,23 @@ class AssetRenamerr(ChubModule):
 
     # ----- apply ----------------------------------------------------------
 
+    @staticmethod
+    def _picked_since(
+        db: ChubDB,
+        conn: sqlite3.Connection,
+        target_kind: str,
+        target_id: int,
+        image_type: str,
+        locked: Optional[dict],
+    ) -> bool:
+        """True when the user has picked this asset, or re-picked another file, since ``locked`` was read."""
+        now = db.media_asset_matches.get_one(target_kind, target_id, image_type, conn=conn) or {}
+        if not now.get("user_confirmed"):
+            return False
+        if not (locked and locked.get("user_confirmed")):
+            return True
+        return now.get("matched_file") != locked.get("matched_file")
+
     def _already_applied(
         self,
         db: ChubDB,
@@ -709,6 +727,13 @@ class AssetRenamerr(ChubModule):
             self.logger.debug(f"Could not stat chosen asset '{file}': {exc}")
             src_mtime = None
 
+        target_id = media.get("id")
+        if target_id is not None:
+            # Lock to this file before applying, whatever the outcome: the run loop's mid-run check sees the pick
+            # while its file lands, and a failed apply (e.g. Plex briefly unreachable) is retried with this file.
+            db.media_asset_matches.set_user_confirmed(
+                target_kind, target_id, image_type, True, matched_file=file
+            )
         applied_libs: Optional[List[str]] = None
         if apply_method == "plex":
             applied, detail, applied_libs = self._apply_direct(
@@ -717,7 +742,6 @@ class AssetRenamerr(ChubModule):
         else:
             applied, detail = self._apply_kometa(media, image_type, "local", file, None)
 
-        target_id = media.get("id")
         if target_id is not None:
             db.media_asset_matches.upsert(
                 target_kind=target_kind,
@@ -734,12 +758,6 @@ class AssetRenamerr(ChubModule):
                 ),
                 match_status="applied" if applied else "failed",
                 detail=detail,
-            )
-            # Lock the manual pick regardless of apply outcome — even if this
-            # leg failed (e.g. Plex briefly unreachable), the chosen file is
-            # saved and the next run reuses it instead of re-resolving.
-            db.media_asset_matches.set_user_confirmed(
-                target_kind, target_id, image_type, True
             )
         return applied, detail
 
@@ -970,6 +988,8 @@ class AssetRenamerr(ChubModule):
                     if target_id is not None
                     else None
                 )
+                # applied_map predates the loop: re-check for a pick made or changed since before applying or writing over it.
+                unlocked_at_start = not (locked and locked.get("user_confirmed"))
                 if (
                     locked
                     and locked.get("user_confirmed")
@@ -998,7 +1018,13 @@ class AssetRenamerr(ChubModule):
                     # that's already applied (e.g. the art lives in Plex but the
                     # local source later vanished), and never persist on a dry run
                     # (media_asset_matches drives idempotency — see below).
-                    if target_id is not None and not self.config.dry_run:
+                    if (
+                        target_id is not None
+                        and not self.config.dry_run
+                        and not self._picked_since(
+                            db, poster_conn, target_kind, target_id, image_type, locked
+                        )
+                    ):
                         prev = applied_map.get(
                             (target_kind, int(target_id), image_type)
                         )
@@ -1009,6 +1035,7 @@ class AssetRenamerr(ChubModule):
                                 image_type=image_type,
                                 match_status="missing",
                                 detail="no source artwork found",
+                                unless_locked=unlocked_at_start,
                             )
                     continue
                 source, file, url = resolved
@@ -1042,6 +1069,17 @@ class AssetRenamerr(ChubModule):
                 ):
                     self.logger.debug(
                         f"↳ unchanged, skipping {image_type} for {media.get('title')}"
+                    )
+                    continue
+                if (
+                    target_id is not None
+                    and not self.config.dry_run
+                    and self._picked_since(
+                        db, poster_conn, target_kind, target_id, image_type, locked
+                    )
+                ):
+                    self.logger.debug(
+                        f"↳ {image_type} for {media.get('title')} was picked during this run, keeping the pick"
                     )
                     continue
 
@@ -1087,6 +1125,7 @@ class AssetRenamerr(ChubModule):
                         # Persist the outcome detail on BOTH paths so a failed
                         # apply can explain itself in the Needs-Review view.
                         detail=detail,
+                        unless_locked=unlocked_at_start,
                     )
 
                 output[image_type].append(

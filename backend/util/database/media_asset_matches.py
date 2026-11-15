@@ -1,5 +1,6 @@
 # util/database/media_asset_matches.py
 
+import sqlite3
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -32,11 +33,17 @@ class MediaAssetMatches(DatabaseBase):
         match_status: Optional[str] = None,
         detail: Optional[str] = None,
         matched_at: Optional[str] = None,
+        unless_locked: bool = False,
     ) -> None:
-        """Insert or refresh the match row for one (target, image_type)."""
+        """Insert or refresh the match row for one (target, image_type); ``unless_locked`` leaves a user-locked row as it is."""
         matched_at = matched_at or datetime.now(timezone.utc).isoformat()
+        keep_lock = (
+            "WHERE COALESCE(media_asset_matches.user_confirmed, 0) = 0"
+            if unless_locked
+            else ""
+        )
         self.execute_query(
-            """
+            f"""
             INSERT INTO media_asset_matches
                 (target_kind, target_id, image_type, source, matched_file,
                  matched_url, source_mtime, applied_method, applied_path,
@@ -54,6 +61,7 @@ class MediaAssetMatches(DatabaseBase):
                 match_status=excluded.match_status,
                 detail=excluded.detail,
                 matched_at=excluded.matched_at
+            {keep_lock}
             """,
             (
                 target_kind,
@@ -99,22 +107,29 @@ class MediaAssetMatches(DatabaseBase):
         )
 
     def set_user_confirmed(
-        self, target_kind: str, target_id: int, image_type: str, confirmed: bool
+        self,
+        target_kind: str,
+        target_id: int,
+        image_type: str,
+        confirmed: bool,
+        matched_file: Optional[str] = None,
     ) -> None:
         """Set the per-(target, image_type) manual-pick lock.
 
         Mirrors ``set_ignored``: works even with no prior match row (inserts a
         status-less row carrying just the flag), and an existing row keeps its
-        match provenance — only ``user_confirmed`` flips. A locked row is reused
+        match provenance — only ``user_confirmed`` flips, plus ``matched_file``
+        when one is given (the file a pick locks to). A locked row is reused
         verbatim by the asset run instead of being re-resolved.
         """
         self.execute_query(
             """
             INSERT INTO media_asset_matches
-                (target_kind, target_id, image_type, matched_at, user_confirmed)
-            VALUES (?, ?, ?, ?, ?)
+                (target_kind, target_id, image_type, matched_at, user_confirmed, matched_file)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(target_kind, target_id, image_type)
-            DO UPDATE SET user_confirmed=excluded.user_confirmed
+            DO UPDATE SET user_confirmed=excluded.user_confirmed,
+                matched_file=COALESCE(excluded.matched_file, media_asset_matches.matched_file)
             """,
             (
                 target_kind,
@@ -122,18 +137,24 @@ class MediaAssetMatches(DatabaseBase):
                 image_type,
                 datetime.now(timezone.utc).isoformat(),
                 1 if confirmed else 0,
+                matched_file,
             ),
         )
 
     def get_one(
-        self, target_kind: str, target_id: int, image_type: str
+        self,
+        target_kind: str,
+        target_id: int,
+        image_type: str,
+        conn: Optional[sqlite3.Connection] = None,
     ) -> Optional[dict]:
-        """Return the single match row for one (target, image_type), or None."""
+        """Return the single match row for one (target, image_type), or None; ``conn`` as in execute_query."""
         row = self.execute_query(
             "SELECT * FROM media_asset_matches "
             "WHERE target_kind=? AND target_id=? AND image_type=?",
             (target_kind, int(target_id), image_type),
             fetch_one=True,
+            conn=conn,
         )
         return dict(row) if row else None
 
