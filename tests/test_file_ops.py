@@ -144,7 +144,7 @@ def test_a_move_onto_a_symlink_to_the_source_puts_the_file_there(tmp_path):
         ("hard link", "copy", True),
     ],
 )
-def test_a_move_onto_a_link_to_its_source_is_not_already_in_place(tmp_path, make_dest, action_type, expected):
+def test_only_a_move_onto_a_link_to_its_source_is_not_already_in_place(tmp_path, make_dest, action_type, expected):
     src_dir, src, _dest_dir, dest = _folders(tmp_path)
     if make_dest == "own path":
         dest = src_dir / "a.png"
