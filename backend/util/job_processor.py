@@ -350,32 +350,27 @@ def _process_webhook_job(
                 # worker's backoff covers repeat failures. Never forced:
                 # already-covered posters skip via their recorded hashes.
                 label, _message, code = _apply_failure(up)
-                try:
-                    retry_at = (
+                retry = {
+                    "payload": {"media_items": media_items},
+                    "job_type": "poster_rename",
+                    "scheduled_at": (
                         datetime.now(timezone.utc) + timedelta(seconds=60)
-                    ).isoformat()
+                    ).isoformat(),
+                }
+                try:
                     if db is not None:
-                        db.worker.enqueue_job(
-                            "jobs",
-                            {"media_items": media_items},
-                            job_type="poster_rename",
-                            scheduled_at=retry_at,
-                        )
+                        queued = db.worker.enqueue_job("jobs", **retry)
                     else:
                         with ChubDB(logger=logger, quiet=True) as tdb:
-                            tdb.worker.enqueue_job(
-                                "jobs",
-                                {"media_items": media_items},
-                                job_type="poster_rename",
-                                scheduled_at=retry_at,
-                            )
-                    log.warning(
-                        f"[JOB:{job_id}] {label} "
-                        f"({up.get('message')}); queued a poster_rename retry"
-                    )
-                    message += f" ({label}; retry queued)"
+                            queued = tdb.worker.enqueue_job("jobs", **retry)
                 except Exception as e:
-                    log.error(f"[JOB:{job_id}] Failed to enqueue upload retry: {e}")
+                    queued = {"success": False, "message": str(e)}
+                # enqueue_job reports a locked or broken jobs table in its result, not by raising.
+                if not (queued or {}).get("success"):
+                    log.error(
+                        f"[JOB:{job_id}] Failed to enqueue upload retry: "
+                        f"{(queued or {}).get('message')}"
+                    )
                     # Nothing else will retry it: fail so the worker reruns this webhook.
                     return {
                         "success": False,
@@ -385,6 +380,11 @@ def _process_webhook_job(
                         ),
                         "error_code": code,
                     }
+                log.warning(
+                    f"[JOB:{job_id}] {label} "
+                    f"({up.get('message')}); queued a poster_rename retry"
+                )
+                message += f" ({label}; retry queued)"
             return {
                 "success": True,
                 "message": message,

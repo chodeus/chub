@@ -522,9 +522,12 @@ def test_webhook_queues_a_retry_naming_the_poster_it_could_not_apply(
     tmp_path, monkeypatch
 ):
     queued = []
-    result = _refused_webhook(
-        tmp_path, monkeypatch, lambda *a, **k: queued.append(k["job_type"])
-    )
+
+    def _enqueue(table, payload, job_type, scheduled_at=None):
+        queued.append(job_type)
+        return {"success": True, "message": "Job enqueued successfully", "data": {"job_id": 7}}
+
+    result = _refused_webhook(tmp_path, monkeypatch, _enqueue)
 
     assert (result["success"], result["message"]) == (
         True,
@@ -534,14 +537,24 @@ def test_webhook_queues_a_retry_naming_the_poster_it_could_not_apply(
     assert queued == ["poster_rename"]
 
 
+def _enqueue_raises(*a, **k):
+    raise RuntimeError("database is locked")
+
+
+def _enqueue_reports_failure(*a, **k):
+    # The shape DBWorker.enqueue_job returns when its insert fails.
+    return {
+        "success": False,
+        "message": "Enqueuing the job failed: database is locked — see the server log",
+        "error_code": "ENQUEUE_JOB_ERROR",
+    }
+
+
 @_SKIP_AS_ROOT
-def test_webhook_fails_when_its_retry_cannot_be_queued(tmp_path, monkeypatch):
+@pytest.mark.parametrize("enqueue", [_enqueue_raises, _enqueue_reports_failure], ids=["raises", "returns-failure"])
+def test_webhook_fails_when_its_retry_cannot_be_queued(tmp_path, monkeypatch, enqueue):
     """Nothing else would retry the poster, so the job must not end as success."""
-
-    def _locked(*a, **k):
-        raise RuntimeError("database is locked")
-
-    result = _refused_webhook(tmp_path, monkeypatch, _locked)
+    result = _refused_webhook(tmp_path, monkeypatch, enqueue)
 
     assert (result["success"], result.get("error_code"), result["message"]) == (
         False,
