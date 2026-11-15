@@ -518,7 +518,9 @@ def test_a_move_of_an_asset_already_at_its_destination_keeps_it(tmp_path):
     _applied, placed = copy._apply_kometa(_media(), "logo", "local", _make_src(tmp_path), None)
     move = make_module(action_type="move", asset_folders=True, destination_dir=str(dest))
     applied, path = move._apply_kometa(_media(), "logo", "local", placed, None)
-    assert (applied, path, open(placed, "rb").read()) == (True, placed, b"img")
+    with open(placed, "rb") as f:
+        kept = f.read()
+    assert (applied, path, kept) == (True, placed, b"img")
 
 
 def test_kometa_requires_destination():
