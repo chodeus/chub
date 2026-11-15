@@ -21,7 +21,9 @@ from backend.util.helper import create_table, print_settings, progress
 from backend.util.paths import get_config_dir
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+from backend.util.public_error import PublicError
 from backend.util.scheduler import md_range_contains
+from backend.util.writable import nearest_existing_dir, refusal_hint, writable_error
 
 # Path to bundled borders: backend/assets/borders/<holiday>/<name>.png
 _BUNDLED_BORDERS_DIR = Path(__file__).resolve().parents[1] / "assets" / "borders"
@@ -48,6 +50,20 @@ _HOLIDAY_FOLDER_OVERRIDES = {
 }
 
 logging.getLogger("PIL").setLevel(logging.WARNING)
+
+
+class NoPosterWritten(PublicError):
+    """Every poster the run tried was refused by its destination, so the job must not report success."""
+
+    public = "no poster could be written"
+
+
+class PosterWriteRefused(Exception):
+    """The destination refused a finished poster (disk full, a folder that lets CHUB create but not replace)."""
+
+    def __init__(self, path: str, err: OSError) -> None:
+        super().__init__(f"Cannot write {path}: {err.strerror or err}")
+        self.errno = err.errno
 
 
 class BorderReplacerr(ChubModule):
@@ -179,6 +195,12 @@ class BorderReplacerr(ChubModule):
 
     def _save_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
         """Write ``out_img`` to ``renamed_file`` if the bytes changed; True if so."""
+        try:
+            return self._replace_if_changed(out_img, renamed_file)
+        except OSError as e:
+            raise PosterWriteRefused(renamed_file, e) from e
+
+    def _replace_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
         dest_dir = os.path.dirname(renamed_file)
         os.makedirs(dest_dir, exist_ok=True)
         suffix = os.path.splitext(renamed_file)[1] or ".jpg"
@@ -243,6 +265,9 @@ class BorderReplacerr(ChubModule):
                 f"No border update needed for {os.path.basename(renamed_file)}"
             )
             return False
+        except PosterWriteRefused:
+            # run() counts these apart from bad images; see _process_or_refuse.
+            raise
         except Exception as e:
             self.logger.error(
                 f"Error compositing image border on "
@@ -290,6 +315,8 @@ class BorderReplacerr(ChubModule):
                         f"No border update needed for {os.path.basename(renamed_file)}"
                     )
                     return False
+        except PosterWriteRefused:
+            raise
         except Exception as e:
             self.logger.error(
                 f"Error replacing border on {os.path.basename(original_file)}: {e}"
@@ -329,6 +356,8 @@ class BorderReplacerr(ChubModule):
                         f"No border update needed for {os.path.basename(renamed_file)}"
                     )
                     return False
+        except PosterWriteRefused:
+            raise
         except Exception as e:
             self.logger.error(
                 f"Error removing border on {os.path.basename(original_file)}: {e}"
@@ -423,6 +452,63 @@ class BorderReplacerr(ChubModule):
         manifest was supplied (standalone module run). Otherwise the
         manifest subset (webhook/adhoc imports)."""
         return bool(process_all or reset_all or manifest is None)
+
+    def _split_unwritable(self, work: list) -> Tuple[list, int, Optional[OSError]]:
+        """(work CHUB can write, posters refused, first refusal); one ERROR per refused folder."""
+        verdicts: Dict[str, Optional[OSError]] = {}
+        refused: Dict[str, int] = {}
+        kept = []
+        for item in work:
+            folder = nearest_existing_dir(os.path.dirname(item[0]["renamed_file"]))
+            if folder not in verdicts:
+                verdicts[folder] = writable_error(folder)
+            if verdicts[folder] is None:
+                kept.append(item)
+            else:
+                refused[folder] = refused.get(folder, 0) + 1
+        for folder, count in refused.items():
+            self.logger.error(
+                f"{verdicts[folder].strerror} Skipped {count} poster(s) that go there."
+            )
+        first = verdicts[next(iter(refused))] if refused else None
+        return kept, sum(refused.values()), first
+
+    def _log_write_refusals(self, refusals: List[PosterWriteRefused]) -> None:
+        """One ERROR per cause, naming the first poster it refused and how many."""
+        by_cause: Dict[Optional[int], List[PosterWriteRefused]] = {}
+        for refusal in refusals:
+            by_cause.setdefault(refusal.errno, []).append(refusal)
+        for group in by_cause.values():
+            self.logger.error(
+                f"{group[0]}. {refusal_hint(group[0].errno)} "
+                f"{len(group)} poster(s) failed this way."
+            )
+
+    def _log_completion(
+        self, tally: Dict[str, int], attempted: int, all_failed: bool
+    ) -> None:
+        """The run's verdict line: INFO with no failures, ERROR when every poster failed and the gate skipped none, else WARNING."""
+        failed, skipped = tally["failed"], tally["skipped"]
+        changed = [f"{tally[k]} {k}" for k in ("replaced", "removed") if tally[k]]
+        if all_failed:
+            self.logger.error(
+                f"Border replacerr failed: all {failed} poster(s) it tried failed, "
+                f"{skipped} skipped — see the ERROR lines above."
+            )
+        elif failed:
+            self.logger.warning(
+                f"Border replacerr finished with errors: {failed} of {attempted} "
+                f"poster(s) it tried failed, {', '.join(changed) or 'no borders changed'}, "
+                f"{skipped} skipped — see the ERROR lines above."
+            )
+        elif changed:
+            self.logger.info(
+                f"Border replacerr completed: {tally['processed']} processed, {', '.join(changed)}, {skipped} skipped."
+            )
+        else:
+            self.logger.info(
+                f"Border replacerr completed: {tally['processed']} processed, {skipped} skipped. No borders changed."
+            )
 
     def run(
         self,
@@ -593,6 +679,14 @@ class BorderReplacerr(ChubModule):
                             continue
                 work.append((asset, variant, sig))
 
+            attempted = len(work)
+            refused, refusal = 0, None
+            # Dry run writes nothing, so a read-only destination is fine there.
+            if not dry_run:
+                work, refused, refusal = self._split_unwritable(work)
+            failed += refused
+            processed += refused
+
             def _process(item: Tuple[dict, object, str]):
                 """Apply the active border op to one poster. Returns
                 (result, title, action, detail, original_file, renamed_file, sig);
@@ -647,6 +741,18 @@ class BorderReplacerr(ChubModule):
                     )
                 return result, title, action, detail, original_file, renamed_file, sig
 
+            write_refusals: List[PosterWriteRefused] = []
+
+            def _process_or_refuse(item: Tuple[dict, object, str]):
+                """_process, with a refused write kept for the verdict and returned as a failure."""
+                try:
+                    return _process(item)
+                except PosterWriteRefused as e:
+                    self.logger.debug(str(e))
+                    write_refusals.append(e)
+                    asset, _variant, sig = item
+                    return None, asset["title"], "", "", asset["original_file"], asset["renamed_file"], sig
+
             # PIL releases the GIL during decode/resize/composite/encode, so a
             # thread pool gives real parallelism on the CPU-bound encode without
             # the pickling cost of processes (and self.logger keeps working).
@@ -691,7 +797,7 @@ class BorderReplacerr(ChubModule):
                         original_file,
                         renamed_file,
                         sig,
-                    ) in pool.map(_process, work):
+                    ) in pool.map(_process_or_refuse, work):
                         bar.update(1)
                         if result:
                             if action == "removed":
@@ -727,6 +833,7 @@ class BorderReplacerr(ChubModule):
                         if total_work and (done % 25 == 0 or done == total_work):
                             self._report_progress(int(done / total_work * 100))
 
+            self._log_write_refusals(write_refusals)
             if new_states:
                 db.border.bulk_record(new_states)
 
@@ -764,29 +871,31 @@ class BorderReplacerr(ChubModule):
             for row in summary_table:
                 self.logger.info(f"{row[0]:<20}: {row[1]}")
 
-            if replaced or removed:
-                action = []
-                if replaced:
-                    action.append(f"{replaced} replaced")
-                if removed:
-                    action.append(f"{removed} removed")
-                self.logger.info(
-                    f"Border replacerr completed: {processed} processed, {', '.join(action)}, {skipped} skipped."
-                )
-            else:
-                self.logger.info(
-                    f"Border replacerr completed: {processed} processed, {skipped} skipped. No borders changed."
-                )
+            refused += len(write_refusals)
+            refusal = refusal or next(iter(write_refusals), None)
+            all_failed = bool(failed) and failed == attempted and not gate_skipped
+            self._log_completion(
+                {
+                    "processed": processed,
+                    "replaced": replaced,
+                    "removed": removed,
+                    "skipped": skipped,
+                    "failed": failed,
+                },
+                attempted,
+                all_failed,
+            )
             self.logger.info(
                 f"   → {processed} processed, {replaced} replaced, {removed} removed, "
                 f"{skipped} skipped, {failed} failed"
             )
-            if failed:
-                self.logger.warning(
-                    f"{failed} poster(s) failed to composite/replace/remove — "
-                    "see the ERROR lines above for details."
-                )
             self.logger.info("")
+
+            # Before set_status: nothing was written, so a holiday switch stays pending.
+            if all_failed and refused == failed:
+                raise NoPosterWritten(
+                    f"All {failed} poster(s) border replacerr tried were refused by their destination"
+                ) from refusal
 
             db.holiday.set_status(active_holiday)
 

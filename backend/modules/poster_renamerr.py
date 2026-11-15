@@ -44,6 +44,7 @@ from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
 from backend.util.public_error import failure_text
 from backend.util.upload_posters import PosterUploader, upload_enabled_instances
+from backend.util.writable import writable_error
 
 # Process-global lock serializing the destructive poster_cache clear()+rebuild.
 # The scheduled run() and the webhook-driven run_poster_rename_adhoc() run on
@@ -311,6 +312,10 @@ class PosterRenamerr(ChubModule):
         dest = self.config.destination_dir
         if os.path.isdir(dest):
             self.logger.debug(f"Destination directory already exists: {dest}")
+            # An existing folder may belong to another user (a mount Docker made as root).
+            refusal = None if getattr(self.config, "dry_run", False) else writable_error(dest)
+            if refusal:
+                raise refusal
             return
 
         self.logger.info(f"Creating destination directory: {dest}")
@@ -2106,8 +2111,10 @@ class PosterRenamerr(ChubModule):
         except KeyboardInterrupt:
             self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
-        except Exception:
-            self.logger.error("\n\nAn error occurred:\n", exc_info=True)
+        except Exception as e:
+            self.logger.error(f"\n\nAn error occurred: {e}\n", exc_info=True)
+            # Propagate so the run is recorded as failed, as sync_gdrive does.
+            raise
         finally:
             # Mark any declared-but-unreached phases skipped (e.g. an early
             # failure) so the Jobs timeline doesn't leave them stuck pending.

@@ -1396,3 +1396,74 @@ def test_ensure_destination_dir_tolerates_a_concurrent_create(tmp_path):
     m.ensure_destination_dir()
     m.ensure_destination_dir()  # already there now — must not raise
     assert dest.is_dir()
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_ensure_destination_dir_refuses_a_mount_it_cannot_write(tmp_path):
+    """An existing but root-owned mount used to pass, so every poster failed on its own."""
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = make_module()
+    m.config = SimpleNamespace(destination_dir=str(dest))
+    dest.chmod(0o555)
+    try:
+        with pytest.raises(PermissionError) as raised:
+            m.ensure_destination_dir()
+        st = os.stat(dest)
+    finally:
+        dest.chmod(0o755)
+    assert raised.value.strerror == (
+        f"Cannot create files in {dest}: Permission denied (CHUB runs as "
+        f"{os.getuid()}:{os.getgid()}; the folder is owned by {st.st_uid}:{st.st_gid}, "
+        "dr-xr-xr-x). Check the volume's host path, and that the folder's owner "
+        "matches PUID/PGID."
+    )
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_ensure_destination_dir_lets_a_dry_run_use_a_read_only_mount(tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = make_module()
+    m.config = SimpleNamespace(destination_dir=str(dest), dry_run=True)
+    dest.chmod(0o555)
+    try:
+        m.ensure_destination_dir()
+    finally:
+        dest.chmod(0o755)
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_run_fails_the_job_when_the_destination_cannot_be_written(tmp_path, monkeypatch):
+    """run() used to log the error and return, so the job showed success."""
+    from tests.conftest import StubLogger
+
+    class _StubDB:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("backend.modules.poster_renamerr.ChubDB", _StubDB)
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = make_module()
+    m.logger = StubLogger()
+    m.config = SimpleNamespace(
+        destination_dir=str(dest), apply_method="kometa", log_level="info"
+    )
+    dest.chmod(0o555)
+    try:
+        with pytest.raises(PermissionError):
+            m.run()
+    finally:
+        dest.chmod(0o755)
+    [logged] = m.logger.messages["error"]
+    assert logged.startswith(
+        f"\n\nAn error occurred: [Errno 13] Cannot create files in {dest}: "
+        "Permission denied"
+    )
