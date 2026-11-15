@@ -1,9 +1,19 @@
 """Name a folder CHUB cannot create files in, with what a user needs to fix the volume."""
 
+import errno
 import os
 import stat
 import tempfile
 from typing import Optional
+
+_OWNER_HINT = "Check the volume's host path, and that the folder's owner matches PUID/PGID."
+_HINTS = {
+    errno.EACCES: _OWNER_HINT,
+    errno.EPERM: _OWNER_HINT,
+    errno.EROFS: "The volume is mounted read-only; set its access mode to read/write.",
+    errno.ENOSPC: "The disk is full; free some space on it.",
+    errno.EDQUOT: "The disk quota is used up; free some space or raise the quota.",
+}
 
 
 def nearest_existing_dir(path: str) -> str:
@@ -31,8 +41,10 @@ def _describe(folder: str, e: OSError) -> str:
         owner = f"owned by {st.st_uid}:{st.st_gid}, {stat.filemode(st.st_mode)}"
     except OSError:
         owner = "of unknown owner"
+    hint = _HINTS.get(
+        e.errno, "Check the volume's host path, and that its disk or mount is working."
+    )
     return (
         f"Cannot create files in {folder}: {e.strerror or e} (CHUB runs as "
-        f"{os.getuid()}:{os.getgid()}; the folder is {owner}). Check the volume's "
-        "host path, and that the folder's owner matches PUID/PGID."
+        f"{os.getuid()}:{os.getgid()}; the folder is {owner}). {hint}"
     )

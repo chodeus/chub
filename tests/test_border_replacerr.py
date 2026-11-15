@@ -996,7 +996,7 @@ def test_every_composite_failing_is_an_error_but_not_a_failed_job(tmp_path, monk
 
 
 def test_a_destination_refusing_every_write_fails_the_job(tmp_path, monkeypatch):
-    """A full disk passes the folder check (an empty file needs no space), then refuses each poster."""
+    """A destination that passes the folder check, then refuses each poster (a disk filling mid-run)."""
     dest = tmp_path / "dest"
     renamed = [dest / "a" / "poster.jpg", dest / "b" / "poster.jpg"]
     br, encodes, holiday_saves = _colour_run(tmp_path, monkeypatch, renamed)

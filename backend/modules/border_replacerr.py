@@ -474,7 +474,7 @@ class BorderReplacerr(ChubModule):
     def _log_completion(
         self, tally: Dict[str, int], attempted: int, all_failed: bool
     ) -> None:
-        """The run's verdict line: INFO with no failures, ERROR when no poster is in place, else WARNING."""
+        """The run's verdict line: INFO with no failures, ERROR when every poster it tried failed, else WARNING."""
         failed, skipped = tally["failed"], tally["skipped"]
         changed = [f"{tally[k]} {k}" for k in ("replaced", "removed") if tally[k]]
         if all_failed:
