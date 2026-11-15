@@ -190,6 +190,7 @@ const CORE_SETTINGS_SCHEMA = [
                         label: 'Location',
                         type: 'dir',
                         required: true,
+                        checkWritable: true,
 
                         description: 'Local directory to sync with the specified Google Drive ID.',
                     },

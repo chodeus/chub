@@ -5,7 +5,7 @@
  * server-side directories and systemAPI.createDirectory to create new ones.
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { systemAPI } from '../../../utils/api/system.js';
 import { FieldWrapper, FieldLabel, FieldDescription } from '../primitives';
 import Spinner from '../../ui/Spinner.jsx';
@@ -42,14 +42,16 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     const [activeRoot, setActiveRoot] = useState(null);
     // Destinations only: the probe creates a file, which a cloud mount may upload.
     const checkWrite = !!field.checkWritable;
+    // Only the latest load sets state: Go up stays clickable while a slow probe is out.
+    const latestLoadRef = useRef(0);
 
     const loadDirectory = useCallback(
         async (rawPath, { skipCache = false } = {}) => {
             // Roots arrive trimmed; a saved "/media/" must equal the root "/media" or Go up escapes it.
             const path = rawPath.replace(/(.)\/+$/, '$1');
+            const load = ++latestLoadRef.current;
             setLoading(true);
             setError(null);
-            setWriteError(null);
             try {
                 // listDirectory caches for 5 minutes: a refresh after Create
                 // (any filesystem change) must pass skipCache: true.
@@ -57,15 +59,17 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     ...(skipCache ? { useCache: false } : {}),
                     checkWrite,
                 });
+                if (load !== latestLoadRef.current) return;
                 const dirs = result?.data?.directories || result?.data || [];
                 setEntries(Array.isArray(dirs) ? dirs : []);
                 setWriteError(result?.data?.write_error ?? null);
                 setCurrentPath(path);
             } catch (err) {
+                if (load !== latestLoadRef.current) return;
                 setError(err.message || 'Failed to load directory');
                 setEntries([]);
             } finally {
-                setLoading(false);
+                if (load === latestLoadRef.current) setLoading(false);
             }
         },
         [checkWrite]

@@ -1,17 +1,25 @@
 /** Guards the start directory, the Go up boundary, and the destination write warning. */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 
-const api = vi.hoisted(() => ({ listed: [], roots: [], probes: [], dirs: {}, refused: {} }));
+const api = vi.hoisted(() => ({
+    listed: [],
+    roots: [],
+    probes: [],
+    dirs: {},
+    refused: {},
+    held: {},
+}));
 
 vi.mock('../../../utils/api/system.js', () => ({
     systemAPI: {
         listAllowedRoots: () => Promise.resolve({ data: { roots: api.roots } }),
-        listDirectory: (path, options = {}) => {
+        listDirectory: async (path, options = {}) => {
             api.listed.push(path);
             api.probes.push(!!options.checkWrite);
-            return Promise.resolve({
+            await api.held[path];
+            return {
                 data: { directories: api.dirs[path] || [], write_error: api.refused[path] ?? null },
-            });
+            };
         },
         createDirectory: () => Promise.resolve(),
     },
@@ -28,7 +36,16 @@ describe('DirPickerField', () => {
         api.roots = ['/data', '/media'];
         api.dirs = {};
         api.refused = {};
+        api.held = {};
     });
+
+    const hold = path => {
+        let release;
+        api.held[path] = new Promise(resolve => {
+            release = resolve;
+        });
+        return release;
+    };
 
     const REFUSAL =
         'Cannot create files in /kometa: Permission denied (CHUB runs as 1000:100; the folder ' +
@@ -45,16 +62,36 @@ describe('DirPickerField', () => {
         expect(api.probes).toEqual([true]);
     });
 
-    it('drops the warning on a folder CHUB can write', async () => {
+    it('keeps the warning until the next folder answers, then drops it there', async () => {
         api.roots = ['/kometa'];
         api.dirs['/kometa'] = ['config'];
         api.refused['/kometa'] = REFUSAL;
+        const release = hold('/kometa/config');
         render(<DirPickerField field={destination} value="/kometa" onChange={() => {}} />);
-        await screen.findByRole('alert');
+        const warning = await screen.findByRole('alert');
 
         fireEvent.click(screen.getByRole('button', { name: /config$/ }));
+        expect(screen.getByRole('alert')).toBe(warning);
+        await act(async () => release());
 
         expect(await screen.findByTitle('/kometa/config')).toBeInTheDocument();
+        expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('ignores a slow folder answer once the user has gone up', async () => {
+        api.roots = ['/kometa'];
+        api.dirs['/kometa/a'] = ['b'];
+        api.refused['/kometa/a/b'] = REFUSAL;
+        const release = hold('/kometa/a/b');
+        render(<DirPickerField field={destination} value="/kometa/a" onChange={() => {}} />);
+        await screen.findByTitle('/kometa/a');
+
+        fireEvent.click(screen.getByRole('button', { name: /b$/ }));
+        fireEvent.click(screen.getByRole('button', { name: /\.\.$/ }));
+        expect(await screen.findByTitle('/kometa')).toBeInTheDocument();
+        await act(async () => release());
+
+        expect(screen.getByTitle('/kometa')).toBeInTheDocument();
         expect(screen.queryByRole('alert')).toBeNull();
     });
 

@@ -269,8 +269,8 @@ def system_disk(logger: Any = Depends(get_logger)) -> JSONResponse:
     summary="List directory contents",
     description=(
         "Lists directories within the specified path for configuration and file management. "
-        "With check_write=true, CHUB tries to create a file there and reports why it could not "
-        "in write_error; never set it for folders CHUB only reads, such as cloud mounts."
+        "With check_write=true, CHUB creates and deletes a temporary file there: writable comes "
+        "from that create and write_error says why it failed. Set it only in destination pickers."
     ),
     responses={
         200: {
@@ -327,7 +327,12 @@ def list_directory(
                 "Invalid path",
                 code="INVALID_PATH",
                 status_code=400,
-                data={"directories": [], "exists": False, "writable": False},
+                data={
+                    "directories": [],
+                    "exists": False,
+                    "writable": False,
+                    "write_error": None,
+                },
             )
 
         dirs = [

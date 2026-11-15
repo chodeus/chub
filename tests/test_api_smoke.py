@@ -410,10 +410,11 @@ def _directory_client(monkeypatch, app_with_router, folder):
 def test_directory_names_why_chub_cannot_write_the_folder(
     monkeypatch, app_with_router, tmp_path
 ):
-    """The destination picker's warning: a mount Docker made as root passed os.access as root-owned 755."""
+    """The destination picker's warning comes from a real create, even where os.access says yes."""
     folder = tmp_path / "kometa"
     folder.mkdir()
     client = _directory_client(monkeypatch, app_with_router, folder)
+    monkeypatch.setattr(system_router.os, "access", lambda *_a, **_k: True)
     folder.chmod(0o555)
     try:
         resp = client.get(

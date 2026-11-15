@@ -1,12 +1,25 @@
 /** Guards the open editor against a removal above it, and the row's button semantics. */
 import { useState } from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { UIStateProvider } from '../../../contexts/UIStateContext.jsx';
+import { SETTINGS_SCHEMA } from '../../../utils/constants/settings_schema.js';
 
 vi.mock('../../../hooks/useInstancesData', () => ({
     useInstancesData: () => ({ instancesData: {} }),
 }));
 vi.mock('../../../contexts/ToastContext.jsx', () => ({
     useToast: () => ({ success() {}, error() {} }),
+}));
+const probes = vi.hoisted(() => []);
+vi.mock('../../../utils/api/system.js', () => ({
+    systemAPI: {
+        listAllowedRoots: () => Promise.resolve({ data: { roots: ['/kometa'] } }),
+        listDirectory: (path, options = {}) => {
+            probes.push([path, !!options.checkWrite]);
+            return Promise.resolve({ data: { directories: [] } });
+        },
+        createDirectory: () => Promise.resolve(),
+    },
 }));
 
 const { ArrayObjectField } = await import('./ArrayObjectField.jsx');
@@ -140,5 +153,23 @@ describe('ArrayObjectField', () => {
 
         expect(tagInputOf('b-label')).toHaveValue('kids');
         expect(tagInputOf('c-label')).toHaveValue('');
+    });
+
+    it("opens a GDrive location's picker with the schema's write check", async () => {
+        const gdriveList = SETTINGS_SCHEMA.find(m => m.key === 'sync_gdrive').fields.find(
+            f => f.key === 'gdrive_list'
+        );
+        render(
+            <ArrayObjectField
+                field={gdriveList}
+                value={[{ name: 'Posters', id: 'abc', location: '/kometa' }]}
+                onChange={() => {}}
+            />,
+            { wrapper: UIStateProvider }
+        );
+
+        fireEvent.click(screen.getByTitle('Browse folders'));
+
+        await waitFor(() => expect(probes).toEqual([['/kometa', true]]));
     });
 });
