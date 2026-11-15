@@ -2,9 +2,7 @@
 
 import json
 import os
-import shutil
 import sqlite3
-import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.util.base_module import ChubModule
@@ -18,11 +16,19 @@ from backend.util.plex import PlexClient
 from backend.util.public_error import PublicError, failure_text
 from backend.util.fanart import FanartClient
 from backend.util.release_readiness import is_release_ready
+from backend.util.file_ops import (
+    copy_into_place,
+    link_into_place,
+    move_into_place,
+    symlink_into_place,
+)
 from backend.util.writable import (
     WriteRefused,
     destination_refused,
     ensure_writable_dir,
+    log_kept_sources,
     log_refusals,
+    note_kept_source,
 )
 
 # The additional (non-poster) asset types this module manages. Banner is
@@ -636,8 +642,10 @@ class AssetRenamerr(ChubModule):
         file: Optional[str],
         url: Optional[str],
         refusals: Optional[List[WriteRefused]] = None,
+        kept_sources: Optional[List[OSError]] = None,
     ) -> Tuple[bool, str]:
-        """Place one asset in the Kometa folder by action_type; with ``refusals``, a destination refusal goes there, logged at DEBUG."""
+        """Place one asset in the Kometa folder by action_type; with ``refusals``/``kept_sources``, a destination
+        refusal or a moved source that stayed goes there, logged at DEBUG."""
         dest_root = self.config.destination_dir
         if not dest_root:
             return False, "no destination_dir configured for Kometa apply"
@@ -692,7 +700,7 @@ class AssetRenamerr(ChubModule):
         if not self.config.dry_run:
             try:
                 os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                self._file_op(src, new_path, self.config.action_type)
+                kept = self._file_op(src, new_path, self.config.action_type)
             except OSError as exc:
                 line = f"Asset file op failed for {src} -> {new_path}: {exc}"
                 if refusals is not None and destination_refused(exc, new_path):
@@ -701,6 +709,8 @@ class AssetRenamerr(ChubModule):
                 else:
                     self.logger.warning(line)
                 return False, failure_text("file op", exc)
+            if kept is not None:
+                note_kept_source(self.logger, kept, kept_sources)
         return True, new_path
 
     def apply_chosen_asset(
@@ -761,38 +771,19 @@ class AssetRenamerr(ChubModule):
             )
         return applied, detail
 
-    def _file_op(self, src: str, dest: str, action_type: str) -> None:
+    def _file_op(self, src: str, dest: str, action_type: str) -> Optional[OSError]:
+        """Place ``src`` at ``dest`` by action_type; returns why a moved source stayed, when it did."""
+        kept = None
         if action_type == "move":
-            shutil.move(src, dest)
-        else:
-            # Short per-thread temp beside dest, never dest: a failed op leaves dest whole, a copy
-            # chmods only its own file, and "xb" never follows a path already at tmp.
-            tmp = os.path.join(
-                os.path.dirname(dest), f".chub-tmp-{os.getpid()}-{threading.get_ident()}"
-            )
-            try:
-                if action_type == "hardlink":
-                    os.link(src, tmp)
-                elif action_type == "symlink":
-                    os.symlink(src, tmp)
-                else:  # copy (default)
-                    with open(src, "rb") as fsrc, open(tmp, "xb") as fdst:
-                        shutil.copyfileobj(fsrc, fdst)
-                    shutil.copymode(src, tmp)
-                os.replace(tmp, dest)
-            except OSError:
-                self._cleanup(tmp)
-                raise
+            kept = move_into_place(src, dest)
+        elif action_type == "hardlink":
+            link_into_place(src, dest)
+        elif action_type == "symlink":
+            symlink_into_place(src, dest)
+        else:  # copy (default)
+            copy_into_place(src, dest)
         self.logger.debug(f"[{action_type.upper()}] {dest} ← {src}")
-
-    def _cleanup(self, path: Optional[str]) -> None:
-        if path and os.path.exists(path):
-            try:
-                os.remove(path)
-            except OSError as exc:
-                # Best-effort cleanup of an internally-generated temp file;
-                # non-fatal, but leave a trace so accumulation is explainable.
-                self.logger.debug(f"Temp file cleanup failed: {path} — {exc}")
+        return kept
 
     # ----- orchestration --------------------------------------------------
 
@@ -924,6 +915,7 @@ class AssetRenamerr(ChubModule):
         # exception it's reclaimed on GC, which is safe for a read connection.
         poster_conn = db.poster.open_read_connection()
         refusals: List[WriteRefused] = []
+        kept_sources: List[OSError] = []
         attempted = 0
         for idx, media in enumerate(all_media, 1):
             if self.is_cancelled():
@@ -1099,7 +1091,7 @@ class AssetRenamerr(ChubModule):
                 else:
                     attempted += 1
                     applied, detail = self._apply_kometa(
-                        media, image_type, source, file, url, refusals
+                        media, image_type, source, file, url, refusals, kept_sources
                     )
 
                 # On a dry run, NEVER persist match state: media_asset_matches
@@ -1145,6 +1137,7 @@ class AssetRenamerr(ChubModule):
                         f"{media.get('title')} -> {detail}"
                     )
         poster_conn.close()
+        log_kept_sources(self.logger, kept_sources, "asset")
         log_refusals(self.logger, refusals, "asset")
         if refusals and len(refusals) == attempted:
             raise NoAssetWritten(

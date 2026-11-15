@@ -4,7 +4,7 @@ import { configAPI } from '../../../utils/api/config.js';
 import { modulesAPI } from '../../../utils/api/modules.js';
 import { SETTINGS_MODULES } from '../../../utils/constants/settings_schema.js';
 import { useModuleSchema } from '../../../hooks/useModuleSchema.js';
-import { shouldShowField } from '../../../utils/forms/conditionalFields.js';
+import { resolveCheckWritable, shouldShowField } from '../../../utils/forms/conditionalFields.js';
 import { useInstancesData } from '../../../hooks/useInstancesData.js';
 import { FieldRegistry } from '../../../components/fields/FieldRegistry.jsx';
 import { ConfigProvider, useConfig } from '../../../contexts/ConfigContext.jsx';
@@ -18,7 +18,7 @@ import { PageHeader } from '../../../components/ui/PageHeader';
 import Spinner from '../../../components/ui/Spinner.jsx';
 
 /**
- * Memoized field component — only re-renders when value/key/disabled change.
+ * Memoized field component — only re-renders when value/key/checkWritable/disabled change.
  */
 const MemoizedFieldComponent = React.memo(
     ({ field, value, onChange, ...props }) => {
@@ -35,6 +35,7 @@ const MemoizedFieldComponent = React.memo(
     (prevProps, nextProps) =>
         prevProps.value === nextProps.value &&
         prevProps.field.key === nextProps.field.key &&
+        prevProps.field.checkWritable === nextProps.field.checkWritable &&
         prevProps.disabled === nextProps.disabled &&
         prevProps.highlightInvalid === nextProps.highlightInvalid
 );
@@ -123,9 +124,13 @@ const ModuleSettingsContent = ({ moduleKey }) => {
     const sections = useMemo(() => {
         if (!activeModule?.fields) return [];
         const moduleData = formData[activeModule.key] || {};
-        const visible = activeModule.fields.filter(
-            f => f.key !== 'dry_run' && shouldShowField(f, moduleData, conditionApiData)
-        );
+        const visible = activeModule.fields
+            .filter(f => f.key !== 'dry_run' && shouldShowField(f, moduleData, conditionApiData))
+            .map(f =>
+                Array.isArray(f.checkWritable)
+                    ? { ...f, checkWritable: resolveCheckWritable(f, moduleData, conditionApiData) }
+                    : f
+            );
         const groups = [];
         const idx = new Map();
         for (const f of visible) {

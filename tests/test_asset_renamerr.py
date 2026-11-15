@@ -977,6 +977,33 @@ def test_a_lock_on_a_vanished_file_still_takes_the_runs_match(db, monkeypatch, t
     assert (row["matched_file"], row["match_status"]) == (str(scanned), "applied")
 
 
+@_SKIP_AS_ROOT
+def test_a_chosen_asset_moved_from_a_read_only_folder_is_applied_and_warns_at_once(db, tmp_path):
+    from tests.conftest import StubLogger
+
+    dest, picks = tmp_path / "kometa", tmp_path / "picks"
+    dest.mkdir()
+    picks.mkdir()
+    logo = picks / "Dune - Logo.png"
+    logo.write_bytes(b"png")
+    m = make_module(destination_dir=str(dest), action_type="move")
+    m.logger = StubLogger()
+    dune = {"id": 1, "title": "Dune", "year": 2021, "folder": "Dune (2021)"}
+    picks.chmod(0o555)
+    try:
+        applied, detail = m.apply_chosen_asset(db, "media", dune, "logo", str(logo))
+    finally:
+        picks.chmod(0o755)
+    target = dest / "Dune (2021)_logo.png"
+    assert (applied, detail, target.read_bytes(), logo.exists()) == (True, str(target), b"png", True)
+    assert db.media_asset_matches.get_one("media", 1, "logo")["match_status"] == "applied"
+    assert m.logger.messages["warning"] == [
+        f"Moved a file but could not delete its source {logo}: Permission denied. "
+        "Set File Action to copy, or let CHUB delete files in the source folder "
+        "(a read/write mount, owned by PUID/PGID)."
+    ]
+
+
 def test_kometa_season_logo_naming(tmp_path):
     """A show season logo must use Kometa's Season##_logo form (PR #2681)."""
     dest = tmp_path / "assets"

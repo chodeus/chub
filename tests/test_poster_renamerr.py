@@ -1567,6 +1567,89 @@ def test_chained_assets_on_writable_folders_notify_both_modules(tmp_path, monkey
     assert sent == ["poster_renamerr", "asset_renamerr"]
 
 
+_KEPT_HINT = (
+    "Set File Action to copy, or let CHUB delete files in the source folder "
+    "(a read/write mount, owned by PUID/PGID)."
+)
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_move_from_a_read_only_source_places_both_and_warns_once_per_module(tmp_path, monkeypatch):
+    m, _sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "move"
+    m.full_config.asset_renamerr.action_type = "move"
+    src = tmp_path / "src"
+    src.chmod(0o555)
+    try:
+        m.run()
+        first_run = list(m.logger.messages["warning"])
+        m.run()
+    finally:
+        src.chmod(0o755)
+    assert first_run == [
+        f"Moved a file but could not delete its source {src}/Dune (2021) {{tmdb-438631}}.jpg: "
+        f"Permission denied. {_KEPT_HINT} 1 poster(s) were placed with their source kept this way.",
+        f"Moved a file but could not delete its source {src}/Dune (2021) {{tmdb-438631}} - Logo.png: "
+        f"Permission denied. {_KEPT_HINT} 1 asset(s) were placed with their source kept this way.",
+    ]
+    assert m.logger.messages["warning"] == first_run, "the next run must not move them again"
+    assert m.logger.messages["error"] == []
+    assert [p.read_bytes() for p in (posters / "Dune (2021).jpg", logos / "Dune (2021)_logo.png")] == [
+        b"poster",
+        b"logo",
+    ]
+    assert sorted(os.listdir(src)) == [
+        "Dune (2021) {tmdb-438631} - Logo.png",
+        "Dune (2021) {tmdb-438631}.jpg",
+    ]
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_webhook_move_from_a_read_only_source_is_renamed_and_warned_once(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "move"
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        dune = db.media.get_by_id(1)
+    src = tmp_path / "src"
+    src.chmod(0o555)
+    try:
+        result = m.run_poster_rename_adhoc([dune])
+    finally:
+        src.chmod(0o755)
+    assert (result["success"], result["stats"]["renamed_items"]) == (True, 1)
+    assert m.logger.messages["warning"] == [
+        f"Moved a file but could not delete its source {src}/Dune (2021) {{tmdb-438631}}.jpg: "
+        f"Permission denied. {_KEPT_HINT} 1 poster(s) were placed with their source kept this way."
+    ]
+    assert (posters / "Dune (2021).jpg").read_bytes() == b"poster"
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_single_poster_moved_from_a_read_only_folder_is_placed_and_warns_at_once(tmp_path):
+    from tests.conftest import StubLogger
+
+    picks, posters = tmp_path / "picks", tmp_path / "posters"
+    picks.mkdir()
+    posters.mkdir()
+    src = picks / "Dune (2021).jpg"
+    src.write_bytes(b"poster")
+    dest = posters / "Dune (2021).jpg"
+    m = PosterRenamerr(logger=StubLogger())
+    picks.chmod(0o555)
+    try:
+        placed = m.process_file(str(src), str(dest), "move")
+    finally:
+        picks.chmod(0o755)
+    assert (placed, dest.read_bytes(), src.exists()) == (True, b"poster", True)
+    assert m.logger.messages["warning"] == [
+        f"Moved a file but could not delete its source {src}: Permission denied. {_KEPT_HINT}"
+    ]
+    assert m.logger.messages["error"] == []
+
+
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
 def test_posters_written_before_a_chained_asset_refusal_are_still_reported(tmp_path, monkeypatch):
     """The root asset folder passes its check; the title folder then refuses the only logo."""
