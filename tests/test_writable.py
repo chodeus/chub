@@ -28,7 +28,7 @@ def test_nearest_existing_dir_climbs_past_missing_folders_and_files(tmp_path):
     "code,strerror,hint",
     [
         (errno.EACCES, "Permission denied", "Check the volume's host path, and that the folder's owner matches PUID/PGID."),
-        (errno.EROFS, "Read-only file system", "The volume is mounted read-only; set its access mode to read/write."),
+        (errno.EROFS, "Read-only file system", "The folder is on a read-only mount: set the volume to read/write, or check the disk if it went read-only on errors."),
         (errno.ENOSPC, "No space left on device", "The disk is full; free some space on it."),
         (errno.ENOTCONN, "Transport endpoint is not connected", "Check the volume's host path, and that its disk or mount is working."),
     ],

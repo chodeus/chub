@@ -10,7 +10,10 @@ _OWNER_HINT = "Check the volume's host path, and that the folder's owner matches
 _HINTS = {
     errno.EACCES: _OWNER_HINT,
     errno.EPERM: _OWNER_HINT,
-    errno.EROFS: "The volume is mounted read-only; set its access mode to read/write.",
+    errno.EROFS: (
+        "The folder is on a read-only mount: set the volume to read/write, "
+        "or check the disk if it went read-only on errors."
+    ),
     errno.ENOSPC: "The disk is full; free some space on it.",
     errno.EDQUOT: "The disk quota is used up; free some space or raise the quota.",
 }
