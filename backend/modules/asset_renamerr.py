@@ -711,8 +711,8 @@ class AssetRenamerr(ChubModule):
 
         target_id = media.get("id")
         if target_id is not None:
-            # Lock before applying, whatever the outcome: a run that read this row unlocked then leaves
-            # it alone, and a failed apply (e.g. Plex briefly unreachable) is retried with this file.
+            # Lock before applying, whatever the outcome: the run loop's mid-run lock check sees the pick
+            # while its file lands, and a failed apply (e.g. Plex briefly unreachable) is retried with this file.
             db.media_asset_matches.set_user_confirmed(
                 target_kind, target_id, image_type, True
             )
