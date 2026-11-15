@@ -5,6 +5,7 @@ Covers the routing safety net: an unknown job type returns a structured error
 than propagating out of the worker.
 """
 
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -417,6 +418,181 @@ def test_adhoc_rename_kometa_notifies_on_write(monkeypatch):
         _outcome_renamer(apply_method="kometa"), [{}], _logger(), 1
     )
     assert len(notes) == 1
+
+
+_SKIP_AS_ROOT = pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+
+
+def _refusing_renamer(tmp_path, monkeypatch):
+    """A kometa renamer whose border step is a real manifest-scoped border run into a read-only folder."""
+    from tests.test_border_replacerr import _colour_run
+
+    kometa = tmp_path / "kometa"
+    kometa.mkdir()
+    br, _encodes, _saves = _colour_run(
+        tmp_path, monkeypatch, [kometa / "Daredevil (2015)" / "poster.jpg"]
+    )
+    renamer = _outcome_renamer(apply_method="kometa")
+    renamer.config.run_border_replacerr = True
+    renamer.run_poster_rename_adhoc = lambda items: {
+        "success": True,
+        "output": {"show": [{"title": "Marvel's Daredevil"}]},
+        "manifest": {"media_cache": [1], "collections_cache": []},
+    }
+    # Mirrors PosterRenamerr.run_border_replacerr: border.run(manifest, process_all=False).
+    renamer.run_border_replacerr = lambda manifest: br.run(manifest, process_all=False)
+    return renamer, kometa
+
+
+@_SKIP_AS_ROOT
+def test_poster_rename_job_fails_with_the_reason_when_its_folder_refuses(
+    tmp_path, monkeypatch
+):
+    """The poster never landed, so the job fails with the real reason and nothing is notified."""
+    renamer, kometa = _refusing_renamer(tmp_path, monkeypatch)
+    notes = []
+    monkeypatch.setattr(
+        "backend.util.notification.NotificationManager", _outcome_notifier(notes)
+    )
+    monkeypatch.setattr(
+        "backend.modules.poster_renamerr.PosterRenamerr", lambda logger: renamer
+    )
+    kometa.chmod(0o555)
+    try:
+        res = jp._process_poster_rename_job({"media_items": [{}]}, _logger(), 1)
+    finally:
+        kometa.chmod(0o755)
+
+    assert (res["success"], res.get("error_code"), res.get("message")) == (
+        False,
+        "POST_RENAME_FAILED",
+        "Poster apply failed: permission denied — see the server log",
+    )
+    assert notes == []
+
+
+def _refused_webhook(tmp_path, monkeypatch, enqueue):
+    """A real webhook job for one show whose kometa folder refuses its poster."""
+    from types import SimpleNamespace as NS
+
+    renamer, kometa = _refusing_renamer(tmp_path, monkeypatch)
+    stored = [{"title": "Marvel's Daredevil", "tvdb_id": 281662, "season_number": None}]
+    db = NS(
+        media=NS(get_by_title_year_instance=lambda *a: stored),
+        plex=NS(get_all=lambda: []),
+        worker=NS(enqueue_job=enqueue),
+    )
+
+    class _Processor:
+        def __init__(self, logger):
+            pass
+
+        def _validate_webhook(self, data, client):
+            info = {"type": "sonarr", "name": "Sonarr", "url": "u", "api": "k"}
+            return {"success": True, "instance_info": info, "media_id": 1}
+
+        def wait_for_plex_availability(self, *a, **k):
+            pass
+
+    arr = NS(
+        is_connected=lambda: True,
+        get_show=lambda mid: {"title": "Marvel's Daredevil", "year": 2015},
+        session=NS(close=lambda: None),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.WebhookProcessor", _Processor)
+    monkeypatch.setattr("backend.util.arr.create_arr_client", lambda *a: arr)
+    monkeypatch.setattr(
+        "backend.modules.poster_renamerr.PosterRenamerr", lambda **k: renamer
+    )
+    monkeypatch.setattr(
+        "backend.util.notification.NotificationManager", _outcome_notifier([])
+    )
+    monkeypatch.setattr(jp, "_process_media_record", lambda media, typ: [media])
+    monkeypatch.setattr(jp, "_update_media_record", lambda *a: None)
+    monkeypatch.setattr(jp, "_instance_force_reupload", lambda info: False)
+    kometa.chmod(0o555)
+    try:
+        return jp._process_webhook_job({"webhook_data": {}}, _logger(), 1, db)
+    finally:
+        kometa.chmod(0o755)
+
+
+@_SKIP_AS_ROOT
+def test_webhook_queues_a_retry_naming_the_poster_it_could_not_apply(
+    tmp_path, monkeypatch
+):
+    queued = []
+    result = _refused_webhook(
+        tmp_path, monkeypatch, lambda *a, **k: queued.append(k["job_type"])
+    )
+
+    assert (result["success"], result["message"]) == (
+        True,
+        "Webhook processed successfully: Marvel's Daredevil "
+        "(poster not applied; retry queued)",
+    )
+    assert queued == ["poster_rename"]
+
+
+@_SKIP_AS_ROOT
+def test_webhook_fails_when_its_retry_cannot_be_queued(tmp_path, monkeypatch):
+    """Nothing else would retry the poster, so the job must not end as success."""
+
+    def _locked(*a, **k):
+        raise RuntimeError("database is locked")
+
+    result = _refused_webhook(tmp_path, monkeypatch, _locked)
+
+    assert (result["success"], result.get("error_code"), result["message"]) == (
+        False,
+        "POST_RENAME_FAILED",
+        "Webhook for Marvel's Daredevil failed: poster not applied, "
+        "and its retry could not be queued",
+    )
+
+
+def test_an_upload_that_raises_is_a_failed_apply(monkeypatch):
+    class _Unreachable:
+        def __init__(self, *a, **k):
+            pass
+
+        def run(self):
+            raise ConnectionError("plex.local refused the connection")
+
+    notes = []
+    monkeypatch.setattr(
+        "backend.util.notification.NotificationManager", _outcome_notifier(notes)
+    )
+    monkeypatch.setattr(jp, "_check_plex_upload_enabled", lambda cfg: True)
+    monkeypatch.setattr(jp, "ChubDB", _OutcomeDB)
+    monkeypatch.setattr("backend.util.upload_posters.PosterUploader", _Unreachable)
+
+    result = jp._adhoc_rename_and_post(_outcome_renamer(), [{}], _logger(), 1)
+
+    assert result.get("upload_result") == {
+        "success": False,
+        "message": "Poster apply failed: could not connect — see the server log",
+        "error_code": "POST_RENAME_FAILED",
+    }
+    assert notes == []
+
+
+def test_a_failed_notification_keeps_an_applied_poster_a_success(monkeypatch):
+    class _Down:
+        def __init__(self, *a, **k):
+            pass
+
+        def send_notification(self, output):
+            raise ConnectionError("discord.com refused the connection")
+
+    monkeypatch.setattr("backend.util.notification.NotificationManager", _Down)
+
+    result = jp._adhoc_rename_and_post(
+        _outcome_renamer(apply_method="kometa"), [{}], _logger(), 1
+    )
+
+    assert result["success"] is True
+    assert "upload_result" not in result
 
 
 def test_labelarr_bulk_job_reports_a_refused_sync_as_a_failure(monkeypatch):

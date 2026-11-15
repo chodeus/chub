@@ -239,13 +239,16 @@ def test_border_state_roundtrip_and_upsert(tmp_path):
 
 
 class _StubTable:
-    """Stands in for db.media / db.collection with a get_all()."""
+    """Stands in for db.media / db.collection with get_all() and get_by_id()."""
 
     def __init__(self, rows):
         self._rows = rows
 
     def get_all(self):
         return self._rows
+
+    def get_by_id(self, row_id):
+        return next((r for r in self._rows if r.get("id") == row_id), None)
 
 
 class _StubDB:
@@ -855,6 +858,7 @@ def _colour_run(tmp_path, monkeypatch, renamed_files, source_bytes=None):
             src.write_bytes(source_bytes)
         rows.append(
             {
+                "id": i + 1,
                 "title": f"t{i}",
                 "folder": f"t{i}",
                 "matched": 1,
