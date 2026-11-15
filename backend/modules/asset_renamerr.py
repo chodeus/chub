@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import sqlite3
 import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -454,6 +455,23 @@ class AssetRenamerr(ChubModule):
 
     # ----- apply ----------------------------------------------------------
 
+    @staticmethod
+    def _picked_since(
+        db: ChubDB,
+        conn: sqlite3.Connection,
+        target_kind: str,
+        target_id: int,
+        image_type: str,
+        locked: Optional[dict],
+    ) -> bool:
+        """True when the user has picked this asset, or re-picked another file, since ``locked`` was read."""
+        now = db.media_asset_matches.get_one(target_kind, target_id, image_type, conn=conn) or {}
+        if not now.get("user_confirmed"):
+            return False
+        if not (locked and locked.get("user_confirmed")):
+            return True
+        return now.get("matched_file") != locked.get("matched_file")
+
     def _already_applied(
         self,
         db: ChubDB,
@@ -711,10 +729,10 @@ class AssetRenamerr(ChubModule):
 
         target_id = media.get("id")
         if target_id is not None:
-            # Lock before applying, whatever the outcome: the run loop's mid-run lock check sees the pick
+            # Lock to this file before applying, whatever the outcome: the run loop's mid-run check sees the pick
             # while its file lands, and a failed apply (e.g. Plex briefly unreachable) is retried with this file.
             db.media_asset_matches.set_user_confirmed(
-                target_kind, target_id, image_type, True
+                target_kind, target_id, image_type, True, matched_file=file
             )
         applied_libs: Optional[List[str]] = None
         if apply_method == "plex":
@@ -970,7 +988,7 @@ class AssetRenamerr(ChubModule):
                     if target_id is not None
                     else None
                 )
-                # applied_map predates the loop: re-check for a pick made since before applying or writing over it.
+                # applied_map predates the loop: re-check for a pick made or changed since before applying or writing over it.
                 unlocked_at_start = not (locked and locked.get("user_confirmed"))
                 if (
                     locked
@@ -1000,7 +1018,13 @@ class AssetRenamerr(ChubModule):
                     # that's already applied (e.g. the art lives in Plex but the
                     # local source later vanished), and never persist on a dry run
                     # (media_asset_matches drives idempotency — see below).
-                    if target_id is not None and not self.config.dry_run:
+                    if (
+                        target_id is not None
+                        and not self.config.dry_run
+                        and not self._picked_since(
+                            db, poster_conn, target_kind, target_id, image_type, locked
+                        )
+                    ):
                         prev = applied_map.get(
                             (target_kind, int(target_id), image_type)
                         )
@@ -1048,15 +1072,11 @@ class AssetRenamerr(ChubModule):
                     )
                     continue
                 if (
-                    unlocked_at_start
-                    and target_id is not None
+                    target_id is not None
                     and not self.config.dry_run
-                    and (
-                        db.media_asset_matches.get_one(
-                            target_kind, target_id, image_type, conn=poster_conn
-                        )
-                        or {}
-                    ).get("user_confirmed")
+                    and self._picked_since(
+                        db, poster_conn, target_kind, target_id, image_type, locked
+                    )
                 ):
                     self.logger.debug(
                         f"↳ {image_type} for {media.get('title')} was picked during this run, keeping the pick"

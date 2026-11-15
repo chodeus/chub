@@ -876,10 +876,73 @@ def test_a_pick_made_while_the_run_places_that_item_keeps_its_row(db, monkeypatc
     assert (row["matched_file"], row["user_confirmed"]) == (str(picked), 1)
 
 
-def test_a_pick_is_locked_before_its_file_lands(db, monkeypatch, tmp_path):
-    """A run reading the row while the picked file lands already sees the lock."""
+def test_a_repick_made_during_a_run_is_not_overwritten_by_the_old_pick(db, monkeypatch, tmp_path):
     dest = tmp_path / "kometa"
     dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    _add_arrival(db, tmp_path)
+    old = tmp_path / "old.png"
+    old.write_bytes(b"old")
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=2,
+        image_type="logo",
+        source="local",
+        matched_file=str(old),
+        match_status="failed",
+    )
+    db.media_asset_matches.set_user_confirmed("media", 2, "logo", True)
+    picked = _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest)
+    m.run()
+    row = db.media_asset_matches.get_one("media", 2, "logo")
+    assert (dest / "Arrival (2016)_logo.png").read_bytes() == b"picked"
+    assert (row["matched_file"], row["match_status"], row["user_confirmed"]) == (
+        str(picked),
+        "applied",
+        1,
+    )
+
+
+def test_a_repick_of_an_item_whose_old_pick_and_art_are_gone_survives_the_run(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    _add_arrival(db, tmp_path)
+    (tmp_path / "src" / "Arrival (2016) {tmdb-329865} - Logo.png").unlink()
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=2,
+        image_type="logo",
+        source="local",
+        matched_file=str(tmp_path / "gone.png"),
+        match_status="failed",
+    )
+    db.media_asset_matches.set_user_confirmed("media", 2, "logo", True)
+    picked = _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest)
+    m.run()
+    row = db.media_asset_matches.get_one("media", 2, "logo")
+    assert (row["matched_file"], row["match_status"], row["user_confirmed"]) == (
+        str(picked),
+        "applied",
+        1,
+    )
+
+
+def test_a_repick_is_locked_to_its_file_before_the_file_lands(db, monkeypatch, tmp_path):
+    """A run reading the row while a re-picked file lands already sees the new pick."""
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=1,
+        image_type="logo",
+        source="local",
+        matched_file=str(tmp_path / "old.png"),
+        match_status="applied",
+    )
+    db.media_asset_matches.set_user_confirmed("media", 1, "logo", True)
     seen = []
     real_replace = os.replace
 
@@ -889,10 +952,9 @@ def test_a_pick_is_locked_before_its_file_lands(db, monkeypatch, tmp_path):
 
     monkeypatch.setattr(os, "replace", _replace)
     dune = {"id": 1, "title": "Dune", "year": 2021, "folder": "Dune (2021)"}
-    make_module(destination_dir=str(dest)).apply_chosen_asset(
-        db, "media", dune, "logo", _make_src(tmp_path)
-    )
-    assert [row and row["user_confirmed"] for row in seen] == [1]
+    src = _make_src(tmp_path)
+    make_module(destination_dir=str(dest)).apply_chosen_asset(db, "media", dune, "logo", src)
+    assert [(row["user_confirmed"], row["matched_file"]) for row in seen] == [(1, src)]
 
 
 def test_a_lock_on_a_vanished_file_still_takes_the_runs_match(db, monkeypatch, tmp_path):

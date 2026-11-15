@@ -165,6 +165,27 @@ def test_get_one_reads_through_the_callers_connection(db):
         db.media_asset_matches.get_one("media", 1, "logo", conn=conn)
 
 
+def test_a_lock_records_its_pick_and_a_bare_lock_keeps_the_rows_file(db):
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=17,
+        image_type="logo",
+        source="local",
+        matched_file="/posters/auto.png",
+        match_status="applied",
+    )
+    db.media_asset_matches.set_user_confirmed(
+        "media", 17, "logo", True, matched_file="/posters/picked.png"
+    )
+    db.media_asset_matches.set_user_confirmed("media", 17, "logo", False)
+    row = db.media_asset_matches.get_one("media", 17, "logo")
+    assert (row["matched_file"], row["user_confirmed"], row["match_status"]) == (
+        "/posters/picked.png",
+        0,
+        "applied",
+    )
+
+
 def test_set_user_confirmed_toggles_off(db):
     db.media_asset_matches.set_user_confirmed("media", 13, "logo", True)
     db.media_asset_matches.set_user_confirmed("media", 13, "logo", False)

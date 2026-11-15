@@ -107,22 +107,29 @@ class MediaAssetMatches(DatabaseBase):
         )
 
     def set_user_confirmed(
-        self, target_kind: str, target_id: int, image_type: str, confirmed: bool
+        self,
+        target_kind: str,
+        target_id: int,
+        image_type: str,
+        confirmed: bool,
+        matched_file: Optional[str] = None,
     ) -> None:
         """Set the per-(target, image_type) manual-pick lock.
 
         Mirrors ``set_ignored``: works even with no prior match row (inserts a
         status-less row carrying just the flag), and an existing row keeps its
-        match provenance — only ``user_confirmed`` flips. A locked row is reused
+        match provenance — only ``user_confirmed`` flips, plus ``matched_file``
+        when one is given (the file a pick locks to). A locked row is reused
         verbatim by the asset run instead of being re-resolved.
         """
         self.execute_query(
             """
             INSERT INTO media_asset_matches
-                (target_kind, target_id, image_type, matched_at, user_confirmed)
-            VALUES (?, ?, ?, ?, ?)
+                (target_kind, target_id, image_type, matched_at, user_confirmed, matched_file)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(target_kind, target_id, image_type)
-            DO UPDATE SET user_confirmed=excluded.user_confirmed
+            DO UPDATE SET user_confirmed=excluded.user_confirmed,
+                matched_file=COALESCE(excluded.matched_file, media_asset_matches.matched_file)
             """,
             (
                 target_kind,
@@ -130,6 +137,7 @@ class MediaAssetMatches(DatabaseBase):
                 image_type,
                 datetime.now(timezone.utc).isoformat(),
                 1 if confirmed else 0,
+                matched_file,
             ),
         )
 
