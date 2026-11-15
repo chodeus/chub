@@ -11,6 +11,7 @@ matching and cache handling"), specifically:
 """
 
 import errno
+import json
 import os
 from types import SimpleNamespace
 
@@ -1574,37 +1575,106 @@ _KEPT_HINT = (
 )
 
 
-def _repick_dune_poster(tmp_path, monkeypatch, action_type):
-    """A run places Dune's poster, then a new one goes through rename_file as the poster picker sends it; returns (picked, placed)."""
+def _pick_dune_poster(tmp_path, monkeypatch, action_type, link_fails_once=False):
+    """A run places Dune's poster, then the poster picker applies a new one; returns (module, picked, placed, reply)."""
+    from backend.api.posters.matching import apply_match
     from backend.util.database import ChubDB
     from tests.conftest import StubLogger
 
     m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
     m.run()
-    picked = tmp_path / "picked.jpg"
+    picked = tmp_path / "picks" / "Dune (2021).jpg"
+    picked.parent.mkdir()
     picked.write_bytes(b"new poster")
     m.config.action_type = action_type
+    if link_fails_once:
+        name = "link" if action_type == "hardlink" else "symlink"
+        real, calls = getattr(os, name), []
+
+        def _fails_once(*a, **k):
+            calls.append(a)
+            if len(calls) == 1:
+                raise OSError(errno.EXDEV, os.strerror(errno.EXDEV))
+            return real(*a, **k)
+
+        monkeypatch.setattr(os, name, _fails_once)
     with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
-        m.rename_file(dict(db.media.get_by_id(1), original_file=str(picked)), db)
+        db.poster.upsert(
+            {
+                "title": "Dune",
+                "normalized_title": "dune",
+                "year": 2021,
+                "tmdb_id": 438631,
+                "tvdb_id": None,
+                "imdb_id": None,
+                "season_number": None,
+                "folder": str(picked.parent),
+                "file": str(picked),
+                "asset_type": "movie",
+            }
+        )
+        poster_id = db.poster.execute_query(
+            "SELECT id FROM poster_cache WHERE file=?", (str(picked),), fetch_one=True
+        )["id"]
+        resp = apply_match(media_id=1, poster_id=poster_id, kind="media", logger=StubLogger(), db=db)
     assert os.listdir(posters) == ["Dune (2021).jpg"]
-    return picked, posters / "Dune (2021).jpg"
+    return m, picked, posters / "Dune (2021).jpg", json.loads(resp.body)
+
+
+_NOT_PLACED = "Match saved and locked — it will be applied on the next poster_renamerr run"
 
 
 @pytest.mark.parametrize("action_type", ["hardlink", "symlink"])
 def test_a_link_replaces_the_poster_already_there(tmp_path, monkeypatch, action_type):
-    picked, placed = _repick_dune_poster(tmp_path, monkeypatch, action_type)
+    _m, picked, placed, reply = _pick_dune_poster(tmp_path, monkeypatch, action_type)
     assert (placed.read_bytes(), os.path.samefile(placed, picked)) == (b"new poster", True)
-    assert placed.is_symlink() == (action_type == "symlink")
+    assert (placed.is_symlink(), reply["data"]["copied"]) == (action_type == "symlink", True)
 
 
 @pytest.mark.parametrize("action_type", ["hardlink", "symlink"])
-def test_a_link_that_fails_keeps_the_poster_already_there(tmp_path, monkeypatch, action_type):
+def test_a_link_that_fails_keeps_the_old_poster_says_so_and_the_next_run_places_the_pick(
+    tmp_path, monkeypatch, action_type
+):
+    m, picked, placed, reply = _pick_dune_poster(tmp_path, monkeypatch, action_type, link_fails_once=True)
+    assert (placed.read_bytes(), reply["data"]["copied"], reply["message"]) == (b"poster", False, _NOT_PLACED)
+    m.run()
+    assert os.path.samefile(placed, picked)
+
+
+def test_a_collection_poster_whose_link_failed_is_left_for_the_next_run(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    src, staged = tmp_path / "Marvel.jpg", tmp_path / "kometa" / "Marvel.jpg"
+    staged.parent.mkdir()
+    src.write_bytes(b"new poster")
+    staged.write_bytes(b"poster")
+    m = make_module()
+    m.config = SimpleNamespace(
+        destination_dir=str(staged.parent),
+        asset_folders=False,
+        dry_run=False,
+        action_type="hardlink",
+        run_border_replacerr=False,
+        print_only_renames=False,
+    )
+
     def _cross_device(*_a, **_k):
         raise OSError(errno.EXDEV, os.strerror(errno.EXDEV))
 
-    monkeypatch.setattr(os, "link" if action_type == "hardlink" else "symlink", _cross_device)
-    _picked, placed = _repick_dune_poster(tmp_path, monkeypatch, action_type)
-    assert placed.read_bytes() == b"poster"
+    monkeypatch.setattr(os, "link", _cross_device)
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+        row = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")
+        db.collection.update(
+            title="Marvel", year=None, library_name="Movies", instance_name="plex1",
+            renamed_file=str(staged), id=row["id"],
+        )
+        item = dict(db.collection.get_by_id(row["id"]), asset_type="collection", original_file=str(src))
+        m.rename_file(item, db)
+        after = db.collection.get_by_id(row["id"])
+    assert (staged.read_bytes(), item["renamed_file"], after["renamed_file"]) == (b"poster", None, None)
+    assert m._needs_staging(after)
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")

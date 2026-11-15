@@ -399,7 +399,7 @@ class BorderReplacerr(ChubModule):
             if os.path.exists(dest) and filecmp.cmp(src, dest, shallow=False):
                 return
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            copy_into_place(src, dest)
+            copy_into_place(src, dest, keep_mode=False)
             self.logger.debug(f"[EXCLUDED_COPY] {dest} ← {src} (unbordered)")
         except OSError as e:
             self.logger.warning(

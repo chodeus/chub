@@ -770,6 +770,13 @@ class AssetRenamerr(ChubModule):
             )
         return applied, detail
 
+    def _pick_still_placed(self, locked: dict) -> bool:
+        """True when a Kometa run still has the file a locked pick placed (its source may be gone, as after a move)."""
+        placed = locked.get("applied_path")
+        return (
+            self.config.apply_method == "kometa" and bool(placed) and os.path.exists(placed)
+        )
+
     def _file_op(self, src: str, dest: str, action_type: str) -> Optional[OSError]:
         """Place ``src`` at ``dest`` by action_type; returns why a moved source stayed, when it did."""
         kept = None
@@ -972,8 +979,8 @@ class AssetRenamerr(ChubModule):
                 # Manual-pick lock: when the user chose a specific file in the
                 # picker, reuse it verbatim instead of re-resolving — a re-run
                 # must never overwrite a locked pick (mirrors poster_renamerr's
-                # user_confirmed early-return). Falls back to auto-resolution if
-                # the locked file has since vanished from disk.
+                # user_confirmed early-return). Falls back to auto-resolution once
+                # the locked file is gone, unless a Kometa run still has its copy.
                 locked = (
                     applied_map.get((target_kind, int(target_id), image_type))
                     if target_id is not None
@@ -981,17 +988,19 @@ class AssetRenamerr(ChubModule):
                 )
                 # applied_map predates the loop: re-check for a pick made or changed since before applying or writing over it.
                 unlocked_at_start = not (locked and locked.get("user_confirmed"))
-                if (
-                    locked
-                    and locked.get("user_confirmed")
-                    and locked.get("matched_file")
-                    and os.path.exists(locked["matched_file"])
-                ):
+                picked = (
+                    locked.get("matched_file")
+                    if locked and locked.get("user_confirmed")
+                    else None
+                )
+                if picked and os.path.exists(picked):
                     resolved: Optional[Tuple[str, Optional[str], Optional[str]]] = (
                         "local",
-                        locked["matched_file"],
+                        picked,
                         None,
                     )
+                elif picked and self._pick_still_placed(locked):
+                    continue
                 else:
                     resolved = self._resolve_source(
                         media,

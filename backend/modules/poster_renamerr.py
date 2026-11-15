@@ -1106,42 +1106,33 @@ class PosterRenamerr(ChubModule):
         discord_message = []
         file_ops_enabled = not config.run_border_replacerr
 
+        files_identical = False
         if os.path.lexists(new_file_path):
             try:
                 files_identical = filecmp.cmp(file, new_file_path)
             except OSError as e:
                 self.logger.warning(f"Cannot compare files: {e}")
-                files_identical = False
-            if not files_identical:
-                if file_name != new_file_name:
-                    messages.append(f"{file_name} -renamed-> {new_file_name}")
-                    discord_message.append(f"{new_file_name}")
-                else:
-                    if not config.print_only_renames:
-                        messages.append(f"{file_name} -not-renamed-> {new_file_name}")
-                        discord_message.append(f"{new_file_name}")
-                if file_ops_enabled and not config.dry_run:
-                    success = self.process_file(file, new_file_path, config.action_type)
-                    if not success:
-                        self.logger.warning(
-                            f"File operation failed for {file} -> {new_file_path}"
-                        )
-                        return None
-        else:
+        if not files_identical:
             if file_name != new_file_name:
                 messages.append(f"{file_name} -renamed-> {new_file_name}")
                 discord_message.append(f"{new_file_name}")
-            else:
-                if not config.print_only_renames:
-                    messages.append(f"{file_name} -not-renamed-> {new_file_name}")
-                    discord_message.append(f"{new_file_name}")
-            if file_ops_enabled and not config.dry_run:
-                success = self.process_file(file, new_file_path, config.action_type)
-                if not success:
-                    self.logger.warning(
-                        f"File operation failed for {file} -> {new_file_path}"
-                    )
-                    return None
+            elif not config.print_only_renames:
+                messages.append(f"{file_name} -not-renamed-> {new_file_name}")
+                discord_message.append(f"{new_file_name}")
+            if (
+                file_ops_enabled
+                and not config.dry_run
+                and not self.process_file(file, new_file_path, config.action_type)
+            ):
+                self.logger.warning(
+                    f"File operation failed for {file} -> {new_file_path}"
+                )
+                # What is there is not this file: un-stage it, so the picker
+                # says so and the next run retries.
+                item["renamed_file"] = None
+                table = db.collection if asset_type == "collection" else db.media
+                table.clear_renamed_file(item.get("id"))
+                return None
 
         # Now that the asset is staged at its current path, drop any copy left
         # behind at the previous path (folder-rename self-cleanup).

@@ -16,22 +16,27 @@ def _into_place(dest: str, make: Callable[[str], None]) -> None:
     try:
         make(tmp)
         os.replace(tmp, dest)
-    except OSError:
+    finally:
+        # Also after a replace: rename() keeps both names when tmp is a hard link of dest.
         with contextlib.suppress(OSError):
             os.remove(tmp)
-        raise
 
 
 def _copy(
-    src: str, tmp: str, copy_meta: Callable[[str, str], None] = shutil.copymode
+    src: str,
+    tmp: str,
+    copy_meta: Optional[Callable[[str, str], None]] = shutil.copymode,
 ) -> None:
     with open(src, "rb") as fsrc, open(tmp, "xb") as fdst:
         shutil.copyfileobj(fsrc, fdst)
-    copy_meta(src, tmp)
+    if copy_meta:
+        copy_meta(src, tmp)
 
 
-def copy_into_place(src: str, dest: str) -> None:
-    _into_place(dest, lambda tmp: _copy(src, tmp))
+def copy_into_place(src: str, dest: str, keep_mode: bool = True) -> None:
+    """Copy ``src`` to ``dest``; without ``keep_mode`` it gets a new file's mode, as shutil.copyfile gives."""
+    meta = shutil.copymode if keep_mode else None
+    _into_place(dest, lambda tmp: _copy(src, tmp, meta))
 
 
 def link_into_place(src: str, dest: str) -> None:
@@ -42,15 +47,24 @@ def symlink_into_place(src: str, dest: str) -> None:
     _into_place(dest, lambda tmp: os.symlink(src, tmp))
 
 
+def _same_inode(src: str, dest: str) -> bool:
+    # lstat: a symlink at dest to src is replaced, not mistaken for src.
+    try:
+        return os.path.samestat(os.lstat(src), os.lstat(dest))
+    except OSError:
+        return False
+
+
 def move_into_place(src: str, dest: str) -> Optional[OSError]:
     """Move ``src`` to ``dest``; once it has landed, return why ``src`` could not be deleted, if it could not."""
-    try:
-        os.replace(src, dest)
-        return None
-    except OSError:
-        # e.g. EXDEV between two container volumes, or a source folder CHUB cannot change.
-        # copystat, as shutil.move's copy2 did: a moved file keeps its times.
-        _into_place(dest, lambda tmp: _copy(src, tmp, shutil.copystat))
+    if not _same_inode(src, dest):
+        try:
+            os.replace(src, dest)
+            return None
+        except OSError:
+            # e.g. EXDEV between two container volumes, or a source folder CHUB cannot change.
+            # copystat, as shutil.move's copy2 did: a moved file keeps its times.
+            _into_place(dest, lambda tmp: _copy(src, tmp, shutil.copystat))
     try:
         os.remove(src)
     except FileNotFoundError:

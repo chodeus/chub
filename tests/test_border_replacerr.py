@@ -723,6 +723,7 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
         tmp_path, monkeypatch, exclusion_list=["inman"]
     )
 
+    os.chmod(by_id[1]["original_file"], 0o600)
     manifest = {"media_cache": [1], "collections_cache": []}
     br.run(manifest, process_all=False)
 
@@ -732,6 +733,9 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
     with open(by_id[1]["original_file"], "rb") as f:
         src_bytes = f.read()
     assert dest.read_bytes() == src_bytes
+    umask = os.umask(0)
+    os.umask(umask)
+    assert oct(dest.stat().st_mode & 0o777) == oct(0o666 & ~umask), "a new file's mode, not the source's"
 
 
 def test_a_second_refresh_does_not_delete_the_first_runs_previews(

@@ -1154,3 +1154,26 @@ def test_a_title_searched_target_reuploads_only_the_copy_that_lost_it(tmp_path):
 
     assert result.action == "updated"
     assert (kept.uploaded, lost.uploaded) == ([], [asset["renamed_file"]])
+
+
+def test_a_music_sidecar_from_a_bordered_poster_gets_a_new_files_mode(tmp_path):
+    import os
+    import stat
+
+    from PIL import Image
+
+    from backend.modules.border_replacerr import BorderReplacerr
+
+    staged = tmp_path / "staging" / "Artist.jpg"
+    staged.parent.mkdir()
+    BorderReplacerr._replace_if_changed(
+        object.__new__(BorderReplacerr), Image.new("RGB", (2, 3)), str(staged)
+    )
+    album = tmp_path / "music" / "Album"
+    album.mkdir(parents=True)
+    _sidecar_uploader()._write_music_sidecar(
+        "album", str(staged), {"file_paths": [str(album)], "title": "A"}, False
+    )
+    umask = os.umask(0)
+    os.umask(umask)
+    assert oct(stat.S_IMODE(os.stat(album / "cover.jpg").st_mode)) == oct(0o666 & ~umask)

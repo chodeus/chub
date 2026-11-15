@@ -1374,7 +1374,7 @@ class PosterUploader:
                 if dry_run:
                     self.logger.debug(f"[DRY RUN] Would write music sidecar {dest}")
                     continue
-                copy_into_place(poster_path, dest)
+                copy_into_place(poster_path, dest, keep_mode=False)
                 self.logger.debug(f"[MUSIC_SIDECAR] {dest}")
         except Exception as e:
             self.logger.warning(
