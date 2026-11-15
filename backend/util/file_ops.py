@@ -1,6 +1,7 @@
 """Put a file at its destination whole: build it under a temp name beside it, then os.replace it in."""
 
 import contextlib
+import filecmp
 import os
 import shutil
 import threading
@@ -63,6 +64,13 @@ def _same_entry(src: str, dest: str) -> bool:
         )
     except OSError:
         return False
+
+
+def already_in_place(src: str, dest: str, action_type: str) -> bool:
+    """True when ``dest`` holds ``src``'s bytes, unless a move onto a link to ``src`` still has ``src`` to remove."""
+    if action_type == "move" and not _same_entry(src, dest) and os.path.samefile(src, dest):
+        return False
+    return filecmp.cmp(src, dest)
 
 
 def move_into_place(src: str, dest: str) -> Optional[OSError]:

@@ -1677,6 +1677,35 @@ def test_a_collection_poster_whose_link_failed_is_left_for_the_next_run(tmp_path
     assert m._needs_staging(after)
 
 
+@pytest.mark.parametrize("link", [os.link, os.symlink], ids=["hardlink", "symlink"])
+def test_a_move_onto_a_link_to_its_source_removes_the_source(tmp_path, link):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    src, staged = tmp_path / "Marvel.jpg", tmp_path / "kometa" / "Marvel.jpg"
+    staged.parent.mkdir()
+    src.write_bytes(b"poster")
+    link(src, staged)
+    m = make_module()
+    m.logger = StubLogger()
+    m.config = SimpleNamespace(
+        destination_dir=str(staged.parent),
+        asset_folders=False,
+        dry_run=False,
+        action_type="move",
+        run_border_replacerr=False,
+        print_only_renames=False,
+    )
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+        row = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")
+        item = dict(db.collection.get_by_id(row["id"]), asset_type="collection", original_file=str(src))
+        result = m.rename_file(item, db)
+    assert (src.exists(), staged.is_symlink(), staged.read_bytes()) == (False, False, b"poster")
+    assert result["messages"] == ["Marvel.jpg -not-renamed-> Marvel.jpg"]
+    assert m.logger.messages["warning"] == []
+
+
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
 def test_a_move_from_a_read_only_source_places_both_and_warns_once_per_module(tmp_path, monkeypatch):
     m, _sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)

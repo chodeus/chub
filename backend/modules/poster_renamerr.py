@@ -1,7 +1,6 @@
 # modules/poster_renamerr.py
 
 import contextlib
-import filecmp
 import hashlib
 import json
 import os
@@ -45,6 +44,7 @@ from backend.util.plex_index import PlexMediaIndex
 from backend.util.public_error import failure_text
 from backend.util.upload_posters import PosterUploader, upload_enabled_instances
 from backend.util.file_ops import (
+    already_in_place,
     copy_into_place,
     link_into_place,
     move_into_place,
@@ -1109,7 +1109,7 @@ class PosterRenamerr(ChubModule):
         files_identical = False
         if os.path.lexists(new_file_path):
             try:
-                files_identical = filecmp.cmp(file, new_file_path)
+                files_identical = already_in_place(file, new_file_path, config.action_type)
             except OSError as e:
                 self.logger.warning(f"Cannot compare files: {e}")
         if not files_identical:

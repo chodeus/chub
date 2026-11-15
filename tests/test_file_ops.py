@@ -134,6 +134,27 @@ def test_a_move_onto_a_symlink_to_the_source_puts_the_file_there(tmp_path):
     assert (kept, os.listdir(src_dir), dest.is_symlink(), dest.read_bytes()) == (None, [], False, b"img")
 
 
+@pytest.mark.parametrize(
+    ("make_dest", "action_type", "expected"),
+    [
+        ("own path", "move", True),
+        ("copy", "move", True),
+        ("hard link", "move", False),
+        ("symlink", "move", False),
+        ("hard link", "copy", True),
+    ],
+)
+def test_a_move_onto_a_link_to_its_source_is_not_already_in_place(tmp_path, make_dest, action_type, expected):
+    src_dir, src, _dest_dir, dest = _folders(tmp_path)
+    if make_dest == "own path":
+        dest = src_dir / "a.png"
+    elif make_dest == "copy":
+        dest.write_bytes(b"img")
+    else:
+        (os.link if make_dest == "hard link" else os.symlink)(src, dest)
+    assert file_ops.already_in_place(str(src), str(dest), action_type) is expected
+
+
 def test_a_copy_without_keep_mode_gets_a_new_files_mode(tmp_path):
     _src_dir, src, _dest_dir, dest = _folders(tmp_path)
     src.chmod(0o600)
