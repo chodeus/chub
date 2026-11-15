@@ -49,9 +49,10 @@ describe('DirField', () => {
         ]);
     });
 
-    it('write-checks only the poster and asset source folders on some settings', () => {
+    it('write-checks only the poster, music art and asset source folders on some settings', () => {
         expect(writeChecked(Array.isArray)).toEqual([
             'poster_renamerr.source_dirs',
+            'poster_renamerr.music_source_dirs',
             'asset_renamerr.source_dirs',
         ]);
     });

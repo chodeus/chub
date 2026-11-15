@@ -1,12 +1,10 @@
 # modules/border_replacerr.py
 
-import contextlib
 import filecmp
 import hashlib
 import logging
 import os
 import re
-import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -17,6 +15,7 @@ from PIL import Image
 
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
+from backend.util.file_ops import copy_into_place
 from backend.util.helper import create_table, print_settings, progress
 from backend.util.paths import get_config_dir
 from backend.util.logger import Logger
@@ -400,14 +399,7 @@ class BorderReplacerr(ChubModule):
             if os.path.exists(dest) and filecmp.cmp(src, dest, shallow=False):
                 return
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            tmp = f"{dest}.chub-tmp-{os.getpid()}"
-            try:
-                shutil.copyfile(src, tmp)
-                os.replace(tmp, dest)
-            except OSError:
-                with contextlib.suppress(OSError):
-                    os.remove(tmp)
-                raise
+            copy_into_place(src, dest)
             self.logger.debug(f"[EXCLUDED_COPY] {dest} ← {src} (unbordered)")
         except OSError as e:
             self.logger.warning(

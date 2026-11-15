@@ -10,6 +10,7 @@ matching and cache handling"), specifically:
   (2020) - Season 01.jpg" gets classified as ``show``, not ``movie``.
 """
 
+import errno
 import os
 from types import SimpleNamespace
 
@@ -1571,6 +1572,39 @@ _KEPT_HINT = (
     "Set File Action to copy, or let CHUB delete files in the source folder "
     "(a read/write mount, owned by PUID/PGID)."
 )
+
+
+def _repick_dune_poster(tmp_path, monkeypatch, action_type):
+    """A run places Dune's poster, then a new one goes through rename_file as the poster picker sends it; returns (picked, placed)."""
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.run()
+    picked = tmp_path / "picked.jpg"
+    picked.write_bytes(b"new poster")
+    m.config.action_type = action_type
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        m.rename_file(dict(db.media.get_by_id(1), original_file=str(picked)), db)
+    assert os.listdir(posters) == ["Dune (2021).jpg"]
+    return picked, posters / "Dune (2021).jpg"
+
+
+@pytest.mark.parametrize("action_type", ["hardlink", "symlink"])
+def test_a_link_replaces_the_poster_already_there(tmp_path, monkeypatch, action_type):
+    picked, placed = _repick_dune_poster(tmp_path, monkeypatch, action_type)
+    assert (placed.read_bytes(), os.path.samefile(placed, picked)) == (b"new poster", True)
+    assert placed.is_symlink() == (action_type == "symlink")
+
+
+@pytest.mark.parametrize("action_type", ["hardlink", "symlink"])
+def test_a_link_that_fails_keeps_the_poster_already_there(tmp_path, monkeypatch, action_type):
+    def _cross_device(*_a, **_k):
+        raise OSError(errno.EXDEV, os.strerror(errno.EXDEV))
+
+    monkeypatch.setattr(os, "link" if action_type == "hardlink" else "symlink", _cross_device)
+    _picked, placed = _repick_dune_poster(tmp_path, monkeypatch, action_type)
+    assert placed.read_bytes() == b"poster"
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")

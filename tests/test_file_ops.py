@@ -77,13 +77,21 @@ def test_a_source_someone_else_deleted_mid_move_is_not_reported_as_kept(tmp_path
     _rename_crosses_volumes(monkeypatch, src)
     real_copy = file_ops._copy
 
-    def _copy_then_lose_source(a, tmp):
-        real_copy(a, tmp)
+    def _copy_then_lose_source(a, tmp, *meta):
+        real_copy(a, tmp, *meta)
         os.remove(a)
 
     monkeypatch.setattr(file_ops, "_copy", _copy_then_lose_source)
     assert move_into_place(str(src), str(dest)) is None
     assert dest.read_bytes() == b"img"
+
+
+def test_a_move_across_volumes_keeps_the_files_times(tmp_path, monkeypatch):
+    _src_dir, src, _dest_dir, dest = _folders(tmp_path)
+    os.utime(src, (1_000_000, 1_000_000))
+    _rename_crosses_volumes(monkeypatch, src)
+    assert move_into_place(str(src), str(dest)) is None
+    assert os.stat(dest).st_mtime == 1_000_000
 
 
 def test_a_failed_copy_leaves_the_destination_whole(tmp_path):

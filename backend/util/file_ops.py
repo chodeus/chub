@@ -22,10 +22,12 @@ def _into_place(dest: str, make: Callable[[str], None]) -> None:
         raise
 
 
-def _copy(src: str, tmp: str) -> None:
+def _copy(
+    src: str, tmp: str, copy_meta: Callable[[str, str], None] = shutil.copymode
+) -> None:
     with open(src, "rb") as fsrc, open(tmp, "xb") as fdst:
         shutil.copyfileobj(fsrc, fdst)
-    shutil.copymode(src, tmp)
+    copy_meta(src, tmp)
 
 
 def copy_into_place(src: str, dest: str) -> None:
@@ -47,7 +49,8 @@ def move_into_place(src: str, dest: str) -> Optional[OSError]:
         return None
     except OSError:
         # e.g. EXDEV between two container volumes, or a source folder CHUB cannot change.
-        copy_into_place(src, dest)
+        # copystat, as shutil.move's copy2 did: a moved file keeps its times.
+        _into_place(dest, lambda tmp: _copy(src, tmp, shutil.copystat))
     try:
         os.remove(src)
     except FileNotFoundError:

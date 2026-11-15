@@ -644,8 +644,7 @@ class AssetRenamerr(ChubModule):
         refusals: Optional[List[WriteRefused]] = None,
         kept_sources: Optional[List[OSError]] = None,
     ) -> Tuple[bool, str]:
-        """Place one asset in the Kometa folder by action_type; with ``refusals``/``kept_sources``, a destination
-        refusal or a moved source that stayed goes there, logged at DEBUG."""
+        """Place one asset in the Kometa folder by action_type; given ``refusals``/``kept_sources``, those go there, logged at DEBUG."""
         dest_root = self.config.destination_dir
         if not dest_root:
             return False, "no destination_dir configured for Kometa apply"

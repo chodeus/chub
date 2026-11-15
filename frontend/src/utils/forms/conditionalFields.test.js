@@ -71,6 +71,7 @@ describe('resolveCheckWritable', () => {
     const field = (moduleKey, key) =>
         SETTINGS_SCHEMA.find(m => m.key === moduleKey).fields.find(f => f.key === key);
     const posterSources = field('poster_renamerr', 'source_dirs');
+    const musicSources = field('poster_renamerr', 'music_source_dirs');
     const assetSources = field('asset_renamerr', 'source_dirs');
 
     it.each([
@@ -80,8 +81,11 @@ describe('resolveCheckWritable', () => {
         [{ apply_method: 'kometa', action_type: 'hardlink' }, false],
         [{ apply_method: 'plex', action_type: 'move' }, false],
         [{ apply_method: 'kometa', action_type: 'move', run_border_replacerr: true }, false],
-    ])('checks poster source folders for %o: %s', (form, expected) => {
-        expect(resolveCheckWritable(posterSources, form)).toBe(expected);
+    ])('checks poster and music art source folders for %o: %s', (form, expected) => {
+        expect([posterSources, musicSources].map(f => resolveCheckWritable(f, form))).toEqual([
+            expected,
+            expected,
+        ]);
     });
 
     it.each([

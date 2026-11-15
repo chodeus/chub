@@ -908,7 +908,7 @@ def test_write_music_sidecar_failure_preserves_existing_cover(tmp_path, monkeypa
     """A crash mid-copy (partial write + OSError) must leave the user's
     existing cover untouched, warn instead of raising, and leave no temp
     litter in the music folder."""
-    from backend.util import upload_posters as up_mod
+    from backend.util import file_ops
 
     poster = tmp_path / "poster.jpg"
     poster.write_bytes(b"poster-bytes")
@@ -918,12 +918,11 @@ def test_write_music_sidecar_failure_preserves_existing_cover(tmp_path, monkeypa
     existing.write_bytes(b"original")
     entry = {"file_paths": [str(folder)], "title": "X"}
 
-    def _partial_copy(src, dst):
-        with open(dst, "wb") as fh:
-            fh.write(b"part")
+    def _partial_copy(fsrc, fdst, *_a):
+        fdst.write(b"part")
         raise OSError("disk full")
 
-    monkeypatch.setattr(up_mod.shutil, "copyfile", _partial_copy)
+    monkeypatch.setattr(file_ops.shutil, "copyfileobj", _partial_copy)
 
     warnings = []
     up = _sidecar_uploader(warnings)

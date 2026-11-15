@@ -44,7 +44,12 @@ from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
 from backend.util.public_error import failure_text
 from backend.util.upload_posters import PosterUploader, upload_enabled_instances
-from backend.util.file_ops import copy_into_place, move_into_place
+from backend.util.file_ops import (
+    copy_into_place,
+    link_into_place,
+    move_into_place,
+    symlink_into_place,
+)
 from backend.util.writable import ensure_writable_dir, log_kept_sources, note_kept_source
 
 # Process-global lock serializing the destructive poster_cache clear()+rebuild.
@@ -372,9 +377,9 @@ class PosterRenamerr(ChubModule):
                 if kept is not None:
                     note_kept_source(self.logger, kept, self._kept_sources)
             elif action_type == "hardlink":
-                os.link(file, new_file_path)
+                link_into_place(file, new_file_path)
             elif action_type == "symlink":
-                os.symlink(file, new_file_path)
+                symlink_into_place(file, new_file_path)
             # Per-file action trace — visible when log_level: debug.
             # Single source of truth so every call site (rename_file,
             # future orphan cleanup, etc.) logs the same shape.
@@ -1116,12 +1121,6 @@ class PosterRenamerr(ChubModule):
                         messages.append(f"{file_name} -not-renamed-> {new_file_name}")
                         discord_message.append(f"{new_file_name}")
                 if file_ops_enabled and not config.dry_run:
-                    if config.action_type in ["hardlink", "symlink"]:
-                        self.logger.debug(
-                            f"[REPLACED] {new_file_path} (overwriting before "
-                            f"{config.action_type})"
-                        )
-                        os.remove(new_file_path)
                     success = self.process_file(file, new_file_path, config.action_type)
                     if not success:
                         self.logger.warning(

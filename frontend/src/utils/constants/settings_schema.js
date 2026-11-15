@@ -293,7 +293,7 @@ const CORE_SETTINGS_SCHEMA = [
                 required: true,
                 description: 'How Kometa places files at the destination.',
                 helpText:
-                    'Kometa method: how matched posters reach the destination. "hardlink" is fastest and saves disk space, but only works when source and destination are inside the same container volume (e.g. one /data mount): separate /posters and /kometa volumes cannot hardlink, even on one disk. "move" deletes each source poster once it is placed (not while Border Replacerr runs after rename), so the Source Directories must be writable. "copy" is safest if you are unsure.',
+                    'Kometa method: how matched posters reach the destination. "hardlink" is fastest and saves disk space, but only works when source and destination are inside the same container volume (e.g. one /data mount): separate /posters and /kometa volumes cannot hardlink, even on one disk. "move" deletes each source poster once it is placed (not while Border Replacerr runs after rename), so the Source Directories and Music Art Source Directories must be writable. "copy" is safest if you are unsure.',
             },
             {
                 key: 'destination_dir',
@@ -457,6 +457,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'music_source_dirs',
                 label: 'Music Art Source Directories',
                 type: 'dirlist_dragdrop',
+                checkWritable: [KOMETA_ONLY, MOVE_ONLY, NO_BORDER_PASS],
                 section: 'music',
                 conditional: {
                     field: 'instances',
@@ -466,7 +467,7 @@ const CORE_SETTINGS_SCHEMA = [
                 },
                 description: 'Folders holding your custom artist / album art.',
                 helpText:
-                    'Folders holding your custom ARTIST/ALBUM art. Files here are recognized as music by folder layout (<Artist>/artist.jpg or poster.jpg, <Artist>/<Album>/cover.jpg) or a flat "Artist.jpg" / "Artist - Album.jpg" name; an {mbid-<id>} tag overrides identity (and works in the regular Source Directories too). Kept separate so a flat "Title.jpg" is never mistaken for a movie poster.',
+                    'Folders holding your custom ARTIST/ALBUM art. Files here are recognized as music by folder layout (<Artist>/artist.jpg or poster.jpg, <Artist>/<Album>/cover.jpg) or a flat "Artist.jpg" / "Artist - Album.jpg" name; an {mbid-<id>} tag overrides identity (and works in the regular Source Directories too). Kept separate so a flat "Title.jpg" is never mistaken for a movie poster. With File Action "move" (and Border Replacerr not run after rename), CHUB deletes each file from here once it is placed, so it must be able to delete files in these folders.',
             },
             {
                 key: 'music_lock_artist_art',
