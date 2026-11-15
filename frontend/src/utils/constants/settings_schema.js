@@ -190,6 +190,7 @@ const CORE_SETTINGS_SCHEMA = [
                         label: 'Location',
                         type: 'dir',
                         required: true,
+                        checkWritable: true,
 
                         description: 'Local directory to sync with the specified Google Drive ID.',
                     },
@@ -295,6 +296,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'destination_dir',
                 label: 'Destination Directory',
                 type: 'dir',
+                checkWritable: true,
                 section: 'output',
                 conditional: KOMETA_ONLY,
                 required: true,
@@ -648,6 +650,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'destination_dir',
                 label: 'Destination Directory',
                 type: 'dir',
+                checkWritable: true,
                 section: 'apply',
                 conditional: KOMETA_ONLY,
                 description: 'Kometa assets directory for renamed assets.',
@@ -738,6 +741,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'destination_dir',
                 label: 'Destination Directory',
                 type: 'dir',
+                checkWritable: true,
                 section: 'Paths',
                 description:
                     'Where re-bordered posters are written when Border Replacerr is run on its own. When triggered via Poster Renamerr, the manifest path is used instead and this field is ignored.',
@@ -1326,6 +1330,7 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'dirlist',
                 section: 'Paths to audit',
                 required: true,
+                checkWritable: true,
 
                 description:
                     'Directories to scan together for duplicate media files. Duplicates across these directories can be hardlinked.',
@@ -1603,6 +1608,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Asset Directories',
                 type: 'dirlist_dragdrop',
                 section: 'sources',
+                checkWritable: true,
                 description: 'Scanned recursively by both asset passes.',
                 helpText:
                     "Directories scanned by BOTH asset passes below — Orphan and Stale duplicates. Typically poster_renamerr's destination_dir, but you can list any path you want explicitly cleaned — including source dirs or personal folders that the post-rename pass deliberately leaves alone. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.",

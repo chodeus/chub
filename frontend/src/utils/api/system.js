@@ -57,10 +57,12 @@ export const systemAPI = {
         });
     },
 
-    /** List directory contents. */
-    listDirectory: (path, options = {}) => {
-        return apiCore.get(`/directory?path=${encodeURIComponent(path)}`, {
-            useCache: true,
+    /** List directory contents; checkWrite has the server try a create there (destinations only). */
+    listDirectory: (path, { checkWrite = false, ...options } = {}) => {
+        const probe = checkWrite ? '&check_write=true' : '';
+        return apiCore.get(`/directory?path=${encodeURIComponent(path)}${probe}`, {
+            // Uncached when probing, so a fixed mount stops warning at once.
+            useCache: !checkWrite,
             cacheTTL: 5 * 60 * 1000, // 5 minutes cache for directories
             ...options,
         });

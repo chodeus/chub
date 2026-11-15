@@ -92,6 +92,7 @@ export const DirField = React.memo(
                                         label: 'Directory Browser',
                                         type: 'dir_picker',
                                         description: 'Browse and select a directory',
+                                        checkWritable: !!field.checkWritable,
                                     }}
                                     value={value}
                                     onChange={handlePickerChange}

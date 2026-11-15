@@ -33,6 +33,7 @@ from backend.util.database import ChubDB
 from backend.util.path_safety import get_browse_roots, is_path_allowed
 from backend.util.public_error import public_reason
 from backend.util.version import check_for_update, get_version
+from backend.util.writable import writable_error
 
 router = APIRouter(
     prefix="/api",
@@ -266,7 +267,11 @@ def system_disk(logger: Any = Depends(get_logger)) -> JSONResponse:
 @router.get(
     "/directory",
     summary="List directory contents",
-    description="Lists directories within the specified path for configuration and file management.",
+    description=(
+        "Lists directories within the specified path for configuration and file management. "
+        "With check_write=true, CHUB creates and deletes a temporary file there: writable comes "
+        "from that create and write_error says why it failed. Set it only in destination pickers."
+    ),
     responses={
         200: {
             "description": "Directory listing retrieved successfully",
@@ -279,6 +284,7 @@ def system_disk(logger: Any = Depends(get_logger)) -> JSONResponse:
                             "directories": ["Documents", "Downloads", "Pictures"],
                             "exists": True,
                             "writable": True,
+                            "write_error": None,
                         },
                     }
                 }
@@ -288,7 +294,7 @@ def system_disk(logger: Any = Depends(get_logger)) -> JSONResponse:
     },
 )
 def list_directory(
-    path: str = "/", logger: Any = Depends(get_logger)
+    path: str = "/", check_write: bool = False, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
     List directories within a specified path.
@@ -321,7 +327,12 @@ def list_directory(
                 "Invalid path",
                 code="INVALID_PATH",
                 status_code=400,
-                data={"directories": [], "exists": False, "writable": False},
+                data={
+                    "directories": [],
+                    "exists": False,
+                    "writable": False,
+                    "write_error": None,
+                },
             )
 
         dirs = [
@@ -331,12 +342,14 @@ def list_directory(
         ]
         dirs.sort()
 
+        refusal = writable_error(str(resolved)) if check_write else None
         return ok(
             f"Listed {len(dirs)} directories",
             {
                 "directories": dirs,
                 "exists": True,
-                "writable": os.access(resolved, os.W_OK),
+                "writable": refusal is None if check_write else os.access(resolved, os.W_OK),
+                "write_error": refusal.strerror if refusal else None,
             },
         )
     except ConfigError:

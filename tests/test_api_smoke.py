@@ -399,6 +399,66 @@ def test_allowed_roots_ok_when_config_file_absent(monkeypatch, app_with_router, 
     assert isinstance(resp.json()["data"]["roots"], list)
 
 
+def _directory_client(monkeypatch, app_with_router, folder):
+    config = ChubConfig()
+    config.poster_renamerr.destination_dir = str(folder)
+    monkeypatch.setattr(system_router, "load_config", lambda: config)
+    return TestClient(app_with_router(system_router.router))
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_directory_names_why_chub_cannot_write_the_folder(
+    monkeypatch, app_with_router, tmp_path
+):
+    """The destination picker's warning comes from a real create, even where os.access says yes."""
+    folder = tmp_path / "kometa"
+    folder.mkdir()
+    client = _directory_client(monkeypatch, app_with_router, folder)
+    monkeypatch.setattr(system_router.os, "access", lambda *_a, **_k: True)
+    folder.chmod(0o555)
+    try:
+        resp = client.get(
+            "/api/directory", params={"path": str(folder), "check_write": "true"}
+        )
+        st = os.stat(folder)
+    finally:
+        folder.chmod(0o755)
+
+    data = resp.json()["data"]
+    assert (data["writable"], data["write_error"]) == (
+        False,
+        f"Cannot create files in {folder.resolve()}: Permission denied (CHUB runs as "
+        f"{os.getuid()}:{os.getgid()}; the folder is owned by {st.st_uid}:{st.st_gid}, "
+        "dr-xr-xr-x). Check the volume's host path, and that the folder's owner "
+        "matches PUID/PGID.",
+    )
+
+
+def test_directory_probes_only_when_asked(monkeypatch, app_with_router, tmp_path):
+    """Source folders, often cloud mounts, are browsed without creating a file."""
+    folder = tmp_path / "posters"
+    folder.mkdir()
+    client = _directory_client(monkeypatch, app_with_router, folder)
+    probed = []
+    real = system_router.writable_error
+    monkeypatch.setattr(
+        system_router, "writable_error", lambda p: probed.append(p) or real(p)
+    )
+
+    plain = client.get("/api/directory", params={"path": str(folder)}).json()["data"]
+    checked = client.get(
+        "/api/directory", params={"path": str(folder), "check_write": "true"}
+    ).json()["data"]
+
+    assert probed == [str(folder.resolve())]
+    assert (plain["write_error"], checked["writable"], checked["write_error"]) == (
+        None,
+        True,
+        None,
+    )
+    assert list(folder.iterdir()) == []
+
+
 def test_allowed_roots_propagates_config_error(monkeypatch, app_with_router):
     """A malformed config must not masquerade as an empty allow-list."""
     from backend.util.config import ConfigError
