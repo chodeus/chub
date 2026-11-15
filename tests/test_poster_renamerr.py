@@ -1577,15 +1577,8 @@ _KEPT_HINT = (
 
 def _pick_dune_poster(tmp_path, monkeypatch, action_type, link_fails_once=False):
     """A run places Dune's poster, then the poster picker applies a new one; returns (module, picked, placed, reply)."""
-    from backend.api.posters.matching import apply_match
-    from backend.util.database import ChubDB
-    from tests.conftest import StubLogger
-
     m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
     m.run()
-    picked = tmp_path / "picks" / "Dune (2021).jpg"
-    picked.parent.mkdir()
-    picked.write_bytes(b"new poster")
     m.config.action_type = action_type
     if link_fails_once:
         name = "link" if action_type == "hardlink" else "symlink"
@@ -1598,6 +1591,20 @@ def _pick_dune_poster(tmp_path, monkeypatch, action_type, link_fails_once=False)
             return real(*a, **k)
 
         monkeypatch.setattr(os, name, _fails_once)
+    picked, reply = _apply_dune_pick(tmp_path)
+    assert os.listdir(posters) == ["Dune (2021).jpg"]
+    return m, picked, posters / "Dune (2021).jpg", reply
+
+
+def _apply_dune_pick(tmp_path):
+    """The poster picker applies a new poster to Dune; returns (picked file, reply)."""
+    from backend.api.posters.matching import apply_match
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    picked = tmp_path / "picks" / "Dune (2021).jpg"
+    picked.parent.mkdir()
+    picked.write_bytes(b"new poster")
     with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
         db.poster.upsert(
             {
@@ -1617,11 +1624,30 @@ def _pick_dune_poster(tmp_path, monkeypatch, action_type, link_fails_once=False)
             "SELECT id FROM poster_cache WHERE file=?", (str(picked),), fetch_one=True
         )["id"]
         resp = apply_match(media_id=1, poster_id=poster_id, kind="media", logger=StubLogger(), db=db)
-    assert os.listdir(posters) == ["Dune (2021).jpg"]
-    return m, picked, posters / "Dune (2021).jpg", json.loads(resp.body)
+    return picked, json.loads(resp.body)
 
 
 _NOT_PLACED = "Match saved and locked — it will be applied on the next poster_renamerr run"
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_pick_whose_new_folder_cannot_be_made_is_not_reported_as_copied(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.asset_folders = True
+    m.run()
+    old = posters / "Dune (2021)" / "poster.jpg"
+    assert old.read_bytes() == b"poster"
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.execute_query("UPDATE media_cache SET folder=? WHERE id=1", ("Dune (2021) [renamed]",))
+    posters.chmod(0o555)
+    try:
+        _picked, reply = _apply_dune_pick(tmp_path)
+    finally:
+        posters.chmod(0o755)
+    assert (reply["data"]["copied"], reply["message"], old.read_bytes()) == (False, _NOT_PLACED, b"poster")
 
 
 @pytest.mark.parametrize("action_type", ["hardlink", "symlink"])

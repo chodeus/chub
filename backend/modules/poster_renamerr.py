@@ -1036,6 +1036,8 @@ class PosterRenamerr(ChubModule):
         # Where this asset was staged on the previous run (may be a stale path
         # under an old folder name); used to clean up after a folder rename.
         previous_renamed = item.get("renamed_file")
+        # Not staged until it lands: the poster picker reads this after any early return below.
+        item["renamed_file"] = None
 
         # _staged_dest() is the single source of truth for the destination
         # (shared with _needs_staging so a renamed media folder gets re-queued
