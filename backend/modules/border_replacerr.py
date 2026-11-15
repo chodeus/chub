@@ -21,7 +21,9 @@ from backend.util.helper import create_table, print_settings, progress
 from backend.util.paths import get_config_dir
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+from backend.util.public_error import PublicError
 from backend.util.scheduler import md_range_contains
+from backend.util.writable import nearest_existing_dir, writable_error
 
 # Path to bundled borders: backend/assets/borders/<holiday>/<name>.png
 _BUNDLED_BORDERS_DIR = Path(__file__).resolve().parents[1] / "assets" / "borders"
@@ -48,6 +50,12 @@ _HOLIDAY_FOLDER_OVERRIDES = {
 }
 
 logging.getLogger("PIL").setLevel(logging.WARNING)
+
+
+class NoPosterWritten(PublicError):
+    """Every poster the run tried was refused by its folder, so the job must not report success."""
+
+    public = "no poster could be written"
 
 
 class BorderReplacerr(ChubModule):
@@ -424,6 +432,52 @@ class BorderReplacerr(ChubModule):
         manifest subset (webhook/adhoc imports)."""
         return bool(process_all or reset_all or manifest is None)
 
+    def _split_unwritable(self, work: list) -> Tuple[list, int, Optional[OSError]]:
+        """(work CHUB can write, posters refused, first refusal); one ERROR per refused folder."""
+        verdicts: Dict[str, Optional[OSError]] = {}
+        refused: Dict[str, int] = {}
+        kept = []
+        for item in work:
+            folder = nearest_existing_dir(os.path.dirname(item[0]["renamed_file"]))
+            if folder not in verdicts:
+                verdicts[folder] = writable_error(folder)
+            if verdicts[folder] is None:
+                kept.append(item)
+            else:
+                refused[folder] = refused.get(folder, 0) + 1
+        for folder, count in refused.items():
+            self.logger.error(
+                f"{verdicts[folder].strerror} Skipped {count} poster(s) that go there."
+            )
+        first = verdicts[next(iter(refused))] if refused else None
+        return kept, sum(refused.values()), first
+
+    def _log_completion(
+        self, tally: Dict[str, int], attempted: int, all_failed: bool
+    ) -> None:
+        """The run's verdict line: INFO with no failures, ERROR when no poster is in place, else WARNING."""
+        failed, skipped = tally["failed"], tally["skipped"]
+        changed = [f"{tally[k]} {k}" for k in ("replaced", "removed") if tally[k]]
+        if all_failed:
+            self.logger.error(
+                f"Border replacerr failed: all {failed} poster(s) it tried failed, "
+                f"{skipped} skipped — see the ERROR lines above."
+            )
+        elif failed:
+            self.logger.warning(
+                f"Border replacerr finished with errors: {failed} of {attempted} "
+                f"poster(s) it tried failed, {', '.join(changed) or 'no borders changed'}, "
+                f"{skipped} skipped — see the ERROR lines above."
+            )
+        elif changed:
+            self.logger.info(
+                f"Border replacerr completed: {tally['processed']} processed, {', '.join(changed)}, {skipped} skipped."
+            )
+        else:
+            self.logger.info(
+                f"Border replacerr completed: {tally['processed']} processed, {skipped} skipped. No borders changed."
+            )
+
     def run(
         self,
         manifest: Optional[dict] = None,
@@ -592,6 +646,14 @@ class BorderReplacerr(ChubModule):
                             processed += 1
                             continue
                 work.append((asset, variant, sig))
+
+            attempted = len(work)
+            refused, refusal = 0, None
+            # Dry run writes nothing, so a read-only destination is fine there.
+            if not dry_run:
+                work, refused, refusal = self._split_unwritable(work)
+            failed += refused
+            processed += refused
 
             def _process(item: Tuple[dict, object, str]):
                 """Apply the active border op to one poster. Returns
@@ -764,29 +826,29 @@ class BorderReplacerr(ChubModule):
             for row in summary_table:
                 self.logger.info(f"{row[0]:<20}: {row[1]}")
 
-            if replaced or removed:
-                action = []
-                if replaced:
-                    action.append(f"{replaced} replaced")
-                if removed:
-                    action.append(f"{removed} removed")
-                self.logger.info(
-                    f"Border replacerr completed: {processed} processed, {', '.join(action)}, {skipped} skipped."
-                )
-            else:
-                self.logger.info(
-                    f"Border replacerr completed: {processed} processed, {skipped} skipped. No borders changed."
-                )
+            all_failed = bool(failed) and failed == attempted and not gate_skipped
+            self._log_completion(
+                {
+                    "processed": processed,
+                    "replaced": replaced,
+                    "removed": removed,
+                    "skipped": skipped,
+                    "failed": failed,
+                },
+                attempted,
+                all_failed,
+            )
             self.logger.info(
                 f"   → {processed} processed, {replaced} replaced, {removed} removed, "
                 f"{skipped} skipped, {failed} failed"
             )
-            if failed:
-                self.logger.warning(
-                    f"{failed} poster(s) failed to composite/replace/remove — "
-                    "see the ERROR lines above for details."
-                )
             self.logger.info("")
+
+            # Before set_status: nothing was written, so a holiday switch stays pending.
+            if all_failed and refused == failed:
+                raise NoPosterWritten(
+                    f"All {failed} poster(s) border replacerr tried were refused by their folder"
+                ) from refusal
 
             db.holiday.set_status(active_holiday)
 

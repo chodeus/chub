@@ -1,5 +1,7 @@
 """Unit tests for BorderReplacerr's image-border helpers."""
 
+import os
+
 import pytest
 from PIL import Image
 from types import SimpleNamespace
@@ -7,7 +9,9 @@ from types import SimpleNamespace
 from backend.modules.border_replacerr import (
     _BUNDLED_BORDERS_DIR,
     BorderReplacerr,
+    NoPosterWritten,
 )
+from backend.util.public_error import failure_text
 
 from tests.conftest import StubLogger
 
@@ -826,4 +830,212 @@ def test_prune_survives_a_directory_swap_after_validation(tmp_path, monkeypatch)
     assert not (moved_dir / stale.name).exists(), "the stale preview was not pruned"
     assert victim.exists(), (
         "a post-validation swap redirected the unlink outside the dir"
+    )
+
+
+# --- a destination CHUB cannot write ---
+
+_SKIP_AS_ROOT = pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+
+
+def _colour_run(tmp_path, monkeypatch, renamed_files, source_bytes=None):
+    """A real colour-mode full pass: one source poster per renamed_file."""
+    from backend.modules import border_replacerr as border_mod
+    from backend.util.database.border_state import BorderState
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    rows = []
+    for i, renamed in enumerate(renamed_files):
+        src = src_dir / f"{i}.jpg"
+        if source_bytes is None:
+            Image.new("RGB", (1000, 1500), (10, 20, 30)).save(src, "JPEG")
+        else:
+            src.write_bytes(source_bytes)
+        rows.append(
+            {
+                "title": f"t{i}",
+                "folder": f"t{i}",
+                "matched": 1,
+                "original_file": str(src),
+                "renamed_file": str(renamed),
+            }
+        )
+    holiday_saves = []
+
+    class _FakeDB:
+        def __init__(self):
+            self.media = _StubTable(rows)
+            self.collection = _StubTable([])
+            self.holiday = SimpleNamespace(
+                get_status=lambda: {"last_active_holiday": None},
+                set_status=lambda *a, **k: holiday_saves.append(a),
+            )
+            self.border = BorderState(
+                logger=StubLogger(), db_path=str(tmp_path / "b.db")
+            )
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(border_mod, "ChubDB", lambda *a, **k: _FakeDB())
+    monkeypatch.setattr(
+        border_mod,
+        "NotificationManager",
+        lambda *a, **k: SimpleNamespace(send_notification=lambda *a, **k: None),
+    )
+    br = _make_br()
+    br.full_config = SimpleNamespace()
+    br.config = SimpleNamespace(
+        log_level="info",
+        holidays=[],
+        border_colors=["#FF0000"],
+        exclusion_list=[],
+        ignore_folders=[],
+        dry_run=False,
+        border_width=26,
+        border_workers=1,
+    )
+    real_replace = BorderReplacerr.replace_borders.__get__(br, BorderReplacerr)
+    encodes = []
+    br.replace_borders = lambda *a, **k: encodes.append(a) or real_replace(*a, **k)
+    return br, encodes, holiday_saves
+
+
+def _refusal(folder) -> str:
+    st = os.stat(folder)
+    return (
+        f"Cannot create files in {folder}: Permission denied (CHUB runs as "
+        f"{os.getuid()}:{os.getgid()}; the folder is owned by {st.st_uid}:{st.st_gid}, "
+        "dr-xr-xr-x). Check the volume's host path, and that the folder's owner "
+        "matches PUID/PGID."
+    )
+
+
+@_SKIP_AS_ROOT
+def test_unwritable_destination_is_named_once_and_fails_the_job(tmp_path, monkeypatch):
+    kometa = tmp_path / "kometa"
+    kometa.mkdir()
+    renamed = [
+        kometa / "Hannibal (2013)" / "poster.jpg",
+        kometa / "Hannibal (2013)" / "Season01.jpg",
+        kometa / "Lisey's Story (2021)" / "poster.jpg",
+    ]
+    br, encodes, holiday_saves = _colour_run(tmp_path, monkeypatch, renamed)
+    kometa.chmod(0o555)
+    try:
+        with pytest.raises(NoPosterWritten) as raised:
+            br.run(process_all=True)
+        refusal = _refusal(kometa)
+    finally:
+        kometa.chmod(0o755)
+
+    assert br.logger.messages["error"] == [
+        f"{refusal} Skipped 3 poster(s) that go there.",
+        "Border replacerr failed: all 3 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above.",
+    ]
+    assert "   → 3 processed, 0 replaced, 0 removed, 0 skipped, 3 failed" in (
+        br.logger.messages["info"]
+    )
+    assert encodes == [], "a poster was decoded for a folder that cannot take it"
+    assert failure_text("Module border_replacerr", raised.value) == (
+        "Module border_replacerr failed: permission denied — see the server log"
+    )
+    assert holiday_saves == [], "a run that wrote nothing recorded the holiday"
+    assert list(kometa.iterdir()) == []
+
+
+@_SKIP_AS_ROOT
+def test_one_unwritable_folder_fails_only_its_posters(tmp_path, monkeypatch):
+    dest = tmp_path / "dest"
+    locked = dest / "locked"
+    locked.mkdir(parents=True)
+    renamed = [dest / "open" / "poster.jpg", locked / "poster.jpg"]
+    br, encodes, holiday_saves = _colour_run(tmp_path, monkeypatch, renamed)
+    locked.chmod(0o555)
+    try:
+        br.run(process_all=True)
+        refusal = _refusal(locked)
+    finally:
+        locked.chmod(0o755)
+
+    assert br.logger.messages["error"] == [
+        f"{refusal} Skipped 1 poster(s) that go there."
+    ]
+    assert br.logger.messages["warning"] == [
+        "Border replacerr finished with errors: 1 of 2 poster(s) it tried failed, "
+        "1 replaced, 0 skipped — see the ERROR lines above."
+    ]
+    assert len(encodes) == 1
+    assert (dest / "open" / "poster.jpg").exists()
+    assert not (locked / "poster.jpg").exists()
+    assert len(holiday_saves) == 1
+
+
+def test_every_composite_failing_is_an_error_but_not_a_failed_job(tmp_path, monkeypatch):
+    """Bad images are the posters' fault, not the destination's: report them, keep the job."""
+    dest = tmp_path / "dest"
+    renamed = [dest / "a" / "poster.jpg", dest / "b" / "poster.jpg"]
+    br, encodes, holiday_saves = _colour_run(
+        tmp_path, monkeypatch, renamed, source_bytes=b"not a jpeg"
+    )
+
+    br.run(process_all=True)
+
+    assert len(encodes) == 2
+    assert br.logger.messages["error"][-1] == (
+        "Border replacerr failed: all 2 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above."
+    )
+    assert len(holiday_saves) == 1
+
+
+@pytest.mark.parametrize(
+    "breakage",
+    ["corrupt source", pytest.param("locked folder", marks=_SKIP_AS_ROOT)],
+)
+def test_one_failure_among_unchanged_posters_keeps_the_job(tmp_path, monkeypatch, breakage):
+    """The gate skips unchanged posters, so the one changed poster is all the run tries."""
+    dest = tmp_path / "dest"
+    renamed = [dest / "a" / "poster.jpg", dest / "b" / "poster.jpg"]
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, renamed)
+    br.run(process_all=True)
+    assert len(encodes) == 2 and br.logger.messages["error"] == []
+
+    (tmp_path / "src" / "1.jpg").write_bytes(b"not a jpeg, and a new size")
+    if breakage == "locked folder":
+        (dest / "b").chmod(0o555)
+    br.logger = StubLogger()
+    try:
+        br.run(process_all=True)
+    finally:
+        (dest / "b").chmod(0o755)
+
+    assert br.logger.messages["warning"] == [
+        "Border replacerr finished with errors: 1 of 1 poster(s) it tried failed, "
+        "no borders changed, 0 skipped — see the ERROR lines above."
+    ]
+
+
+@_SKIP_AS_ROOT
+def test_dry_run_ignores_a_destination_it_cannot_write(tmp_path, monkeypatch):
+    """A dry run against a read-only mount is a safe way to try CHUB; it must still pass."""
+    kometa = tmp_path / "kometa"
+    kometa.mkdir()
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [kometa / "t" / "poster.jpg"])
+    br.config.dry_run = True
+    kometa.chmod(0o555)
+    try:
+        br.run(process_all=True)
+    finally:
+        kometa.chmod(0o755)
+
+    assert br.logger.messages["error"] == []
+    assert (
+        "Border replacerr completed: 1 processed, 1 replaced, 0 skipped."
+        in br.logger.messages["info"]
     )
