@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.util.base_module import ChubModule
@@ -13,9 +14,15 @@ from backend.util.helper import create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex import PlexClient
-from backend.util.public_error import failure_text
+from backend.util.public_error import PublicError, failure_text
 from backend.util.fanart import FanartClient
 from backend.util.release_readiness import is_release_ready
+from backend.util.writable import (
+    WriteRefused,
+    destination_refused,
+    ensure_writable_dir,
+    log_refusals,
+)
 
 # The additional (non-poster) asset types this module manages. Banner is
 # deliberately absent: Plex has no banner upload API and Kometa does not read
@@ -71,6 +78,12 @@ FANART_IMAGE_KEY = {
     "logo": "logo",
     "background": "background",
 }
+
+
+class NoAssetWritten(PublicError):
+    """Every asset the run tried was refused by its destination, so the job must not report success."""
+
+    public = "no asset could be written"
 
 
 class AssetRenamerr(ChubModule):
@@ -604,7 +617,9 @@ class AssetRenamerr(ChubModule):
         source: str,
         file: Optional[str],
         url: Optional[str],
+        refusals: Optional[List[WriteRefused]] = None,
     ) -> Tuple[bool, str]:
+        """Place one asset in the Kometa folder by action_type; with ``refusals``, a destination refusal goes there, logged at DEBUG."""
         dest_root = self.config.destination_dir
         if not dest_root:
             return False, "no destination_dir configured for Kometa apply"
@@ -661,9 +676,12 @@ class AssetRenamerr(ChubModule):
                 os.makedirs(os.path.dirname(new_path), exist_ok=True)
                 self._file_op(src, new_path, self.config.action_type)
             except OSError as exc:
-                self.logger.warning(
-                    f"Asset file op failed for {src} -> {new_path}: {exc}"
-                )
+                line = f"Asset file op failed for {src} -> {new_path}: {exc}"
+                if refusals is not None and destination_refused(exc, new_path):
+                    self.logger.debug(line)
+                    refusals.append(WriteRefused(new_path, exc))
+                else:
+                    self.logger.warning(line)
                 return False, failure_text("file op", exc)
         return True, new_path
 
@@ -728,22 +746,25 @@ class AssetRenamerr(ChubModule):
     def _file_op(self, src: str, dest: str, action_type: str) -> None:
         if action_type == "move":
             shutil.move(src, dest)
-        elif action_type in ("hardlink", "symlink"):
-            # Create the link under a temp name and os.replace() it over the
-            # destination — never remove dest first, so a failed link (source
-            # vanished, ENOSPC, cross-device) can't destroy the existing file.
-            tmp = f"{dest}.chub-tmp-{os.getpid()}"
+        else:
+            # Short per-thread temp beside dest, never dest: a failed op leaves dest whole, a copy
+            # chmods only its own file, and "xb" never follows a path already at tmp.
+            tmp = os.path.join(
+                os.path.dirname(dest), f".chub-tmp-{os.getpid()}-{threading.get_ident()}"
+            )
             try:
                 if action_type == "hardlink":
                     os.link(src, tmp)
-                else:
+                elif action_type == "symlink":
                     os.symlink(src, tmp)
+                else:  # copy (default)
+                    with open(src, "rb") as fsrc, open(tmp, "xb") as fdst:
+                        shutil.copyfileobj(fsrc, fdst)
+                    shutil.copymode(src, tmp)
                 os.replace(tmp, dest)
             except OSError:
                 self._cleanup(tmp)
                 raise
-        else:  # copy (default)
-            shutil.copy(src, dest)
         self.logger.debug(f"[{action_type.upper()}] {dest} ← {src}")
 
     def _cleanup(self, path: Optional[str]) -> None:
@@ -756,6 +777,13 @@ class AssetRenamerr(ChubModule):
                 self.logger.debug(f"Temp file cleanup failed: {path} — {exc}")
 
     # ----- orchestration --------------------------------------------------
+
+    def ensure_destination_writable(self) -> None:
+        """Create the Kometa destination, or raise why CHUB cannot write there; not in dry run."""
+        dest = self.config.destination_dir
+        if self.config.apply_method != "kometa" or self.config.dry_run or not dest:
+            return
+        ensure_writable_dir(dest, self.logger)
 
     def match_and_apply_assets(self, db: ChubDB) -> Dict[str, List[dict]]:
         """Match every configured image_type for every media item and apply it.
@@ -877,6 +905,8 @@ class AssetRenamerr(ChubModule):
         # whole loop. Read-only (query_only); closed after the loop — on an
         # exception it's reclaimed on GC, which is safe for a read connection.
         poster_conn = db.poster.open_read_connection()
+        refusals: List[WriteRefused] = []
+        attempted = 0
         for idx, media in enumerate(all_media, 1):
             if self.is_cancelled():
                 break
@@ -1029,8 +1059,9 @@ class AssetRenamerr(ChubModule):
                         src_mtime,
                     )
                 else:
+                    attempted += 1
                     applied, detail = self._apply_kometa(
-                        media, image_type, source, file, url
+                        media, image_type, source, file, url, refusals
                     )
 
                 # On a dry run, NEVER persist match state: media_asset_matches
@@ -1075,6 +1106,11 @@ class AssetRenamerr(ChubModule):
                         f"{media.get('title')} -> {detail}"
                     )
         poster_conn.close()
+        log_refusals(self.logger, refusals, "asset")
+        if refusals and len(refusals) == attempted:
+            raise NoAssetWritten(
+                f"All {attempted} asset(s) asset renamerr tried were refused by their destination"
+            ) from refusals[0]
         return output
 
     def handle_output(self, output: Dict[str, List[dict]]) -> None:
@@ -1119,6 +1155,8 @@ class AssetRenamerr(ChubModule):
                     self.logger.info(
                         create_table([["Dry Run"], ["NO CHANGES WILL BE MADE"]])
                     )
+                # One error for a mount CHUB cannot write, before the sync and scan.
+                self.ensure_destination_writable()
 
                 # Declare the phases this run will execute (gated by config) so
                 # the Jobs page shows each sub-step and its timing.
@@ -1183,6 +1221,8 @@ class AssetRenamerr(ChubModule):
             self.logger.info("Asset Renamerr interrupted. Exiting...")
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)
+            # Propagate so the run is recorded as failed, as poster_renamerr does.
+            raise
         finally:
             # Mark any declared-but-unreached phases skipped so the Jobs
             # timeline doesn't leave them stuck pending after an early failure.

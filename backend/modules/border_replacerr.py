@@ -23,7 +23,12 @@ from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.public_error import PublicError
 from backend.util.scheduler import md_range_contains
-from backend.util.writable import nearest_existing_dir, refusal_hint, writable_error
+from backend.util.writable import (
+    WriteRefused,
+    log_refusals,
+    nearest_existing_dir,
+    writable_error,
+)
 
 # Path to bundled borders: backend/assets/borders/<holiday>/<name>.png
 _BUNDLED_BORDERS_DIR = Path(__file__).resolve().parents[1] / "assets" / "borders"
@@ -58,12 +63,8 @@ class NoPosterWritten(PublicError):
     public = "no poster could be written"
 
 
-class PosterWriteRefused(Exception):
+class PosterWriteRefused(WriteRefused):
     """The destination refused a finished poster (disk full, a folder that lets CHUB create but not replace)."""
-
-    def __init__(self, path: str, err: OSError) -> None:
-        super().__init__(f"Cannot write {path}: {err.strerror or err}")
-        self.errno = err.errno
 
 
 class BorderReplacerr(ChubModule):
@@ -473,17 +474,6 @@ class BorderReplacerr(ChubModule):
         first = verdicts[next(iter(refused))] if refused else None
         return kept, sum(refused.values()), first
 
-    def _log_write_refusals(self, refusals: List[PosterWriteRefused]) -> None:
-        """One ERROR per cause, naming the first poster it refused and how many."""
-        by_cause: Dict[Optional[int], List[PosterWriteRefused]] = {}
-        for refusal in refusals:
-            by_cause.setdefault(refusal.errno, []).append(refusal)
-        for group in by_cause.values():
-            self.logger.error(
-                f"{group[0]}. {refusal_hint(group[0].errno)} "
-                f"{len(group)} poster(s) failed this way."
-            )
-
     def _log_completion(
         self, tally: Dict[str, int], attempted: int, all_failed: bool
     ) -> None:
@@ -833,7 +823,7 @@ class BorderReplacerr(ChubModule):
                         if total_work and (done % 25 == 0 or done == total_work):
                             self._report_progress(int(done / total_work * 100))
 
-            self._log_write_refusals(write_refusals)
+            log_refusals(self.logger, write_refusals, "poster")
             if new_states:
                 db.border.bulk_record(new_states)
 

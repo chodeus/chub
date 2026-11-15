@@ -44,7 +44,7 @@ from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
 from backend.util.public_error import failure_text
 from backend.util.upload_posters import PosterUploader, upload_enabled_instances
-from backend.util.writable import writable_error
+from backend.util.writable import ensure_writable_dir
 
 # Process-global lock serializing the destructive poster_cache clear()+rebuild.
 # The scheduled run() and the webhook-driven run_poster_rename_adhoc() run on
@@ -309,27 +309,11 @@ class PosterRenamerr(ChubModule):
                 shutil.rmtree(staging_dir, ignore_errors=True)
 
     def ensure_destination_dir(self):
-        dest = self.config.destination_dir
-        if os.path.isdir(dest):
-            self.logger.debug(f"Destination directory already exists: {dest}")
-            # An existing folder may belong to another user (a mount Docker made as root).
-            refusal = None if getattr(self.config, "dry_run", False) else writable_error(dest)
-            if refusal:
-                raise refusal
-            return
-
-        self.logger.info(f"Creating destination directory: {dest}")
-        try:
-            # exist_ok: a concurrent pass (webhook worker vs the scheduled run)
-            # can create it between the check above and here.
-            os.makedirs(dest, exist_ok=True)
-        except OSError as e:
-            # Bare OSError surfaces as "[Errno 13] Permission denied" with no
-            # hint that the volume simply isn't mounted.
-            raise FileNotFoundError(
-                f"Could not create destination directory: {dest} ({e}). "
-                "Check the path is correct and its volume is mounted."
-            ) from e
+        ensure_writable_dir(
+            self.config.destination_dir,
+            self.logger,
+            check_write=not getattr(self.config, "dry_run", False),
+        )
 
     # Progress slice for sync_gdrive when invoked from inside poster_renamerr.
     # The nested SyncGDrive instance reports its own 0..100 internally but
@@ -1877,6 +1861,11 @@ class PosterRenamerr(ChubModule):
                     print_settings(self.logger, self.config)
 
                 self.ensure_destination_dir()
+                if self.config.run_asset_renamerr:
+                    from backend.modules.asset_renamerr import AssetRenamerr
+
+                    # Before any poster lands, so an asset folder CHUB cannot write stops the run first.
+                    AssetRenamerr(logger=self.logger).ensure_destination_writable()
 
                 if self.config.dry_run:
                     self.logger.info(
@@ -2045,35 +2034,7 @@ class PosterRenamerr(ChubModule):
                             db=db, logger=self.logger, manifest=manifest
                         ).run()
 
-                # Additional asset types (logo / squareart / background /
-                # banner) ride this run when enabled: the gdrive sync, the single
-                # image_type-aware merge_assets scan (poster_cache already holds
-                # the asset rows), and the loaded media/Plex snapshot are all
-                # reused, so no second sync/scan/fetch happens. See AssetRenamerr.
-                if self.config.run_asset_renamerr:
-                    from backend.modules.asset_renamerr import AssetRenamerr
-
-                    with self._phase("asset_renamerr"):
-                        self.logger.info("Running asset_renamerr")
-                        asset_module = AssetRenamerr(logger=self.logger)
-                        # Drive the reserved tail of the parent's bar so the %
-                        # advances through this long phase instead of sitting at
-                        # 100. No-ops cleanly when this run has no job context.
-                        asset_module.set_job_context(
-                            getattr(self, "_job_id", None),
-                            getattr(self, "_job_db", None),
-                        )
-                        asset_module.set_progress_window(*tail_windows["asset"])
-                        asset_output = asset_module.match_and_apply_assets(db)
-                        # Same summary a standalone run prints; without it the
-                        # chained path emits nothing above DEBUG.
-                        asset_module.handle_output(asset_output)
-                        self.logger.info("Finished running asset_renamerr")
-                    # Notify under asset_renamerr so its own notification config
-                    # governs (mirrors how each chained module owns its policy).
-                    NotificationManager(
-                        self.full_config, self.logger, module_name="asset_renamerr"
-                    ).send_notification(asset_output)
+                # Posters are reported before the chained asset step, so its failure can't drop them.
                 # Always notify on a successful run, even when nothing
                 # happened — gives the user a heartbeat that the module fired.
                 # kometa: the rename output IS the outcome (files written for
@@ -2107,6 +2068,30 @@ class PosterRenamerr(ChubModule):
                     self.full_config, self.logger, module_name="poster_renamerr"
                 )
                 manager.send_notification(notify_output)
+
+                # Chained asset types reuse this run's gdrive sync, merge_assets scan and
+                # media/Plex snapshot, so nothing is fetched twice. See AssetRenamerr.
+                if self.config.run_asset_renamerr:
+                    with self._phase("asset_renamerr"):
+                        self.logger.info("Running asset_renamerr")
+                        # Built here, not at the probe: asset settings saved during the poster pass apply.
+                        asset_module = AssetRenamerr(logger=self.logger)
+                        # Drives the reserved tail of the parent's progress bar; no-op without a job.
+                        asset_module.set_job_context(
+                            getattr(self, "_job_id", None),
+                            getattr(self, "_job_db", None),
+                        )
+                        asset_module.set_progress_window(*tail_windows["asset"])
+                        asset_output = asset_module.match_and_apply_assets(db)
+                        # Same summary a standalone run prints; without it the
+                        # chained path emits nothing above DEBUG.
+                        asset_module.handle_output(asset_output)
+                        self.logger.info("Finished running asset_renamerr")
+                    # Notify under asset_renamerr so its own notification config
+                    # governs (mirrors how each chained module owns its policy).
+                    NotificationManager(
+                        asset_module.full_config, self.logger, module_name="asset_renamerr"
+                    ).send_notification(asset_output)
 
         except KeyboardInterrupt:
             self.logger.info("Keyboard Interrupt detected. Exiting...")
