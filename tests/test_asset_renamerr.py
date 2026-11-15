@@ -589,6 +589,14 @@ def test_run_fails_once_on_a_destination_it_cannot_write(db, monkeypatch, tmp_pa
     dest = tmp_path / "kometa"
     dest.mkdir()
     m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    connected = []
+    sync = SimpleNamespace(
+        update_arr_database=lambda: None, update_collections_database=lambda: None
+    )
+    monkeypatch.setattr(
+        "backend.modules.asset_renamerr.Connector",
+        lambda **k: connected.append(k) or sync,
+    )
     dest.chmod(0o555)
     try:
         with pytest.raises(PermissionError) as raised:
@@ -605,6 +613,7 @@ def test_run_fails_once_on_a_destination_it_cannot_write(db, monkeypatch, tmp_pa
     assert m.logger.messages["warning"] == []
     assert m.logger.messages["error"] == ["\n\nAn error occurred:\n"]
     assert db.media_asset_matches.get_one("media", 1, "logo") is None
+    assert connected == [], "the refusal must stop the run before the *arr sync"
 
 
 @_SKIP_AS_ROOT

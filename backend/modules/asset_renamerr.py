@@ -758,6 +758,15 @@ class AssetRenamerr(ChubModule):
 
     # ----- orchestration --------------------------------------------------
 
+    def ensure_destination_writable(self) -> None:
+        """Raise the probe's error for a Kometa destination CHUB cannot write; not in dry run."""
+        dest = self.config.destination_dir
+        if self.config.apply_method != "kometa" or self.config.dry_run or not dest:
+            return
+        refusal = writable_error(dest)
+        if refusal:
+            raise refusal
+
     def match_and_apply_assets(self, db: ChubDB) -> Dict[str, List[dict]]:
         """Match every configured image_type for every media item and apply it.
 
@@ -796,11 +805,6 @@ class AssetRenamerr(ChubModule):
                     "single asset_folders setting, so one of these layouts will "
                     "not be read. Make them match your Kometa config."
                 )
-            # One error for a mount CHUB cannot write, not one warning per asset.
-            dest = self.config.destination_dir
-            refusal = None if self.config.dry_run or not dest else writable_error(dest)
-            if refusal:
-                raise refusal
 
         all_media = self._gather_media(db)
         if not all_media:
@@ -1125,6 +1129,8 @@ class AssetRenamerr(ChubModule):
                     self.logger.info(
                         create_table([["Dry Run"], ["NO CHANGES WILL BE MADE"]])
                     )
+                # One error for a mount CHUB cannot write, before the sync and scan.
+                self.ensure_destination_writable()
 
                 # Declare the phases this run will execute (gated by config) so
                 # the Jobs page shows each sub-step and its timing.

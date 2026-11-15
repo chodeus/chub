@@ -1877,6 +1877,13 @@ class PosterRenamerr(ChubModule):
                     print_settings(self.logger, self.config)
 
                 self.ensure_destination_dir()
+                asset_module = None
+                if self.config.run_asset_renamerr:
+                    from backend.modules.asset_renamerr import AssetRenamerr
+
+                    asset_module = AssetRenamerr(logger=self.logger)
+                    # Before any poster lands, so a refused asset folder fails nothing half-applied.
+                    asset_module.ensure_destination_writable()
 
                 if self.config.dry_run:
                     self.logger.info(
@@ -2050,12 +2057,9 @@ class PosterRenamerr(ChubModule):
                 # image_type-aware merge_assets scan (poster_cache already holds
                 # the asset rows), and the loaded media/Plex snapshot are all
                 # reused, so no second sync/scan/fetch happens. See AssetRenamerr.
-                if self.config.run_asset_renamerr:
-                    from backend.modules.asset_renamerr import AssetRenamerr
-
+                if asset_module is not None:
                     with self._phase("asset_renamerr"):
                         self.logger.info("Running asset_renamerr")
-                        asset_module = AssetRenamerr(logger=self.logger)
                         # Drive the reserved tail of the parent's bar so the %
                         # advances through this long phase instead of sitting at
                         # 100. No-ops cleanly when this run has no job context.
