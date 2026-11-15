@@ -1435,7 +1435,7 @@ def test_ensure_destination_dir_lets_a_dry_run_use_a_read_only_mount(tmp_path):
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
 def test_run_fails_the_job_when_the_destination_cannot_be_written(tmp_path, monkeypatch):
-    """run() used to log the error and return, so the job showed success."""
+    """The refusal fails the run and is logged once."""
     from tests.conftest import StubLogger
 
     class _StubDB:
@@ -1469,12 +1469,46 @@ def test_run_fails_the_job_when_the_destination_cannot_be_written(tmp_path, monk
     )
 
 
-def _poster_run_with_chained_assets(tmp_path, monkeypatch, poster_dest, asset_dest):
-    """Real PosterRenamerr.run() chaining the real AssetRenamerr; the sync, scan and match phases are stubbed."""
+def _poster_run_with_chained_assets(tmp_path, monkeypatch, sync=None):
+    """Real PosterRenamerr.run() scanning, matching and renaming a real poster, then chaining the real AssetRenamerr."""
+    from backend.util.config import ChubConfig
     from backend.util.database import ChubDB
     from tests.conftest import StubLogger
 
+    src, posters, logos = tmp_path / "src", tmp_path / "posters", tmp_path / "logos"
+    for folder in (src, posters, logos):
+        folder.mkdir()
+    (src / "Dune (2021) {tmdb-438631}.jpg").write_bytes(b"poster")
+    (src / "Dune (2021) {tmdb-438631} - Logo.png").write_bytes(b"logo")
     db_path = str(tmp_path / "chub.db")
+    with ChubDB(StubLogger(), db_path=db_path) as db:
+        db.media.upsert(
+            {
+                "title": "Dune",
+                "normalized_title": "dune",
+                "alternate_titles": "[]",
+                "year": 2021,
+                "tmdb_id": 438631,
+                "folder": "Dune (2021)",
+                "status": "released",
+                "has_content": 1,
+            },
+            "movie",
+            "radarr",
+            "radarr1",
+        )
+    cfg = ChubConfig()
+    cfg.poster_renamerr.source_dirs = [str(src)]
+    cfg.poster_renamerr.destination_dir = str(posters)
+    cfg.poster_renamerr.instances = ["radarr1"]
+    cfg.poster_renamerr.run_asset_renamerr = True
+    cfg.asset_renamerr.sources = ["local"]
+    cfg.asset_renamerr.asset_types = ["logo"]
+    cfg.asset_renamerr.apply_method = "kometa"
+    cfg.asset_renamerr.destination_dir = str(logos)
+    cfg.asset_renamerr.instances = ["radarr1"]
+    live = {"config": cfg}
+    monkeypatch.setattr("backend.util.base_module.load_config", lambda: live["config"])
 
     class _OpenDB:
         def __init__(self, *a, **k):
@@ -1487,107 +1521,63 @@ def _poster_run_with_chained_assets(tmp_path, monkeypatch, poster_dest, asset_de
             return self._ctx.__exit__(*a)
 
     sent = []
+    arr = SimpleNamespace(
+        update_arr_database=lambda: sync(live) if sync else None,
+        update_collections_database=lambda: None,
+    )
     monkeypatch.setattr("backend.modules.poster_renamerr.ChubDB", _OpenDB)
+    monkeypatch.setattr("backend.modules.poster_renamerr.Connector", lambda **k: arr)
     monkeypatch.setattr(
         "backend.modules.poster_renamerr.NotificationManager",
         lambda cfg, log, module_name=None: SimpleNamespace(
             send_notification=lambda out: sent.append(module_name)
         ),
     )
-    asset_cfg = SimpleNamespace(
-        log_level="info",
-        dry_run=False,
-        sources=["local"],
-        asset_types=["logo"],
-        apply_method="kometa",
-        action_type="copy",
-        asset_folders=False,
-        destination_dir=str(asset_dest),
-        source_dirs=[],
-        print_only_renames=False,
-        sync_assets=False,
-        tmdb_language=["en"],
-        instances=[],
-        plex_scope=[],
-    )
-    monkeypatch.setattr(
-        "backend.util.base_module.load_config",
-        lambda: SimpleNamespace(
-            asset_renamerr=asset_cfg,
-            poster_renamerr=SimpleNamespace(asset_folders=False),
-            general=SimpleNamespace(max_logs=9),
-        ),
-    )
-    m = object.__new__(PosterRenamerr)
-    m.logger = StubLogger()
-    m._cancel_event = None
-    m.full_config = SimpleNamespace()
-    m.config = SimpleNamespace(
-        log_level="info",
-        dry_run=False,
-        apply_method="kometa",
-        destination_dir=str(poster_dest),
-        sync_posters=False,
-        report_unmatched_assets=False,
-        clean_orphan_assets=False,
-        run_border_replacerr=False,
-        run_asset_renamerr=True,
-        instances=[],
-        plex_scope=[],
-    )
-    landed = poster_dest / "Dune (2021).jpg"
-
-    def _rename_files(db, progress_ceiling=100):
-        landed.write_bytes(b"poster")
-        return {"movie": [{"title": "Dune", "year": 2021}]}, {
-            "media_cache": [1],
-            "collections_cache": [],
-        }
-
-    m.merge_assets = lambda **k: None
-    m.merge_gdrive_search_index = lambda db: None
-    m._scan_source_dirs = lambda: []
-    m.match_assets_to_media = lambda db: None
-    m._run_match_quality_pass = lambda db: None
-    m.rename_files = _rename_files
-    m.handle_output = lambda output: None
-    return m, sent, landed
+    return PosterRenamerr(logger=StubLogger()), sent, posters, logos
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
 def test_a_chained_asset_folder_it_cannot_write_stops_the_run_before_any_poster(
     tmp_path, monkeypatch
 ):
-    """Failing after the posters landed lost their notification and retried a done job."""
-    poster_dest, asset_dest = tmp_path / "posters", tmp_path / "logos"
-    poster_dest.mkdir()
-    asset_dest.mkdir()
-    m, sent, landed = _poster_run_with_chained_assets(
-        tmp_path, monkeypatch, poster_dest, asset_dest
-    )
-    asset_dest.chmod(0o555)
+    """No poster is written and no notification sent; the run fails naming the asset folder."""
+    m, sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    logos.chmod(0o555)
     try:
         with pytest.raises(PermissionError) as raised:
             m.run()
-        st = os.stat(asset_dest)
+        st = os.stat(logos)
     finally:
-        asset_dest.chmod(0o755)
+        logos.chmod(0o755)
 
     assert str(raised.value) == (
-        f"[Errno 13] Cannot create files in {asset_dest}: Permission denied (CHUB runs as "
+        f"[Errno 13] Cannot create files in {logos}: Permission denied (CHUB runs as "
         f"{os.getuid()}:{os.getgid()}; the folder is owned by {st.st_uid}:{st.st_gid}, "
         "dr-xr-xr-x). Check the volume's host path, and that the folder's owner "
         "matches PUID/PGID."
     )
-    assert (landed.exists(), sent) == (False, [])
+    assert (os.listdir(posters), sent) == ([], [])
 
 
 def test_chained_assets_on_writable_folders_notify_both_modules(tmp_path, monkeypatch):
-    poster_dest, asset_dest = tmp_path / "posters", tmp_path / "logos"
-    poster_dest.mkdir()
-    asset_dest.mkdir()
-    m, sent, landed = _poster_run_with_chained_assets(
-        tmp_path, monkeypatch, poster_dest, asset_dest
+    m, sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.run()
+    assert os.listdir(posters) == ["Dune (2021).jpg"]
+    assert os.listdir(logos) == ["Dune (2021)_logo.png"]
+    assert sent == ["asset_renamerr", "poster_renamerr"]
+
+
+def test_chained_assets_use_asset_settings_saved_during_the_poster_pass(tmp_path, monkeypatch):
+    moved = tmp_path / "logos-new"
+    moved.mkdir()
+
+    def _user_saves_a_new_asset_folder(live):
+        saved = live["config"].model_copy(deep=True)
+        saved.asset_renamerr.destination_dir = str(moved)
+        live["config"] = saved
+
+    m, _sent, _posters, logos = _poster_run_with_chained_assets(
+        tmp_path, monkeypatch, sync=_user_saves_a_new_asset_folder
     )
     m.run()
-    assert (landed.exists(), sent) == (True, ["asset_renamerr", "poster_renamerr"])
+    assert (os.listdir(logos), os.listdir(moved)) == ([], ["Dune (2021)_logo.png"])

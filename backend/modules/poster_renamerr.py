@@ -44,7 +44,7 @@ from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
 from backend.util.public_error import failure_text
 from backend.util.upload_posters import PosterUploader, upload_enabled_instances
-from backend.util.writable import writable_error
+from backend.util.writable import ensure_writable_dir
 
 # Process-global lock serializing the destructive poster_cache clear()+rebuild.
 # The scheduled run() and the webhook-driven run_poster_rename_adhoc() run on
@@ -309,27 +309,11 @@ class PosterRenamerr(ChubModule):
                 shutil.rmtree(staging_dir, ignore_errors=True)
 
     def ensure_destination_dir(self):
-        dest = self.config.destination_dir
-        if os.path.isdir(dest):
-            self.logger.debug(f"Destination directory already exists: {dest}")
-            # An existing folder may belong to another user (a mount Docker made as root).
-            refusal = None if getattr(self.config, "dry_run", False) else writable_error(dest)
-            if refusal:
-                raise refusal
-            return
-
-        self.logger.info(f"Creating destination directory: {dest}")
-        try:
-            # exist_ok: a concurrent pass (webhook worker vs the scheduled run)
-            # can create it between the check above and here.
-            os.makedirs(dest, exist_ok=True)
-        except OSError as e:
-            # Bare OSError surfaces as "[Errno 13] Permission denied" with no
-            # hint that the volume simply isn't mounted.
-            raise FileNotFoundError(
-                f"Could not create destination directory: {dest} ({e}). "
-                "Check the path is correct and its volume is mounted."
-            ) from e
+        ensure_writable_dir(
+            self.config.destination_dir,
+            self.logger,
+            check_write=not getattr(self.config, "dry_run", False),
+        )
 
     # Progress slice for sync_gdrive when invoked from inside poster_renamerr.
     # The nested SyncGDrive instance reports its own 0..100 internally but
@@ -1877,13 +1861,11 @@ class PosterRenamerr(ChubModule):
                     print_settings(self.logger, self.config)
 
                 self.ensure_destination_dir()
-                asset_module = None
                 if self.config.run_asset_renamerr:
                     from backend.modules.asset_renamerr import AssetRenamerr
 
-                    asset_module = AssetRenamerr(logger=self.logger)
                     # Before any poster lands, so a refused asset folder fails nothing half-applied.
-                    asset_module.ensure_destination_writable()
+                    AssetRenamerr(logger=self.logger).ensure_destination_writable()
 
                 if self.config.dry_run:
                     self.logger.info(
@@ -2057,9 +2039,11 @@ class PosterRenamerr(ChubModule):
                 # image_type-aware merge_assets scan (poster_cache already holds
                 # the asset rows), and the loaded media/Plex snapshot are all
                 # reused, so no second sync/scan/fetch happens. See AssetRenamerr.
-                if asset_module is not None:
+                if self.config.run_asset_renamerr:
                     with self._phase("asset_renamerr"):
                         self.logger.info("Running asset_renamerr")
+                        # Built here, not at the probe: asset settings saved during the poster pass apply.
+                        asset_module = AssetRenamerr(logger=self.logger)
                         # Drive the reserved tail of the parent's bar so the %
                         # advances through this long phase instead of sitting at
                         # 100. No-ops cleanly when this run has no job context.

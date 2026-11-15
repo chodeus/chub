@@ -585,7 +585,7 @@ def test_run_applies_a_scanned_logo_to_the_destination(db, monkeypatch, tmp_path
 
 @_SKIP_AS_ROOT
 def test_run_fails_once_on_a_destination_it_cannot_write(db, monkeypatch, tmp_path):
-    """A wrong volume used to log one warning per asset and end as success."""
+    """One error and a failed run, before the *arr sync and with no per-asset warning."""
     dest = tmp_path / "kometa"
     dest.mkdir()
     m = _standalone_run(db, monkeypatch, tmp_path, dest)
@@ -628,6 +628,134 @@ def test_dry_run_ignores_an_asset_destination_it_cannot_write(db, monkeypatch, t
         dest.chmod(0o755)
     assert m.logger.messages["error"] == []
     assert list(dest.iterdir()) == []
+
+
+def _add_arrival(db, tmp_path):
+    (tmp_path / "src" / "Arrival (2016) {tmdb-329865} - Logo.png").write_bytes(b"png")
+    db.media.upsert(
+        {
+            "title": "Arrival",
+            "normalized_title": "arrival",
+            "alternate_titles": "[]",
+            "year": 2016,
+            "tmdb_id": 329865,
+            "folder": "Arrival (2016)",
+            "status": "released",
+            "has_content": 1,
+        },
+        "movie",
+        "radarr",
+        "radarr1",
+    )
+
+
+_OWNER_HINT = "Check the volume's host path, and that the folder's owner matches PUID/PGID."
+
+
+@_SKIP_AS_ROOT
+def test_title_folders_refusing_every_logo_log_once_and_fail_the_run(db, monkeypatch, tmp_path):
+    from backend.modules.asset_renamerr import NoAssetWritten
+
+    dest = tmp_path / "kometa"
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, asset_folders=True)
+    _add_arrival(db, tmp_path)
+    locked = [dest / "Dune (2021)", dest / "Arrival (2016)"]
+    for folder in locked:
+        folder.mkdir(parents=True)
+        folder.chmod(0o555)
+    try:
+        with pytest.raises(NoAssetWritten) as raised:
+            m.run()
+    finally:
+        for folder in locked:
+            folder.chmod(0o755)
+    assert str(raised.value) == "All 2 asset(s) asset renamerr tried were refused by their destination"
+    assert m.logger.messages["warning"] == []
+    assert m.logger.messages["error"] == [
+        f"Cannot write {dest}/Dune (2021)/logo.png: Permission denied. {_OWNER_HINT} "
+        "2 asset(s) failed this way.",
+        "\n\nAn error occurred:\n",
+    ]
+
+
+@_SKIP_AS_ROOT
+def test_one_refused_title_folder_is_logged_once_and_the_rest_still_apply(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, asset_folders=True)
+    _add_arrival(db, tmp_path)
+    locked = dest / "Dune (2021)"
+    locked.mkdir(parents=True)
+    locked.chmod(0o555)
+    try:
+        m.run()
+    finally:
+        locked.chmod(0o755)
+    assert m.logger.messages["error"] == [
+        f"Cannot write {locked}/logo.png: Permission denied. {_OWNER_HINT} 1 asset(s) failed this way."
+    ]
+    assert os.listdir(dest / "Arrival (2016)") == ["logo.png"]
+    assert db.media_asset_matches.get_one("media", 1, "logo")["match_status"] == "failed"
+
+
+@_SKIP_AS_ROOT
+def test_an_unreadable_source_warns_and_never_fails_the_run(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    logo = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    logo.chmod(0o000)
+    try:
+        m.run()
+    finally:
+        logo.chmod(0o644)
+    assert m.logger.messages["error"] == []
+    assert m.logger.messages["warning"] == [
+        f"Asset file op failed for {logo} -> {dest}/Dune (2021)_logo.png: "
+        f"[Errno 13] Permission denied: '{logo}'"
+    ]
+    assert list(dest.iterdir()) == []
+
+
+@_SKIP_AS_ROOT
+def test_a_destination_on_a_missing_volume_says_to_check_the_mount(db, monkeypatch, tmp_path):
+    unmounted = tmp_path / "unmounted"
+    unmounted.mkdir()
+    dest = unmounted / "kometa"
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    unmounted.chmod(0o555)
+    try:
+        with pytest.raises(FileNotFoundError) as raised:
+            m.run()
+    finally:
+        unmounted.chmod(0o755)
+    assert str(raised.value) == (
+        f"Could not create destination directory: {dest} ([Errno 13] Permission denied: "
+        f"'{dest}'). Check the path is correct and its volume is mounted."
+    )
+
+
+@_SKIP_AS_ROOT
+def test_a_single_chosen_asset_keeps_its_own_warning(db, tmp_path):
+    from tests.conftest import StubLogger
+
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    logo = tmp_path / "Dune - Logo.png"
+    logo.write_bytes(b"png")
+    m = make_module(destination_dir=str(dest))
+    m.logger = StubLogger()
+    dune = {"id": 1, "title": "Dune", "year": 2021, "folder": "Dune (2021)"}
+    dest.chmod(0o555)
+    try:
+        applied, detail = m.apply_chosen_asset(db, "media", dune, "logo", str(logo))
+    finally:
+        dest.chmod(0o755)
+    assert (applied, detail) == (False, "file op failed: permission denied — see the server log")
+    assert db.media_asset_matches.get_one("media", 1, "logo")["match_status"] == "failed"
+    assert m.logger.messages["warning"] == [
+        f"Asset file op failed for {logo} -> {dest}/Dune (2021)_logo.png: "
+        f"[Errno 13] Permission denied: '{dest}/Dune (2021)_logo.png'"
+    ]
 
 
 def test_kometa_season_logo_naming(tmp_path):

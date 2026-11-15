@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 
-from backend.util.writable import nearest_existing_dir, writable_error
+from backend.util.writable import destination_refused, nearest_existing_dir, writable_error
 
 
 def test_a_writable_folder_passes_and_keeps_no_probe_file(tmp_path):
@@ -48,3 +48,41 @@ def test_the_refusal_names_the_fix_for_its_cause(tmp_path, monkeypatch, code, st
         f"{os.getuid()}:{os.getgid()}; the folder is owned by {st.st_uid}:{st.st_gid}, "
         f"{stat.filemode(st.st_mode)}). {hint}",
     )
+
+
+@pytest.mark.parametrize("code", [errno.ENOSPC, errno.EDQUOT, errno.EROFS])
+def test_a_full_or_read_only_disk_is_always_the_destination(tmp_path, code):
+    refused = destination_refused(OSError(code, "refused"), str(tmp_path / "logo.png"))
+    assert refused is True
+
+
+@pytest.mark.parametrize(
+    "code", [errno.ENOENT, errno.EACCES, errno.EROFS], ids=["missing", "unreadable", "read-only"]
+)
+def test_an_error_naming_only_the_source_is_not_the_destination(tmp_path, code):
+    dest = str(tmp_path / "kometa" / "logo.png")
+    src = str(tmp_path / "posters" / "Dune - Logo.png")
+    refused = destination_refused(OSError(code, "refused", src), dest)
+    assert refused is False
+
+
+def test_a_denied_write_to_the_destination_file_is_the_destination(tmp_path):
+    dest = str(tmp_path / "logo.png")
+    refused = destination_refused(OSError(errno.EACCES, "Permission denied", dest), dest)
+    assert refused is True
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_link_its_folder_refuses_is_the_destination(tmp_path):
+    folder = tmp_path / "Dune (2021)"
+    folder.mkdir()
+    src = tmp_path / "src.png"
+    src.write_bytes(b"png")
+    folder.chmod(0o555)
+    try:
+        with pytest.raises(OSError) as raised:
+            os.link(src, folder / "logo.png.chub-tmp")
+        refused = destination_refused(raised.value, str(folder / "logo.png"))
+    finally:
+        folder.chmod(0o755)
+    assert (raised.value.errno, refused) == (errno.EACCES, True)
