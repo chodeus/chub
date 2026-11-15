@@ -813,7 +813,7 @@ def test_a_single_chosen_asset_keeps_its_own_warning(db, tmp_path):
     ]
 
 
-def _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, landed="Dune (2021)_logo.png"):
+def _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, landed="Dune (2021)_logo.png", **over):
     """The user picks Arrival's logo in the UI once the run places ``landed``; returns the picked file."""
     picked = tmp_path / "picked.png"
     picked.write_bytes(b"picked")
@@ -825,7 +825,7 @@ def _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, landed="Dune (202
         real_replace(src, dst, *a, **k)
         if os.path.basename(dst) == landed and not done:
             done.append(dst)
-            make_module(destination_dir=str(dest)).apply_chosen_asset(
+            make_module(destination_dir=str(dest), **over).apply_chosen_asset(
                 db, "media", arrival, "logo", str(picked)
             )
 
@@ -2159,6 +2159,19 @@ def test_a_run_places_the_found_logo_once_a_moved_pick_is_deleted_from_kometa(db
     placed.unlink()
     m.run()
     assert placed.read_bytes() == b"png"
+
+
+def test_a_logo_picked_with_move_during_a_run_stays_through_the_next_run(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _add_arrival(db, tmp_path)
+    picked = _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, action_type="move")
+    placed = dest / "Arrival (2016)_logo.png"
+    m.run()
+    assert (placed.read_bytes(), picked.exists()) == (b"picked", False)
+    m.run()
+    assert placed.read_bytes() == b"picked"
 
 
 def test_a_plex_run_does_not_count_a_kometa_copy_as_the_pick(tmp_path):
