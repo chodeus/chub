@@ -645,10 +645,6 @@ class AssetRenamerr(ChubModule):
         kept_sources: Optional[List[OSError]] = None,
     ) -> Tuple[bool, str]:
         """Place one asset in the Kometa folder by action_type; given ``refusals``/``kept_sources``, those go there, logged at DEBUG."""
-        dest_root = self.config.destination_dir
-        if not dest_root:
-            return False, "no destination_dir configured for Kometa apply"
-
         # Kometa applies LOCAL files only — fanart art is never downloaded to
         # disk (it's Plex-only, streamed straight to Plex). fanart is already
         # filtered out of the Kometa source set in match_and_apply_assets, so
@@ -658,40 +654,9 @@ class AssetRenamerr(ChubModule):
         src = file
         if not src:
             return False, "no local source file to apply"
-
-        ext = os.path.splitext(src)[1] or ".png"
-        folder = self._kometa_folder(media)
-
-        # Kometa asset-name stem. Season-level assets on a show use Kometa's
-        # "Season##_<stem>" form; only background reaches here at season level.
-        stem = IMAGE_TYPE_TO_KOMETA_NAME.get(image_type, image_type)
-        season_number = media.get("season_number")
-        if media.get("asset_type") == "show" and season_number is not None:
-            stem = f"Season{int(season_number):02d}_{stem}"
-        elif media.get("asset_type") == "album":
-            # Album assets live in the ARTIST's folder, so key them by album
-            # title — otherwise every album collides on background.ext.
-            album = illegal_chars_regex.sub("", media.get("title") or "").strip()
-            if not album:
-                return False, "album has no title to name its asset after"
-            stem = f"{album}_{stem}"
-
-        if self.config.asset_folders:
-            dest_dir = os.path.join(dest_root, folder)
-            new_name = f"{stem}{ext}"
-        else:
-            dest_dir = dest_root
-            new_name = f"{folder}_{stem}{ext}"
-
-        # Path-traversal guard. `folder` comes from external *arr/Plex metadata
-        # (folder basename / title) and feeds EITHER the destination subdir
-        # (asset_folders on) OR the filename via new_name (asset_folders off) —
-        # so guarding dest_dir alone leaves the off path open. Resolve the FINAL
-        # path and confirm it stays under destination_dir before any file op.
-        real_base = os.path.realpath(dest_root)
-        new_path = os.path.realpath(os.path.join(dest_dir, new_name))
-        if not new_path.startswith(real_base + os.sep):
-            return False, f"path traversal blocked for folder '{folder}'"
+        new_path, why = self._kometa_path(media, image_type, src)
+        if new_path is None:
+            return False, why
 
         # Normalise the source too; it is a scanned asset path, never raw HTTP
         # input, but realpath keeps the file op operating on a canonical path.
@@ -711,6 +676,46 @@ class AssetRenamerr(ChubModule):
             if kept is not None:
                 note_kept_source(self.logger, kept, kept_sources)
         return True, new_path
+
+    def _kometa_path(self, media: dict, image_type: str, src: str) -> Tuple[Optional[str], str]:
+        """Where a Kometa apply of ``src`` lands, resolved: ``(path, "")``, or ``(None, why not)``."""
+        dest_root = self.config.destination_dir
+        if not dest_root:
+            return None, "no destination_dir configured for Kometa apply"
+        ext = os.path.splitext(src)[1] or ".png"
+        folder = self._kometa_folder(media)
+
+        # Kometa asset-name stem. Season-level assets on a show use Kometa's
+        # "Season##_<stem>" form; only background reaches here at season level.
+        stem = IMAGE_TYPE_TO_KOMETA_NAME.get(image_type, image_type)
+        season_number = media.get("season_number")
+        if media.get("asset_type") == "show" and season_number is not None:
+            stem = f"Season{int(season_number):02d}_{stem}"
+        elif media.get("asset_type") == "album":
+            # Album assets live in the ARTIST's folder, so key them by album
+            # title — otherwise every album collides on background.ext.
+            album = illegal_chars_regex.sub("", media.get("title") or "").strip()
+            if not album:
+                return None, "album has no title to name its asset after"
+            stem = f"{album}_{stem}"
+
+        if self.config.asset_folders:
+            dest_dir = os.path.join(dest_root, folder)
+            new_name = f"{stem}{ext}"
+        else:
+            dest_dir = dest_root
+            new_name = f"{folder}_{stem}{ext}"
+
+        # Path-traversal guard. `folder` comes from external *arr/Plex metadata
+        # (folder basename / title) and feeds EITHER the destination subdir
+        # (asset_folders on) OR the filename via new_name (asset_folders off) —
+        # so guarding dest_dir alone leaves the off path open. Resolve the FINAL
+        # path and confirm it stays under destination_dir before any file op.
+        real_base = os.path.realpath(dest_root)
+        new_path = os.path.realpath(os.path.join(dest_dir, new_name))
+        if not new_path.startswith(real_base + os.sep):
+            return None, f"path traversal blocked for folder '{folder}'"
+        return new_path, ""
 
     def apply_chosen_asset(
         self,
@@ -770,12 +775,12 @@ class AssetRenamerr(ChubModule):
             )
         return applied, detail
 
-    def _pick_still_placed(self, locked: dict) -> bool:
-        """True when a Kometa run still has the file a locked pick placed (its source may be gone, as after a move)."""
+    def _placed_pick(self, locked: dict) -> Optional[str]:
+        """The file a locked pick placed for Kometa, while it is still there (its source may be gone, as after a move)."""
         placed = locked.get("applied_path")
-        return (
-            self.config.apply_method == "kometa" and bool(placed) and os.path.exists(placed)
-        )
+        if self.config.apply_method == "kometa" and placed and os.path.exists(placed):
+            return placed
+        return None
 
     def _file_op(self, src: str, dest: str, action_type: str) -> Optional[OSError]:
         """Place ``src`` at ``dest`` by action_type; returns why a moved source stayed, when it did."""
@@ -999,8 +1004,12 @@ class AssetRenamerr(ChubModule):
                         picked,
                         None,
                     )
-                elif picked and self._pick_still_placed(locked):
-                    continue
+                elif picked and (placed := self._placed_pick(locked)):
+                    target, _why = self._kometa_path(media, image_type, placed)
+                    if target in (None, os.path.realpath(placed)):
+                        continue
+                    # The destination changed: place the pick from the file it last placed.
+                    resolved = ("local", placed, None)
                 else:
                     resolved = self._resolve_source(
                         media,
