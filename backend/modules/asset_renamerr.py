@@ -970,6 +970,8 @@ class AssetRenamerr(ChubModule):
                     if target_id is not None
                     else None
                 )
+                # applied_map predates the loop: re-check for a pick made since before applying or writing over it.
+                unlocked_at_start = not (locked and locked.get("user_confirmed"))
                 if (
                     locked
                     and locked.get("user_confirmed")
@@ -1009,6 +1011,7 @@ class AssetRenamerr(ChubModule):
                                 image_type=image_type,
                                 match_status="missing",
                                 detail="no source artwork found",
+                                unless_locked=unlocked_at_start,
                             )
                     continue
                 source, file, url = resolved
@@ -1042,6 +1045,19 @@ class AssetRenamerr(ChubModule):
                 ):
                     self.logger.debug(
                         f"↳ unchanged, skipping {image_type} for {media.get('title')}"
+                    )
+                    continue
+                if (
+                    unlocked_at_start
+                    and target_id is not None
+                    and not self.config.dry_run
+                    and (
+                        db.media_asset_matches.get_one(target_kind, target_id, image_type)
+                        or {}
+                    ).get("user_confirmed")
+                ):
+                    self.logger.debug(
+                        f"↳ {image_type} for {media.get('title')} was picked during this run, keeping the pick"
                     )
                     continue
 
@@ -1087,6 +1103,7 @@ class AssetRenamerr(ChubModule):
                         # Persist the outcome detail on BOTH paths so a failed
                         # apply can explain itself in the Needs-Review view.
                         detail=detail,
+                        unless_locked=unlocked_at_start,
                     )
 
                 output[image_type].append(

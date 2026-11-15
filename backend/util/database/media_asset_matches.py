@@ -32,11 +32,17 @@ class MediaAssetMatches(DatabaseBase):
         match_status: Optional[str] = None,
         detail: Optional[str] = None,
         matched_at: Optional[str] = None,
+        unless_locked: bool = False,
     ) -> None:
-        """Insert or refresh the match row for one (target, image_type)."""
+        """Insert or refresh the match row for one (target, image_type); ``unless_locked`` leaves a user-locked row as it is."""
         matched_at = matched_at or datetime.now(timezone.utc).isoformat()
+        keep_lock = (
+            "WHERE COALESCE(media_asset_matches.user_confirmed, 0) = 0"
+            if unless_locked
+            else ""
+        )
         self.execute_query(
-            """
+            f"""
             INSERT INTO media_asset_matches
                 (target_kind, target_id, image_type, source, matched_file,
                  matched_url, source_mtime, applied_method, applied_path,
@@ -54,6 +60,7 @@ class MediaAssetMatches(DatabaseBase):
                 match_status=excluded.match_status,
                 detail=excluded.detail,
                 matched_at=excluded.matched_at
+            {keep_lock}
             """,
             (
                 target_kind,

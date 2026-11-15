@@ -117,6 +117,46 @@ def test_upsert_preserves_user_confirmed_lock(db):
     assert row["match_status"] == "applied"
 
 
+def _run_write(db, target_id, matched_file):
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=target_id,
+        image_type="logo",
+        source="local",
+        matched_file=matched_file,
+        match_status="applied",
+        unless_locked=True,
+    )
+
+
+def test_unless_locked_leaves_a_locked_pick_as_it_is(db):
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=14,
+        image_type="logo",
+        source="local",
+        matched_file="/posters/picked.png",
+        match_status="applied",
+    )
+    db.media_asset_matches.set_user_confirmed("media", 14, "logo", True)
+    _run_write(db, 14, "/posters/auto.png")
+    row = db.media_asset_matches.get_one("media", 14, "logo")
+    assert (row["matched_file"], row["user_confirmed"]) == ("/posters/picked.png", 1)
+
+
+def test_unless_locked_still_writes_unlocked_and_new_rows(db):
+    db.media_asset_matches.upsert(
+        target_kind="media", target_id=15, image_type="logo", match_status="missing"
+    )
+    _run_write(db, 15, "/posters/auto.png")
+    _run_write(db, 16, "/posters/new.png")
+    rows = [db.media_asset_matches.get_one("media", i, "logo") for i in (15, 16)]
+    assert [(r["matched_file"], r["match_status"]) for r in rows] == [
+        ("/posters/auto.png", "applied"),
+        ("/posters/new.png", "applied"),
+    ]
+
+
 def test_set_user_confirmed_toggles_off(db):
     db.media_asset_matches.set_user_confirmed("media", 13, "logo", True)
     db.media_asset_matches.set_user_confirmed("media", 13, "logo", False)

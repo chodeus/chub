@@ -813,6 +813,89 @@ def test_a_single_chosen_asset_keeps_its_own_warning(db, tmp_path):
     ]
 
 
+def _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, landed="Dune (2021)_logo.png"):
+    """The user picks Arrival's logo in the UI once the run places ``landed``; returns the picked file."""
+    picked = tmp_path / "picked.png"
+    picked.write_bytes(b"picked")
+    arrival = db.media.get_by_id(2)
+    real_replace = os.replace
+    done = []
+
+    def _replace(src, dst, *a, **k):
+        real_replace(src, dst, *a, **k)
+        if os.path.basename(dst) == landed and not done:
+            done.append(dst)
+            make_module(destination_dir=str(dest)).apply_chosen_asset(
+                db, "media", arrival, "logo", str(picked)
+            )
+
+    monkeypatch.setattr(os, "replace", _replace)
+    return picked
+
+
+def test_a_logo_picked_during_a_run_is_not_overwritten_by_it(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    _add_arrival(db, tmp_path)
+    picked = _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest)
+    m.run()
+    row = db.media_asset_matches.get_one("media", 2, "logo")
+    assert (dest / "Arrival (2016)_logo.png").read_bytes() == b"picked"
+    assert (row["matched_file"], row["user_confirmed"]) == (str(picked), 1)
+    assert db.media_asset_matches.get_one("media", 1, "logo")["match_status"] == "applied"
+
+
+def test_a_pick_for_an_item_with_no_art_survives_the_run(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    _add_arrival(db, tmp_path)
+    (tmp_path / "src" / "Arrival (2016) {tmdb-329865} - Logo.png").unlink()
+    picked = _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest)
+    m.run()
+    row = db.media_asset_matches.get_one("media", 2, "logo")
+    assert (row["matched_file"], row["match_status"], row["user_confirmed"]) == (
+        str(picked),
+        "applied",
+        1,
+    )
+
+
+def test_a_pick_made_while_the_run_places_that_item_keeps_its_row(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    _add_arrival(db, tmp_path)
+    picked = _pick_arrival_when_placed(
+        db, monkeypatch, tmp_path, dest, landed="Arrival (2016)_logo.png"
+    )
+    m.run()
+    row = db.media_asset_matches.get_one("media", 2, "logo")
+    assert (dest / "Arrival (2016)_logo.png").read_bytes() == b"picked"
+    assert (row["matched_file"], row["user_confirmed"]) == (str(picked), 1)
+
+
+def test_a_lock_on_a_vanished_file_still_takes_the_runs_match(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=1,
+        image_type="logo",
+        source="local",
+        matched_file=str(tmp_path / "gone.png"),
+        match_status="applied",
+    )
+    db.media_asset_matches.set_user_confirmed("media", 1, "logo", True)
+    m.run()
+    scanned = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (dest / "Dune (2021)_logo.png").read_bytes() == b"png"
+    assert (row["matched_file"], row["match_status"]) == (str(scanned), "applied")
+
+
 def test_kometa_season_logo_naming(tmp_path):
     """A show season logo must use Kometa's Season##_logo form (PR #2681)."""
     dest = tmp_path / "assets"
