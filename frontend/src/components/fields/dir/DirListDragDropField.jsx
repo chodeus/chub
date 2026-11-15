@@ -191,6 +191,7 @@ export const DirListDragDropField = React.memo(
                             onMoveUp={handleMoveUp}
                             onMoveDown={handleMoveDown}
                             showPriority={!!field.priorityOrder}
+                            checkWritable={!!field.checkWritable}
                         />
                     </SortableContext>
                 </DndContext>

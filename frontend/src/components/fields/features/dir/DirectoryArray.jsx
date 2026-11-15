@@ -374,6 +374,7 @@ export const DirectoryArray = React.memo(
         onModeChange = null,
         // Priority-order display (opt-in)
         showPriority = false,
+        checkWritable = false,
         ...props
     }) => {
         const [modalOpen, setModalOpen] = useState(false);
@@ -570,6 +571,7 @@ export const DirectoryArray = React.memo(
                                         label: 'Directory Browser',
                                         type: 'dir_picker',
                                         description: 'Browse and select a directory',
+                                        checkWritable,
                                     }}
                                     value={currentValue}
                                     onChange={handlePickerChange}

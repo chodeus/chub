@@ -1,4 +1,4 @@
-/** The folders CHUB writes open a picker that checks CHUB can write there. */
+/** The folders CHUB writes into open a picker that checks CHUB can write there. */
 import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
 import { UIStateProvider } from '../../../contexts/UIStateContext.jsx';
 
@@ -37,12 +37,14 @@ describe('DirField', () => {
         api.probes.length = 0;
     });
 
-    it('write-checks exactly the module destinations and the GDrive sync location', () => {
+    it('write-checks the destinations, GDrive locations, hardlink and cleanup folders only', () => {
         expect(writeChecked).toEqual([
             'sync_gdrive.gdrive_list.location',
             'poster_renamerr.destination_dir',
             'asset_renamerr.destination_dir',
             'border_replacerr.destination_dir',
+            'jduparr.source_dirs',
+            'poster_cleanarr.asset_dirs',
         ]);
     });
 

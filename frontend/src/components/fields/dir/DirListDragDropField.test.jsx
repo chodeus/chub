@@ -52,4 +52,15 @@ describe('DirListDragDropField', () => {
         );
         expect(captured.arrayProps.minDirectories).toBe(0);
     });
+
+    it("passes the schema's write check on to the folder picker", () => {
+        render(
+            <DirListDragDropField
+                field={{ ...field, checkWritable: true }}
+                value={['/a']}
+                onChange={() => {}}
+            />
+        );
+        expect(captured.arrayProps.checkWritable).toBe(true);
+    });
 });
