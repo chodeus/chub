@@ -16,6 +16,7 @@ from backend.util.plex import PlexClient
 from backend.util.public_error import failure_text
 from backend.util.fanart import FanartClient
 from backend.util.release_readiness import is_release_ready
+from backend.util.writable import writable_error
 
 # The additional (non-poster) asset types this module manages. Banner is
 # deliberately absent: Plex has no banner upload API and Kometa does not read
@@ -795,6 +796,11 @@ class AssetRenamerr(ChubModule):
                     "single asset_folders setting, so one of these layouts will "
                     "not be read. Make them match your Kometa config."
                 )
+            # One error for a mount CHUB cannot write, not one warning per asset.
+            dest = self.config.destination_dir
+            refusal = None if self.config.dry_run or not dest else writable_error(dest)
+            if refusal:
+                raise refusal
 
         all_media = self._gather_media(db)
         if not all_media:
@@ -1183,6 +1189,8 @@ class AssetRenamerr(ChubModule):
             self.logger.info("Asset Renamerr interrupted. Exiting...")
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)
+            # Propagate so the run is recorded as failed, as poster_renamerr does.
+            raise
         finally:
             # Mark any declared-but-unreached phases skipped so the Jobs
             # timeline doesn't leave them stuck pending after an early failure.

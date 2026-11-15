@@ -514,6 +514,113 @@ def test_kometa_requires_destination():
     assert applied is False and "destination" in reason.lower()
 
 
+_SKIP_AS_ROOT = pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+
+
+def _standalone_run(db, monkeypatch, tmp_path, dest, **over):
+    """A real run(): scans a real logo and matches a seeded movie; only the *arr/Plex sync is stubbed."""
+    from backend.modules import asset_renamerr as asset_mod
+    from tests.conftest import StubLogger
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    (src_dir / "Dune (2021) {tmdb-438631} - Logo.png").write_bytes(b"png")
+    db.media.upsert(
+        {
+            "title": "Dune",
+            "normalized_title": "dune",
+            "alternate_titles": "[]",
+            "year": 2021,
+            "tmdb_id": 438631,
+            "folder": "Dune (2021)",
+            "status": "released",
+            "has_content": 1,
+        },
+        "movie",
+        "radarr",
+        "radarr1",
+    )
+
+    class _OpenDB:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return db
+
+        def __exit__(self, *a):
+            return False
+
+    sync = SimpleNamespace(
+        update_arr_database=lambda: None, update_collections_database=lambda: None
+    )
+    monkeypatch.setattr(asset_mod, "ChubDB", _OpenDB)
+    monkeypatch.setattr(asset_mod, "Connector", lambda **k: sync)
+    monkeypatch.setattr(
+        asset_mod,
+        "NotificationManager",
+        lambda *a, **k: SimpleNamespace(send_notification=lambda *a, **k: None),
+    )
+    m = make_module(
+        sources=["local"],
+        asset_types=["logo"],
+        source_dirs=[str(src_dir)],
+        destination_dir=str(dest),
+        instances=["radarr1"],
+        **over,
+    )
+    m.logger = StubLogger()
+    return m
+
+
+def test_run_applies_a_scanned_logo_to_the_destination(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    m.run()
+    assert [p.name for p in dest.iterdir()] == ["Dune (2021)_logo.png"]
+    assert m.logger.messages["error"] == []
+    assert db.media_asset_matches.get_one("media", 1, "logo")["match_status"] == "applied"
+
+
+@_SKIP_AS_ROOT
+def test_run_fails_once_on_a_destination_it_cannot_write(db, monkeypatch, tmp_path):
+    """A wrong volume used to log one warning per asset and end as success."""
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    dest.chmod(0o555)
+    try:
+        with pytest.raises(PermissionError) as raised:
+            m.run()
+        st = os.stat(dest)
+    finally:
+        dest.chmod(0o755)
+    assert str(raised.value) == (
+        f"[Errno 13] Cannot create files in {dest}: Permission denied (CHUB runs as "
+        f"{os.getuid()}:{os.getgid()}; the folder is owned by {st.st_uid}:{st.st_gid}, "
+        "dr-xr-xr-x). Check the volume's host path, and that the folder's owner "
+        "matches PUID/PGID."
+    )
+    assert m.logger.messages["warning"] == []
+    assert m.logger.messages["error"] == ["\n\nAn error occurred:\n"]
+    assert db.media_asset_matches.get_one("media", 1, "logo") is None
+
+
+@_SKIP_AS_ROOT
+def test_dry_run_ignores_an_asset_destination_it_cannot_write(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, dry_run=True)
+    dest.chmod(0o555)
+    try:
+        m.run()
+    finally:
+        dest.chmod(0o755)
+    assert m.logger.messages["error"] == []
+    assert list(dest.iterdir()) == []
+
+
 def test_kometa_season_logo_naming(tmp_path):
     """A show season logo must use Kometa's Season##_logo form (PR #2681)."""
     dest = tmp_path / "assets"
