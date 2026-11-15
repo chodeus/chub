@@ -42,7 +42,12 @@ from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
 from backend.util.public_error import failure_text
-from backend.util.upload_posters import PosterUploader, upload_enabled_instances
+from backend.util.run_summary import RunSummary
+from backend.util.upload_posters import (
+    PosterUploader,
+    upload_enabled_instances,
+    upload_skip_reason,
+)
 from backend.util.file_ops import (
     already_in_place,
     copy_into_place,
@@ -272,6 +277,11 @@ def build_asset_record(
     }
 
 
+def _show_key(asset: Dict[str, Any]) -> Tuple[Any, Any, Any]:
+    """A show's rows in the rename output; its season posters share it."""
+    return (asset.get("title"), asset.get("year"), asset.get("folder"))
+
+
 class PosterRenamerr(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
@@ -341,32 +351,37 @@ class PosterRenamerr(ChubModule):
     _SYNC_PROGRESS_CEILING_PCT = 10
 
     def sync_posters(self):
-        if self.config.sync_posters:
-            self.logger.info("Running sync_gdrive")
-            self._report_progress(0)
-            try:
-                from backend.modules.sync_gdrive import SyncGDrive
-
-                # skip_cache_refresh: merge_assets below does a full
-                # clear() + rebuild, so the per-folder refresh would be
-                # immediately overwritten — pure duplicated work.
-                sync = SyncGDrive(logger=self.logger)
-                # Drive the parent bar's 0..ceiling slice as folders complete,
-                # so the longest phase isn't flat. No-ops without job context.
-                sync.set_job_context(
-                    getattr(self, "_job_id", None), getattr(self, "_job_db", None)
-                )
-                sync.set_progress_window(0, self._SYNC_PROGRESS_CEILING_PCT)
-                sync.run(skip_cache_refresh=True)
-                self.logger.info("Finished running sync_gdrive")
-                self._report_progress(self._SYNC_PROGRESS_CEILING_PCT)
-            except FileNotFoundError as e:
-                self.logger.warning(
-                    f"Skipping GDrive sync: {e}. "
-                    "Set sync_posters to false in config if you don't use GDrive."
-                )
-        else:
+        if not self.config.sync_posters:
             self.logger.debug("Sync posters is disabled. Skipping...")
+            self._run_summary.gdrive_not_run("off", failed=False)
+            return
+        self.logger.info("Running sync_gdrive")
+        self._report_progress(0)
+        try:
+            from backend.modules.sync_gdrive import SyncGDrive
+
+            # skip_cache_refresh: merge_assets below does a full
+            # clear() + rebuild, so the per-folder refresh would be
+            # immediately overwritten — pure duplicated work.
+            sync = SyncGDrive(logger=self.logger)
+            # Drive the parent bar's 0..ceiling slice as folders complete,
+            # so the longest phase isn't flat. No-ops without job context.
+            sync.set_job_context(
+                getattr(self, "_job_id", None), getattr(self, "_job_db", None)
+            )
+            sync.set_progress_window(0, self._SYNC_PROGRESS_CEILING_PCT)
+            try:
+                sync.run(skip_cache_refresh=True)
+            finally:
+                self._run_summary.gdrive(sync.summary)
+            self.logger.info("Finished running sync_gdrive")
+            self._report_progress(self._SYNC_PROGRESS_CEILING_PCT)
+        except FileNotFoundError as e:
+            self.logger.warning(
+                f"Skipping GDrive sync: {e}. "
+                "Set sync_posters to false in config if you don't use GDrive."
+            )
+            self._run_summary.gdrive_not_run(f"skipped: {e}", failed=True)
 
     def process_file(self, file: str, new_file_path: str, action_type: str):
         try:
@@ -1316,6 +1331,24 @@ class PosterRenamerr(ChubModule):
         lidarr = getattr(getattr(self.full_config, "instances", None), "lidarr", None)
         return any(name in (lidarr or {}) for name in (self.config.instances or []))
 
+    def _output_sections(self, output: Dict[str, List[Dict[str, Any]]]) -> List[str]:
+        """The rename output's sections, in the order handle_output prints them."""
+        # Never hide a section that actually has rows — the scope check only
+        # suppresses the empty music headers on a Lidarr-less setup.
+        music_scope = self._music_in_scope()
+        return ["collection", "movie", "show"] + [
+            t for t in ("artist", "album") if music_scope or output.get(t)
+        ]
+
+    def _rename_counts(self, output: Dict[str, List[Dict[str, Any]]]) -> Dict[str, int]:
+        """Renamed items per section; a show counts once however many posters it got."""
+        return {
+            kind: len({_show_key(a) for a in output.get(kind, [])})
+            if kind == "show"
+            else len(output.get(kind, []))
+            for kind in self._output_sections(output)
+        }
+
     def handle_output(self, output: Dict[str, List[Dict[str, Any]]]):
         headers = {
             "collection": "Collection",
@@ -1324,13 +1357,7 @@ class PosterRenamerr(ChubModule):
             "artist": "Artist",
             "album": "Album",
         }
-        # Never hide a section that actually has rows — the scope check only
-        # suppresses the empty music headers on a Lidarr-less setup.
-        music_scope = self._music_in_scope()
-        sections = ["collection", "movie", "show"] + [
-            t for t in ("artist", "album") if music_scope or output.get(t)
-        ]
-        for asset_type in sections:
+        for asset_type in self._output_sections(output):
             assets = output.get(asset_type, [])
             header = f"{headers.get(asset_type, asset_type.capitalize())}s"
             self.logger.info(create_table([[header]]))
@@ -1343,7 +1370,7 @@ class PosterRenamerr(ChubModule):
             if asset_type == "show":
                 grouped = {}
                 for asset in assets:
-                    key = (asset.get("title"), asset.get("year"), asset.get("folder"))
+                    key = _show_key(asset)
                     grouped.setdefault(key, {"messages": [], "discord_message": []})
                     grouped[key]["messages"].extend(asset.get("messages", []))
                     grouped[key]["discord_message"].extend(
@@ -1722,9 +1749,10 @@ class PosterRenamerr(ChubModule):
                 getattr(self, "_job_id", None), getattr(self, "_job_db", None)
             )
             border.set_progress_window(*progress_window)
-        border.run(manifest, process_all=process_all, manifest_only=manifest_only)
+        counts = border.run(manifest, process_all=process_all, manifest_only=manifest_only)
 
         self.logger.info("Finished running border_replacerr.")
+        return counts
 
     def run_poster_rename_adhoc(self, media_items: List[dict]) -> dict:
         """
@@ -1848,6 +1876,8 @@ class PosterRenamerr(ChubModule):
             dir. destination_dir is not written.
         """
         apply_method = getattr(self.config, "apply_method", "kometa")
+        self._run_summary = RunSummary()
+        failure: Optional[BaseException] = None
         try:
             # On the plex path this redirects output to a temp staging dir and
             # cleans it up on exit; on the kometa path it's a no-op.
@@ -1917,8 +1947,9 @@ class PosterRenamerr(ChubModule):
                         logger=self.logger,
                         instance_map=build_instance_map(self.config),
                     )
-                    connector.update_arr_database()
+                    arr_results = connector.update_arr_database()
                     connector.update_collections_database()
+                self._run_summary.arr(arr_results)
 
                 # matching reads poster_cache per item; hold the rebuild lock so
                 # a webhook clear() can't wipe it mid-match.
@@ -1951,6 +1982,7 @@ class PosterRenamerr(ChubModule):
                     output, manifest = self.rename_files(
                         db, progress_ceiling=rename_ceiling
                     )
+                self._run_summary.renames(self._rename_counts(output))
 
                 if self.config.report_unmatched_assets:
                     from backend.modules.unmatched_assets import UnmatchedAssets
@@ -1990,7 +2022,7 @@ class PosterRenamerr(ChubModule):
                         instance_names = list(self.config.instances) + [
                             s.instance for s in (self.config.plex_scope or [])
                         ]
-                        run_orphan_assets_pass(
+                        orphans = run_orphan_assets_pass(
                             db=db,
                             instances=instance_names,
                             asset_dirs=allowed_roots,
@@ -2001,6 +2033,7 @@ class PosterRenamerr(ChubModule):
                                 getattr(cleanarr_cfg, "orphan_ignore_titles", []) or []
                             ),
                         )
+                    self._run_summary.orphans(orphans)
 
                 if self.config.run_border_replacerr:
                     with self._phase("border_replacerr"):
@@ -2010,12 +2043,13 @@ class PosterRenamerr(ChubModule):
                         # manifest assets upload; a full pass would re-encode
                         # Layer-A-skipped posters into dead temp paths from
                         # prior runs (leaking recreated dirs) for nothing.
-                        self.run_border_replacerr(
+                        border_counts = self.run_border_replacerr(
                             manifest,
                             progress_window=tail_windows.get("border"),
                             process_all=(apply_method != "plex"),
                             manifest_only=(apply_method == "plex"),
                         )
+                    self._run_summary.border(border_counts)
 
                 # Strict either/or: upload to Plex only on the "plex" path. The
                 # uploader still gates per-instance on add_posters, so only
@@ -2028,6 +2062,7 @@ class PosterRenamerr(ChubModule):
                         upload_result = PosterUploader(
                             db=db, logger=self.logger, manifest=manifest
                         ).run()
+                    self._run_summary.upload(upload_result)
 
                 # Posters are reported before the chained asset step, so its failure can't drop them.
                 # Always notify on a successful run, even when nothing
@@ -2054,10 +2089,7 @@ class PosterRenamerr(ChubModule):
                                 f"({failed} failed — check the logs)."
                             )
                         else:
-                            reason = (upload_result or {}).get(
-                                "message"
-                            ) or "upload did not run"
-                            empty_text = f"No posters were uploaded — {reason}"
+                            empty_text = f"No posters were uploaded — {upload_skip_reason(upload_result)}"
                         notify_output["empty_text"] = empty_text
                 manager = NotificationManager(
                     self.full_config, self.logger, module_name="poster_renamerr"
@@ -2082,16 +2114,19 @@ class PosterRenamerr(ChubModule):
                         # chained path emits nothing above DEBUG.
                         asset_module.handle_output(asset_output)
                         self.logger.info("Finished running asset_renamerr")
+                    self._run_summary.assets(asset_output)
                     # Notify under asset_renamerr so its own notification config
                     # governs (mirrors how each chained module owns its policy).
                     NotificationManager(
                         asset_module.full_config, self.logger, module_name="asset_renamerr"
                     ).send_notification(asset_output)
 
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as e:
+            failure = e
             self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception as e:
+            failure = e
             self.logger.error(f"\n\nAn error occurred: {e}\n", exc_info=True)
             # Propagate so the run is recorded as failed, as sync_gdrive does.
             raise
@@ -2099,4 +2134,21 @@ class PosterRenamerr(ChubModule):
             # Mark any declared-but-unreached phases skipped (e.g. an early
             # failure) so the Jobs timeline doesn't leave them stuck pending.
             self._finalize_phases()
+            self._log_run_summary(failure)
             self.logger.log_outro()
+
+    def _log_run_summary(self, failure: Optional[BaseException]) -> None:
+        """Log the Run Summary; a fault here is a warning, never raised over the run's own error."""
+        try:
+            self._run_summary.log(
+                self.logger,
+                failure,
+                self.phase_failure,
+                self.is_cancelled(),
+                dry_run=bool(self.config.dry_run),
+            )
+        except Exception as e:
+            self.logger.warning(f"Could not log the run summary: {e}")
+        finally:
+            # Drop the failed phase's traceback and frames with the run.
+            self.phase_failure = None

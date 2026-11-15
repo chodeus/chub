@@ -17,6 +17,11 @@ from backend.util.plex_index import PlexMediaIndex, _coerce_year
 from backend.util.plex import PlexClient
 
 
+def upload_skip_reason(result: Optional[Dict[str, Any]]) -> str:
+    """Why an upload placed nothing and failed nothing: its message, or that it never ran."""
+    return (result or {}).get("message") or "upload did not run"
+
+
 def upload_enabled_instances(plex_scope) -> Dict[str, List[str]]:
     """add_posters scopes merged per instance; [] (all libraries) wins over a list."""
     enabled: Dict[str, List[str]] = {}

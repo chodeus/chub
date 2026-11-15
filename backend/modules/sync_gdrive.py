@@ -9,7 +9,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from shutil import rmtree, which
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.util.base_module import ChubModule
 from backend.util.constants import ASSET_IMAGE_EXTENSIONS
@@ -205,6 +205,8 @@ class SyncGDrive(ChubModule):
         super().__init__(logger=logger)
         self.rclone_path = self.get_rclone_path()
         self.db = None
+        # Set by run() once every folder is counted, a failed sync included.
+        self.summary: Optional[Dict[str, Any]] = None
 
     @property
     def logger(self) -> Any:
@@ -970,6 +972,13 @@ class SyncGDrive(ChubModule):
                     except Exception as e:
                         self.logger.debug(f"sync_gdrive notification failed: {e}")
 
+                self.summary = {
+                    "total": total,
+                    "synced": sum(1 for it in synced_items if it["success"]),
+                    "failed": failed_count,
+                    "changes": _format_counter_summary(agg_counters),
+                    "dry_run": bool(self.config.dry_run),
+                }
                 if failed_count > 0:
                     msg = f"GDrive sync failed for {failed_count}/{total} folders"
                     self.logger.error(msg)
