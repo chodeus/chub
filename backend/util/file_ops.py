@@ -70,7 +70,7 @@ def already_in_place(src: str, dest: str, action_type: str) -> bool:
     """True when ``dest`` holds ``src``'s bytes, unless a move onto a link to ``src`` still has ``src`` to remove."""
     if action_type == "move" and not _same_entry(src, dest) and os.path.samefile(src, dest):
         return False
-    return filecmp.cmp(src, dest)
+    return filecmp.cmp(src, dest, shallow=False)
 
 
 def move_into_place(src: str, dest: str) -> Optional[OSError]:

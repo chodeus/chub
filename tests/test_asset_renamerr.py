@@ -2186,7 +2186,24 @@ def test_a_logo_picked_with_move_follows_a_new_destination(db, monkeypatch, tmp_
     m.run()
     with open(landed, "rb") as f:
         kept = f.read()
+    row = db.media_asset_matches.get_one("media", 1, "logo")
     assert (kept, row["applied_path"]) == (b"my pick", str(landed))
+
+
+@pytest.mark.parametrize("action_type", ["copy", "hardlink"])
+def test_an_unchanged_logo_follows_a_new_destination(db, monkeypatch, tmp_path, action_type):
+    dest, new_dest = tmp_path / "kometa", tmp_path / "kometa2"
+    dest.mkdir()
+    new_dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type=action_type)
+    m.run()
+    m.config.destination_dir = str(new_dest)
+    m.run()
+    landed = new_dest / "Dune (2021)_logo.png"
+    with open(landed, "rb") as f:
+        placed = f.read()
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (placed, row["applied_path"]) == (b"png", str(landed))
 
 
 def test_a_moved_pick_stays_a_file_after_the_action_becomes_symlink(db, monkeypatch, tmp_path):

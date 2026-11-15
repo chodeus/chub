@@ -489,6 +489,7 @@ class AssetRenamerr(ChubModule):
         src_mtime: Optional[float],
         media: Optional[dict] = None,
         is_collection: bool = False,
+        image_type: Optional[str] = None,
     ) -> bool:
         """True when this asset was already applied with the same source and the
         source hasn't changed — so we can skip re-applying it. Never skip on a
@@ -505,10 +506,12 @@ class AssetRenamerr(ChubModule):
         )
         if recorded is None:
             return False
-        # For the kometa path, the destination file must still exist.
+        # For the kometa path, the destination file must still exist and, when a run can place it, sit where it lands now.
         if apply_method == "kometa":
             applied_path = prev.get("applied_path")
             if not applied_path or not os.path.lexists(applied_path):
+                return False
+            if media is not None and image_type and not self._at_current_target(media, image_type, applied_path):
                 return False
         # For the plex path, only skip if EVERY currently-targeted library
         # already received it; otherwise re-apply so a newly-added or
@@ -782,6 +785,11 @@ class AssetRenamerr(ChubModule):
             return placed
         return None
 
+    def _at_current_target(self, media: dict, image_type: str, placed: str) -> bool:
+        """True when ``placed`` is where a Kometa apply would land now, or there is nowhere to land it."""
+        target, _why = self._kometa_path(media, image_type, placed)
+        return target in (None, os.path.realpath(placed))
+
     def _file_op(self, src: str, dest: str, action_type: str) -> Optional[OSError]:
         """Place ``src`` at ``dest`` by action_type; returns why a moved source stayed, when it did."""
         kept = None
@@ -1005,8 +1013,7 @@ class AssetRenamerr(ChubModule):
                         None,
                     )
                 elif picked and (placed := self._placed_pick(locked)):
-                    target, _why = self._kometa_path(media, image_type, placed)
-                    if target in (None, os.path.realpath(placed)):
+                    if self._at_current_target(media, image_type, placed):
                         continue
                     # The destination changed: place the pick from the file it last placed.
                     resolved = ("local", placed, None)
@@ -1075,6 +1082,7 @@ class AssetRenamerr(ChubModule):
                     src_mtime,
                     media=media,
                     is_collection=is_collection,
+                    image_type=image_type,
                 ):
                     self.logger.debug(
                         f"↳ unchanged, skipping {image_type} for {media.get('title')}"

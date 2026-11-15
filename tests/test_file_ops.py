@@ -155,6 +155,14 @@ def test_only_a_move_onto_a_link_to_its_source_is_not_already_in_place(tmp_path,
     assert file_ops.already_in_place(str(src), str(dest), action_type) is expected
 
 
+def test_a_destination_with_the_same_size_and_time_but_other_bytes_is_not_already_in_place(tmp_path):
+    _src_dir, src, _dest_dir, dest = _folders(tmp_path)
+    dest.write_bytes(b"new")
+    st = os.stat(src)
+    os.utime(dest, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert file_ops.already_in_place(str(src), str(dest), "copy") is False
+
+
 def test_a_copy_without_keep_mode_gets_a_new_files_mode(tmp_path):
     _src_dir, src, _dest_dir, dest = _folders(tmp_path)
     src.chmod(0o600)
