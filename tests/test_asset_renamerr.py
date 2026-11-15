@@ -876,6 +876,25 @@ def test_a_pick_made_while_the_run_places_that_item_keeps_its_row(db, monkeypatc
     assert (row["matched_file"], row["user_confirmed"]) == (str(picked), 1)
 
 
+def test_a_pick_is_locked_before_its_file_lands(db, monkeypatch, tmp_path):
+    """A run reading the row while the picked file lands already sees the lock."""
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    seen = []
+    real_replace = os.replace
+
+    def _replace(src, dst, *a, **k):
+        seen.append(db.media_asset_matches.get_one("media", 1, "logo"))
+        return real_replace(src, dst, *a, **k)
+
+    monkeypatch.setattr(os, "replace", _replace)
+    dune = {"id": 1, "title": "Dune", "year": 2021, "folder": "Dune (2021)"}
+    make_module(destination_dir=str(dest)).apply_chosen_asset(
+        db, "media", dune, "logo", _make_src(tmp_path)
+    )
+    assert [row and row["user_confirmed"] for row in seen] == [1]
+
+
 def test_a_lock_on_a_vanished_file_still_takes_the_runs_match(db, monkeypatch, tmp_path):
     dest = tmp_path / "kometa"
     dest.mkdir()

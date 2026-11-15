@@ -2,6 +2,7 @@
 image_type) ``ignored`` flag added for the Unmatched → Additional artwork view.
 """
 
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
@@ -155,6 +156,13 @@ def test_unless_locked_still_writes_unlocked_and_new_rows(db):
         ("/posters/auto.png", "applied"),
         ("/posters/new.png", "applied"),
     ]
+
+
+def test_get_one_reads_through_the_callers_connection(db):
+    conn = db.media_asset_matches.open_read_connection()
+    conn.close()
+    with pytest.raises(sqlite3.ProgrammingError):
+        db.media_asset_matches.get_one("media", 1, "logo", conn=conn)
 
 
 def test_set_user_confirmed_toggles_off(db):

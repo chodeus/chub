@@ -1,5 +1,6 @@
 # util/database/media_asset_matches.py
 
+import sqlite3
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -133,14 +134,19 @@ class MediaAssetMatches(DatabaseBase):
         )
 
     def get_one(
-        self, target_kind: str, target_id: int, image_type: str
+        self,
+        target_kind: str,
+        target_id: int,
+        image_type: str,
+        conn: Optional[sqlite3.Connection] = None,
     ) -> Optional[dict]:
-        """Return the single match row for one (target, image_type), or None."""
+        """Return the single match row for one (target, image_type), or None; ``conn`` as in execute_query."""
         row = self.execute_query(
             "SELECT * FROM media_asset_matches "
             "WHERE target_kind=? AND target_id=? AND image_type=?",
             (target_kind, int(target_id), image_type),
             fetch_one=True,
+            conn=conn,
         )
         return dict(row) if row else None
 

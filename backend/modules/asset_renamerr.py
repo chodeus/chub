@@ -709,6 +709,13 @@ class AssetRenamerr(ChubModule):
             self.logger.debug(f"Could not stat chosen asset '{file}': {exc}")
             src_mtime = None
 
+        target_id = media.get("id")
+        if target_id is not None:
+            # Lock before applying, whatever the outcome: a run that read this row unlocked then leaves
+            # it alone, and a failed apply (e.g. Plex briefly unreachable) is retried with this file.
+            db.media_asset_matches.set_user_confirmed(
+                target_kind, target_id, image_type, True
+            )
         applied_libs: Optional[List[str]] = None
         if apply_method == "plex":
             applied, detail, applied_libs = self._apply_direct(
@@ -717,7 +724,6 @@ class AssetRenamerr(ChubModule):
         else:
             applied, detail = self._apply_kometa(media, image_type, "local", file, None)
 
-        target_id = media.get("id")
         if target_id is not None:
             db.media_asset_matches.upsert(
                 target_kind=target_kind,
@@ -734,12 +740,6 @@ class AssetRenamerr(ChubModule):
                 ),
                 match_status="applied" if applied else "failed",
                 detail=detail,
-            )
-            # Lock the manual pick regardless of apply outcome — even if this
-            # leg failed (e.g. Plex briefly unreachable), the chosen file is
-            # saved and the next run reuses it instead of re-resolving.
-            db.media_asset_matches.set_user_confirmed(
-                target_kind, target_id, image_type, True
             )
         return applied, detail
 
@@ -1052,7 +1052,9 @@ class AssetRenamerr(ChubModule):
                     and target_id is not None
                     and not self.config.dry_run
                     and (
-                        db.media_asset_matches.get_one(target_kind, target_id, image_type)
+                        db.media_asset_matches.get_one(
+                            target_kind, target_id, image_type, conn=poster_conn
+                        )
                         or {}
                     ).get("user_confirmed")
                 ):
