@@ -497,7 +497,8 @@ class BorderReplacerr(ChubModule):
         manifest: Optional[dict] = None,
         process_all: bool = False,
         manifest_only: bool = False,
-    ):
+    ) -> Optional[Dict[str, int]]:
+        """Re-border the run's posters; returns the counts and ``dry_run``, or None when there were none to process."""
         # manifest_only is a HARD restriction for the plex apply path: staged
         # files live in a per-run temp dir and only manifest assets upload, so
         # a full-library sweep (process_all, a holiday reset_all edge, or a
@@ -554,7 +555,7 @@ class BorderReplacerr(ChubModule):
             if not assets:
                 self.logger.info("No assets to process for border replacerr.")
                 db.holiday.set_status(active_holiday)
-                return
+                return None
 
             border_colors = results["border_colors"]
             border_paths = results.get("border_paths") or []
@@ -856,17 +857,14 @@ class BorderReplacerr(ChubModule):
             refused += len(write_refusals)
             refusal = refusal or next(iter(write_refusals), None)
             all_failed = bool(failed) and failed == attempted and not gate_skipped
-            self._log_completion(
-                {
-                    "processed": processed,
-                    "replaced": replaced,
-                    "removed": removed,
-                    "skipped": skipped,
-                    "failed": failed,
-                },
-                attempted,
-                all_failed,
-            )
+            counts = {
+                "processed": processed,
+                "replaced": replaced,
+                "removed": removed,
+                "skipped": skipped,
+                "failed": failed,
+            }
+            self._log_completion(counts, attempted, all_failed)
             self.logger.info(
                 f"   → {processed} processed, {replaced} replaced, {removed} removed, "
                 f"{skipped} skipped, {failed} failed"
@@ -900,3 +898,4 @@ class BorderReplacerr(ChubModule):
                     )
                 except Exception as e:
                     self.logger.warning(f"border_replacerr notification failed: {e}")
+            return {**counts, "dry_run": bool(dry_run)}

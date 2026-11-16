@@ -13,12 +13,14 @@ matching and cache handling"), specifically:
 import errno
 import json
 import os
+import threading
 from types import SimpleNamespace
 
 import pytest
 
 
 from backend.modules.poster_renamerr import PosterRenamerr
+from backend.util.connector import SyncResult
 
 
 def make_module():
@@ -1522,12 +1524,19 @@ def _poster_run_with_chained_assets(tmp_path, monkeypatch, sync=None):
         def __exit__(self, *a):
             return self._ctx.__exit__(*a)
 
+    def _update_arr_database():
+        if sync:
+            sync(live)
+        return [SyncResult(instance_name="radarr1", instance_type="radarr", success=True)]
+
     sent = []
     arr = SimpleNamespace(
-        update_arr_database=lambda: sync(live) if sync else None,
+        update_arr_database=_update_arr_database,
         update_collections_database=lambda: None,
     )
     monkeypatch.setattr("backend.modules.poster_renamerr.ChubDB", _OpenDB)
+    monkeypatch.setattr("backend.modules.sync_gdrive.ChubDB", _OpenDB)
+    monkeypatch.setattr("backend.modules.border_replacerr.ChubDB", _OpenDB)
     monkeypatch.setattr("backend.modules.poster_renamerr.Connector", lambda **k: arr)
     monkeypatch.setattr(
         "backend.modules.poster_renamerr.NotificationManager",
@@ -1628,6 +1637,26 @@ def _apply_dune_pick(tmp_path):
 
 
 _NOT_PLACED = "Match saved and locked — it will be applied on the next poster_renamerr run"
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_poster_it_could_not_place_fails_the_renamed_line(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.asset_folders = True
+    folder = posters / "Dune (2021)"
+    folder.mkdir()
+    folder.chmod(0o555)
+    try:
+        m.run()
+    finally:
+        folder.chmod(0o755)
+    summary = _run_summary(m)
+    [renamed] = [line for line in summary if line.startswith("Posters renamed")]
+    assert (os.listdir(folder), renamed, summary[-1]) == (
+        [],
+        "Posters renamed  : ❌ 0 collections, 0 movies, 0 shows, 1 failed",
+        "Result           : ⚠ finished, with failures above",
+    )
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
@@ -1853,3 +1882,247 @@ def test_chained_assets_use_asset_settings_saved_during_the_poster_pass(tmp_path
     m.run()
     assert (os.listdir(logos), os.listdir(moved)) == ([], ["Dune (2021)_logo.png"])
     assert used == {"poster_renamerr": started_with, "asset_renamerr": saved[0]}
+
+
+# Prints its argv's last item's kind of result; "config create" succeeds silently.
+_FAKE_RCLONE = """#!/bin/sh
+[ "$1" = config ] && exit 0
+for last; do :; done
+case "$last" in
+  *broken*) echo "2026/11/15 13:00:00 ERROR : drive not found"; exit 1 ;;
+  *changed*) echo "2026/11/15 13:00:00 INFO  : a.jpg: Copied (new)"
+             echo "2026/11/15 13:00:00 INFO  : b.jpg: Deleted" ;;
+esac
+exit 0
+"""
+
+
+def _syncing(tmp_path, monkeypatch, *folders, rclone=_FAKE_RCLONE, sync=None):
+    """The chained-asset run with sync_posters on, one gdrive folder per name, through a fake rclone."""
+    from backend.util.config import GDriveListEntry
+
+    fake = tmp_path / "rclone"
+    fake.write_text(rclone)
+    fake.chmod(0o755)
+    monkeypatch.setenv("RCLONE_PATH", str(fake))
+    m, _sent, _posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch, sync=sync)
+    m.config.sync_posters = True
+    m.full_config.sync_gdrive.gdrive_list = [
+        GDriveListEntry(id=f"id-{n}", location=str(tmp_path / "gdrive" / n), name=n)
+        for n in folders
+    ]
+    return m
+
+
+def _run_summary(m):
+    """The info lines after the last Run Summary header: what ends the log."""
+    info = m.logger.messages["info"]
+    [*_, header] = (i for i, line in enumerate(info) if "Run Summary" in line)
+    return info[header + 1 :]
+
+
+def test_the_log_ends_with_an_in_sync_drive_and_what_the_run_renamed(tmp_path, monkeypatch):
+    m = _syncing(tmp_path, monkeypatch, "drive1")
+    m.run()
+    assert _run_summary(m) == [
+        "GDrive sync      : 1/1 folders, already in sync, no changes",
+        "Arr sync         : 1/1 instances synced",
+        "Posters renamed  : 0 collections, 1 movie, 0 shows",
+        "Asset renamerr   : 1 logo applied",
+        "Result           : ✅ finished",
+    ]
+
+
+def test_the_summary_counts_what_the_drive_sync_changed(tmp_path, monkeypatch):
+    m = _syncing(tmp_path, monkeypatch, "changed")
+    m.run()
+    assert _run_summary(m)[0] == "GDrive sync      : 1/1 folders, 1 copied, 1 deleted"
+
+
+def test_a_failed_drive_folder_is_summed_up_and_still_fails_the_run(tmp_path, monkeypatch):
+    m = _syncing(tmp_path, monkeypatch, "drive1", "broken")
+    with pytest.raises(RuntimeError, match="GDrive sync failed for 1/2 folders"):
+        m.run()
+    assert (_run_summary(m), m.phase_failure) == (
+        [
+            "GDrive sync      : ❌ 1/2 folders failed",
+            "Result           : ❌ failed at sync_gdrive: GDrive sync failed for 1/2 folders",
+        ],
+        None,
+    )
+
+
+def test_sync_posters_off_shows_as_off(tmp_path, monkeypatch):
+    m, _sent, _posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.run()
+    assert _run_summary(m)[0] == "GDrive sync      : off"
+
+
+def test_a_drive_sync_with_no_runnable_rclone_shows_as_skipped(tmp_path, monkeypatch):
+    m = _syncing(tmp_path, monkeypatch, "drive1")
+    (tmp_path / "rclone").chmod(0o644)
+    m.run()
+    assert (_run_summary(m)[0], _run_summary(m)[-1]) == (
+        f"GDrive sync      : ❌ skipped: RCLONE_PATH is set to '{tmp_path / 'rclone'}', "
+        "but it is not an executable file.",
+        "Result           : ⚠ finished, with failures above",
+    )
+
+
+def test_a_dry_run_says_so_first(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.dry_run = True
+    m.run()
+    assert (_run_summary(m)[0], os.listdir(posters)) == ("Poster renamerr ran as a dry run.", [])
+
+
+def _orphan_run(tmp_path, monkeypatch, mode):
+    """The chained-asset run with the orphan pass on in ``mode``, and one orphan poster in the destination."""
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.clean_orphan_assets = True
+    m.full_config.poster_cleanarr.orphan_assets_mode = mode
+    # The orphan pass re-reads config from disk and logs to its own file.
+    monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: m.full_config)
+    monkeypatch.setenv("LOG_DIR", str(tmp_path / "logs"))
+    (posters / "Gone Movie (1999).jpg").write_bytes(b"old")
+    return m, posters
+
+
+def test_orphans_in_the_destination_are_summed_up(tmp_path, monkeypatch):
+    m, _posters = _orphan_run(tmp_path, monkeypatch, "report")
+    m.run()
+    assert "Orphan cleanup   : 1 orphan found (report only)" in _run_summary(m)
+
+
+def test_an_orphan_it_could_not_move_fails_the_line(tmp_path, monkeypatch):
+    m, posters = _orphan_run(tmp_path, monkeypatch, "move")
+    (posters / ".chub_orphan_restore").write_text("a file where the restore folder goes")
+    m.run()
+    assert _run_summary(m)[-3:] == [
+        "Orphan cleanup   : ❌ 0 orphans moved, 1 not moved, see the cleanarr log",
+        "Asset renamerr   : 1 logo applied",
+        "Result           : ⚠ finished, with failures above",
+    ]
+
+
+def test_an_orphan_pass_that_could_not_run_says_skipped(tmp_path, monkeypatch):
+    m, _posters = _orphan_run(tmp_path, monkeypatch, "bogus")
+    m.run()
+    assert "Orphan cleanup   : ❌ skipped, see the cleanarr log" in _run_summary(m)
+
+
+def test_border_replacerr_counts_a_poster_it_could_not_border(tmp_path, monkeypatch):
+    m, _sent, _posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.run_border_replacerr = True
+    m.run()
+    assert _run_summary(m) == [
+        "GDrive sync      : off",
+        "Arr sync         : 1/1 instances synced",
+        "Posters renamed  : 0 collections, 1 movie, 0 shows",
+        "Border replacerr : ❌ 0 changed of 1 processed, 1 failed",
+        "Asset renamerr   : 1 logo applied",
+        "Result           : ⚠ finished, with failures above",
+    ]
+
+
+def test_a_chained_module_in_its_own_dry_run_is_marked(tmp_path, monkeypatch):
+    m, _sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.run_border_replacerr = True
+    m.full_config.border_replacerr.dry_run = True
+    m.full_config.asset_renamerr.dry_run = True
+    m.run()
+    landed = [f for _root, _dirs, files in os.walk(posters) for f in files]
+    assert (landed, os.listdir(logos), _run_summary(m)[3:]) == (
+        [],
+        [],
+        [
+            "Border replacerr : [DRY RUN] 1 changed of 1 processed",
+            "Asset renamerr   : [DRY RUN] 1 logo applied",
+            "Result           : ✅ finished",
+        ],
+    )
+
+
+def test_a_drive_sync_in_its_own_dry_run_is_marked(tmp_path, monkeypatch):
+    m = _syncing(tmp_path, monkeypatch, "drive1")
+    m.full_config.sync_gdrive.dry_run = True
+    m.run()
+    assert _run_summary(m)[0] == "GDrive sync      : [DRY RUN] 1/1 folders, already in sync, no changes"
+
+
+def test_an_arr_instance_it_could_not_reach_fails_the_line(tmp_path, monkeypatch):
+    from backend.util.config import InstanceDetail
+    from backend.util.connector import Connector
+
+    m, _sent, _posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.full_config.instances.radarr = {"radarr1": InstanceDetail(url="http://127.0.0.1:9", api="0" * 32)}
+    monkeypatch.setattr("backend.util.connector.load_config", lambda *a, **k: m.full_config)
+    monkeypatch.setattr("backend.modules.poster_renamerr.Connector", Connector)
+    # create_arr_client returns None for an instance it cannot reach.
+    monkeypatch.setattr("backend.util.connector.create_arr_client", lambda url, api, logger: None)
+    m.run()
+    [warned] = [w for w in m.logger.messages["warning"] if "Failed to sync radarr1: " in w]
+    error = warned.split("Failed to sync radarr1: ", 1)[1]
+    assert (_run_summary(m)[1], _run_summary(m)[-1]) == (
+        f"Arr sync         : ❌ 0/1 instances synced, radarr1: {error}",
+        "Result           : ⚠ finished, with failures above",
+    )
+
+
+def test_a_cancelled_run_is_summed_up_as_cancelled(tmp_path, monkeypatch):
+    m, _sent, _posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m._cancel_event = threading.Event()
+    m._cancel_event.set()
+    m.run()
+    assert _run_summary(m)[-1] == "Result           : ⏹ cancelled"
+
+
+def test_a_show_counts_once_however_many_season_posters_it_got(tmp_path, monkeypatch):
+    m, _sent, _posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    show = {"title": "Andor", "year": 2022, "folder": "Andor (2022)"}
+    output = {"show": [show, {**show, "season_number": 1}, {**show, "season_number": 2}]}
+    assert m._rename_counts(output) == {"collection": 0, "movie": 0, "show": 1}
+
+
+def test_a_plex_upload_that_did_not_run_says_why(tmp_path, monkeypatch):
+    m, _sent, _posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.apply_method = "plex"
+    m.run()
+    [upload] = [line for line in _run_summary(m) if line.startswith("Plex upload")]
+    assert upload == (
+        "Plex upload      : ❌ 0 uploaded, 0 failed (No Plex instances enabled for poster upload)"
+    )
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_failure_before_any_step_names_no_step(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    posters.chmod(0o555)
+    try:
+        with pytest.raises(PermissionError) as raised:
+            m.run()
+    finally:
+        posters.chmod(0o755)
+    assert _run_summary(m) == [f"Result           : ❌ failed: {raised.value}"]
+
+
+def test_a_keyboard_interrupt_is_summed_up_as_stopped(tmp_path, monkeypatch):
+    def _interrupt(_live):
+        raise KeyboardInterrupt
+
+    m = _syncing(tmp_path, monkeypatch, "drive1", sync=_interrupt)
+    m.run()
+    assert _run_summary(m)[-1] == "Result           : ⏹ stopped by keyboard interrupt"
+
+
+def test_a_fault_in_the_summary_never_replaces_the_runs_own_error(tmp_path, monkeypatch):
+    m = _syncing(tmp_path, monkeypatch, "broken")
+
+    def _broken(*_a):
+        raise ValueError("summary bug")
+
+    monkeypatch.setattr("backend.util.run_summary.result_text", _broken)
+    with pytest.raises(RuntimeError, match="GDrive sync failed"):
+        m.run()
+    assert m.logger.messages["warning"][-1] == "Could not log the run summary: summary bug"
+

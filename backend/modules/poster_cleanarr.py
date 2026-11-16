@@ -1132,26 +1132,26 @@ class PosterCleanarr(ChubModule):
                 f"Invalid orphan_assets_mode '{mode}'. "
                 f"Must be one of: {', '.join(sorted(VALID_ORPHAN_MODES))}"
             )
-            return {"count": 0, "total_size": 0, "mode": mode}
+            return {"count": 0, "total_size": 0, "mode": mode, "skipped": True}
 
         if not asset_dirs:
             logger.warning(
                 "Orphan asset cleanup enabled but asset_dirs is empty; skipping."
             )
-            return {"count": 0, "total_size": 0, "mode": mode}
+            return {"count": 0, "total_size": 0, "mode": mode, "skipped": True}
 
         if not instances:
             logger.error(
                 "Orphan asset cleanup enabled but no instances selected; "
                 "cannot build a comparison set."
             )
-            return {"count": 0, "total_size": 0, "mode": mode}
+            return {"count": 0, "total_size": 0, "mode": mode, "skipped": True}
 
         orphans = self._find_orphans(
             db, instances, asset_dirs, include_collections, logger, ignore_titles
         )
         if orphans is None:
-            return {"count": 0, "total_size": 0, "mode": mode}
+            return {"count": 0, "total_size": 0, "mode": mode, "skipped": True}
         return self._execute_orphan_mode(orphans, mode, logger)
 
     def _find_orphans(
@@ -1679,7 +1679,7 @@ class PosterCleanarr(ChubModule):
             f"   → orphan scan: {count} {mode}d"
             + (f", {empty_dirs} empty dir(s) pruned" if empty_dirs else "")
         )
-        return {"count": count, "total_size": total_size, "mode": mode}
+        return {"count": count, "total_size": total_size, "mode": mode, "found": len(orphans)}
 
     # =========================================================================
     # Empty directory cleanup

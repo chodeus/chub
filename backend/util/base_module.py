@@ -3,14 +3,29 @@
 import threading
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from backend.util.config import load_config
 from backend.util.logger import Logger
 from backend.util.public_error import failure_text
 
 
+def _job_call(module: Any, method: str, *args: Any, **kwargs: Any) -> None:
+    """``db.worker.<method>("jobs", job_id, ...)`` for the module's job; no-op without one, never raises."""
+    job_id = getattr(module, "_job_id", None)
+    db = getattr(module, "_job_db", None)
+    if not job_id or db is None:
+        return
+    try:
+        getattr(db.worker, method)("jobs", job_id, *args, **kwargs)
+    except Exception:  # noqa: S110 — phase tracking is non-critical
+        pass
+
+
 class ChubModule(ABC):
+    # (name, exception) of the last _phase whose work raised, job or not.
+    phase_failure: Optional[Tuple[str, BaseException]] = None
+
     def __init__(
         self, config: Optional[Dict[str, Any]] = None, logger: Optional[Logger] = None
     ) -> None:
@@ -142,38 +157,15 @@ class ChubModule(ABC):
 
     @contextmanager
     def _phase(self, name: str):
-        """Record one sub-step's timing on the job (start → success/error).
-
-        Wrap an orchestrated sub-phase: ``with self._phase("sync_gdrive"): ...``.
-        No-op when there's no job context, so nested context-less sub-module
-        instances don't double-record — the parent owns the phase. Phase
-        bookkeeping never masks a real error: the work's exception propagates
-        after the phase is marked ``error``.
-        """
-        job_id = getattr(self, "_job_id", None)
-        db = getattr(self, "_job_db", None)
-        if not job_id or db is None:
-            yield
-            return
-        try:
-            db.worker.start_phase("jobs", job_id, name)
-        except Exception:  # noqa: S110 — phase tracking is non-critical
-            pass
+        """Time one sub-step on the job (a no-op without job context); a failure sets ``phase_failure`` and propagates."""
+        _job_call(self, "start_phase", name)
         try:
             yield
         except Exception as e:
-            try:
-                db.worker.finish_phase(
-                    "jobs", job_id, name, status="error", error=failure_text(name, e)
-                )
-            except Exception:  # noqa: S110
-                pass
+            self.phase_failure = (name, e)
+            _job_call(self, "finish_phase", name, status="error", error=failure_text(name, e))
             raise
-        else:
-            try:
-                db.worker.finish_phase("jobs", job_id, name, status="success")
-            except Exception:  # noqa: S110
-                pass
+        _job_call(self, "finish_phase", name, status="success")
 
     def _finalize_phases(self) -> None:
         """Mark any declared-but-unreached phases ``skipped``. Call once at the
