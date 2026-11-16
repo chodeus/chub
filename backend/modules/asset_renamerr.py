@@ -444,7 +444,8 @@ class AssetRenamerr(ChubModule):
                     conn=conn,
                 )
                 cand = found.get("candidate")
-                if found.get("matched") and cand and cand.get("file"):
+                # A missing source root keeps its cached rows: skip one whose file is gone.
+                if found.get("matched") and cand and cand.get("file") and os.path.isfile(cand["file"]):
                     return ("local", cand["file"], None)
             elif source == "fanart":
                 fanart_key = FANART_IMAGE_KEY.get(image_type)

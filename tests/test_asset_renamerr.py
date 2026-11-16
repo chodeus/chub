@@ -195,7 +195,7 @@ def _media(**over):
     return base
 
 
-def _seed(db, image_type, fname):
+def _seed(db, image_type, fname, folder="/x"):
     db.poster.upsert(
         {
             "asset_type": "movie",
@@ -207,7 +207,7 @@ def _seed(db, image_type, fname):
             "imdb_id": "tt27511275",
             "season_number": None,
             "folder": "x",
-            "file": f"/x/{fname}",
+            "file": f"{folder}/{fname}",
             "style": None,
             "priority": 0,
             "image_type": image_type,
@@ -272,11 +272,12 @@ def _fake_fanart(url="https://assets.fanart.tv/fanart/movies/123/hdmovielogo/l.p
     return SimpleNamespace(get_images=lambda *a, **k: {"logo": url, "background": None})
 
 
-def test_source_priority_local_first(db):
-    _seed(db, "logo", "8 A.M. Metro (2023) - Logo.png")
+def test_source_priority_local_first(db, tmp_path):
+    logo = tmp_path / "8 A.M. Metro (2023) - Logo.png"
+    logo.write_bytes(b"png")
+    _seed(db, "logo", logo.name, folder=str(tmp_path))
     m = make_module(sources=["local", "fanart"])
-    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_fanart())
-    assert src == "local" and file and url is None
+    assert m._resolve_source(_media(), db, "logo", False, _fake_fanart()) == ("local", str(logo), None)
 
 
 def test_source_priority_fanart_first(db):
@@ -2253,6 +2254,23 @@ def test_a_logo_found_and_moved_follows_a_new_destination(db, monkeypatch, tmp_p
         kept = f.read()
     row = db.media_asset_matches.get_one("media", 1, "logo")
     assert (kept, row["applied_path"], row["match_status"]) == (b"png", str(landed), "applied")
+
+
+def test_a_moved_logo_follows_a_new_destination_while_its_source_root_is_missing(db, monkeypatch, tmp_path):
+    dest, new_dest = tmp_path / "kometa", tmp_path / "kometa2"
+    dest.mkdir()
+    new_dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    src = tmp_path / "src"
+    src.rmdir()  # the source drive is unmounted; its cached scan rows stay
+    m.config.destination_dir = str(new_dest)
+    m.run()
+    landed = new_dest / "Dune (2021)_logo.png"
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (landed.read_bytes(), (dest / "Dune (2021)_logo.png").exists()) == (b"png", False)
+    assert (row["match_status"], row["applied_path"]) == ("applied", str(landed))
+    assert (m.logger.messages["warning"], m.logger.messages["error"]) == ([f"Source dir not found: '{src}'"], [])
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
