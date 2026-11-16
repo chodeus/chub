@@ -360,9 +360,8 @@ class PosterRenamerr(ChubModule):
         try:
             from backend.modules.sync_gdrive import SyncGDrive
 
-            # skip_cache_refresh: merge_assets below does a full
-            # clear() + rebuild, so the per-folder refresh would be
-            # immediately overwritten — pure duplicated work.
+            # skip_cache_refresh: merge_assets below clears and rebuilds the
+            # cache, so a per-folder refresh here would be wasted work.
             sync = SyncGDrive(logger=self.logger)
             # Drive the parent bar's 0..ceiling slice as folders complete,
             # so the longest phase isn't flat. No-ops without job context.
