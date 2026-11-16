@@ -1,10 +1,10 @@
-"""Name a folder CHUB cannot create files in, with what a user needs to fix the volume."""
+"""Name a folder CHUB cannot create files in, or delete a moved source from, with what a user needs to fix the volume."""
 
 import errno
 import os
 import stat
 import tempfile
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, TypeVar
 
 from backend.util.logger import Logger
 
@@ -20,6 +20,10 @@ _HINTS = {
     errno.EDQUOT: "The disk quota is used up; free some space or raise the quota.",
 }
 _DEFAULT_HINT = "Check the volume's host path, and that its disk or mount is working."
+_KEPT_SOURCE_HINT = (
+    "Set File Action to copy, or let CHUB delete files in the source folder "
+    "(a read/write mount, owned by PUID/PGID)."
+)
 # Reads never raise these; a source path named in the error still rules them out.
 _DESTINATION_ONLY = frozenset({errno.EROFS, errno.ENOSPC, errno.EDQUOT})
 
@@ -34,20 +38,55 @@ class WriteRefused(Exception):
         self.__cause__ = err
 
 
+_E = TypeVar("_E", OSError, WriteRefused)
+
+
 def refusal_hint(err: Optional[int]) -> str:
     """What a user can do about a write refused with this errno."""
     return _HINTS.get(err, _DEFAULT_HINT)
 
 
+def _by_cause(errors: Sequence[_E]) -> List[List[_E]]:
+    groups: Dict[Optional[int], List[_E]] = {}
+    for err in errors:
+        groups.setdefault(err.errno, []).append(err)
+    return list(groups.values())
+
+
 def log_refusals(logger: Logger, refusals: Sequence[WriteRefused], noun: str) -> None:
     """One ERROR per cause, naming the first file it refused and how many."""
-    by_cause: Dict[Optional[int], List[WriteRefused]] = {}
-    for refusal in refusals:
-        by_cause.setdefault(refusal.errno, []).append(refusal)
-    for group in by_cause.values():
+    for group in _by_cause(refusals):
         logger.error(
             f"{group[0]}. {refusal_hint(group[0].errno)} "
             f"{len(group)} {noun}(s) failed this way."
+        )
+
+
+def kept_source_text(err: OSError) -> str:
+    """What a user sees when a moved file landed but its source could not be deleted."""
+    return (
+        f"Moved a file but could not delete its source {err.filename}: "
+        f"{err.strerror or err}. {_KEPT_SOURCE_HINT}"
+    )
+
+
+def note_kept_source(
+    logger: Logger, err: OSError, batch: Optional[List[OSError]]
+) -> None:
+    """Add ``err`` to ``batch`` for log_kept_sources (logged at DEBUG), or warn now when there is no batch."""
+    if batch is None:
+        logger.warning(kept_source_text(err))
+        return
+    logger.debug(kept_source_text(err))
+    batch.append(err)
+
+
+def log_kept_sources(logger: Logger, errors: Sequence[OSError], noun: str) -> None:
+    """One WARNING per cause, naming the first source it kept and how many."""
+    for group in _by_cause(errors):
+        logger.warning(
+            f"{kept_source_text(group[0])} {len(group)} {noun}(s) were placed "
+            "with their source kept this way."
         )
 
 
@@ -55,7 +94,7 @@ def destination_refused(err: OSError, dest: str) -> bool:
     """True when ``err`` came from ``dest`` or its folder refusing the write, not from the source."""
     folder = os.path.dirname(dest)
     named = [p for p in (err.filename, err.filename2) if p]
-    # e.g. a cross-device move that copied, then could not delete its read-only source.
+    # e.g. a source file CHUB cannot read.
     if named and not any(p == folder or p.startswith(folder + os.sep) for p in named):
         return False
     if err.errno in _DESTINATION_ONLY:

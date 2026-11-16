@@ -510,6 +510,19 @@ def test_kometa_action_types(tmp_path, action):
     assert applied and os.path.exists(path)
 
 
+def test_a_move_of_an_asset_already_at_its_destination_keeps_it(tmp_path):
+    """A destination also listed in source_dirs rescans each placed file as its own source."""
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    copy = make_module(action_type="copy", asset_folders=True, destination_dir=str(dest))
+    _applied, placed = copy._apply_kometa(_media(), "logo", "local", _make_src(tmp_path), None)
+    move = make_module(action_type="move", asset_folders=True, destination_dir=str(dest))
+    applied, path = move._apply_kometa(_media(), "logo", "local", placed, None)
+    with open(placed, "rb") as f:
+        kept = f.read()
+    assert (applied, path, kept) == (True, placed, b"img")
+
+
 def test_kometa_requires_destination():
     m = make_module(apply_method="kometa", destination_dir="")
     applied, reason = m._apply_kometa(_media(), "logo", "local", "/x/l.png", None)
@@ -813,7 +826,7 @@ def test_a_single_chosen_asset_keeps_its_own_warning(db, tmp_path):
     ]
 
 
-def _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, landed="Dune (2021)_logo.png"):
+def _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, landed="Dune (2021)_logo.png", **over):
     """The user picks Arrival's logo in the UI once the run places ``landed``; returns the picked file."""
     picked = tmp_path / "picked.png"
     picked.write_bytes(b"picked")
@@ -825,7 +838,7 @@ def _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, landed="Dune (202
         real_replace(src, dst, *a, **k)
         if os.path.basename(dst) == landed and not done:
             done.append(dst)
-            make_module(destination_dir=str(dest)).apply_chosen_asset(
+            make_module(destination_dir=str(dest), **over).apply_chosen_asset(
                 db, "media", arrival, "logo", str(picked)
             )
 
@@ -975,6 +988,33 @@ def test_a_lock_on_a_vanished_file_still_takes_the_runs_match(db, monkeypatch, t
     row = db.media_asset_matches.get_one("media", 1, "logo")
     assert (dest / "Dune (2021)_logo.png").read_bytes() == b"png"
     assert (row["matched_file"], row["match_status"]) == (str(scanned), "applied")
+
+
+@_SKIP_AS_ROOT
+def test_a_chosen_asset_moved_from_a_read_only_folder_is_applied_and_warns_at_once(db, tmp_path):
+    from tests.conftest import StubLogger
+
+    dest, picks = tmp_path / "kometa", tmp_path / "picks"
+    dest.mkdir()
+    picks.mkdir()
+    logo = picks / "Dune - Logo.png"
+    logo.write_bytes(b"png")
+    m = make_module(destination_dir=str(dest), action_type="move")
+    m.logger = StubLogger()
+    dune = {"id": 1, "title": "Dune", "year": 2021, "folder": "Dune (2021)"}
+    picks.chmod(0o555)
+    try:
+        applied, detail = m.apply_chosen_asset(db, "media", dune, "logo", str(logo))
+    finally:
+        picks.chmod(0o755)
+    target = dest / "Dune (2021)_logo.png"
+    assert (applied, detail, target.read_bytes(), logo.exists()) == (True, str(target), b"png", True)
+    assert db.media_asset_matches.get_one("media", 1, "logo")["match_status"] == "applied"
+    assert m.logger.messages["warning"] == [
+        f"Moved a file but could not delete its source {logo}: Permission denied. "
+        "Set File Action to copy, or let CHUB delete files in the source folder "
+        "(a read/write mount, owned by PUID/PGID)."
+    ]
 
 
 def test_kometa_season_logo_naming(tmp_path):
@@ -2088,3 +2128,109 @@ def test_a_second_run_does_not_reupload_where_the_asset_already_landed(db, monke
     assert uploaded == ["Films", "Films 4K", "Films 4K"]
     row = db.media_asset_matches.get_one("media", 3, "logo")
     assert (row["match_status"], row["applied_libraries"]) == ("applied", '["plex1/Films"]')
+
+
+def test_re_picking_a_hardlinked_logo_leaves_no_temp_and_the_next_asset_lands(db, tmp_path):
+    dest, picks = tmp_path / "kometa", tmp_path / "picks"
+    dest.mkdir()
+    picks.mkdir()
+    logo, bg = picks / "Dune - Logo.png", picks / "Dune - Background.jpg"
+    logo.write_bytes(b"logo")
+    bg.write_bytes(b"bg")
+    m = make_module(destination_dir=str(dest), action_type="hardlink")
+    dune = {"id": 1, "title": "Dune", "year": 2021, "folder": "Dune (2021)"}
+    first = m.apply_chosen_asset(db, "media", dune, "logo", str(logo))
+    repick = m.apply_chosen_asset(db, "media", dune, "logo", str(logo))
+    applied, detail = m.apply_chosen_asset(db, "media", dune, "background", str(bg))
+    assert (first[0], repick[0], applied) == (True, True, True), detail
+    assert sorted(os.listdir(dest)) == ["Dune (2021)_background.jpg", "Dune (2021)_logo.png"]
+
+
+def _moved_pick(db, monkeypatch, tmp_path):
+    """A logo picked with File Action "move" before a run that also finds Dune's own logo; returns (module, placed)."""
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    pick = tmp_path / "picks" / "mine.png"
+    pick.parent.mkdir()
+    pick.write_bytes(b"my pick")
+    applied, detail = m.apply_chosen_asset(db, "media", db.media.get_by_id(1), "logo", str(pick))
+    placed = dest / "Dune (2021)_logo.png"
+    assert (applied, placed.read_bytes(), pick.exists()) == (True, b"my pick", False), detail
+    return m, placed
+
+
+def test_a_run_keeps_a_logo_picked_with_move(db, monkeypatch, tmp_path):
+    m, placed = _moved_pick(db, monkeypatch, tmp_path)
+    m.run()
+    assert placed.read_bytes() == b"my pick"
+    assert db.media_asset_matches.get_one("media", 1, "logo")["user_confirmed"]
+
+
+def test_a_run_places_the_found_logo_once_a_moved_pick_is_deleted_from_kometa(db, monkeypatch, tmp_path):
+    m, placed = _moved_pick(db, monkeypatch, tmp_path)
+    placed.unlink()
+    m.run()
+    assert placed.read_bytes() == b"png"
+
+
+def test_a_logo_picked_with_move_follows_a_new_destination(db, monkeypatch, tmp_path):
+    m, placed = _moved_pick(db, monkeypatch, tmp_path)
+    new_dest = tmp_path / "kometa2"
+    new_dest.mkdir()
+    m.config.destination_dir = str(new_dest)
+    m.run()
+    landed = new_dest / "Dune (2021)_logo.png"
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (landed.read_bytes(), placed.exists(), row["user_confirmed"]) == (b"my pick", False, 1)
+    m.run()
+    with open(landed, "rb") as f:
+        kept = f.read()
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (kept, row["applied_path"]) == (b"my pick", str(landed))
+
+
+@pytest.mark.parametrize("action_type", ["copy", "hardlink"])
+def test_an_unchanged_logo_follows_a_new_destination(db, monkeypatch, tmp_path, action_type):
+    dest, new_dest = tmp_path / "kometa", tmp_path / "kometa2"
+    dest.mkdir()
+    new_dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type=action_type)
+    m.run()
+    m.config.destination_dir = str(new_dest)
+    m.run()
+    landed = new_dest / "Dune (2021)_logo.png"
+    with open(landed, "rb") as f:
+        placed = f.read()
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (placed, row["applied_path"]) == (b"png", str(landed))
+
+
+def test_a_moved_pick_stays_a_file_after_the_action_becomes_symlink(db, monkeypatch, tmp_path):
+    m, placed = _moved_pick(db, monkeypatch, tmp_path)
+    m.config.action_type = "symlink"
+    m.run()
+    with open(placed, "rb") as f:
+        kept = f.read()
+    assert (placed.is_symlink(), kept) == (False, b"my pick")
+
+
+def test_a_logo_picked_with_move_during_a_run_stays_through_the_next_run(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _add_arrival(db, tmp_path)
+    picked = _pick_arrival_when_placed(db, monkeypatch, tmp_path, dest, action_type="move")
+    placed = dest / "Arrival (2016)_logo.png"
+    m.run()
+    assert (placed.read_bytes(), picked.exists()) == (b"picked", False)
+    m.run()
+    assert placed.read_bytes() == b"picked"
+
+
+def test_a_plex_run_does_not_count_a_kometa_copy_as_the_pick(tmp_path):
+    placed = tmp_path / "Dune (2021)_logo.png"
+    placed.write_bytes(b"my pick")
+    locked = {"user_confirmed": 1, "applied_path": str(placed)}
+    assert make_module(apply_method="plex")._placed_pick(locked) is None
+    assert make_module(apply_method="kometa")._placed_pick(locked) == str(placed)

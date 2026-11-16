@@ -1,14 +1,14 @@
 import hashlib
 import json
 import os
-import shutil
 import time
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from backend.util.config import load_config
 from backend.util.database import ChubDB
+from backend.util.file_ops import copy_into_place
 from backend.util.helper import progress, YEAR_MATCH_TOLERANCE
 from backend.util.logger import Logger
 from backend.util.normalization import normalize_titles
@@ -1374,16 +1374,7 @@ class PosterUploader:
                 if dry_run:
                     self.logger.debug(f"[DRY RUN] Would write music sidecar {dest}")
                     continue
-                # Copy to a temp name then os.replace so a crash mid-copy can't
-                # truncate an existing user cover (mirrors process_file).
-                tmp = f"{dest}.chub-tmp-{os.getpid()}"
-                try:
-                    shutil.copyfile(poster_path, tmp)
-                    os.replace(tmp, dest)
-                except OSError:
-                    with suppress(OSError):
-                        os.remove(tmp)
-                    raise
+                copy_into_place(poster_path, dest, keep_mode=False)
                 self.logger.debug(f"[MUSIC_SIDECAR] {dest}")
         except Exception as e:
             self.logger.warning(

@@ -1,7 +1,6 @@
 # modules/poster_renamerr.py
 
 import contextlib
-import filecmp
 import hashlib
 import json
 import os
@@ -44,7 +43,14 @@ from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
 from backend.util.public_error import failure_text
 from backend.util.upload_posters import PosterUploader, upload_enabled_instances
-from backend.util.writable import ensure_writable_dir
+from backend.util.file_ops import (
+    already_in_place,
+    copy_into_place,
+    link_into_place,
+    move_into_place,
+    symlink_into_place,
+)
+from backend.util.writable import ensure_writable_dir, log_kept_sources, note_kept_source
 
 # Process-global lock serializing the destructive poster_cache clear()+rebuild.
 # The scheduled run() and the webhook-driven run_poster_rename_adhoc() run on
@@ -269,6 +275,18 @@ def build_asset_record(
 class PosterRenamerr(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
+        # None outside _kept_sources_batch: a single apply (the poster picker) warns at once.
+        self._kept_sources: Optional[List[OSError]] = None
+
+    @contextlib.contextmanager
+    def _kept_sources_batch(self):
+        """Collect moved posters whose source stayed, then log them as one WARNING per cause."""
+        self._kept_sources = []
+        try:
+            yield
+        finally:
+            kept, self._kept_sources = self._kept_sources, None
+            log_kept_sources(self.logger, kept, "poster")
 
     @contextlib.contextmanager
     def apply_staging(self):
@@ -353,25 +371,15 @@ class PosterRenamerr(ChubModule):
     def process_file(self, file: str, new_file_path: str, action_type: str):
         try:
             if action_type == "copy":
-                # Copy to a temp name in the destination dir, then atomically
-                # os.replace() into place — an interrupted copy (crash, kill,
-                # ENOSPC) can't leave a truncated poster at the real path or
-                # clobber an existing good file with a partial one. Mirrors
-                # asset_renamerr._file_op's destroy-safe link handling.
-                tmp = f"{new_file_path}.chub-tmp-{os.getpid()}"
-                try:
-                    shutil.copy(file, tmp)
-                    os.replace(tmp, new_file_path)
-                except OSError:
-                    with contextlib.suppress(OSError):
-                        os.remove(tmp)
-                    raise
+                copy_into_place(file, new_file_path)
             elif action_type == "move":
-                shutil.move(file, new_file_path)
+                kept = move_into_place(file, new_file_path)
+                if kept is not None:
+                    note_kept_source(self.logger, kept, self._kept_sources)
             elif action_type == "hardlink":
-                os.link(file, new_file_path)
+                link_into_place(file, new_file_path)
             elif action_type == "symlink":
-                os.symlink(file, new_file_path)
+                symlink_into_place(file, new_file_path)
             # Per-file action trace — visible when log_level: debug.
             # Single source of truth so every call site (rename_file,
             # future orphan cleanup, etc.) logs the same shape.
@@ -1028,6 +1036,8 @@ class PosterRenamerr(ChubModule):
         # Where this asset was staged on the previous run (may be a stale path
         # under an old folder name); used to clean up after a folder rename.
         previous_renamed = item.get("renamed_file")
+        # Not staged until it lands: the poster picker reads this after any early return below.
+        item["renamed_file"] = None
 
         # _staged_dest() is the single source of truth for the destination
         # (shared with _needs_staging so a renamed media folder gets re-queued
@@ -1098,48 +1108,33 @@ class PosterRenamerr(ChubModule):
         discord_message = []
         file_ops_enabled = not config.run_border_replacerr
 
+        files_identical = False
         if os.path.lexists(new_file_path):
             try:
-                files_identical = filecmp.cmp(file, new_file_path)
+                files_identical = already_in_place(file, new_file_path, config.action_type)
             except OSError as e:
                 self.logger.warning(f"Cannot compare files: {e}")
-                files_identical = False
-            if not files_identical:
-                if file_name != new_file_name:
-                    messages.append(f"{file_name} -renamed-> {new_file_name}")
-                    discord_message.append(f"{new_file_name}")
-                else:
-                    if not config.print_only_renames:
-                        messages.append(f"{file_name} -not-renamed-> {new_file_name}")
-                        discord_message.append(f"{new_file_name}")
-                if file_ops_enabled and not config.dry_run:
-                    if config.action_type in ["hardlink", "symlink"]:
-                        self.logger.debug(
-                            f"[REPLACED] {new_file_path} (overwriting before "
-                            f"{config.action_type})"
-                        )
-                        os.remove(new_file_path)
-                    success = self.process_file(file, new_file_path, config.action_type)
-                    if not success:
-                        self.logger.warning(
-                            f"File operation failed for {file} -> {new_file_path}"
-                        )
-                        return None
-        else:
+        if not files_identical:
             if file_name != new_file_name:
                 messages.append(f"{file_name} -renamed-> {new_file_name}")
                 discord_message.append(f"{new_file_name}")
-            else:
-                if not config.print_only_renames:
-                    messages.append(f"{file_name} -not-renamed-> {new_file_name}")
-                    discord_message.append(f"{new_file_name}")
-            if file_ops_enabled and not config.dry_run:
-                success = self.process_file(file, new_file_path, config.action_type)
-                if not success:
-                    self.logger.warning(
-                        f"File operation failed for {file} -> {new_file_path}"
-                    )
-                    return None
+            elif not config.print_only_renames:
+                messages.append(f"{file_name} -not-renamed-> {new_file_name}")
+                discord_message.append(f"{new_file_name}")
+            if (
+                file_ops_enabled
+                and not config.dry_run
+                and not self.process_file(file, new_file_path, config.action_type)
+            ):
+                self.logger.warning(
+                    f"File operation failed for {file} -> {new_file_path}"
+                )
+                # What is there is not this file: un-stage it, so the picker
+                # says so and the next run retries.
+                item["renamed_file"] = None
+                table = db.collection if asset_type == "collection" else db.media
+                table.clear_renamed_file(item.get("id"))
+                return None
 
         # Now that the asset is staged at its current path, drop any copy left
         # behind at the previous path (folder-rename self-cleanup).
@@ -1241,7 +1236,7 @@ class PosterRenamerr(ChubModule):
             self.logger.info("Renaming assets please wait...")
             total = len(matched_assets)
             rename_span = progress_ceiling - self._MATCH_PROGRESS_CEILING_PCT
-            with progress(
+            with self._kept_sources_batch(), progress(
                 matched_assets,
                 desc="Renaming assets",
                 total=total,
@@ -1757,7 +1752,7 @@ class PosterRenamerr(ChubModule):
                 # this run's per-item match reads it — the item lists here are
                 # small webhook payloads, so holding it across the match+rename
                 # loop is cheap (see _POSTER_CACHE_REBUILD_LOCK).
-                with _POSTER_CACHE_REBUILD_LOCK:
+                with _POSTER_CACHE_REBUILD_LOCK, self._kept_sources_batch():
                     db.poster.clear()
                     self.merge_assets(source_dirs=self._scan_source_dirs(), db=db)
                     # Index gdrive_list folders outside source_dirs as

@@ -10,6 +10,8 @@ matching and cache handling"), specifically:
   (2020) - Season 01.jpg" gets classified as ``show``, not ``movie``.
 """
 
+import errno
+import json
 import os
 from types import SimpleNamespace
 
@@ -1565,6 +1567,246 @@ def test_chained_assets_on_writable_folders_notify_both_modules(tmp_path, monkey
     assert os.listdir(posters) == ["Dune (2021).jpg"]
     assert os.listdir(logos) == ["Dune (2021)_logo.png"]
     assert sent == ["poster_renamerr", "asset_renamerr"]
+
+
+_KEPT_HINT = (
+    "Set File Action to copy, or let CHUB delete files in the source folder "
+    "(a read/write mount, owned by PUID/PGID)."
+)
+
+
+def _pick_dune_poster(tmp_path, monkeypatch, action_type, link_fails_once=False):
+    """A run places Dune's poster, then the poster picker applies a new one; returns (module, picked, placed, reply)."""
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.run()
+    m.config.action_type = action_type
+    if link_fails_once:
+        name = "link" if action_type == "hardlink" else "symlink"
+        real, calls = getattr(os, name), []
+
+        def _fails_once(*a, **k):
+            calls.append(a)
+            if len(calls) == 1:
+                raise OSError(errno.EXDEV, os.strerror(errno.EXDEV))
+            return real(*a, **k)
+
+        monkeypatch.setattr(os, name, _fails_once)
+    picked, reply = _apply_dune_pick(tmp_path)
+    assert os.listdir(posters) == ["Dune (2021).jpg"]
+    return m, picked, posters / "Dune (2021).jpg", reply
+
+
+def _apply_dune_pick(tmp_path):
+    """The poster picker applies a new poster to Dune; returns (picked file, reply)."""
+    from backend.api.posters.matching import apply_match
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    picked = tmp_path / "picks" / "Dune (2021).jpg"
+    picked.parent.mkdir()
+    picked.write_bytes(b"new poster")
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.poster.upsert(
+            {
+                "title": "Dune",
+                "normalized_title": "dune",
+                "year": 2021,
+                "tmdb_id": 438631,
+                "tvdb_id": None,
+                "imdb_id": None,
+                "season_number": None,
+                "folder": str(picked.parent),
+                "file": str(picked),
+                "asset_type": "movie",
+            }
+        )
+        poster_id = db.poster.execute_query(
+            "SELECT id FROM poster_cache WHERE file=?", (str(picked),), fetch_one=True
+        )["id"]
+        resp = apply_match(media_id=1, poster_id=poster_id, kind="media", logger=StubLogger(), db=db)
+    return picked, json.loads(resp.body)
+
+
+_NOT_PLACED = "Match saved and locked — it will be applied on the next poster_renamerr run"
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_pick_whose_new_folder_cannot_be_made_is_not_reported_as_copied(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.asset_folders = True
+    m.run()
+    old = posters / "Dune (2021)" / "poster.jpg"
+    assert old.read_bytes() == b"poster"
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.execute_query("UPDATE media_cache SET folder=? WHERE id=1", ("Dune (2021) [renamed]",))
+    posters.chmod(0o555)
+    try:
+        _picked, reply = _apply_dune_pick(tmp_path)
+    finally:
+        posters.chmod(0o755)
+    assert (reply["data"]["copied"], reply["message"], old.read_bytes()) == (False, _NOT_PLACED, b"poster")
+
+
+@pytest.mark.parametrize("action_type", ["hardlink", "symlink"])
+def test_a_link_replaces_the_poster_already_there(tmp_path, monkeypatch, action_type):
+    _m, picked, placed, reply = _pick_dune_poster(tmp_path, monkeypatch, action_type)
+    assert (placed.read_bytes(), os.path.samefile(placed, picked)) == (b"new poster", True)
+    assert (placed.is_symlink(), reply["data"]["copied"]) == (action_type == "symlink", True)
+
+
+@pytest.mark.parametrize("action_type", ["hardlink", "symlink"])
+def test_a_link_that_fails_keeps_the_old_poster_says_so_and_the_next_run_places_the_pick(
+    tmp_path, monkeypatch, action_type
+):
+    m, picked, placed, reply = _pick_dune_poster(tmp_path, monkeypatch, action_type, link_fails_once=True)
+    assert (placed.read_bytes(), reply["data"]["copied"], reply["message"]) == (b"poster", False, _NOT_PLACED)
+    m.run()
+    assert os.path.samefile(placed, picked)
+
+
+def test_a_collection_poster_whose_link_failed_is_left_for_the_next_run(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    src, staged = tmp_path / "Marvel.jpg", tmp_path / "kometa" / "Marvel.jpg"
+    staged.parent.mkdir()
+    src.write_bytes(b"new poster")
+    staged.write_bytes(b"poster")
+    m = make_module()
+    m.config = SimpleNamespace(
+        destination_dir=str(staged.parent),
+        asset_folders=False,
+        dry_run=False,
+        action_type="hardlink",
+        run_border_replacerr=False,
+        print_only_renames=False,
+    )
+
+    def _cross_device(*_a, **_k):
+        raise OSError(errno.EXDEV, os.strerror(errno.EXDEV))
+
+    monkeypatch.setattr(os, "link", _cross_device)
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+        row = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")
+        db.collection.update(
+            title="Marvel", year=None, library_name="Movies", instance_name="plex1",
+            renamed_file=str(staged), id=row["id"],
+        )
+        item = dict(db.collection.get_by_id(row["id"]), asset_type="collection", original_file=str(src))
+        m.rename_file(item, db)
+        after = db.collection.get_by_id(row["id"])
+    assert (staged.read_bytes(), item["renamed_file"], after["renamed_file"]) == (b"poster", None, None)
+    assert m._needs_staging(after)
+
+
+@pytest.mark.parametrize("link", [os.link, os.symlink], ids=["hardlink", "symlink"])
+def test_a_move_onto_a_link_to_its_source_removes_the_source(tmp_path, link):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    src, staged = tmp_path / "Marvel.jpg", tmp_path / "kometa" / "Marvel.jpg"
+    staged.parent.mkdir()
+    src.write_bytes(b"poster")
+    link(src, staged)
+    m = make_module()
+    m.logger = StubLogger()
+    m.config = SimpleNamespace(
+        destination_dir=str(staged.parent),
+        asset_folders=False,
+        dry_run=False,
+        action_type="move",
+        run_border_replacerr=False,
+        print_only_renames=False,
+    )
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+        row = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")
+        item = dict(db.collection.get_by_id(row["id"]), asset_type="collection", original_file=str(src))
+        result = m.rename_file(item, db)
+    assert (src.exists(), staged.is_symlink(), staged.read_bytes()) == (False, False, b"poster")
+    assert result["messages"] == ["Marvel.jpg -not-renamed-> Marvel.jpg"]
+    assert m.logger.messages["warning"] == []
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_move_from_a_read_only_source_places_both_and_warns_once_per_module(tmp_path, monkeypatch):
+    m, _sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "move"
+    m.full_config.asset_renamerr.action_type = "move"
+    src = tmp_path / "src"
+    src.chmod(0o555)
+    try:
+        m.run()
+        first_run = list(m.logger.messages["warning"])
+        m.run()
+    finally:
+        src.chmod(0o755)
+    assert first_run == [
+        f"Moved a file but could not delete its source {src}/Dune (2021) {{tmdb-438631}}.jpg: "
+        f"Permission denied. {_KEPT_HINT} 1 poster(s) were placed with their source kept this way.",
+        f"Moved a file but could not delete its source {src}/Dune (2021) {{tmdb-438631}} - Logo.png: "
+        f"Permission denied. {_KEPT_HINT} 1 asset(s) were placed with their source kept this way.",
+    ]
+    assert m.logger.messages["warning"] == first_run, "the next run must not move them again"
+    assert m.logger.messages["error"] == []
+    assert [p.read_bytes() for p in (posters / "Dune (2021).jpg", logos / "Dune (2021)_logo.png")] == [
+        b"poster",
+        b"logo",
+    ]
+    assert sorted(os.listdir(src)) == [
+        "Dune (2021) {tmdb-438631} - Logo.png",
+        "Dune (2021) {tmdb-438631}.jpg",
+    ]
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_webhook_move_from_a_read_only_source_is_renamed_and_warned_once(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "move"
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        dune = db.media.get_by_id(1)
+    src = tmp_path / "src"
+    src.chmod(0o555)
+    try:
+        result = m.run_poster_rename_adhoc([dune])
+    finally:
+        src.chmod(0o755)
+    assert (result["success"], result["stats"]["renamed_items"]) == (True, 1)
+    assert m.logger.messages["warning"] == [
+        f"Moved a file but could not delete its source {src}/Dune (2021) {{tmdb-438631}}.jpg: "
+        f"Permission denied. {_KEPT_HINT} 1 poster(s) were placed with their source kept this way."
+    ]
+    assert (posters / "Dune (2021).jpg").read_bytes() == b"poster"
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_single_poster_moved_from_a_read_only_folder_is_placed_and_warns_at_once(tmp_path):
+    from tests.conftest import StubLogger
+
+    picks, posters = tmp_path / "picks", tmp_path / "posters"
+    picks.mkdir()
+    posters.mkdir()
+    src = picks / "Dune (2021).jpg"
+    src.write_bytes(b"poster")
+    dest = posters / "Dune (2021).jpg"
+    m = PosterRenamerr(logger=StubLogger())
+    picks.chmod(0o555)
+    try:
+        placed = m.process_file(str(src), str(dest), "move")
+    finally:
+        picks.chmod(0o755)
+    assert (placed, dest.read_bytes(), src.exists()) == (True, b"poster", True)
+    assert m.logger.messages["warning"] == [
+        f"Moved a file but could not delete its source {src}: Permission denied. {_KEPT_HINT}"
+    ]
+    assert m.logger.messages["error"] == []
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldShowField } from './conditionalFields';
+import { resolveCheckWritable, shouldShowField } from './conditionalFields';
+import { SETTINGS_SCHEMA } from '../constants/settings_schema.js';
 
 // `api_flag` exists because only the server can stat the service-account
 // keyfile — a path that is set but missing still means the shared client.
@@ -62,5 +63,42 @@ describe('existing conditions still evaluate', () => {
 
     it('shows a field with no conditional at all', () => {
         expect(shouldShowField({ key: 'plain' }, {})).toBe(true);
+    });
+});
+
+// A move deletes the source file, so only then must CHUB be able to write a source folder.
+describe('resolveCheckWritable', () => {
+    const field = (moduleKey, key) =>
+        SETTINGS_SCHEMA.find(m => m.key === moduleKey).fields.find(f => f.key === key);
+    const posterSources = field('poster_renamerr', 'source_dirs');
+    const musicSources = field('poster_renamerr', 'music_source_dirs');
+    const assetSources = field('asset_renamerr', 'source_dirs');
+
+    it.each([
+        [{ apply_method: 'kometa', action_type: 'move' }, true],
+        [{ action_type: 'move' }, true],
+        [{ apply_method: 'kometa', action_type: 'copy' }, false],
+        [{ apply_method: 'kometa', action_type: 'hardlink' }, false],
+        [{ apply_method: 'plex', action_type: 'move' }, false],
+        [{ apply_method: 'kometa', action_type: 'move', run_border_replacerr: true }, false],
+    ])('checks poster and music art source folders for %o: %s', (form, expected) => {
+        expect([posterSources, musicSources].map(f => resolveCheckWritable(f, form))).toEqual([
+            expected,
+            expected,
+        ]);
+    });
+
+    it.each([
+        [{ apply_method: 'kometa', action_type: 'move' }, true],
+        [{ apply_method: 'kometa', action_type: 'copy' }, false],
+        [{ apply_method: 'plex', action_type: 'move' }, false],
+    ])('checks asset source folders for %o: %s', (form, expected) => {
+        expect(resolveCheckWritable(assetSources, form)).toBe(expected);
+    });
+
+    it('keeps an always-checked folder checked and an unchecked one unchecked', () => {
+        const form = { apply_method: 'plex', action_type: 'copy' };
+        expect(resolveCheckWritable(field('poster_renamerr', 'destination_dir'), form)).toBe(true);
+        expect(resolveCheckWritable(field('asset_renamerr', 'tmdb_language'), form)).toBe(false);
     });
 });

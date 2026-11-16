@@ -495,6 +495,12 @@ class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, Databa
             (int(bool(confirmed)), id),
         )
 
+    def clear_renamed_file(self, id: int) -> None:
+        """Forget where one media row's poster was staged, so the next run stages it again."""
+        self.execute_query(
+            "UPDATE media_cache SET renamed_file=NULL WHERE id=?", (id,)
+        )
+
     def approve_match(self, id: int) -> None:
         """Promote one reviewed media row to a full-confidence, user-locked match."""
         # Locking here rather than in a second statement — see set_ignored.

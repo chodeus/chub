@@ -2,9 +2,7 @@
 
 import json
 import os
-import shutil
 import sqlite3
-import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.util.base_module import ChubModule
@@ -18,11 +16,19 @@ from backend.util.plex import PlexClient
 from backend.util.public_error import PublicError, failure_text
 from backend.util.fanart import FanartClient
 from backend.util.release_readiness import is_release_ready
+from backend.util.file_ops import (
+    copy_into_place,
+    link_into_place,
+    move_into_place,
+    symlink_into_place,
+)
 from backend.util.writable import (
     WriteRefused,
     destination_refused,
     ensure_writable_dir,
+    log_kept_sources,
     log_refusals,
+    note_kept_source,
 )
 
 # The additional (non-poster) asset types this module manages. Banner is
@@ -483,6 +489,7 @@ class AssetRenamerr(ChubModule):
         src_mtime: Optional[float],
         media: Optional[dict] = None,
         is_collection: bool = False,
+        image_type: Optional[str] = None,
     ) -> bool:
         """True when this asset was already applied with the same source and the
         source hasn't changed — so we can skip re-applying it. Never skip on a
@@ -499,10 +506,12 @@ class AssetRenamerr(ChubModule):
         )
         if recorded is None:
             return False
-        # For the kometa path, the destination file must still exist.
+        # For the kometa path, the destination file must still exist and, when a run can place it, sit where it lands now.
         if apply_method == "kometa":
             applied_path = prev.get("applied_path")
             if not applied_path or not os.path.lexists(applied_path):
+                return False
+            if media is not None and image_type and not self._at_current_target(media, image_type, applied_path):
                 return False
         # For the plex path, only skip if EVERY currently-targeted library
         # already received it; otherwise re-apply so a newly-added or
@@ -636,12 +645,9 @@ class AssetRenamerr(ChubModule):
         file: Optional[str],
         url: Optional[str],
         refusals: Optional[List[WriteRefused]] = None,
+        kept_sources: Optional[List[OSError]] = None,
     ) -> Tuple[bool, str]:
-        """Place one asset in the Kometa folder by action_type; with ``refusals``, a destination refusal goes there, logged at DEBUG."""
-        dest_root = self.config.destination_dir
-        if not dest_root:
-            return False, "no destination_dir configured for Kometa apply"
-
+        """Place one asset in the Kometa folder by action_type; given ``refusals``/``kept_sources``, those go there, logged at DEBUG."""
         # Kometa applies LOCAL files only — fanart art is never downloaded to
         # disk (it's Plex-only, streamed straight to Plex). fanart is already
         # filtered out of the Kometa source set in match_and_apply_assets, so
@@ -651,7 +657,34 @@ class AssetRenamerr(ChubModule):
         src = file
         if not src:
             return False, "no local source file to apply"
+        new_path, why = self._kometa_path(media, image_type, src)
+        if new_path is None:
+            return False, why
 
+        # Normalise the source too; it is a scanned asset path, never raw HTTP
+        # input, but realpath keeps the file op operating on a canonical path.
+        src = os.path.realpath(src)
+        if not self.config.dry_run:
+            try:
+                os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                kept = self._file_op(src, new_path, self.config.action_type)
+            except OSError as exc:
+                line = f"Asset file op failed for {src} -> {new_path}: {exc}"
+                if refusals is not None and destination_refused(exc, new_path):
+                    self.logger.debug(line)
+                    refusals.append(WriteRefused(new_path, exc))
+                else:
+                    self.logger.warning(line)
+                return False, failure_text("file op", exc)
+            if kept is not None:
+                note_kept_source(self.logger, kept, kept_sources)
+        return True, new_path
+
+    def _kometa_path(self, media: dict, image_type: str, src: str) -> Tuple[Optional[str], str]:
+        """Where a Kometa apply of ``src`` lands, resolved: ``(path, "")``, or ``(None, why not)``."""
+        dest_root = self.config.destination_dir
+        if not dest_root:
+            return None, "no destination_dir configured for Kometa apply"
         ext = os.path.splitext(src)[1] or ".png"
         folder = self._kometa_folder(media)
 
@@ -666,7 +699,7 @@ class AssetRenamerr(ChubModule):
             # title — otherwise every album collides on background.ext.
             album = illegal_chars_regex.sub("", media.get("title") or "").strip()
             if not album:
-                return False, "album has no title to name its asset after"
+                return None, "album has no title to name its asset after"
             stem = f"{album}_{stem}"
 
         if self.config.asset_folders:
@@ -684,24 +717,8 @@ class AssetRenamerr(ChubModule):
         real_base = os.path.realpath(dest_root)
         new_path = os.path.realpath(os.path.join(dest_dir, new_name))
         if not new_path.startswith(real_base + os.sep):
-            return False, f"path traversal blocked for folder '{folder}'"
-
-        # Normalise the source too; it is a scanned asset path, never raw HTTP
-        # input, but realpath keeps the file op operating on a canonical path.
-        src = os.path.realpath(src)
-        if not self.config.dry_run:
-            try:
-                os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                self._file_op(src, new_path, self.config.action_type)
-            except OSError as exc:
-                line = f"Asset file op failed for {src} -> {new_path}: {exc}"
-                if refusals is not None and destination_refused(exc, new_path):
-                    self.logger.debug(line)
-                    refusals.append(WriteRefused(new_path, exc))
-                else:
-                    self.logger.warning(line)
-                return False, failure_text("file op", exc)
-        return True, new_path
+            return None, f"path traversal blocked for folder '{folder}'"
+        return new_path, ""
 
     def apply_chosen_asset(
         self,
@@ -761,38 +778,31 @@ class AssetRenamerr(ChubModule):
             )
         return applied, detail
 
-    def _file_op(self, src: str, dest: str, action_type: str) -> None:
-        if action_type == "move":
-            shutil.move(src, dest)
-        else:
-            # Short per-thread temp beside dest, never dest: a failed op leaves dest whole, a copy
-            # chmods only its own file, and "xb" never follows a path already at tmp.
-            tmp = os.path.join(
-                os.path.dirname(dest), f".chub-tmp-{os.getpid()}-{threading.get_ident()}"
-            )
-            try:
-                if action_type == "hardlink":
-                    os.link(src, tmp)
-                elif action_type == "symlink":
-                    os.symlink(src, tmp)
-                else:  # copy (default)
-                    with open(src, "rb") as fsrc, open(tmp, "xb") as fdst:
-                        shutil.copyfileobj(fsrc, fdst)
-                    shutil.copymode(src, tmp)
-                os.replace(tmp, dest)
-            except OSError:
-                self._cleanup(tmp)
-                raise
-        self.logger.debug(f"[{action_type.upper()}] {dest} ← {src}")
+    def _placed_pick(self, locked: dict) -> Optional[str]:
+        """The file a locked pick placed for Kometa, while it is still there (its source may be gone, as after a move)."""
+        placed = locked.get("applied_path")
+        if self.config.apply_method == "kometa" and placed and os.path.exists(placed):
+            return placed
+        return None
 
-    def _cleanup(self, path: Optional[str]) -> None:
-        if path and os.path.exists(path):
-            try:
-                os.remove(path)
-            except OSError as exc:
-                # Best-effort cleanup of an internally-generated temp file;
-                # non-fatal, but leave a trace so accumulation is explainable.
-                self.logger.debug(f"Temp file cleanup failed: {path} — {exc}")
+    def _at_current_target(self, media: dict, image_type: str, placed: str) -> bool:
+        """True when ``placed`` is where a Kometa apply would land now, or there is nowhere to land it."""
+        target, _why = self._kometa_path(media, image_type, placed)
+        return target in (None, os.path.realpath(placed))
+
+    def _file_op(self, src: str, dest: str, action_type: str) -> Optional[OSError]:
+        """Place ``src`` at ``dest`` by action_type; returns why a moved source stayed, when it did."""
+        kept = None
+        if action_type == "move":
+            kept = move_into_place(src, dest)
+        elif action_type == "hardlink":
+            link_into_place(src, dest)
+        elif action_type == "symlink":
+            symlink_into_place(src, dest)
+        else:  # copy (default)
+            copy_into_place(src, dest)
+        self.logger.debug(f"[{action_type.upper()}] {dest} ← {src}")
+        return kept
 
     # ----- orchestration --------------------------------------------------
 
@@ -924,6 +934,7 @@ class AssetRenamerr(ChubModule):
         # exception it's reclaimed on GC, which is safe for a read connection.
         poster_conn = db.poster.open_read_connection()
         refusals: List[WriteRefused] = []
+        kept_sources: List[OSError] = []
         attempted = 0
         for idx, media in enumerate(all_media, 1):
             if self.is_cancelled():
@@ -981,8 +992,8 @@ class AssetRenamerr(ChubModule):
                 # Manual-pick lock: when the user chose a specific file in the
                 # picker, reuse it verbatim instead of re-resolving — a re-run
                 # must never overwrite a locked pick (mirrors poster_renamerr's
-                # user_confirmed early-return). Falls back to auto-resolution if
-                # the locked file has since vanished from disk.
+                # user_confirmed early-return). Falls back to auto-resolution once
+                # the locked file is gone, unless a Kometa run still has its copy.
                 locked = (
                     applied_map.get((target_kind, int(target_id), image_type))
                     if target_id is not None
@@ -990,17 +1001,22 @@ class AssetRenamerr(ChubModule):
                 )
                 # applied_map predates the loop: re-check for a pick made or changed since before applying or writing over it.
                 unlocked_at_start = not (locked and locked.get("user_confirmed"))
-                if (
-                    locked
-                    and locked.get("user_confirmed")
-                    and locked.get("matched_file")
-                    and os.path.exists(locked["matched_file"])
-                ):
+                picked = (
+                    locked.get("matched_file")
+                    if locked and locked.get("user_confirmed")
+                    else None
+                )
+                if picked and os.path.exists(picked):
                     resolved: Optional[Tuple[str, Optional[str], Optional[str]]] = (
                         "local",
-                        locked["matched_file"],
+                        picked,
                         None,
                     )
+                elif picked and (placed := self._placed_pick(locked)):
+                    if self._at_current_target(media, image_type, placed):
+                        continue
+                    # The destination changed: place the pick from the file it last placed.
+                    resolved = ("local", placed, None)
                 else:
                     resolved = self._resolve_source(
                         media,
@@ -1066,6 +1082,7 @@ class AssetRenamerr(ChubModule):
                     src_mtime,
                     media=media,
                     is_collection=is_collection,
+                    image_type=image_type,
                 ):
                     self.logger.debug(
                         f"↳ unchanged, skipping {image_type} for {media.get('title')}"
@@ -1099,7 +1116,7 @@ class AssetRenamerr(ChubModule):
                 else:
                     attempted += 1
                     applied, detail = self._apply_kometa(
-                        media, image_type, source, file, url, refusals
+                        media, image_type, source, file, url, refusals, kept_sources
                     )
 
                 # On a dry run, NEVER persist match state: media_asset_matches
@@ -1145,6 +1162,7 @@ class AssetRenamerr(ChubModule):
                         f"{media.get('title')} -> {detail}"
                     )
         poster_conn.close()
+        log_kept_sources(self.logger, kept_sources, "asset")
         log_refusals(self.logger, refusals, "asset")
         if refusals and len(refusals) == attempted:
             raise NoAssetWritten(

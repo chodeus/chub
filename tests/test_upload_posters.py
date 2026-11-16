@@ -908,7 +908,7 @@ def test_write_music_sidecar_failure_preserves_existing_cover(tmp_path, monkeypa
     """A crash mid-copy (partial write + OSError) must leave the user's
     existing cover untouched, warn instead of raising, and leave no temp
     litter in the music folder."""
-    from backend.util import upload_posters as up_mod
+    from backend.util import file_ops
 
     poster = tmp_path / "poster.jpg"
     poster.write_bytes(b"poster-bytes")
@@ -918,12 +918,11 @@ def test_write_music_sidecar_failure_preserves_existing_cover(tmp_path, monkeypa
     existing.write_bytes(b"original")
     entry = {"file_paths": [str(folder)], "title": "X"}
 
-    def _partial_copy(src, dst):
-        with open(dst, "wb") as fh:
-            fh.write(b"part")
+    def _partial_copy(fsrc, fdst, *_a):
+        fdst.write(b"part")
         raise OSError("disk full")
 
-    monkeypatch.setattr(up_mod.shutil, "copyfile", _partial_copy)
+    monkeypatch.setattr(file_ops.shutil, "copyfileobj", _partial_copy)
 
     warnings = []
     up = _sidecar_uploader(warnings)
@@ -1155,3 +1154,24 @@ def test_a_title_searched_target_reuploads_only_the_copy_that_lost_it(tmp_path):
 
     assert result.action == "updated"
     assert (kept.uploaded, lost.uploaded) == ([], [asset["renamed_file"]])
+
+
+def test_a_music_sidecar_from_a_bordered_poster_gets_a_new_files_mode(tmp_path, umask_022):
+    import os
+    import stat
+
+    from PIL import Image
+
+    from backend.modules.border_replacerr import BorderReplacerr
+
+    staged = tmp_path / "staging" / "Artist.jpg"
+    staged.parent.mkdir()
+    BorderReplacerr._replace_if_changed(
+        object.__new__(BorderReplacerr), Image.new("RGB", (2, 3)), str(staged)
+    )
+    album = tmp_path / "music" / "Album"
+    album.mkdir(parents=True)
+    _sidecar_uploader()._write_music_sidecar(
+        "album", str(staged), {"file_paths": [str(album)], "title": "A"}, False
+    )
+    assert oct(stat.S_IMODE(os.stat(album / "cover.jpg").st_mode)) == oct(0o644)

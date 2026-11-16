@@ -87,6 +87,17 @@ export const shouldShowField = (field, formData, apiData = {}) => {
 };
 
 /**
+ * Whether a folder picker checks CHUB can write there: `checkWritable` is true, or a list of
+ * `conditional`-shaped conditions that must all hold for the current form.
+ */
+export const resolveCheckWritable = (field, formData, apiData = {}) =>
+    Array.isArray(field.checkWritable)
+        ? field.checkWritable.every(conditional =>
+              shouldShowField({ conditional }, formData, apiData)
+          )
+        : !!field.checkWritable;
+
+/**
  * Resolve instance-type-aware labels/description on a field.
  *
  * A field may declare per-instance-type display overrides so one shared
