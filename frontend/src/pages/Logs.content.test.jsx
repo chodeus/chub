@@ -1,4 +1,4 @@
-/** What the Logs page shows for a read, through the real useLogContent and logsAPI; fetch is the only stub. */
+/** What the Logs page shows for a read: useLogContent and logsAPI run for real over a stubbed fetch; the selection is fixed and polls run by hand. */
 import { act, render, screen } from '@testing-library/react';
 
 vi.mock('../contexts/UIStateContext', () => ({

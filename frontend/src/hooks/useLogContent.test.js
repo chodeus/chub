@@ -1,4 +1,4 @@
-/** Guards that polls append only new lines, and that a refresh in flight cannot commit content for a previous selection. */
+/** What reads and polls leave in view: lines appended or replaced, errors shown then cleared, and reads dropped once the selection changes. */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 vi.mock('../utils/api/logs.js', () => {
