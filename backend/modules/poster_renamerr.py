@@ -1003,7 +1003,7 @@ class PosterRenamerr(ChubModule):
     def _moved_source(self, row: dict) -> Optional[str]:
         """Under move, the file staged last time once its source is gone: the only copy left to stage from."""
         config = self.config
-        # Only a run whose own file ops move posters can carry one.
+        # Only move carries one, dry runs included; under border_replacerr the border step places posters.
         if config.action_type != "move" or config.run_border_replacerr:
             return None
         staged = row.get("renamed_file")
@@ -1142,8 +1142,8 @@ class PosterRenamerr(ChubModule):
 
         item["renamed_file"] = new_file_path
 
-        # A dry run leaves a moved poster's staged path alone: the next real run stages from it.
-        if not (config.dry_run and moved):
+        # A dry run never replaces a staged path that still holds a file: the next real run moves or cleans up from it.
+        if not (config.dry_run and previous_renamed and os.path.lexists(previous_renamed)):
             self._record_staged(item, db, new_file_path)
 
         messages = []

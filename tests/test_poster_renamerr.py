@@ -1861,10 +1861,37 @@ def test_a_dry_run_lists_a_moved_poster_the_real_run_will_carry(tmp_path, monkey
     m.logger.messages["info"].clear()
     m.run()
     listed = "\tDune (2021).jpg -not-renamed-> Dune (2021).jpg" in m.logger.messages["info"]
-    assert (listed, landed.exists(), placed.exists()) == (True, False, True)
+    assert (listed, landed.exists(), _dune_row(tmp_path)["renamed_file"]) == (True, False, str(placed))
     m.config.dry_run = False
     m.run()
-    assert (landed.read_bytes(), placed.exists()) == (b"poster", False)
+    assert (landed.read_bytes(), placed.exists(), m.logger.messages["error"]) == (b"poster", False, [])
+
+
+def test_a_first_dry_run_records_where_posters_would_go_for_its_border_and_plex_steps(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.dry_run = True
+    m.run()
+    would = posters / "Dune (2021).jpg"
+    assert (_dune_row(tmp_path)["renamed_file"], would.exists()) == (str(would), False)
+
+
+def test_a_dry_run_after_a_folder_rename_leaves_the_old_folder_for_the_real_run_to_clear(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.asset_folders = True
+    m.run()
+    old = posters / "Dune (2021)" / "poster.jpg"
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.execute_query("UPDATE media_cache SET folder=? WHERE id=1", ("Dune (2021) [renamed]",))
+    m.config.dry_run = True
+    m.run()
+    assert _dune_row(tmp_path)["renamed_file"] == str(old)
+    m.config.dry_run = False
+    m.run()
+    landed = posters / "Dune (2021) [renamed]" / "poster.jpg"
+    assert (landed.read_bytes(), old.parent.exists()) == (b"poster", False)
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
