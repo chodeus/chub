@@ -1128,7 +1128,7 @@ class AssetRenamerr(ChubModule):
                 # was never actually uploaded. We still report it in the output
                 # (marked "would apply") so the dry-run preview is complete.
                 # A failed carry leaves the row on the file still placed, so the next run retries it.
-                carry_failed = not applied and file == placed
+                carry_failed = placed is not None and not applied and file == placed
                 if target_id is not None and not self.config.dry_run and not carry_failed:
                     db.media_asset_matches.upsert(
                         target_kind=target_kind,

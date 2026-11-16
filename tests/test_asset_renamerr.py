@@ -1333,6 +1333,34 @@ def test_dry_run_does_not_persist_match_state(db, monkeypatch):
     assert uploaded == []
 
 
+def test_a_failed_fanart_upload_records_its_failure(db, monkeypatch):
+    m = make_module(
+        sources=["fanart"],
+        apply_method="plex",
+        asset_types=["logo"],
+        plex_scope=[SimpleNamespace(instance="plex1", library_names=["Movies"], add_posters=True)],
+    )
+
+    class RefusingPlex:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            return False
+
+    m._plex_clients = {"plex1": RefusingPlex()}
+    monkeypatch.setattr(m, "_gather_media", lambda _db: [_media(id=3)])
+    # The fanart resolver's shape: no local file, only a URL.
+    monkeypatch.setattr(m, "_resolve_source", lambda *a, **k: ("fanart", None, "http://x/logo.png"))
+    out = m.match_and_apply_assets(db)
+    row = db.media_asset_matches.get_one("media", 3, "logo")
+    assert (out["logo"][0]["applied"], row["match_status"], row["matched_url"]) == (
+        False,
+        "failed",
+        "http://x/logo.png",
+    )
+
+
 def test_apply_direct_uploads_to_all_matching_libraries():
     m = make_module(
         apply_method="plex",
