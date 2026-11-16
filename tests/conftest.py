@@ -139,3 +139,13 @@ class _NoopConnector:
 def noop_media_resync(monkeypatch):
     """resync_media succeeds without contacting any app."""
     monkeypatch.setattr("backend.util.connector.Connector", _NoopConnector)
+
+
+@pytest.fixture
+def umask_022():
+    """Pin the umask, so a new file's mode (0o644) differs from a 0o600 source's."""
+    old = os.umask(0o022)
+    try:
+        yield
+    finally:
+        os.umask(old)

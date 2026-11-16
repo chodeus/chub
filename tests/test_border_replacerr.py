@@ -715,7 +715,7 @@ def test_manifest_only_overrides_full_library_triggers(tmp_path, monkeypatch):
     assert not (dest_dir / "outman.jpg").exists()  # full sweep suppressed
 
 
-def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
+def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch, umask_022):
     """A border-EXCLUDED manifest asset must still get its raw source staged
     at renamed_file (exclusion means no border, not no poster) — otherwise the
     plex uploader finds nothing to read and fails it on every run."""
@@ -733,9 +733,7 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
     with open(by_id[1]["original_file"], "rb") as f:
         src_bytes = f.read()
     assert dest.read_bytes() == src_bytes
-    umask = os.umask(0)
-    os.umask(umask)
-    assert oct(dest.stat().st_mode & 0o777) == oct(0o666 & ~umask), "a new file's mode, not the source's"
+    assert oct(dest.stat().st_mode & 0o777) == oct(0o644), "a new file's mode, not the source's"
 
 
 def test_a_second_refresh_does_not_delete_the_first_runs_previews(

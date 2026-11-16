@@ -163,10 +163,8 @@ def test_a_destination_with_the_same_size_and_time_but_other_bytes_is_not_alread
     assert file_ops.already_in_place(str(src), str(dest), "copy") is False
 
 
-def test_a_copy_without_keep_mode_gets_a_new_files_mode(tmp_path):
+def test_a_copy_without_keep_mode_gets_a_new_files_mode(tmp_path, umask_022):
     _src_dir, src, _dest_dir, dest = _folders(tmp_path)
     src.chmod(0o600)
     copy_into_place(str(src), str(dest), keep_mode=False)
-    umask = os.umask(0)
-    os.umask(umask)
-    assert oct(dest.stat().st_mode & 0o777) == oct(0o666 & ~umask)
+    assert oct(dest.stat().st_mode & 0o777) == oct(0o644)

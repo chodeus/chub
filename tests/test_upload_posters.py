@@ -1156,7 +1156,7 @@ def test_a_title_searched_target_reuploads_only_the_copy_that_lost_it(tmp_path):
     assert (kept.uploaded, lost.uploaded) == ([], [asset["renamed_file"]])
 
 
-def test_a_music_sidecar_from_a_bordered_poster_gets_a_new_files_mode(tmp_path):
+def test_a_music_sidecar_from_a_bordered_poster_gets_a_new_files_mode(tmp_path, umask_022):
     import os
     import stat
 
@@ -1174,6 +1174,4 @@ def test_a_music_sidecar_from_a_bordered_poster_gets_a_new_files_mode(tmp_path):
     _sidecar_uploader()._write_music_sidecar(
         "album", str(staged), {"file_paths": [str(album)], "title": "A"}, False
     )
-    umask = os.umask(0)
-    os.umask(umask)
-    assert oct(stat.S_IMODE(os.stat(album / "cover.jpg").st_mode)) == oct(0o666 & ~umask)
+    assert oct(stat.S_IMODE(os.stat(album / "cover.jpg").st_mode)) == oct(0o644)
