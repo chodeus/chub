@@ -190,16 +190,7 @@ def read_log(
     ),
     logger: Any = Depends(get_logger),
 ) -> PlainTextResponse:
-    """
-    Read and return the contents of a specific log file.
-
-    Returns the raw log file content as plain text. Security measures prevent
-    access to debug logs and directory traversal attacks.
-
-    With `offset`, returns only whole lines added since that read, with X-Log-* headers
-    for the next one; X-Log-Reset 1 means replace the view (offset 0, rotation, truncation,
-    or a view past twice VIEW_CAP). X-Log-Start is the view's first byte.
-    """
+    """Return a log as plain text: the whole file, or with ``offset`` the whole lines added since (X-Log-* headers)."""
     try:
         # Allow-list the module name (same guard as list_logs_for_module).
         # Filename still goes through basename+realpath because it's
