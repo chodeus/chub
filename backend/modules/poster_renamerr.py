@@ -1003,8 +1003,8 @@ class PosterRenamerr(ChubModule):
     def _moved_source(self, row: dict) -> Optional[str]:
         """Under move, the file staged last time once its source is gone: the only copy left to stage from."""
         config = self.config
-        # Only a run that moves files can carry it; a dry run would also overwrite renamed_file.
-        if config.action_type != "move" or config.dry_run or config.run_border_replacerr:
+        # Only a run whose own file ops move posters can carry one.
+        if config.action_type != "move" or config.run_border_replacerr:
             return None
         staged = row.get("renamed_file")
         if not staged or not os.path.isfile(staged):
@@ -1051,6 +1051,41 @@ class PosterRenamerr(ChubModule):
         """Log why one poster was not staged, and count it for the Run Summary."""
         log(message)
         self._rename_failures += 1
+
+    def _record_staged(self, item: dict, db: ChubDB, new_file_path: str) -> None:
+        """Write where ``item`` is now staged (and, on a real run, its rename history) to its cache row."""
+        asset_type = item.get("asset_type")
+        if asset_type == "collection":
+            db.collection.update(
+                title=item.get("title"),
+                year=item.get("year"),
+                library_name=item.get("library_name"),
+                instance_name=item.get("instance_name"),
+                matched_value=None,
+                original_file=None,
+                renamed_file=new_file_path,
+                id=item.get("id"),
+            )
+        else:
+            history_json = None
+            if not self.config.dry_run:
+                history_json = self._append_rename_history(
+                    item.get("rename_history"),
+                    item.get("original_file") or item.get("file"),
+                    new_file_path,
+                )
+            db.media.update(
+                asset_type=asset_type,
+                title=item.get("title"),
+                year=item.get("year"),
+                instance_name=item.get("instance_name"),
+                matched_value=None,
+                season_number=item.get("season_number"),
+                original_file=None,
+                renamed_file=new_file_path,
+                rename_history=history_json,
+                id=item.get("id"),
+            )
 
     def rename_file(self, item: dict, db: ChubDB) -> Optional[dict]:
         asset_type = item.get("asset_type")
@@ -1107,37 +1142,9 @@ class PosterRenamerr(ChubModule):
 
         item["renamed_file"] = new_file_path
 
-        if asset_type == "collection":
-            db.collection.update(
-                title=item.get("title"),
-                year=item.get("year"),
-                library_name=item.get("library_name"),
-                instance_name=item.get("instance_name"),
-                matched_value=None,
-                original_file=None,
-                renamed_file=new_file_path,
-                id=item.get("id"),
-            )
-        else:
-            history_json = None
-            if not config.dry_run:
-                history_json = self._append_rename_history(
-                    item.get("rename_history"),
-                    item.get("original_file") or item.get("file"),
-                    new_file_path,
-                )
-            db.media.update(
-                asset_type=asset_type,
-                title=item.get("title"),
-                year=item.get("year"),
-                instance_name=item.get("instance_name"),
-                matched_value=None,
-                season_number=item.get("season_number"),
-                original_file=None,
-                renamed_file=new_file_path,
-                rename_history=history_json,
-                id=item.get("id"),
-            )
+        # A dry run leaves a moved poster's staged path alone: the next real run stages from it.
+        if not (config.dry_run and moved):
+            self._record_staged(item, db, new_file_path)
 
         messages = []
         discord_message = []

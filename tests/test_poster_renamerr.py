@@ -1840,6 +1840,33 @@ def test_a_moved_poster_whose_folder_is_renamed_leaves_no_old_folder(tmp_path, m
     assert (landed.read_bytes(), placed.parent.exists()) == (b"poster", False)
 
 
+def test_a_dry_run_keeps_a_picked_and_moved_poster_for_the_real_run(tmp_path, monkeypatch):
+    m, _picked, placed, _reply = _pick_dune_poster(tmp_path, monkeypatch, "move")
+    landed = _new_poster_folder(m, tmp_path)
+    m.config.dry_run = True
+    m.run()
+    assert (placed.exists(), landed.exists(), _dune_row(tmp_path)["renamed_file"]) == (True, False, str(placed))
+    m.config.dry_run = False
+    m.run()
+    assert (landed.read_bytes(), placed.exists(), m.logger.messages["error"]) == (b"new poster", False, [])
+
+
+def test_a_dry_run_lists_a_moved_poster_the_real_run_will_carry(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "move"
+    m.run()
+    placed = posters / "Dune (2021).jpg"
+    landed = _new_poster_folder(m, tmp_path)
+    m.config.dry_run = True
+    m.logger.messages["info"].clear()
+    m.run()
+    listed = "\tDune (2021).jpg -not-renamed-> Dune (2021).jpg" in m.logger.messages["info"]
+    assert (listed, landed.exists(), placed.exists()) == (True, False, True)
+    m.config.dry_run = False
+    m.run()
+    assert (landed.read_bytes(), placed.exists()) == (b"poster", False)
+
+
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
 def test_a_move_from_a_read_only_source_places_both_and_warns_once_per_module(tmp_path, monkeypatch):
     m, _sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
