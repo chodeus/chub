@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logsAPI } from '../utils/api/logs.js';
 
-// Initial load and poll refresh MUST pass the same tail, or the view shrinks
-// on the first poll.
-const LOG_TAIL_LINES = 5000;
+const FROM_START = { offset: 0, id: '', start: 0 };
 
-/** Log content plus a `refresh` for polling. In-flight fetches abort on unmount or
- *  selection change, and overlapping refreshes are skipped so slow reads don't pile up. */
+/** Log content plus a `refresh` for polling, which asks only for the lines added since the last read.
+ *  In-flight fetches abort on unmount or selection change, and overlapping refreshes are skipped. */
 export function useLogContent(selectedModule, selectedLogFile) {
     const [logText, setLogText] = useState('');
+    // Bytes the server left out at the top of a log too big to view whole.
+    const [skippedBytes, setSkippedBytes] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const posRef = useRef(FROM_START);
 
     // Tracks whether a fetch is currently in flight. The polling hook reads
     // this to skip ticks that would overlap with an ongoing request.
@@ -26,13 +27,25 @@ export function useLogContent(selectedModule, selectedLogFile) {
     if (lastKey !== currentKey) {
         setLastKey(currentKey);
         setError(null);
+        setSkippedBytes(0);
+        setLogText('');
         if (!currentKey) {
-            setLogText('');
             setLoading(false);
         } else {
             setLoading(true);
         }
     }
+
+    const applyRead = useCallback(read => {
+        posRef.current = { offset: read.offset, id: read.id, start: read.start };
+        setError(null);
+        setSkippedBytes(read.start);
+        if (read.reset) {
+            setLogText(read.text);
+        } else if (read.text) {
+            setLogText(prev => prev + read.text);
+        }
+    }, []);
 
     useEffect(() => {
         if (!selectedModule || !selectedLogFile) return;
@@ -40,14 +53,15 @@ export function useLogContent(selectedModule, selectedLogFile) {
         const controller = new AbortController();
         abortRef.current = controller;
         inFlightRef.current = true;
+        posRef.current = FROM_START;
 
         logsAPI
-            .fetchLogContent(selectedModule, selectedLogFile, controller.signal, LOG_TAIL_LINES)
-            .then(content => {
-                if (!controller.signal.aborted) setLogText(content);
+            .fetchLogContent(selectedModule, selectedLogFile, controller.signal, FROM_START)
+            .then(read => {
+                if (!controller.signal.aborted) applyRead(read);
             })
             .catch(err => {
-                if (err?.name === 'AbortError') return;
+                if (err?.name === 'AbortError' || controller.signal.aborted) return;
                 console.error('Failed to load log content:', err);
                 setError(err);
                 setLogText('');
@@ -67,7 +81,7 @@ export function useLogContent(selectedModule, selectedLogFile) {
             abortRef.current = null;
             inFlightRef.current = false;
         };
-    }, [selectedModule, selectedLogFile]);
+    }, [selectedModule, selectedLogFile, applyRead]);
 
     // Manual refresh function for polling. Skips if a fetch is already running
     // so slow log reads don't stack up when the poll interval fires repeatedly.
@@ -80,27 +94,29 @@ export function useLogContent(selectedModule, selectedLogFile) {
         inFlightRef.current = true;
 
         try {
-            const content = await logsAPI.fetchLogContent(
+            const read = await logsAPI.fetchLogContent(
                 selectedModule,
                 selectedLogFile,
                 controller.signal,
-                LOG_TAIL_LINES
+                posRef.current
             );
-            if (!controller.signal.aborted) setLogText(content);
+            if (!controller.signal.aborted) applyRead(read);
         } catch (err) {
-            if (err?.name === 'AbortError') return;
-            // Silent failure during polling - don't show toast spam
+            if (err?.name === 'AbortError' || controller.signal.aborted) return;
+            // Keeps the position for the next poll, whose good read clears the error.
             console.error('Failed to refresh log content:', err);
+            setError(err);
         } finally {
             if (abortRef.current === controller) {
                 abortRef.current = null;
                 inFlightRef.current = false;
             }
         }
-    }, [selectedModule, selectedLogFile]);
+    }, [selectedModule, selectedLogFile, applyRead]);
 
     return {
         logText,
+        skippedBytes,
         loading,
         error,
         refresh,
