@@ -3,7 +3,7 @@ import { logsAPI } from '../utils/api/logs.js';
 
 const FROM_START = { offset: 0, id: '', start: 0 };
 
-/** Log content plus a `refresh` for polling, which fetches only the lines added since the last read.
+/** Log content plus a `refresh` for polling, which asks only for the lines added since the last read.
  *  In-flight fetches abort on unmount or selection change, and overlapping refreshes are skipped. */
 export function useLogContent(selectedModule, selectedLogFile) {
     const [logText, setLogText] = useState('');

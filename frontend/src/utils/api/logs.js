@@ -55,17 +55,22 @@ export const logsAPI = {
             // returning it for a failure hid the error from useLogContent's catch.
             if (!res.ok) throw new Error(`Log request failed with status ${res.status}`);
             const text = await res.text();
+            const header = name => {
+                const value = res.headers.get(name);
+                if (value === null) throw new Error(`Log response has no ${name} header`);
+                return value;
+            };
             const position = name => {
-                const n = Number.parseInt(res.headers.get(name), 10);
-                if (!Number.isFinite(n)) throw new Error(`Log response has no ${name} header`);
+                const n = Number.parseInt(header(name), 10);
+                if (!Number.isFinite(n)) throw new Error(`Log response has a bad ${name} header`);
                 return n;
             };
             return {
                 text,
                 offset: position('X-Log-Offset'),
-                id: res.headers.get('X-Log-Id') ?? '',
+                id: header('X-Log-Id'),
                 start: position('X-Log-Start'),
-                reset: res.headers.get('X-Log-Reset') === '1',
+                reset: header('X-Log-Reset') === '1',
             };
         } catch (error) {
             // AbortError is the caller cancelling, not a failure worth logging.

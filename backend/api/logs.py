@@ -190,7 +190,7 @@ def read_log(
     ),
     logger: Any = Depends(get_logger),
 ) -> PlainTextResponse:
-    """Return a log as plain text: the whole file, or with ``offset`` the whole lines added since (X-Log-* headers)."""
+    """Return a log as plain text: the whole file, or with ``offset`` one ``_view`` read (X-Log-* headers)."""
     try:
         # Allow-list the module name (same guard as list_logs_for_module).
         # Filename still goes through basename+realpath because it's

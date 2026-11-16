@@ -64,7 +64,12 @@ describe('logsAPI.fetchLogContent', () => {
     it('returns a genuinely empty file as empty text', async () => {
         vi.stubGlobal(
             'fetch',
-            okResponse('', { 'X-Log-Offset': '0', 'X-Log-Start': '0', 'X-Log-Reset': '1' })
+            okResponse('', {
+                'X-Log-Offset': '0',
+                'X-Log-Id': '5:e3b0c44298fc',
+                'X-Log-Start': '0',
+                'X-Log-Reset': '1',
+            })
         );
 
         await expect(logsAPI.fetchLogContent('mod', 'a.log')).resolves.toMatchObject({ text: '' });
@@ -96,12 +101,33 @@ describe('logsAPI.fetchLogContent', () => {
     });
 
     it('rejects a reply with no view start instead of guessing the top of the file', async () => {
-        vi.stubGlobal('fetch', okResponse('two\n', { 'X-Log-Offset': '4', 'X-Log-Reset': '1' }));
+        vi.stubGlobal(
+            'fetch',
+            okResponse('two\n', { 'X-Log-Offset': '4', 'X-Log-Id': '1:a', 'X-Log-Reset': '1' })
+        );
 
         await expect(logsAPI.fetchLogContent('mod', 'a.log')).rejects.toThrow(
             'Log response has no X-Log-Start header'
         );
     });
+
+    it.each(['X-Log-Id', 'X-Log-Reset'])(
+        'rejects a reply with no %s instead of guessing it',
+        async name => {
+            const headers = {
+                'X-Log-Offset': '4',
+                'X-Log-Id': '1:a',
+                'X-Log-Start': '0',
+                'X-Log-Reset': '1',
+            };
+            delete headers[name];
+            vi.stubGlobal('fetch', okResponse('two\n', headers));
+
+            await expect(logsAPI.fetchLogContent('mod', 'a.log')).rejects.toThrow(
+                `Log response has no ${name} header`
+            );
+        }
+    );
 
     it('still rethrows an AbortError for a cancelled request', async () => {
         vi.stubGlobal(
