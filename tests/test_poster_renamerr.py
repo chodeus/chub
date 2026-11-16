@@ -1761,6 +1761,49 @@ def test_a_move_onto_a_link_to_its_source_removes_the_source(tmp_path, link):
     assert m.logger.messages["warning"] == []
 
 
+def _dune_renamed_file(tmp_path):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        return db.media.get_by_id(1)["renamed_file"]
+
+
+def _new_poster_folder(m, tmp_path):
+    new_posters = tmp_path / "posters2"
+    new_posters.mkdir()
+    m.config.destination_dir = str(new_posters)
+    return new_posters / "Dune (2021).jpg"
+
+
+def test_a_poster_found_and_moved_follows_a_new_destination(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "move"
+    m.run()
+    placed = posters / "Dune (2021).jpg"
+    src_left = (tmp_path / "src" / "Dune (2021) {tmdb-438631}.jpg").exists()
+    assert (placed.read_bytes(), src_left) == (b"poster", False)
+    landed = _new_poster_folder(m, tmp_path)
+    m.run()
+    assert (landed.read_bytes(), placed.exists(), _dune_renamed_file(tmp_path)) == (b"poster", False, str(landed))
+    m.run()
+    with open(landed, "rb") as f:
+        kept = f.read()
+    assert (kept, m.logger.messages["error"]) == (b"poster", [])
+
+
+def test_a_poster_picked_with_move_follows_a_new_destination(tmp_path, monkeypatch):
+    m, picked, placed, reply = _pick_dune_poster(tmp_path, monkeypatch, "move")
+    assert (reply["data"]["copied"], picked.exists(), placed.read_bytes()) == (True, False, b"new poster")
+    landed = _new_poster_folder(m, tmp_path)
+    m.run()
+    assert (landed.read_bytes(), placed.exists(), m.logger.messages["error"]) == (b"new poster", False, [])
+    m.run()
+    with open(landed, "rb") as f:
+        kept = f.read()
+    assert (kept, _dune_renamed_file(tmp_path)) == (b"new poster", str(landed))
+
+
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
 def test_a_move_from_a_read_only_source_places_both_and_warns_once_per_module(tmp_path, monkeypatch):
     m, _sent, posters, logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)

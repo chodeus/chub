@@ -1000,6 +1000,18 @@ class PosterRenamerr(ChubModule):
             expected
         )
 
+    def _moved_source(self, row: dict) -> Optional[str]:
+        """Under move, the file staged last time once its source is gone: the only copy left to stage from."""
+        config = self.config
+        # Only a run that moves files can carry it; a dry run would also overwrite renamed_file.
+        if config.action_type != "move" or config.dry_run or config.run_border_replacerr:
+            return None
+        staged = row.get("renamed_file")
+        if not staged or not os.path.isfile(staged):
+            return None
+        src = row.get("original_file") or row.get("file")
+        return None if src and os.path.lexists(src) else staged
+
     def _remove_superseded(self, previous: Optional[str], new_file_path: str) -> None:
         """Delete the file an asset was PREVIOUSLY staged to once it has moved to
         a new path (e.g. the media folder was renamed). Without this a folder
@@ -1042,7 +1054,7 @@ class PosterRenamerr(ChubModule):
 
     def rename_file(self, item: dict, db: ChubDB) -> Optional[dict]:
         asset_type = item.get("asset_type")
-        file = item.get("original_file") or item.get("file")
+        file = self._moved_source(item) or item.get("original_file") or item.get("file")
         folder = item.get("folder", item.get("media_folder", "")) or ""
         # Plex collections have no on-disk folder, so collections_cache.folder is
         # empty — which previously produced a nameless ".jpg" (flat) or a generic
@@ -1187,7 +1199,8 @@ class PosterRenamerr(ChubModule):
 
         def _consider(row: dict) -> None:
             nonlocal skipped_unchanged
-            if not (row.get("matched") and self._needs_staging(row)):
+            # A moved poster's row goes unmatched once its source is gone, but its file still follows the destination.
+            if not ((row.get("matched") or self._moved_source(row)) and self._needs_staging(row)):
                 return
             if self._is_unchanged_upload(row, lib_indexes):
                 skipped_unchanged += 1
