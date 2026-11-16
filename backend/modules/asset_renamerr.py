@@ -778,9 +778,9 @@ class AssetRenamerr(ChubModule):
             )
         return applied, detail
 
-    def _placed_pick(self, locked: dict) -> Optional[str]:
-        """The file a locked pick placed for Kometa, while it is still there (its source may be gone, as after a move)."""
-        placed = locked.get("applied_path")
+    def _placed_file(self, row: Optional[dict]) -> Optional[str]:
+        """The file a match row placed for Kometa, while it is still there (its source may be gone, as after a move)."""
+        placed = (row or {}).get("applied_path")
         if self.config.apply_method == "kometa" and placed and os.path.exists(placed):
             return placed
         return None
@@ -1012,11 +1012,8 @@ class AssetRenamerr(ChubModule):
                         picked,
                         None,
                     )
-                elif picked and (placed := self._placed_pick(locked)):
-                    if self._at_current_target(media, image_type, placed):
-                        continue
-                    # The destination changed: place the pick from the file it last placed.
-                    resolved = ("local", placed, None)
+                elif picked and self._placed_file(locked):
+                    resolved = None  # Kometa still has the pick: never re-resolve over it
                 else:
                     resolved = self._resolve_source(
                         media,
@@ -1026,6 +1023,11 @@ class AssetRenamerr(ChubModule):
                         fanart_client,
                         conn=poster_conn,
                     )
+                if not resolved and (placed := self._placed_file(locked)):
+                    if self._at_current_target(media, image_type, placed):
+                        continue
+                    # No source is left (as after a move) and the destination changed: place from the file last placed.
+                    resolved = ("local", placed, None)
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a
                     # "missing" row so the Unmatched view can derive coverage

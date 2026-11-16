@@ -2206,6 +2206,27 @@ def test_an_unchanged_logo_follows_a_new_destination(db, monkeypatch, tmp_path, 
     assert (placed, row["applied_path"]) == (b"png", str(landed))
 
 
+def test_a_logo_found_and_moved_follows_a_new_destination(db, monkeypatch, tmp_path):
+    dest, new_dest = tmp_path / "kometa", tmp_path / "kometa2"
+    dest.mkdir()
+    new_dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    placed = dest / "Dune (2021)_logo.png"
+    src_left = list((tmp_path / "src").iterdir())
+    assert (placed.read_bytes(), src_left) == (b"png", [])
+    m.config.destination_dir = str(new_dest)
+    m.run()
+    landed = new_dest / "Dune (2021)_logo.png"
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (landed.read_bytes(), placed.exists(), row["match_status"]) == (b"png", False, "applied")
+    m.run()
+    with open(landed, "rb") as f:
+        kept = f.read()
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (kept, row["applied_path"], row["match_status"]) == (b"png", str(landed), "applied")
+
+
 def test_a_moved_pick_stays_a_file_after_the_action_becomes_symlink(db, monkeypatch, tmp_path):
     m, placed = _moved_pick(db, monkeypatch, tmp_path)
     m.config.action_type = "symlink"
@@ -2232,5 +2253,5 @@ def test_a_plex_run_does_not_count_a_kometa_copy_as_the_pick(tmp_path):
     placed = tmp_path / "Dune (2021)_logo.png"
     placed.write_bytes(b"my pick")
     locked = {"user_confirmed": 1, "applied_path": str(placed)}
-    assert make_module(apply_method="plex")._placed_pick(locked) is None
-    assert make_module(apply_method="kometa")._placed_pick(locked) == str(placed)
+    assert make_module(apply_method="plex")._placed_file(locked) is None
+    assert make_module(apply_method="kometa")._placed_file(locked) == str(placed)
