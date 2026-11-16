@@ -53,6 +53,7 @@ from backend.util.file_ops import (
     copy_into_place,
     link_into_place,
     move_into_place,
+    resolve_folder,
     symlink_into_place,
 )
 from backend.util.writable import ensure_writable_dir, log_kept_sources, note_kept_source
@@ -1028,7 +1029,7 @@ class PosterRenamerr(ChubModule):
             return
         try:
             real_base = os.path.realpath(config.destination_dir)
-            real_prev = os.path.realpath(previous)
+            real_prev = resolve_folder(previous)  # a staged symlink is removed, not followed out
             if not real_prev.startswith(real_base + os.sep):
                 return  # outside the staging tree — leave it alone
             # A move has already taken it away; its emptied folder still goes.

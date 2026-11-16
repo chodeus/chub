@@ -8,6 +8,11 @@ import threading
 from typing import Callable, Optional
 
 
+def resolve_folder(path: str) -> str:
+    """``path`` with its folder resolved and its own name kept, so a link already at ``path`` is never followed."""
+    return os.path.join(os.path.realpath(os.path.dirname(path)), os.path.basename(path))
+
+
 def _into_place(dest: str, make: Callable[[str], None]) -> None:
     # Short per-thread temp beside dest, never dest: a failed op leaves dest whole, a copy
     # chmods only its own file, and "xb" never follows a path already at tmp.

@@ -20,6 +20,7 @@ from backend.util.file_ops import (
     copy_into_place,
     link_into_place,
     move_into_place,
+    resolve_folder,
     symlink_into_place,
 )
 from backend.util.writable import (
@@ -713,10 +714,10 @@ class AssetRenamerr(ChubModule):
         # Path-traversal guard. `folder` comes from external *arr/Plex metadata
         # (folder basename / title) and feeds EITHER the destination subdir
         # (asset_folders on) OR the filename via new_name (asset_folders off) —
-        # so guarding dest_dir alone leaves the off path open. Resolve the FINAL
-        # path and confirm it stays under destination_dir before any file op.
+        # so guarding dest_dir alone leaves the off path open. Resolve the final path's FOLDER and confirm
+        # it stays under destination_dir; the file stays unresolved, so a symlink placed there is replaced.
         real_base = os.path.realpath(dest_root)
-        new_path = os.path.realpath(os.path.join(dest_dir, new_name))
+        new_path = resolve_folder(os.path.join(dest_dir, new_name))
         if not new_path.startswith(real_base + os.sep):
             return None, f"path traversal blocked for folder '{folder}'"
         return new_path, ""
@@ -789,7 +790,7 @@ class AssetRenamerr(ChubModule):
     def _at_current_target(self, media: dict, image_type: str, placed: str) -> bool:
         """True when ``placed`` is where a Kometa apply would land now, or there is nowhere to land it."""
         target, _why = self._kometa_path(media, image_type, placed)
-        return target in (None, os.path.realpath(placed))
+        return target in (None, resolve_folder(placed))
 
     def _file_op(self, src: str, dest: str, action_type: str) -> Optional[OSError]:
         """Place ``src`` at ``dest`` by action_type; returns why a moved source stayed, when it did."""

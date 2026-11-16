@@ -2306,6 +2306,56 @@ def test_a_moved_pick_stays_a_file_after_the_action_becomes_symlink(db, monkeypa
     assert (placed.is_symlink(), kept) == (False, b"my pick")
 
 
+def _symlinked_logo(db, monkeypatch, tmp_path):
+    """A real run symlinks Dune's scanned logo into Kometa; returns (module, placed link, its source)."""
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="symlink")
+    m.run()
+    placed = dest / "Dune (2021)_logo.png"
+    src = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    assert (placed.is_symlink(), os.path.realpath(placed)) == (True, os.path.realpath(src))
+    return m, placed, src
+
+
+def _pick_logo(m, db, tmp_path):
+    pick = tmp_path / "picks" / "mine.png"
+    pick.parent.mkdir()
+    pick.write_bytes(b"my pick")
+    return pick, m.apply_chosen_asset(db, "media", db.media.get_by_id(1), "logo", str(pick))
+
+
+def test_a_symlinked_logo_takes_a_new_pick_and_keeps_its_source(db, monkeypatch, tmp_path):
+    m, placed, src = _symlinked_logo(db, monkeypatch, tmp_path)
+    pick, (applied, detail) = _pick_logo(m, db, tmp_path)
+    with open(placed, "rb") as f:
+        shown = f.read()
+    assert (applied, detail) == (True, os.path.join(os.path.realpath(placed.parent), placed.name))
+    assert (os.path.realpath(placed), shown, src.read_bytes()) == (os.path.realpath(pick), b"my pick", b"png")
+    m.logger.messages["debug"].clear()
+    m.run()
+    relinked = [line for line in m.logger.messages["debug"] if line.startswith("[SYMLINK]")]
+    assert (os.path.realpath(placed), relinked, m.logger.messages["warning"]) == (os.path.realpath(pick), [], [])
+
+
+def test_a_symlinked_logo_whose_source_changed_is_linked_again(db, monkeypatch, tmp_path):
+    m, placed, src = _symlinked_logo(db, monkeypatch, tmp_path)
+    later = os.stat(src).st_mtime + 60
+    os.utime(src, (later, later))
+    m.run()
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (row["match_status"], row["source_mtime"], placed.is_symlink()) == ("applied", later, True)
+    assert (m.logger.messages["warning"], m.logger.messages["error"]) == ([], [])
+
+
+def test_a_symlinked_logo_becomes_a_file_once_the_action_is_move(db, monkeypatch, tmp_path):
+    m, placed, src = _symlinked_logo(db, monkeypatch, tmp_path)
+    m.config.action_type = "move"
+    pick, (applied, _detail) = _pick_logo(m, db, tmp_path)
+    assert (applied, placed.is_symlink(), placed.read_bytes()) == (True, False, b"my pick")
+    assert (pick.exists(), src.read_bytes()) == (False, b"png")
+
+
 def test_a_logo_picked_with_move_during_a_run_stays_through_the_next_run(db, monkeypatch, tmp_path):
     dest = tmp_path / "kometa"
     dest.mkdir()
