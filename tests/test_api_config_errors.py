@@ -21,8 +21,6 @@ from pydantic import ValidationError  # noqa: E402
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-os.environ.setdefault("CONFIG_DIR", os.path.join(os.path.dirname(__file__), ".cfgtmp"))
-
 from backend.api.main import handle_config_error  # noqa: E402
 from backend.util.config import (  # noqa: E402
     ChubConfig,
