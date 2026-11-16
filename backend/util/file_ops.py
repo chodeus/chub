@@ -45,6 +45,9 @@ def link_into_place(src: str, dest: str) -> None:
 
 
 def symlink_into_place(src: str, dest: str) -> None:
+    # Onto its own path, the file would become a link to itself.
+    if _same_entry(src, dest):
+        return
     _into_place(dest, lambda tmp: os.symlink(src, tmp))
 
 

@@ -127,6 +127,15 @@ def test_a_move_onto_its_own_path_keeps_the_file(tmp_path, spelling):
     assert (kept, src.read_bytes()) == (None, b"img")
 
 
+@pytest.mark.parametrize("place", [copy_into_place, link_into_place, file_ops.symlink_into_place])
+@pytest.mark.parametrize("spelling", ["{d}/a.png", "{d}/../posters/a.png"])
+def test_placing_a_file_onto_its_own_path_keeps_the_file(tmp_path, place, spelling):
+    src_dir, src, _dest_dir, _dest = _folders(tmp_path)
+    place(str(src), spelling.format(d=src_dir))
+    assert (src.is_symlink(), os.listdir(src_dir)) == (False, ["a.png"])
+    assert src.read_bytes() == b"img"
+
+
 def test_a_move_onto_a_symlink_to_the_source_puts_the_file_there(tmp_path):
     src_dir, src, dest_dir, dest = _folders(tmp_path)
     os.symlink(src, dest)
