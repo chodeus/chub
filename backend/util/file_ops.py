@@ -88,7 +88,7 @@ def move_into_place(src: str, dest: str) -> Optional[OSError]:
     try:
         os.remove(src)
     except FileNotFoundError:
-        pass
+        pass  # someone else deleted it mid-move: nothing was kept
     except OSError as e:
         return e
     return None
