@@ -203,8 +203,16 @@ export default function Logs() {
                         Showing only the end of this large log. Download it to see the whole file.
                     </p>
                 )}
+                {error && logText && (
+                    <p
+                        role="alert"
+                        className="px-4 py-2 border-t border-border text-meta text-error"
+                    >
+                        Could not refresh this log: {error.message}
+                    </p>
+                )}
                 <div ref={logOutputRef} className="flex flex-col flex-1 min-h-0">
-                    {error ? (
+                    {error && !logText ? (
                         <p role="alert" className="flex-1 p-3 font-mono text-sm text-error">
                             Could not load this log: {error.message}
                         </p>

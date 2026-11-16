@@ -1,5 +1,5 @@
 /** What the Logs page shows for a read, through the real useLogContent and logsAPI; fetch is the only stub. */
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('../contexts/UIStateContext', () => ({
     useUIState: () => ({ viewport: { width: 1400 } }),
@@ -15,9 +15,12 @@ vi.mock('../hooks/useLogFiles.js', () => ({
         setSelectedLogFile: vi.fn(),
     }),
 }));
+const polling = vi.hoisted(() => ({ refresh: null }));
 vi.mock('../hooks/useLogPolling.js', async importOriginal => ({
     ...(await importOriginal()),
-    useLogPolling: () => {},
+    useLogPolling: (_module, _file, refresh) => {
+        polling.refresh = refresh;
+    },
 }));
 
 const { default: Logs } = await import('./Logs.jsx');
@@ -70,5 +73,28 @@ describe('Logs page reading a log', () => {
 
         expect(await screen.findByText(/Showing only the end of this large log/)).toBeTruthy();
         expect(screen.queryByRole('alert')).toBeNull();
+    });
+    it('keeps the log on screen and says when a poll fails', async () => {
+        vi.stubGlobal(
+            'fetch',
+            reply('INFO first line\n', {
+                'X-Log-Offset': '16',
+                'X-Log-Id': '1:a',
+                'X-Log-Start': '0',
+                'X-Log-Reset': '1',
+            })
+        );
+        render(<Logs />);
+        await waitFor(() => expect(screen.queryByText('No logs available')).toBeNull());
+
+        const failed = reply('', {}, 503);
+        vi.stubGlobal('fetch', failed);
+        await act(() => polling.refresh());
+
+        expect(failed.mock.calls[0][0]).toContain('offset=16');
+        expect(screen.getAllByRole('alert').map(a => a.textContent)).toEqual([
+            'Could not refresh this log: Log request failed with status 503',
+        ]);
+        expect(screen.queryByText('No logs available')).toBeNull();
     });
 });

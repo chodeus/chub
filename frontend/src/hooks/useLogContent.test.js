@@ -121,6 +121,55 @@ describe('useLogContent', () => {
         expect([result.current.error, result.current.logText]).toEqual([null, 'a\n']);
     });
 
+    it('reports a failed poll, keeps what was read, and clears it on the next good poll', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        logsAPI.fetchLogContent.mockResolvedValueOnce(read('a\n'));
+        const { result } = renderHook(() => useLogContent('mod', 'a.log'));
+        await waitFor(() => expect(result.current.logText).toBe('a\n'));
+
+        logsAPI.fetchLogContent.mockRejectedValueOnce(
+            new Error('Log request failed with status 503')
+        );
+        await act(() => result.current.refresh());
+        expect([result.current.error?.message, result.current.logText]).toEqual([
+            'Log request failed with status 503',
+            'a\n',
+        ]);
+
+        logsAPI.fetchLogContent.mockResolvedValueOnce(read('b\n', { offset: 4, reset: false }));
+        await act(() => result.current.refresh());
+        expect(logsAPI.fetchLogContent.mock.calls.at(-1)[3]).toMatchObject({ offset: 2 });
+        expect([result.current.error, result.current.logText]).toEqual([null, 'a\nb\n']);
+    });
+
+    it.each(['first read', 'poll'])(
+        'drops a %s that fails after the selection changed',
+        async which => {
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            let fail;
+            const late = new Promise((_resolve, reject) => {
+                fail = reject;
+            });
+            if (which === 'poll') logsAPI.fetchLogContent.mockResolvedValueOnce(read('a\n'));
+            logsAPI.fetchLogContent.mockReturnValueOnce(late);
+            const { result, rerender } = renderHook(({ file }) => useLogContent('mod', file), {
+                initialProps: { file: 'a.log' },
+            });
+            if (which === 'poll') {
+                await waitFor(() => expect(result.current.logText).toBe('a\n'));
+                act(() => {
+                    result.current.refresh();
+                });
+            }
+            logsAPI.fetchLogContent.mockReturnValueOnce(deferred().promise);
+            rerender({ file: 'b.log' });
+
+            await act(async () => fail(new Error('Log request failed with status 500')));
+
+            expect(result.current.error).toBeNull();
+        }
+    );
+
     it('starts a new selection over from offset 0, clearing the old file', async () => {
         logsAPI.fetchLogContent.mockResolvedValueOnce(
             read('a\n', { offset: 2, id: 'x', start: 5 })

@@ -61,7 +61,7 @@ export function useLogContent(selectedModule, selectedLogFile) {
                 if (!controller.signal.aborted) applyRead(read);
             })
             .catch(err => {
-                if (err?.name === 'AbortError') return;
+                if (err?.name === 'AbortError' || controller.signal.aborted) return;
                 console.error('Failed to load log content:', err);
                 setError(err);
                 setLogText('');
@@ -102,9 +102,10 @@ export function useLogContent(selectedModule, selectedLogFile) {
             );
             if (!controller.signal.aborted) applyRead(read);
         } catch (err) {
-            if (err?.name === 'AbortError') return;
-            // Silent failure during polling - don't show toast spam
+            if (err?.name === 'AbortError' || controller.signal.aborted) return;
+            // Keeps the position for the next poll, whose good read clears the error.
             console.error('Failed to refresh log content:', err);
+            setError(err);
         } finally {
             if (abortRef.current === controller) {
                 abortRef.current = null;

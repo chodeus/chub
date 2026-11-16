@@ -28,29 +28,28 @@ def _log_id(f: Any, st: os.stat_result) -> str:
     return f"{st.st_ino}:{hashlib.sha256(first).hexdigest()[:12]}"
 
 
-def _view(path: str, offset: int, log_id: str, view_start: int) -> PlainTextResponse:
-    """Whole lines after ``offset``, or the last VIEW_CAP bytes when the client must start over."""
-    with open(path, "rb") as f:
-        st = os.fstat(f.fileno())
-        size = st.st_size
-        cur_id = _log_id(f, st)
-        # Past twice the cap, so a view stays bounded without re-sending it on every poll.
-        reset = (
-            offset == 0
-            or log_id != cur_id
-            or offset > size
-            or size - view_start > 2 * VIEW_CAP
-        )
-        start = offset
-        if reset:
-            start = max(0, size - VIEW_CAP)
-            if start:
-                f.seek(start - 1)
-                f.readline()
-                start = f.tell()
-            view_start = start
-        f.seek(start)
-        data = f.read(max(0, size - start))
+def _view(f: Any, offset: int, log_id: str, view_start: int) -> PlainTextResponse:
+    """From the open log ``f``: whole lines after ``offset``, or its last VIEW_CAP bytes when the client must start over."""
+    st = os.fstat(f.fileno())
+    size = st.st_size
+    cur_id = _log_id(f, st)
+    # Past twice the cap, so a view stays bounded without re-sending it on every poll.
+    reset = (
+        offset == 0
+        or log_id != cur_id
+        or offset > size
+        or size - view_start > 2 * VIEW_CAP
+    )
+    start = offset
+    if reset:
+        start = max(0, size - VIEW_CAP)
+        if start:
+            f.seek(start - 1)
+            f.readline()
+            start = f.tell()
+        view_start = start
+    f.seek(start)
+    data = f.read(max(0, size - start))
     # A line still being written waits for its newline; a newline is never inside a UTF-8 sequence.
     data = data[: data.rfind(b"\n") + 1]
     return PlainTextResponse(
@@ -234,7 +233,8 @@ def read_log(
             )
 
         if offset is not None:
-            return _view(resolved_path, offset, log_id, view_start)
+            with open(resolved_path, "rb") as f:
+                return _view(f, offset, log_id, view_start)
 
         with open(resolved_path, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
