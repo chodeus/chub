@@ -1053,7 +1053,7 @@ class PosterRenamerr(ChubModule):
         self._rename_failures += 1
 
     def _record_staged(self, item: dict, db: ChubDB, new_file_path: str) -> None:
-        """Write where ``item`` is now staged (and, on a real run, its rename history) to its cache row."""
+        """Write where ``item`` is now staged to its cache row; a media row also gets its rename history on a real run."""
         asset_type = item.get("asset_type")
         if asset_type == "collection":
             db.collection.update(
