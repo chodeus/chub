@@ -195,7 +195,7 @@ def _media(**over):
     return base
 
 
-def _seed(db, image_type, fname):
+def _seed(db, image_type, fname, folder="/x"):
     db.poster.upsert(
         {
             "asset_type": "movie",
@@ -207,7 +207,7 @@ def _seed(db, image_type, fname):
             "imdb_id": "tt27511275",
             "season_number": None,
             "folder": "x",
-            "file": f"/x/{fname}",
+            "file": f"{folder}/{fname}",
             "style": None,
             "priority": 0,
             "image_type": image_type,
@@ -272,11 +272,12 @@ def _fake_fanart(url="https://assets.fanart.tv/fanart/movies/123/hdmovielogo/l.p
     return SimpleNamespace(get_images=lambda *a, **k: {"logo": url, "background": None})
 
 
-def test_source_priority_local_first(db):
-    _seed(db, "logo", "8 A.M. Metro (2023) - Logo.png")
+def test_source_priority_local_first(db, tmp_path):
+    logo = tmp_path / "8 A.M. Metro (2023) - Logo.png"
+    logo.write_bytes(b"png")
+    _seed(db, "logo", logo.name, folder=str(tmp_path))
     m = make_module(sources=["local", "fanart"])
-    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_fanart())
-    assert src == "local" and file and url is None
+    assert m._resolve_source(_media(), db, "logo", False, _fake_fanart()) == ("local", str(logo), None)
 
 
 def test_source_priority_fanart_first(db):
@@ -1333,6 +1334,34 @@ def test_dry_run_does_not_persist_match_state(db, monkeypatch):
     assert uploaded == []
 
 
+def test_a_failed_fanart_upload_records_its_failure(db, monkeypatch):
+    m = make_module(
+        sources=["fanart"],
+        apply_method="plex",
+        asset_types=["logo"],
+        plex_scope=[SimpleNamespace(instance="plex1", library_names=["Movies"], add_posters=True)],
+    )
+
+    class RefusingPlex:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            return False
+
+    m._plex_clients = {"plex1": RefusingPlex()}
+    monkeypatch.setattr(m, "_gather_media", lambda _db: [_media(id=3)])
+    # The fanart resolver's shape: no local file, only a URL.
+    monkeypatch.setattr(m, "_resolve_source", lambda *a, **k: ("fanart", None, "http://x/logo.png"))
+    out = m.match_and_apply_assets(db)
+    row = db.media_asset_matches.get_one("media", 3, "logo")
+    assert (out["logo"][0]["applied"], row["match_status"], row["matched_url"]) == (
+        False,
+        "failed",
+        "http://x/logo.png",
+    )
+
+
 def test_apply_direct_uploads_to_all_matching_libraries():
     m = make_module(
         apply_method="plex",
@@ -2206,6 +2235,68 @@ def test_an_unchanged_logo_follows_a_new_destination(db, monkeypatch, tmp_path, 
     assert (placed, row["applied_path"]) == (b"png", str(landed))
 
 
+def test_a_logo_found_and_moved_follows_a_new_destination(db, monkeypatch, tmp_path):
+    dest, new_dest = tmp_path / "kometa", tmp_path / "kometa2"
+    dest.mkdir()
+    new_dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    placed = dest / "Dune (2021)_logo.png"
+    src_left = list((tmp_path / "src").iterdir())
+    assert (placed.read_bytes(), src_left) == (b"png", [])
+    m.config.destination_dir = str(new_dest)
+    m.run()
+    landed = new_dest / "Dune (2021)_logo.png"
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (landed.read_bytes(), placed.exists(), row["match_status"]) == (b"png", False, "applied")
+    m.run()
+    with open(landed, "rb") as f:
+        kept = f.read()
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (kept, row["applied_path"], row["match_status"]) == (b"png", str(landed), "applied")
+
+
+def test_a_moved_logo_follows_a_new_destination_while_its_source_root_is_missing(db, monkeypatch, tmp_path):
+    dest, new_dest = tmp_path / "kometa", tmp_path / "kometa2"
+    dest.mkdir()
+    new_dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    src = tmp_path / "src"
+    src.rmdir()  # the source drive is unmounted; its cached scan rows stay
+    m.config.destination_dir = str(new_dest)
+    m.run()
+    landed = new_dest / "Dune (2021)_logo.png"
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (landed.read_bytes(), (dest / "Dune (2021)_logo.png").exists()) == (b"png", False)
+    assert (row["match_status"], row["applied_path"]) == ("applied", str(landed))
+    assert (m.logger.messages["warning"], m.logger.messages["error"]) == ([f"Source dir not found: '{src}'"], [])
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_moved_logo_that_cannot_reach_a_new_destination_is_retried(db, monkeypatch, tmp_path):
+    from backend.modules.asset_renamerr import NoAssetWritten
+
+    dest, new_dest = tmp_path / "kometa", tmp_path / "kometa2"
+    dest.mkdir()
+    blocked = new_dest / "Dune (2021)"
+    blocked.mkdir(parents=True)
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move", asset_folders=True)
+    m.run()
+    placed = dest / "Dune (2021)" / "logo.png"
+    m.config.destination_dir = str(new_dest)
+    blocked.chmod(0o555)
+    try:
+        with pytest.raises(NoAssetWritten):
+            m.run()
+    finally:
+        blocked.chmod(0o755)
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (placed.read_bytes(), row["applied_path"]) == (b"png", str(placed))
+    m.run()
+    assert ((blocked / "logo.png").read_bytes(), placed.exists()) == (b"png", False)
+
+
 def test_a_moved_pick_stays_a_file_after_the_action_becomes_symlink(db, monkeypatch, tmp_path):
     m, placed = _moved_pick(db, monkeypatch, tmp_path)
     m.config.action_type = "symlink"
@@ -2232,5 +2323,5 @@ def test_a_plex_run_does_not_count_a_kometa_copy_as_the_pick(tmp_path):
     placed = tmp_path / "Dune (2021)_logo.png"
     placed.write_bytes(b"my pick")
     locked = {"user_confirmed": 1, "applied_path": str(placed)}
-    assert make_module(apply_method="plex")._placed_pick(locked) is None
-    assert make_module(apply_method="kometa")._placed_pick(locked) == str(placed)
+    assert make_module(apply_method="plex")._placed_file(locked) is None
+    assert make_module(apply_method="kometa")._placed_file(locked) == str(placed)
