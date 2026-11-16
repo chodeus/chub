@@ -27,10 +27,13 @@ def _sync(total, synced, failed=0, changes="1 copied"):
         (_sync(5, 2), "GDrive sync      : ❌ stopped after 2/5 folders, 1 copied"),
         (_sync(5, 0), "GDrive sync      : ❌ stopped after 0/5 folders"),
         (None, "GDrive sync      : ❌ stopped before it counted its folders"),
+        ({**_sync(5, 3, failed=2), "dry_run": True}, "GDrive sync      : ❌ [DRY RUN] 2/5 folders failed"),
+        ({**_sync(5, 2), "dry_run": True}, "GDrive sync      : ❌ [DRY RUN] stopped after 2/5 folders, 1 copied"),
     ],
 )
 def test_a_drive_sync_line(summary, line):
-    assert _lines("gdrive", summary)[0] == line
+    lines = _lines("gdrive", summary)
+    assert lines[0] == line
 
 
 def _arr(name, error=None):
@@ -49,7 +52,8 @@ def _arr(name, error=None):
     ],
 )
 def test_an_arr_sync_line(results, line):
-    assert _lines("arr", results)[0] == line
+    lines = _lines("arr", results)
+    assert lines[0] == line
 
 
 def _upload(updated, failed, *errors):
@@ -74,7 +78,8 @@ def _upload(updated, failed, *errors):
     ],
 )
 def test_a_plex_upload_line(result, line):
-    assert _lines("upload", result)[0] == line
+    lines = _lines("upload", result)
+    assert lines[0] == line
 
 
 def test_failed_asset_applies_are_counted_and_fail_the_run_line():
@@ -83,7 +88,8 @@ def test_failed_asset_applies_are_counted_and_fail_the_run_line():
         "logo": [{**entry, "applied": True, "reason": "/k/a.png"}] * 3,
         "banner": [{**entry, "applied": False, "reason": "permission denied"}],
     }
-    assert _lines("assets", output) == [
+    lines = _lines("assets", output)
+    assert lines == [
         "Asset renamerr   : ❌ 3 logos, 0 banners applied, 1 failed",
         "Result           : ⚠ finished, with failures above",
     ]
@@ -94,9 +100,9 @@ def test_a_step_result_it_cannot_read_costs_only_that_line():
     summary.upload(None)
     summary.assets({"logo": [{"applied": True}]})
     summary.log(logger, None, None, cancelled=False, dry_run=False)
+    error = "AttributeError: 'NoneType' object has no attribute 'get'"
     assert logger.messages["info"][1:] == [
-        "Plex upload      : ❌ could not summarise this step "
-        "(AttributeError: 'NoneType' object has no attribute 'get')",
+        f"Plex upload      : ❌ could not summarise this step ({error})",
         "Asset renamerr   : 1 logo applied",
         "Result           : ⚠ finished, with failures above",
     ]

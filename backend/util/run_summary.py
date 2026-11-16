@@ -27,12 +27,12 @@ def _gdrive_text(summary: Optional[Dict[str, Any]]) -> Line:
         return "stopped before it counted its folders", True
     total, synced, failed = summary["total"], summary["synced"], summary["failed"]
     if failed:
-        return f"{failed}/{total} folders failed", True
+        return _dry((f"{failed}/{total} folders failed", True), summary.get("dry_run"))
     if not total:
         return "no folders in gdrive_list", False
     if synced < total:
         changes = f", {summary['changes']}" if synced else ""
-        return f"stopped after {synced}/{total} folders{changes}", True
+        return _dry((f"stopped after {synced}/{total} folders{changes}", True), summary.get("dry_run"))
     return _dry((f"{synced}/{total} folders, {summary['changes']}", False), summary.get("dry_run"))
 
 
@@ -48,8 +48,11 @@ def _arr_text(results: List[Any]) -> Line:
     return f"{text}, {failed[0].instance_name}: {failed[0].error_message or 'failed'}{more}", True
 
 
-def _renames_text(counts: Dict[str, int]) -> Line:
-    return ", ".join(plural(n, kind) for kind, n in counts.items()), False
+def _renames_text(result: Tuple[Dict[str, int], int]) -> Line:
+    """``result`` is the renamed count per section and how many posters failed to stage."""
+    counts, failed = result
+    text = ", ".join(plural(n, kind) for kind, n in counts.items())
+    return (f"{text}, {failed} failed", True) if failed else (text, False)
 
 
 def _orphans_text(result: Dict[str, Any]) -> Line:
@@ -113,8 +116,8 @@ class RunSummary:
     def arr(self, results: List[Any]) -> None:
         self._add("Arr sync", _arr_text, results)
 
-    def renames(self, counts: Dict[str, int]) -> None:
-        self._add("Posters renamed", _renames_text, counts)
+    def renames(self, counts: Dict[str, int], failed: int) -> None:
+        self._add("Posters renamed", _renames_text, (counts, failed))
 
     def orphans(self, result: Dict[str, Any]) -> None:
         self._add("Orphan cleanup", _orphans_text, result)

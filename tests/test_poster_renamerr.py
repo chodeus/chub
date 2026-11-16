@@ -1640,6 +1640,26 @@ _NOT_PLACED = "Match saved and locked — it will be applied on the next poster_
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_poster_it_could_not_place_fails_the_renamed_line(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.asset_folders = True
+    folder = posters / "Dune (2021)"
+    folder.mkdir()
+    folder.chmod(0o555)
+    try:
+        m.run()
+    finally:
+        folder.chmod(0o755)
+    summary = _run_summary(m)
+    [renamed] = [line for line in summary if line.startswith("Posters renamed")]
+    assert (os.listdir(folder), renamed, summary[-1]) == (
+        [],
+        "Posters renamed  : ❌ 0 collections, 0 movies, 0 shows, 1 failed",
+        "Result           : ⚠ finished, with failures above",
+    )
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
 def test_a_pick_whose_new_folder_cannot_be_made_is_not_reported_as_copied(tmp_path, monkeypatch):
     from backend.util.database import ChubDB
     from tests.conftest import StubLogger
@@ -2038,6 +2058,8 @@ def test_an_arr_instance_it_could_not_reach_fails_the_line(tmp_path, monkeypatch
     m.full_config.instances.radarr = {"radarr1": InstanceDetail(url="http://127.0.0.1:9", api="0" * 32)}
     monkeypatch.setattr("backend.util.connector.load_config", lambda *a, **k: m.full_config)
     monkeypatch.setattr("backend.modules.poster_renamerr.Connector", Connector)
+    # create_arr_client returns None for an instance it cannot reach.
+    monkeypatch.setattr("backend.util.connector.create_arr_client", lambda url, api, logger: None)
     m.run()
     [warned] = [w for w in m.logger.messages["warning"] if "Failed to sync radarr1: " in w]
     error = warned.split("Failed to sync radarr1: ", 1)[1]

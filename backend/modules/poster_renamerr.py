@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import threading
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
@@ -1035,6 +1035,11 @@ class PosterRenamerr(ChubModule):
         except OSError as e:
             self.logger.warning(f"Could not remove superseded asset {previous}: {e}")
 
+    def _rename_failed(self, log: Callable[[str], None], message: str) -> None:
+        """Log why one poster was not staged, and count it for the Run Summary."""
+        log(message)
+        self._rename_failures += 1
+
     def rename_file(self, item: dict, db: ChubDB) -> Optional[dict]:
         asset_type = item.get("asset_type")
         file = item.get("original_file") or item.get("file")
@@ -1069,8 +1074,9 @@ class PosterRenamerr(ChubModule):
             real_dest = os.path.realpath(dest_dir)
             real_base = os.path.realpath(config.destination_dir)
             if not real_dest.startswith(real_base + os.sep) and real_dest != real_base:
-                self.logger.warning(
-                    f"Path traversal detected for folder '{folder}', skipping"
+                self._rename_failed(
+                    self.logger.warning,
+                    f"Path traversal detected for folder '{folder}', skipping",
                 )
                 return None
             if (
@@ -1081,7 +1087,9 @@ class PosterRenamerr(ChubModule):
                 try:
                     os.makedirs(dest_dir)
                 except OSError as e:
-                    self.logger.error(f"Failed to create directory {dest_dir}: {e}")
+                    self._rename_failed(
+                        self.logger.error, f"Failed to create directory {dest_dir}: {e}"
+                    )
                     return None
 
         item["renamed_file"] = new_file_path
@@ -1140,8 +1148,9 @@ class PosterRenamerr(ChubModule):
                 and not config.dry_run
                 and not self.process_file(file, new_file_path, config.action_type)
             ):
-                self.logger.warning(
-                    f"File operation failed for {file} -> {new_file_path}"
+                self._rename_failed(
+                    self.logger.warning,
+                    f"File operation failed for {file} -> {new_file_path}",
                 )
                 # What is there is not this file: un-stage it, so the picker
                 # says so and the next run retries.
@@ -1234,6 +1243,8 @@ class PosterRenamerr(ChubModule):
     # less frequently than match — this phase is much shorter (only matched
     # assets, not the full media list).
     _RENAME_PROGRESS_EVERY = 100
+    # Posters rename_files could not stage this run; read by the Run Summary.
+    _rename_failures = 0
 
     def rename_files(self, db: ChubDB, progress_ceiling: int = 100) -> tuple:
         output: Dict[str, List[Dict[str, Any]]] = {
@@ -1244,6 +1255,7 @@ class PosterRenamerr(ChubModule):
             "album": [],
         }
         manifest = {"media_cache": [], "collections_cache": []}
+        self._rename_failures = 0
         matched_assets = self.get_matched_assets(db=db)
 
         if matched_assets:
@@ -1981,7 +1993,7 @@ class PosterRenamerr(ChubModule):
                     output, manifest = self.rename_files(
                         db, progress_ceiling=rename_ceiling
                     )
-                self._run_summary.renames(self._rename_counts(output))
+                self._run_summary.renames(self._rename_counts(output), self._rename_failures)
 
                 if self.config.report_unmatched_assets:
                     from backend.modules.unmatched_assets import UnmatchedAssets
