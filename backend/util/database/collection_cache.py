@@ -246,10 +246,10 @@ class CollectionCache(DatabaseBase):
             (int(bool(confirmed)), id),
         )
 
-    def clear_renamed_file(self, id: int) -> None:
-        """Forget where one collection row's poster was staged, so the next run stages it again."""
+    def set_renamed_file(self, id: int, path: Optional[str] = None) -> None:
+        """Set where one collection row's poster is staged; None un-stages it, so the next run stages it again."""
         self.execute_query(
-            "UPDATE collections_cache SET renamed_file=NULL WHERE id=?", (id,)
+            "UPDATE collections_cache SET renamed_file=? WHERE id=?", (path, id)
         )
 
     def approve_match(self, id: int) -> None:

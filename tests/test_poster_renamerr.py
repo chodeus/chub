@@ -1761,12 +1761,12 @@ def test_a_move_onto_a_link_to_its_source_removes_the_source(tmp_path, link):
     assert m.logger.messages["warning"] == []
 
 
-def _dune_renamed_file(tmp_path):
+def _dune_row(tmp_path):
     from backend.util.database import ChubDB
     from tests.conftest import StubLogger
 
     with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
-        return db.media.get_by_id(1)["renamed_file"]
+        return db.media.get_by_id(1)
 
 
 def _new_poster_folder(m, tmp_path):
@@ -1785,7 +1785,7 @@ def test_a_poster_found_and_moved_follows_a_new_destination(tmp_path, monkeypatc
     assert (placed.read_bytes(), src_left) == (b"poster", False)
     landed = _new_poster_folder(m, tmp_path)
     m.run()
-    assert (landed.read_bytes(), placed.exists(), _dune_renamed_file(tmp_path)) == (b"poster", False, str(landed))
+    assert (landed.read_bytes(), placed.exists(), _dune_row(tmp_path)["renamed_file"]) == (b"poster", False, str(landed))
     m.run()
     with open(landed, "rb") as f:
         kept = f.read()
@@ -1801,7 +1801,43 @@ def test_a_poster_picked_with_move_follows_a_new_destination(tmp_path, monkeypat
     m.run()
     with open(landed, "rb") as f:
         kept = f.read()
-    assert (kept, _dune_renamed_file(tmp_path)) == (b"new poster", str(landed))
+    assert (kept, _dune_row(tmp_path)["renamed_file"]) == (b"new poster", str(landed))
+
+
+def _moved_into_asset_folders(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "move"
+    m.config.asset_folders = True
+    m.run()
+    return m, posters / "Dune (2021)" / "poster.jpg"
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_moved_poster_that_cannot_reach_a_new_destination_is_retried(tmp_path, monkeypatch):
+    m, placed = _moved_into_asset_folders(tmp_path, monkeypatch)
+    blocked = tmp_path / "posters2" / "Dune (2021)"
+    blocked.mkdir(parents=True)
+    m.config.destination_dir = str(blocked.parent)
+    blocked.chmod(0o555)
+    try:
+        m.run()
+    finally:
+        blocked.chmod(0o755)
+    assert (placed.read_bytes(), _dune_row(tmp_path)["renamed_file"]) == (b"poster", str(placed))
+    m.run()
+    assert ((blocked / "poster.jpg").read_bytes(), placed.exists()) == (b"poster", False)
+
+
+def test_a_moved_poster_whose_folder_is_renamed_leaves_no_old_folder(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, placed = _moved_into_asset_folders(tmp_path, monkeypatch)
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.execute_query("UPDATE media_cache SET folder=? WHERE id=1", ("Dune (2021) [renamed]",))
+    m.run()
+    landed = placed.parent.parent / "Dune (2021) [renamed]" / "poster.jpg"
+    assert (landed.read_bytes(), placed.parent.exists()) == (b"poster", False)
 
 
 @pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")

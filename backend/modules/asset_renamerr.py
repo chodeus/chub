@@ -1006,13 +1006,14 @@ class AssetRenamerr(ChubModule):
                     if locked and locked.get("user_confirmed")
                     else None
                 )
+                placed = self._placed_file(locked)
                 if picked and os.path.exists(picked):
                     resolved: Optional[Tuple[str, Optional[str], Optional[str]]] = (
                         "local",
                         picked,
                         None,
                     )
-                elif picked and self._placed_file(locked):
+                elif picked and placed:
                     resolved = None  # Kometa still has the pick: never re-resolve over it
                 else:
                     resolved = self._resolve_source(
@@ -1023,7 +1024,7 @@ class AssetRenamerr(ChubModule):
                         fanart_client,
                         conn=poster_conn,
                     )
-                if not resolved and (placed := self._placed_file(locked)):
+                if not resolved and placed:
                     if self._at_current_target(media, image_type, placed):
                         continue
                     # No source is left (as after a move) and the destination changed: place from the file last placed.
@@ -1126,7 +1127,9 @@ class AssetRenamerr(ChubModule):
                 # as "applied" would make the next REAL run skip an item that
                 # was never actually uploaded. We still report it in the output
                 # (marked "would apply") so the dry-run preview is complete.
-                if target_id is not None and not self.config.dry_run:
+                # A failed carry leaves the row on the file still placed, so the next run retries it.
+                carry_failed = not applied and file == placed
+                if target_id is not None and not self.config.dry_run and not carry_failed:
                     db.media_asset_matches.upsert(
                         target_kind=target_kind,
                         target_id=target_id,

@@ -2227,6 +2227,30 @@ def test_a_logo_found_and_moved_follows_a_new_destination(db, monkeypatch, tmp_p
     assert (kept, row["applied_path"], row["match_status"]) == (b"png", str(landed), "applied")
 
 
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_moved_logo_that_cannot_reach_a_new_destination_is_retried(db, monkeypatch, tmp_path):
+    from backend.modules.asset_renamerr import NoAssetWritten
+
+    dest, new_dest = tmp_path / "kometa", tmp_path / "kometa2"
+    dest.mkdir()
+    blocked = new_dest / "Dune (2021)"
+    blocked.mkdir(parents=True)
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move", asset_folders=True)
+    m.run()
+    placed = dest / "Dune (2021)" / "logo.png"
+    m.config.destination_dir = str(new_dest)
+    blocked.chmod(0o555)
+    try:
+        with pytest.raises(NoAssetWritten):
+            m.run()
+    finally:
+        blocked.chmod(0o755)
+    row = db.media_asset_matches.get_one("media", 1, "logo")
+    assert (placed.read_bytes(), row["applied_path"]) == (b"png", str(placed))
+    m.run()
+    assert ((blocked / "logo.png").read_bytes(), placed.exists()) == (b"png", False)
+
+
 def test_a_moved_pick_stays_a_file_after_the_action_becomes_symlink(db, monkeypatch, tmp_path):
     m, placed = _moved_pick(db, monkeypatch, tmp_path)
     m.config.action_type = "symlink"

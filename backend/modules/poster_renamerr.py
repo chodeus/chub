@@ -1031,10 +1031,10 @@ class PosterRenamerr(ChubModule):
             real_prev = os.path.realpath(previous)
             if not real_prev.startswith(real_base + os.sep):
                 return  # outside the staging tree — leave it alone
-            if not os.path.lexists(previous):
-                return
-            os.remove(previous)
-            self.logger.debug(f"[CLEANUP] removed superseded staged asset {previous}")
+            # A move has already taken it away; its emptied folder still goes.
+            if os.path.lexists(previous):
+                os.remove(previous)
+                self.logger.debug(f"[CLEANUP] removed superseded staged asset {previous}")
             parent = os.path.dirname(previous)
             if (
                 config.asset_folders
@@ -1054,7 +1054,8 @@ class PosterRenamerr(ChubModule):
 
     def rename_file(self, item: dict, db: ChubDB) -> Optional[dict]:
         asset_type = item.get("asset_type")
-        file = self._moved_source(item) or item.get("original_file") or item.get("file")
+        moved = self._moved_source(item)
+        file = moved or item.get("original_file") or item.get("file")
         folder = item.get("folder", item.get("media_folder", "")) or ""
         # Plex collections have no on-disk folder, so collections_cache.folder is
         # empty — which previously produced a nameless ".jpg" (flat) or a generic
@@ -1164,11 +1165,11 @@ class PosterRenamerr(ChubModule):
                     self.logger.warning,
                     f"File operation failed for {file} -> {new_file_path}",
                 )
-                # What is there is not this file: un-stage it, so the picker
-                # says so and the next run retries.
-                item["renamed_file"] = None
+                # What is there is not this file: un-stage it so the next run retries;
+                # a moved poster keeps its staged path, the only copy left to retry from.
+                item["renamed_file"] = moved
                 table = db.collection if asset_type == "collection" else db.media
-                table.clear_renamed_file(item.get("id"))
+                table.set_renamed_file(item.get("id"), moved)
                 return None
 
         # Now that the asset is staged at its current path, drop any copy left
