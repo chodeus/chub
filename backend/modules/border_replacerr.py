@@ -555,7 +555,7 @@ class BorderReplacerr(ChubModule):
             if not assets:
                 self.logger.info("No assets to process for border replacerr.")
                 db.holiday.set_status(active_holiday)
-                return
+                return None
 
             border_colors = results["border_colors"]
             border_paths = results.get("border_paths") or []
