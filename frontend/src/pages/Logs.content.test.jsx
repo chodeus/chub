@@ -1,5 +1,5 @@
 /** What the Logs page shows for a read, through the real useLogContent and logsAPI; fetch is the only stub. */
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 vi.mock('../contexts/UIStateContext', () => ({
     useUIState: () => ({ viewport: { width: 1400 } }),
@@ -74,7 +74,10 @@ describe('Logs page reading a log', () => {
         expect(await screen.findByText(/Showing only the end of this large log/)).toBeTruthy();
         expect(screen.queryByRole('alert')).toBeNull();
     });
+
     it('keeps the log on screen and says when a poll fails', async () => {
+        // jsdom has no layout: give the virtualized output a height so its lines render.
+        vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(600);
         vi.stubGlobal(
             'fetch',
             reply('INFO first line\n', {
@@ -85,7 +88,7 @@ describe('Logs page reading a log', () => {
             })
         );
         render(<Logs />);
-        await waitFor(() => expect(screen.queryByText('No logs available')).toBeNull());
+        expect(await screen.findByText(/first line/)).toBeTruthy();
 
         const failed = reply('', {}, 503);
         vi.stubGlobal('fetch', failed);
@@ -95,6 +98,7 @@ describe('Logs page reading a log', () => {
         expect(screen.getAllByRole('alert').map(a => a.textContent)).toEqual([
             'Could not refresh this log: Log request failed with status 503',
         ]);
+        expect(screen.getByText(/first line/)).toBeTruthy();
         expect(screen.queryByText('No logs available')).toBeNull();
     });
 });
