@@ -16,6 +16,7 @@ from backend.util.plex import PlexClient
 from backend.util.public_error import PublicError, failure_text
 from backend.util.fanart import FanartClient
 from backend.util.release_readiness import is_release_ready
+from backend.util.path_safety import resolve_folder
 from backend.util.file_ops import (
     copy_into_place,
     link_into_place,
@@ -710,13 +711,10 @@ class AssetRenamerr(ChubModule):
             dest_dir = dest_root
             new_name = f"{folder}_{stem}{ext}"
 
-        # Path-traversal guard. `folder` comes from external *arr/Plex metadata
-        # (folder basename / title) and feeds EITHER the destination subdir
-        # (asset_folders on) OR the filename via new_name (asset_folders off) —
-        # so guarding dest_dir alone leaves the off path open. Resolve the FINAL
-        # path and confirm it stays under destination_dir before any file op.
+        # Guard the full path, not dest_dir: `folder` is *arr/Plex data and also feeds new_name when asset_folders is off.
+        # Folder resolved, name kept: a link already placed here is replaced, not followed.
         real_base = os.path.realpath(dest_root)
-        new_path = os.path.realpath(os.path.join(dest_dir, new_name))
+        new_path = resolve_folder(os.path.join(dest_dir, new_name))
         if not new_path.startswith(real_base + os.sep):
             return None, f"path traversal blocked for folder '{folder}'"
         return new_path, ""
@@ -789,7 +787,7 @@ class AssetRenamerr(ChubModule):
     def _at_current_target(self, media: dict, image_type: str, placed: str) -> bool:
         """True when ``placed`` is where a Kometa apply would land now, or there is nowhere to land it."""
         target, _why = self._kometa_path(media, image_type, placed)
-        return target in (None, os.path.realpath(placed))
+        return target in (None, resolve_folder(placed))
 
     def _file_op(self, src: str, dest: str, action_type: str) -> Optional[OSError]:
         """Place ``src`` at ``dest`` by action_type; returns why a moved source stayed, when it did."""

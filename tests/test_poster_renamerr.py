@@ -1046,6 +1046,17 @@ def test_remove_superseded_keeps_shared_folder_until_empty(tmp_path):
     assert (old_dir / "Season01.jpg").exists()
 
 
+def test_remove_superseded_keeps_the_poster_both_paths_name(tmp_path):
+    real = tmp_path / "posters"
+    real.mkdir()
+    (tmp_path / "alias").symlink_to(real)
+    poster = real / "Dune (2021).jpg"
+    poster.write_bytes(b"x")
+    m = _staging_module(destination_dir=str(real))
+    m._remove_superseded(str(tmp_path / "alias" / "Dune (2021).jpg"), str(poster))
+    assert poster.read_bytes() == b"x"
+
+
 def test_remove_superseded_ignores_paths_outside_destination(tmp_path):
     """Never delete outside the staging tree, even if asked."""
     m = _staging_module(destination_dir=str(tmp_path / "assets"))
@@ -1838,6 +1849,24 @@ def test_a_moved_poster_whose_folder_is_renamed_leaves_no_old_folder(tmp_path, m
     m.run()
     landed = placed.parent.parent / "Dune (2021) [renamed]" / "poster.jpg"
     assert (landed.read_bytes(), placed.parent.exists()) == (b"poster", False)
+
+
+def test_a_symlinked_poster_whose_folder_is_renamed_leaves_no_old_link(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "symlink"
+    m.run()
+    placed = posters / "Dune (2021).jpg"
+    assert placed.is_symlink()
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.execute_query("UPDATE media_cache SET folder=? WHERE id=1", ("Dune (2021) [renamed]",))
+    m.run()
+    landed = posters / "Dune (2021) [renamed].jpg"
+    src = tmp_path / "src" / "Dune (2021) {tmdb-438631}.jpg"
+    assert (landed.is_symlink(), os.path.lexists(placed), src.read_bytes()) == (True, False, b"poster")
+    assert m.logger.messages["warning"] == []
 
 
 def test_a_dry_run_keeps_a_picked_and_moved_poster_for_the_real_run(tmp_path, monkeypatch):

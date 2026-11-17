@@ -48,6 +48,7 @@ from backend.util.upload_posters import (
     upload_enabled_instances,
     upload_skip_reason,
 )
+from backend.util.path_safety import resolve_folder
 from backend.util.file_ops import (
     already_in_place,
     copy_into_place,
@@ -1022,13 +1023,14 @@ class PosterRenamerr(ChubModule):
         never removes the destination root. Best-effort — failures only warn.
         """
         config = self.config
-        if not previous or previous == new_file_path:
+        # Two spellings of one file (an aliased destination) are no supersede.
+        if not previous or resolve_folder(previous) == resolve_folder(new_file_path):
             return
         if config.dry_run or config.run_border_replacerr:
             return
         try:
             real_base = os.path.realpath(config.destination_dir)
-            real_prev = os.path.realpath(previous)
+            real_prev = resolve_folder(previous)  # a staged symlink is removed, not followed out
             if not real_prev.startswith(real_base + os.sep):
                 return  # outside the staging tree — leave it alone
             # A move has already taken it away; its emptied folder still goes.
