@@ -48,12 +48,12 @@ from backend.util.upload_posters import (
     upload_enabled_instances,
     upload_skip_reason,
 )
+from backend.util.path_safety import resolve_folder
 from backend.util.file_ops import (
     already_in_place,
     copy_into_place,
     link_into_place,
     move_into_place,
-    resolve_folder,
     symlink_into_place,
 )
 from backend.util.writable import ensure_writable_dir, log_kept_sources, note_kept_source

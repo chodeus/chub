@@ -268,6 +268,11 @@ def containing_root(path: str, config: ChubConfig) -> Optional[Path]:
     return best
 
 
+def resolve_folder(path: str) -> str:
+    """``path`` with its folder resolved and its own name kept, so a link already at ``path`` is never followed."""
+    return os.path.join(os.path.realpath(os.path.dirname(path)), os.path.basename(path))
+
+
 def resolve_confined(path: str, config: ChubConfig) -> Optional[Path]:
     """Resolve *path* and return it only when the resolved target is inside an allowed root, else None."""
     if not path or not isinstance(path, str):

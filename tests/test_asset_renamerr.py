@@ -425,6 +425,18 @@ def test_kometa_flat_naming_blocks_path_traversal(tmp_path):
     assert not (tmp_path / "evil (2023)_logo.png").exists()
 
 
+def test_kometa_asset_folder_linked_outside_the_destination_is_blocked(tmp_path):
+    dest = tmp_path / "assets"
+    outside = tmp_path / "outside"
+    dest.mkdir()
+    outside.mkdir()
+    (dest / "Metro").symlink_to(outside, target_is_directory=True)
+    src = _make_src(tmp_path)
+    m = make_module(apply_method="kometa", action_type="copy", asset_folders=True, destination_dir=str(dest))
+    applied, reason = m._apply_kometa(_media(folder="Metro"), "logo", "local", src, None)
+    assert (applied, "traversal" in reason.lower(), list(outside.iterdir())) == (False, True, [])
+
+
 def test_apply_chosen_asset_copies_and_locks(tmp_path, db):
     """The manual artwork picker's backend: apply_chosen_asset copies the chosen
     file (kometa path), records an 'applied' provenance row, and sets the
