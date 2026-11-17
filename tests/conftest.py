@@ -1,20 +1,71 @@
 """Shared pytest fixtures for CHUB test suite."""
 
 import os
+import shutil
+import stat
 import sys
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
 
-from backend.util.config import (
+# Test files import this as tests.conftest: reuse this load rather than run it a second time.
+sys.modules.setdefault("tests.conftest", sys.modules[__name__])
+_REPO = Path(__file__).resolve().parents[1]
+# Set before any backend import reads them, so CHUB's config, database and logs go to a temp folder.
+_STATE_DIR = tempfile.mkdtemp(prefix="chub-tests-")
+os.environ["CONFIG_DIR"] = _STATE_DIR
+os.environ["LOG_DIR"] = os.path.join(_STATE_DIR, "logs")
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from backend.util import paths  # noqa: E402
+from backend.util.config import (  # noqa: E402
     ChubConfig,
     InstanceDetail,
     InstancesConfig,
     JduparrConfig,
     NohlConfig,
 )
+
+# Also moves the <repo>/config and <repo>/logs fallbacks and the legacy <repo>/config/chub.db.
+paths._REPO_ROOT = Path(_STATE_DIR)
+
+
+def _checkout_state() -> dict:
+    """Each path under the checkout's config and log folders: a file's ctime, or -1 for a folder."""
+    state = {}
+    for folder in ("logs", "config", "tests/.cfgtmp"):
+        root = _REPO / folder
+        for path in (root, *root.rglob("*")) if root.exists() else ():
+            try:
+                st = path.lstat()
+            except OSError:
+                continue
+            # ctime, not mtime: a write that restores mtime (os.utime, copy2) still moves ctime.
+            state[str(path.relative_to(_REPO))] = -1 if stat.S_ISDIR(st.st_mode) else st.st_ctime_ns
+    return state
+
+
+_BEFORE = _checkout_state()
+
+
+def pytest_sessionfinish(session):
+    """Remove the tests' state folder, and fail the run if the checkout's config or log folders changed."""
+    shutil.rmtree(_STATE_DIR, ignore_errors=True)
+    after = _checkout_state()
+    stray = sorted(p for p in _BEFORE.keys() | after.keys() if _BEFORE.get(p) != after.get(p))
+    if not stray:
+        return
+    message = "These checkout paths changed during the test run; tests write under tmp_path: " + ", ".join(stray)
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter:
+        reporter.write_line(message, red=True)
+    else:
+        sys.stderr.write(message + "\n")
+    if session.exitstatus == pytest.ExitCode.OK:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 class StubLogger:
