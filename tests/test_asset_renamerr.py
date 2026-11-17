@@ -2347,6 +2347,85 @@ def test_a_moved_pick_stays_a_file_after_the_action_becomes_symlink(db, monkeypa
     assert (placed.is_symlink(), kept) == (False, b"my pick")
 
 
+def _logo_run_then_rename(db, monkeypatch, tmp_path, **over):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, **over)
+    m.run()
+    db.media.execute_query("UPDATE media_cache SET folder=? WHERE id=1", ("Dune (2021) [renamed]",))
+    return m, dest
+
+
+def _tree(dest):
+    return sorted(str(p.relative_to(dest)) for p in dest.rglob("*"))
+
+
+@pytest.mark.parametrize("asset_folders", [False, True])
+@pytest.mark.parametrize("action_type", ["copy", "hardlink", "symlink"])
+def test_a_logo_whose_folder_is_renamed_leaves_no_old_file(db, monkeypatch, tmp_path, action_type, asset_folders):
+    m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path, action_type=action_type, asset_folders=asset_folders)
+    m.run()
+    landed = ["Dune (2021) [renamed]", "Dune (2021) [renamed]/logo.png"] if asset_folders else ["Dune (2021) [renamed]_logo.png"]
+    src = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    assert (_tree(dest), src.read_bytes(), m.logger.messages["warning"]) == (landed, b"png", [])
+
+
+def test_a_logo_leaves_no_empty_folder_once_asset_folders_is_off(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, asset_folders=True)
+    m.run()
+    m.config.asset_folders = False
+    m.run()
+    assert _tree(dest) == ["Dune (2021)_logo.png"]
+
+
+def test_a_hardlinked_logo_carried_as_a_symlink_leaves_no_old_file(db, monkeypatch, tmp_path):
+    m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path, action_type="hardlink")
+    m.config.action_type = "symlink"
+    m.run()
+    assert (_tree(dest), (dest / "Dune (2021) [renamed]_logo.png").is_symlink()) == (["Dune (2021) [renamed]_logo.png"], True)
+
+
+def test_a_case_only_folder_rename_keeps_the_logo_on_a_case_insensitive_mount(db, monkeypatch, tmp_path):
+    (tmp_path / "probe").touch()
+    if not (tmp_path / "PROBE").exists():
+        pytest.skip("needs a case-insensitive filesystem")
+    m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path)
+    db.media.execute_query("UPDATE media_cache SET folder=? WHERE id=1", ("DUNE (2021)",))
+    m.run()
+    assert [p.read_bytes() for p in dest.iterdir()] == [b"png"]
+
+
+def test_a_dry_run_keeps_the_logo_placed_under_the_old_folder_name(db, monkeypatch, tmp_path):
+    m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path)
+    m.config.dry_run = True
+    m.run()
+    assert _tree(dest) == ["Dune (2021)_logo.png"]
+
+
+def test_a_moved_logo_carried_as_a_symlink_keeps_the_file_it_links_to(db, monkeypatch, tmp_path):
+    m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path, action_type="move")
+    m.config.action_type = "symlink"
+    m.run()
+    landed = dest / "Dune (2021) [renamed]_logo.png"
+    assert (landed.is_symlink(), landed.read_bytes()) == (True, b"png")
+
+
+def test_a_logo_picked_with_another_extension_replaces_the_old_file(db, monkeypatch, tmp_path):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    m.run()
+    pick = tmp_path / "picks" / "mine.jpg"
+    pick.parent.mkdir()
+    pick.write_bytes(b"my pick")
+    applied, detail = m.apply_chosen_asset(db, "media", db.media.get_by_id(1), "logo", str(pick))
+    assert (applied, _tree(dest), (dest / "Dune (2021)_logo.jpg").read_bytes()) == (
+        True, ["Dune (2021)_logo.jpg"], b"my pick"
+    ), detail
+
+
 def _symlinked_logo(db, monkeypatch, tmp_path):
     """A real run symlinks Dune's scanned logo into Kometa; returns (module, placed link, its source)."""
     dest = tmp_path / "kometa"

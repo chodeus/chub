@@ -49,12 +49,12 @@ from backend.util.upload_posters import (
     upload_enabled_instances,
     upload_skip_reason,
 )
-from backend.util.path_safety import resolve_folder
 from backend.util.file_ops import (
     already_in_place,
     copy_into_place,
     link_into_place,
     move_into_place,
+    remove_superseded,
     stale_link,
     symlink_into_place,
 )
@@ -1087,40 +1087,11 @@ class PosterRenamerr(ChubModule):
         return None if src and os.path.lexists(src) else staged
 
     def _remove_superseded(self, previous: Optional[str], new_file_path: str) -> None:
-        """Delete the file an asset was PREVIOUSLY staged to once it has moved to
-        a new path (e.g. the media folder was renamed). Without this a folder
-        rename leaves the old "<Old Folder>/poster.jpg" stranded forever: Kometa
-        ignores it (the folder name no longer matches the item) and the
-        orphan-asset pass spares it (its {tvdb-id}/{tmdb-id} still matches a live
-        title), so duplicate folders accumulate. Bounded to destination_dir;
-        never removes the destination root. Best-effort — failures only warn.
-        """
+        """Drop the file an asset was staged to before it moved (e.g. a folder rename): Kometa ignores it and the orphan pass spares its id."""
         config = self.config
-        # Two spellings of one file (an aliased destination) are no supersede.
-        if not previous or resolve_folder(previous) == resolve_folder(new_file_path):
-            return
         if config.dry_run or config.run_border_replacerr:
             return
-        try:
-            real_base = os.path.realpath(config.destination_dir)
-            real_prev = resolve_folder(previous)  # a staged symlink is removed, not followed out
-            if not real_prev.startswith(real_base + os.sep):
-                return  # outside the staging tree — leave it alone
-            # A move has already taken it away; its emptied folder still goes.
-            if os.path.lexists(previous):
-                os.remove(previous)
-                self.logger.debug(f"[CLEANUP] removed superseded staged asset {previous}")
-            parent = os.path.dirname(previous)
-            if (
-                config.asset_folders
-                and os.path.realpath(parent) != real_base
-                and os.path.isdir(parent)
-                and not os.listdir(parent)
-            ):
-                os.rmdir(parent)
-                self.logger.debug(f"[CLEANUP] removed emptied stale folder {parent}")
-        except OSError as e:
-            self.logger.warning(f"Could not remove superseded asset {previous}: {e}")
+        remove_superseded(previous, new_file_path, config.destination_dir, self.logger)
 
     def _rename_failed(self, log: Callable[[str], None], message: str) -> None:
         """Log why one poster was not staged, and count it for the Run Summary."""

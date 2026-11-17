@@ -21,6 +21,7 @@ from backend.util.file_ops import (
     copy_into_place,
     link_into_place,
     move_into_place,
+    remove_superseded,
     stale_link,
     symlink_into_place,
 )
@@ -657,8 +658,9 @@ class AssetRenamerr(ChubModule):
         url: Optional[str],
         refusals: Optional[List[WriteRefused]] = None,
         kept_sources: Optional[List[OSError]] = None,
+        prev: Optional[dict] = None,
     ) -> Tuple[bool, str]:
-        """Place one asset in the Kometa folder by action_type; given ``refusals``/``kept_sources``, those go there, logged at DEBUG."""
+        """Place one asset for Kometa by action_type and drop what ``prev`` placed elsewhere; ``refusals``/``kept_sources`` collect at DEBUG."""
         # Kometa applies LOCAL files only — fanart art is never downloaded to
         # disk (it's Plex-only, streamed straight to Plex). fanart is already
         # filtered out of the Kometa source set in match_and_apply_assets, so
@@ -688,6 +690,8 @@ class AssetRenamerr(ChubModule):
                 return False, failure_text("file op", exc)
             if kept is not None:
                 note_kept_source(self.logger, kept, kept_sources)
+            if prev and prev.get("applied_method") == "kometa":
+                remove_superseded(prev.get("applied_path"), new_path, self.config.destination_dir, self.logger)
         return True, new_path
 
     def _kometa_path(self, media: dict, image_type: str, src: str) -> Tuple[Optional[str], str]:
@@ -764,7 +768,8 @@ class AssetRenamerr(ChubModule):
                 db, media, image_type, file, None, is_collection
             )
         else:
-            applied, detail = self._apply_kometa(media, image_type, "local", file, None)
+            prev = db.media_asset_matches.get_one(target_kind, target_id, image_type) if target_id is not None else None
+            applied, detail = self._apply_kometa(media, image_type, "local", file, None, prev=prev)
 
         if target_id is not None:
             db.media_asset_matches.upsert(
@@ -1128,7 +1133,7 @@ class AssetRenamerr(ChubModule):
                 else:
                     attempted += 1
                     applied, detail = self._apply_kometa(
-                        media, image_type, source, file, url, refusals, kept_sources
+                        media, image_type, source, file, url, refusals, kept_sources, prev
                     )
 
                 # On a dry run, NEVER persist match state: media_asset_matches
