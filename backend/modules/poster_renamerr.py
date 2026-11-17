@@ -1023,7 +1023,8 @@ class PosterRenamerr(ChubModule):
         never removes the destination root. Best-effort — failures only warn.
         """
         config = self.config
-        if not previous or previous == new_file_path:
+        # Two spellings of one file (an aliased destination) are no supersede.
+        if not previous or resolve_folder(previous) == resolve_folder(new_file_path):
             return
         if config.dry_run or config.run_border_replacerr:
             return

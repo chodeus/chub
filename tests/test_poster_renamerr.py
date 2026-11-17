@@ -1046,6 +1046,17 @@ def test_remove_superseded_keeps_shared_folder_until_empty(tmp_path):
     assert (old_dir / "Season01.jpg").exists()
 
 
+def test_remove_superseded_keeps_the_poster_both_paths_name(tmp_path):
+    real = tmp_path / "posters"
+    real.mkdir()
+    (tmp_path / "alias").symlink_to(real)
+    poster = real / "Dune (2021).jpg"
+    poster.write_bytes(b"x")
+    m = _staging_module(destination_dir=str(real))
+    m._remove_superseded(str(tmp_path / "alias" / "Dune (2021).jpg"), str(poster))
+    assert poster.read_bytes() == b"x"
+
+
 def test_remove_superseded_ignores_paths_outside_destination(tmp_path):
     """Never delete outside the staging tree, even if asked."""
     m = _staging_module(destination_dir=str(tmp_path / "assets"))
