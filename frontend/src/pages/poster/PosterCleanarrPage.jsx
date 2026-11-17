@@ -1626,8 +1626,8 @@ const PosterCleanarrPage = () => {
                                 </h2>
                                 <span style={typeBadge}>{unmatchedStale.length}</span>
                                 <span className="text-fg-subtle text-xs">
-                                    Renamed asset folders whose title isn&apos;t in the Plex bundle
-                                    scan — still cleaned by the Stale pass
+                                    Renamed asset folders and files whose title isn&apos;t in the
+                                    Plex bundle scan — still cleaned by the Stale pass
                                 </span>
                             </div>
                             <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>

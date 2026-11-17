@@ -1493,7 +1493,7 @@ const CORE_SETTINGS_SCHEMA = [
                 kind: 'pass',
                 enableField: 'stale_duplicates_enabled',
                 modeField: 'stale_duplicates_mode',
-                note: 'The canonical folder is always kept — the pass only acts on the stale, renamed copy.',
+                note: 'The canonical copy is always kept — the pass only acts on the stale, renamed copy.',
             },
         ],
         fields: [
@@ -1679,9 +1679,10 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'check_box',
                 sectionToggle: true,
                 section: 'stale',
-                description: 'Remove duplicate asset folders left behind after a library rename.',
+                description:
+                    'Remove asset folders and files left behind under an old name after a library rename.',
                 helpText:
-                    'Scans the Asset Directories for Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances to resolve each item’s canonical folder. The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy).',
+                    'Scans the Asset Directories for Kometa asset folders, and flat-layout files named after a folder, whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances to resolve each item’s canonical folder. The canonical copy is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical copy is not yet staged (never deletes the only copy).',
             },
             {
                 key: 'stale_duplicates_mode',

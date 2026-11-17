@@ -1158,6 +1158,7 @@ def test_stale_removal_drops_the_cached_scan(tmp_path, monkeypatch, no_kometa_ca
         "name": old.name,
         "canonical": "Gone Show (2018) {tvdb-1}",
         "canonical_present": True,
+        "is_dir": True,
         "id": ("tvdb", 1),
         "size": 1,
     }

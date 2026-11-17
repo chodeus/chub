@@ -4,6 +4,7 @@ import errno
 import glob
 import json
 import os
+import re
 import shutil
 import threading
 import time
@@ -94,6 +95,8 @@ VALID_STALE_MODES = {"report", "move", "remove"}
 ASSET_IMAGE_EXTS = ASSET_IMAGE_EXTENSIONS
 RESTORE_DIR_NAME = "Poster Cleanarr Restore"
 ORPHAN_RESTORE_DIR_NAME = ".chub_orphan_restore"
+# What a flat placement adds after its folder name: "", "_logo", "_Season01_logo"..., then the extension.
+_FLAT_SUFFIX = re.compile(r"(?:_[A-Za-z0-9]+)*\.\w+$")
 PLEX_DB_NAME = "com.plexapp.plugins.library.db"
 DB_MAX_AGE_HOURS = 2
 
@@ -112,6 +115,45 @@ MODE_LABELS = {
     "clear": {"ed": "Cleared", "ing": "Clearing"},
     "nothing": {"ed": "Skipped", "ing": "Skipping"},
 }
+
+
+def _live_id(
+    name: str, canonical_by_id: Dict[Tuple[str, int], Set[str]]
+) -> Optional[Tuple[str, int]]:
+    """The {tvdb/tmdb} id in ``name`` naming a live media item, tvdb first."""
+    for kind, regex in (("tvdb", tvdb_id_regex), ("tmdb", tmdb_id_regex)):
+        m = regex.search(name)
+        if m and (kind, int(m.group(1))) in canonical_by_id:
+            return kind, int(m.group(1))
+    return None
+
+
+def _canonical_copy(asset_dir: str, folder: str, suffix: str) -> Optional[str]:
+    """The name ``folder``'s placement has on disk in ``asset_dir``: the folder, or its flat file under any image extension."""
+    if not suffix:
+        return folder if os.path.isdir(os.path.join(asset_dir, folder)) else None
+    base = folder + suffix.rsplit(".", 1)[0]
+    for name in (folder + suffix, *(base + ext for ext in ASSET_IMAGE_EXTS)):
+        if os.path.isfile(os.path.join(asset_dir, name)):
+            return name
+    return None
+
+
+def _disk_size(path: str) -> int:
+    """Bytes in the file at ``path``, or in every file under the folder at ``path``."""
+    if not os.path.isdir(path):
+        try:
+            return os.path.getsize(path)
+        except OSError:
+            return 0
+    size = 0
+    for r, _d, files in os.walk(path):
+        for f in files:
+            try:
+                size += os.path.getsize(os.path.join(r, f))
+            except OSError:
+                pass  # file vanished mid-walk — don't count it
+    return size
 
 
 class PosterCleanarr(ChubModule):
@@ -1263,14 +1305,10 @@ class PosterCleanarr(ChubModule):
 
     def _build_canonical_folder_map(
         self, db: ChubDB, instances: List[str]
-    ) -> Dict[Tuple[str, int], str]:
-        """Map ('tvdb'|'tmdb', id) -> the media item's canonical folder name
-        (media_cache.folder), scoped to `instances`. Only main (season-less)
-        rows define the folder, so the show-level folder isn't shadowed by a
-        season row. Used to tell a stale-duplicate asset folder (wrong name)
-        from the canonical one."""
+    ) -> Dict[Tuple[str, int], Set[str]]:
+        """Map ('tvdb'|'tmdb', id) to every canonical folder name (media_cache.folder) its main rows in `instances` give it."""
         wanted = set(instances)
-        out: Dict[Tuple[str, int], str] = {}
+        out: Dict[Tuple[str, int], Set[str]] = {}
         for row in db.media.get_all():
             if row.get("instance_name") not in wanted:
                 continue
@@ -1285,7 +1323,7 @@ class PosterCleanarr(ChubModule):
             ):
                 try:
                     if raw not in (None, "", 0):
-                        out[(kind, int(raw))] = folder
+                        out.setdefault((kind, int(raw)), set()).add(folder)
                 except (ValueError, TypeError):
                     continue
         return out
@@ -1293,14 +1331,9 @@ class PosterCleanarr(ChubModule):
     def _scan_stale_duplicates(
         self,
         asset_dirs: List[str],
-        canonical_by_id: Dict[Tuple[str, int], str],
+        canonical_by_id: Dict[Tuple[str, int], Set[str]],
     ) -> List[Dict[str, Any]]:
-        """Top-level asset folders whose {tvdb/tmdb} id matches a live media
-        item but whose name != that item's canonical folder. Spare-only on the
-        id: an id with no live match is left to the orphan pass, never flagged
-        here. `canonical_present` records whether the correctly-named folder is
-        already on disk — removal must keep the only copy (see
-        _execute_stale_mode)."""
+        """Stale-duplicate entries for the top-level folders and flat files in ``asset_dirs`` (see _stale_entry)."""
         out: List[Dict[str, Any]] = []
         for asset_dir in asset_dirs:
             if not os.path.isdir(asset_dir):
@@ -1310,51 +1343,41 @@ class PosterCleanarr(ChubModule):
             except OSError:
                 continue
             for name in entries:
-                full = os.path.join(asset_dir, name)
-                if not os.path.isdir(full):
-                    continue
-                canonical = None
-                ident = None
-                mt = tmdb_id_regex.search(name)
-                mv = tvdb_id_regex.search(name)
-                if mv and ("tvdb", int(mv.group(1))) in canonical_by_id:
-                    ident = ("tvdb", int(mv.group(1)))
-                elif mt and ("tmdb", int(mt.group(1))) in canonical_by_id:
-                    ident = ("tmdb", int(mt.group(1)))
-                if ident is None:
-                    continue  # no live id match -> orphan-pass territory, not stale
-                canonical = canonical_by_id[ident]
-                if name == canonical:
-                    continue  # this IS the canonical folder
-                size = 0
-                for r, _d, files in os.walk(full):
-                    for f in files:
-                        try:
-                            size += os.path.getsize(os.path.join(r, f))
-                        except OSError:
-                            pass  # file vanished mid-walk — don't count it
-                out.append(
-                    {
-                        "folder": full,
-                        "asset_dir": asset_dir,
-                        "name": name,
-                        "canonical": canonical,
-                        "canonical_present": os.path.isdir(
-                            os.path.join(asset_dir, canonical)
-                        ),
-                        "id": ident,
-                        "size": size,
-                    }
-                )
+                entry = self._stale_entry(asset_dir, name, canonical_by_id)
+                if entry is not None:
+                    out.append(entry)
         return out
+
+    @staticmethod
+    def _stale_entry(
+        asset_dir: str, name: str, canonical_by_id: Dict[Tuple[str, int], Set[str]]
+    ) -> Optional[Dict[str, Any]]:
+        """The stale-duplicate entry for one top-level name in ``asset_dir``, or None."""
+        flat = _FLAT_SUFFIX.search(name) if name.lower().endswith(ASSET_IMAGE_EXTS) else None
+        old_folder, suffix = (name[: flat.start()], flat.group()) if flat else (name, "")
+        ident = _live_id(old_folder, canonical_by_id)
+        if ident is None:
+            return None  # no live id match -> orphan-pass territory, not stale
+        folders = canonical_by_id[ident]
+        full = os.path.join(asset_dir, name)
+        if old_folder in folders or not (os.path.isfile if flat else os.path.isdir)(full):
+            return None  # a canonical copy, or no placement at all
+        copies = [c for c in (_canonical_copy(asset_dir, f, suffix) for f in sorted(folders)) if c]
+        return {
+            "folder": full,
+            "asset_dir": asset_dir,
+            "name": name,
+            "canonical": copies[0] if copies else min(folders) + suffix,
+            "canonical_present": bool(copies),
+            "is_dir": flat is None,
+            "id": ident,
+            "size": _disk_size(full),
+        }
 
     def _execute_stale_mode(
         self, dupes: List[Dict[str, Any]], mode: str, logger: Logger
     ) -> Dict[str, Any]:
-        """report/move/remove stale-duplicate FOLDERS. move/remove are skipped
-        for an entry whose canonical folder is not yet on disk so the only
-        staged copy is never destroyed (the renamer recreates the canonical
-        folder on its next run, after which this dup is safe to drop)."""
+        """report/move/remove stale duplicates; move/remove keep one whose canonical copy is not on disk yet (the only copy)."""
         count = 0
         total_size = 0
         touched: Set[str] = set()
@@ -1395,7 +1418,8 @@ class PosterCleanarr(ChubModule):
                 total_size += size
                 touched.add(d["asset_dir"])
             elif mode == "remove":
-                if not self._rmtree_confined(folder, config, logger):
+                remove = self._rmtree_confined if d["is_dir"] else self._remove_confined
+                if not remove(folder, config, logger):
                     continue
                 logger.info(f"  [STALE REMOVED] {folder}")
                 count += 1
@@ -1460,7 +1484,7 @@ class PosterCleanarr(ChubModule):
         dupes = self._scan_stale_duplicates(valid_dirs, canonical)
         total = sum(d["size"] for d in dupes)
         logger.info(
-            f"Found {len(dupes)} stale-duplicate folder(s) ({format_bytes(total)})."
+            f"Found {len(dupes)} stale duplicate(s) ({format_bytes(total)})."
         )
         return self._execute_stale_mode(dupes, mode, logger)
 
