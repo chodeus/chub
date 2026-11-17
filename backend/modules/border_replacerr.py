@@ -15,7 +15,7 @@ from PIL import Image
 
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
-from backend.util.file_ops import copy_into_place
+from backend.util.file_ops import already_in_place, copy_into_place
 from backend.util.helper import create_table, print_settings, progress
 from backend.util.paths import get_config_dir
 from backend.util.logger import Logger
@@ -396,7 +396,7 @@ class BorderReplacerr(ChubModule):
         try:
             if not os.path.exists(src):
                 return
-            if os.path.exists(dest) and filecmp.cmp(src, dest, shallow=False):
+            if os.path.exists(dest) and already_in_place(src, dest, "copy"):
                 return
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             copy_into_place(src, dest, keep_mode=False)
@@ -644,11 +644,12 @@ class BorderReplacerr(ChubModule):
                 # input poster is unchanged and the settings signature matches,
                 # the output we'd produce is byte-identical, so the decode/encode
                 # is skippable. Output existence is required so a deleted output
-                # is regenerated. Keying on source (not output) is correct
+                # is regenerated, and a link (a symlink run's) is never our output.
+                # Keying on source (not output) is correct
                 # whether the border is applied in place (source == output) or to
                 # a separate path: a re-downloaded source bumps its mtime/size
                 # and forces a reprocess even if the stale output was untouched.
-                if gate_enabled and os.path.exists(renamed_file):
+                if gate_enabled and os.path.exists(renamed_file) and not os.path.islink(renamed_file):
                     prev = state_map.get(renamed_file)
                     if prev and prev["variant_sig"] == sig:
                         st = self._safe_stat(original_file)

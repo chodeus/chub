@@ -736,6 +736,28 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch, umask_
     assert oct(dest.stat().st_mode & 0o777) == oct(0o644), "a new file's mode, not the source's"
 
 
+def test_excluded_asset_staged_as_a_link_becomes_a_file(tmp_path, monkeypatch):
+    br, dest_dir, by_id = _subset_harness(tmp_path, monkeypatch, exclusion_list=["inman"])
+    src = by_id[1]["original_file"]
+    dest = dest_dir / "inman.jpg"
+    dest.symlink_to(src)
+    br.run({"media_cache": [1], "collections_cache": []}, process_all=False)
+    with open(src, "rb") as f:
+        assert (dest.is_symlink(), dest.read_bytes()) == (False, f.read())
+
+
+def test_a_bordered_poster_a_link_replaced_is_bordered_again(tmp_path, monkeypatch):
+    br, dest_dir, by_id = _subset_harness(tmp_path, monkeypatch)
+    manifest = {"media_cache": [1], "collections_cache": []}
+    br.run(manifest, process_all=False)
+    dest = dest_dir / "inman.jpg"
+    bordered = dest.read_bytes()
+    dest.unlink()
+    dest.symlink_to(by_id[1]["original_file"])
+    br.run(manifest, process_all=False)
+    assert (dest.is_symlink(), dest.read_bytes() == bordered) == (False, True)
+
+
 def test_a_second_refresh_does_not_delete_the_first_runs_previews(
     tmp_path, monkeypatch
 ):

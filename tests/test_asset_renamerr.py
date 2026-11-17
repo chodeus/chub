@@ -2397,6 +2397,19 @@ def test_a_symlinked_logo_becomes_a_file_once_the_action_is_move(db, monkeypatch
     assert (pick.exists(), src.read_bytes()) == (False, b"png")
 
 
+@pytest.mark.parametrize("action", ["copy", "hardlink", "move"])
+def test_a_symlinked_logo_becomes_a_file_once_the_action_is_not_symlink(db, monkeypatch, tmp_path, action):
+    m, placed, src = _symlinked_logo(db, monkeypatch, tmp_path)
+    m.config.action_type = action
+    m.run()
+    assert (placed.is_symlink(), placed.read_bytes(), src.exists()) == (False, b"png", action != "move")
+    assert (src.exists() and os.path.samefile(placed, src)) == (action == "hardlink")
+    m.logger.messages["debug"].clear()
+    m.run()
+    placed_again = [line for line in m.logger.messages["debug"] if line.startswith(("[COPY]", "[HARDLINK]", "[MOVE]"))]
+    assert (placed_again, m.logger.messages["warning"]) == ([], [])
+
+
 def test_a_logo_picked_with_move_during_a_run_stays_through_the_next_run(db, monkeypatch, tmp_path):
     dest = tmp_path / "kometa"
     dest.mkdir()

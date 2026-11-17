@@ -21,6 +21,7 @@ from backend.util.file_ops import (
     copy_into_place,
     link_into_place,
     move_into_place,
+    stale_link,
     symlink_into_place,
 )
 from backend.util.writable import (
@@ -513,10 +514,13 @@ class AssetRenamerr(ChubModule):
         )
         if recorded is None:
             return False
-        # For the kometa path, the destination file must still exist and, when a run can place it, sit where it lands now.
+        # Kometa: the placed file must still exist, be no link the File Action stopped placing, and,
+        # when a run can place it, sit where it lands now.
         if apply_method == "kometa":
             applied_path = prev.get("applied_path")
             if not applied_path or not os.path.lexists(applied_path):
+                return False
+            if stale_link(applied_path, self.config.action_type):
                 return False
             if media is not None and image_type and not self._at_current_target(media, image_type, applied_path):
                 return False

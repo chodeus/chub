@@ -55,6 +55,7 @@ from backend.util.file_ops import (
     copy_into_place,
     link_into_place,
     move_into_place,
+    stale_link,
     symlink_into_place,
 )
 from backend.util.writable import ensure_writable_dir, log_kept_sources, note_kept_source
@@ -1057,15 +1058,14 @@ class PosterRenamerr(ChubModule):
         return bool(current) and current == stored
 
     def _needs_staging(self, row: dict) -> bool:
-        """True when a matched asset must be (re)staged: nothing staged yet, the
-        staged file is missing, OR it sits at a stale path because the media
-        folder/title was renamed (so the poster is stranded under the old name).
-        The path check is what lets a folder rename self-heal on the next run
-        instead of being skipped forever because the old staged file still
-        exists.
-        """
+        """True when a matched asset must be (re)staged: none on disk, a path a folder rename left stale, or a stale link Kometa would read."""
         current = row.get("renamed_file")
         if not current or not os.path.exists(current):
+            return True
+        cfg = self.config
+        # Plex uploads read through a link; border replacerr's full pass replaces links itself.
+        kometa_reads = getattr(cfg, "apply_method", "kometa") != "plex" and not cfg.run_border_replacerr
+        if kometa_reads and stale_link(current, cfg.action_type):
             return True
         expected = self._staged_dest(row)
         return bool(expected) and os.path.normpath(current) != os.path.normpath(

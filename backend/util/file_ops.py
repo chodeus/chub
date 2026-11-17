@@ -69,8 +69,15 @@ def _same_entry(src: str, dest: str) -> bool:
         return False
 
 
+def stale_link(path: str, action_type: str) -> bool:
+    """True when ``path`` is a symlink but ``action_type`` places a real file there."""
+    return action_type != "symlink" and os.path.islink(path)
+
+
 def already_in_place(src: str, dest: str, action_type: str) -> bool:
-    """True when ``dest`` holds ``src``'s bytes, unless a move onto a link to ``src`` still has ``src`` to remove."""
+    """True when ``dest`` holds ``src``'s bytes, unless it is a stale link or a move still has ``src`` to remove."""
+    if stale_link(dest, action_type):
+        return False
     if action_type == "move" and not _same_entry(src, dest) and os.path.samefile(src, dest):
         return False
     return filecmp.cmp(src, dest, shallow=False)
