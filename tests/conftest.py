@@ -34,7 +34,7 @@ paths._REPO_ROOT = Path(_STATE_DIR)
 
 
 def _checkout_state() -> dict:
-    """Each path under the checkout's config and log folders: a file's mtime, or -1 for a folder."""
+    """Each path under the checkout's config and log folders: a file's ctime, or -1 for a folder."""
     state = {}
     for folder in ("logs", "config", "tests/.cfgtmp"):
         root = _REPO / folder
@@ -43,7 +43,8 @@ def _checkout_state() -> dict:
                 st = path.lstat()
             except OSError:
                 continue
-            state[str(path.relative_to(_REPO))] = -1 if stat.S_ISDIR(st.st_mode) else st.st_mtime_ns
+            # ctime, not mtime: a write that restores mtime (os.utime, copy2) still moves ctime.
+            state[str(path.relative_to(_REPO))] = -1 if stat.S_ISDIR(st.st_mode) else st.st_ctime_ns
     return state
 
 
