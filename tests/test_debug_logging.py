@@ -142,7 +142,7 @@ def test_process_file_failure_does_not_emit_success_debug(
     assert module.process_file(src, dest, "copy") is False
     # The error path should log at ERROR, and there must be NO success debug.
     assert not any("[COPY]" in line for line in logger.lines("debug"))
-    assert any("Error copying file" in line for line in logger.lines("error"))
+    assert any("Copy failed" in line for line in logger.lines("error"))
 
 
 def test_process_file_uses_action_verb_from_call(renamerr_with_capture, tmp_path):

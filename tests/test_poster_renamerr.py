@@ -1839,6 +1839,50 @@ def test_a_moved_poster_that_cannot_reach_a_new_destination_is_retried(tmp_path,
     assert ((blocked / "poster.jpg").read_bytes(), placed.exists()) == (b"poster", False)
 
 
+def test_a_stale_run_on_a_moved_poster_keeps_its_staged_path(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, placed = _moved_into_asset_folders(tmp_path, monkeypatch)
+    stale = dict(_dune_row(tmp_path), renamed_file=None)
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        m.rename_file(stale, db)
+    row = _dune_row(tmp_path)
+    assert (row["renamed_file"], placed.read_bytes(), m.logger.messages["error"]) == (str(placed), b"poster", [])
+
+
+def test_a_moved_poster_whose_staged_path_was_cleared_follows_a_renamed_folder(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, placed = _moved_into_asset_folders(tmp_path, monkeypatch)
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.set_renamed_file(1, None)
+    m.run()
+    row = _dune_row(tmp_path)
+    assert (row["renamed_file"], placed.read_bytes(), m.logger.messages["error"]) == (str(placed), b"poster", [])
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.execute_query("UPDATE media_cache SET folder=? WHERE id=1", ("Dune (2021) [renamed]",))
+    m.run()
+    landed = placed.parent.parent / "Dune (2021) [renamed]" / "poster.jpg"
+    assert (landed.read_bytes(), placed.parent.exists()) == (b"poster", False)
+
+
+def test_a_moved_poster_deleted_in_the_poster_list_is_not_adopted(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+    from tests.test_posters_queries import _client
+
+    m, placed = _moved_into_asset_folders(tmp_path, monkeypatch)
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        src = str(tmp_path / "src" / "Dune (2021) {tmdb-438631}.jpg")
+        poster = db.poster.execute_query("SELECT id FROM poster_cache WHERE file=?", (src,), fetch_one=True)
+        body = _client(db).delete(f"/api/posters/{poster['id']}").json()
+    m.run()
+    row = _dune_row(tmp_path)
+    assert (body["data"]["media_unmatched"], row["renamed_file"], placed.read_bytes()) == (1, "", b"poster")
+
+
 def test_a_moved_poster_whose_folder_is_renamed_leaves_no_old_folder(tmp_path, monkeypatch):
     from backend.util.database import ChubDB
     from tests.conftest import StubLogger

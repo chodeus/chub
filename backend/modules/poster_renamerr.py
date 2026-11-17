@@ -401,7 +401,7 @@ class PosterRenamerr(ChubModule):
             self.logger.debug(f"[{action_type.upper()}] {new_file_path} ← {file}")
             return True
         except OSError as e:
-            self.logger.error(f"Error {action_type}ing file: {e}")
+            self.logger.error(f"{action_type.capitalize()} failed: {e}")
             return False
 
     @staticmethod
@@ -1007,7 +1007,9 @@ class PosterRenamerr(ChubModule):
         # Only move carries one, dry runs included; under border_replacerr the border step places posters.
         if config.action_type != "move" or config.run_border_replacerr:
             return None
-        staged = row.get("renamed_file")
+        # No staged path: a failed op on a stale row clears it after another writer's move landed, so adopt
+        # the file at the staged path. _staged_dest is None without a recorded source: such a row is never adopted.
+        staged = row.get("renamed_file") or self._staged_dest(row)
         if not staged or not os.path.isfile(staged):
             return None
         src = row.get("original_file") or row.get("file")
