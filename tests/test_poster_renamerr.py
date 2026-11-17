@@ -13,6 +13,7 @@ matching and cache handling"), specifically:
 import errno
 import json
 import os
+import sqlite3
 import threading
 from types import SimpleNamespace
 
@@ -21,6 +22,7 @@ import pytest
 
 from backend.modules.poster_renamerr import PosterRenamerr
 from backend.util.connector import SyncResult
+from backend.util.database import ChubDB
 
 
 def make_module():
@@ -1345,7 +1347,7 @@ def test_rename_file_collection_names_by_title(tmp_path):
         def update(self, **kwargs):
             pass
 
-    db = SimpleNamespace(collection=_Iface(), media=_Iface())
+    db = SimpleNamespace(collection=_Iface(), media=_Iface(), records_placed_path=lambda path: False)
     item = {
         "asset_type": "collection",
         "title": "Phineas and Ferb Collection",
@@ -1573,7 +1575,7 @@ def test_needs_staging_when_nothing_staged():
     assert m._needs_staging(row) is True
 
 
-def test_remove_superseded_drops_old_folder(tmp_path):
+def test_remove_superseded_drops_old_folder(tmp_path, db):
     """Re-staging after a folder rename removes the stale file and its now-empty
     old folder — Kometa ignores it and the orphan pass spares its id, so it
     would otherwise linger forever."""
@@ -1583,12 +1585,12 @@ def test_remove_superseded_drops_old_folder(tmp_path):
     old = old_dir / "poster.jpg"
     old.write_bytes(b"x")
     new = tmp_path / "Dune Prophecy (2024) {tvdb-367118}" / "poster.jpg"
-    m._remove_superseded(str(old), str(new))
+    m._remove_superseded(str(old), str(new), db)
     assert not old.exists()
     assert not old_dir.exists()  # emptied folder is removed too
 
 
-def test_remove_superseded_keeps_shared_folder_until_empty(tmp_path):
+def test_remove_superseded_keeps_shared_folder_until_empty(tmp_path, db):
     """A season poster left in the old folder keeps the folder until the last
     file is gone."""
     m = _staging_module(destination_dir=str(tmp_path))
@@ -1599,29 +1601,86 @@ def test_remove_superseded_keeps_shared_folder_until_empty(tmp_path):
     m._remove_superseded(
         str(old_dir / "poster.jpg"),
         str(tmp_path / "Show X (2024) {tvdb-1}" / "poster.jpg"),
+        db,
     )
     assert old_dir.exists()  # Season01.jpg still there
     assert (old_dir / "Season01.jpg").exists()
 
 
-def test_remove_superseded_keeps_the_poster_both_paths_name(tmp_path):
+@pytest.fixture
+def db(tmp_path, stub_logger):
+    with ChubDB(stub_logger, db_path=str(tmp_path / "chub.db"), quiet=True) as database:
+        yield database
+
+
+@pytest.mark.parametrize("shared", [True, False], ids=["shared", "own"])
+def test_a_renamed_poster_leaves_the_old_file_only_while_another_row_records_it(tmp_path, db, shared):
+    src = tmp_path / "src" / "Dune (2021).jpg"
+    src.parent.mkdir()
+    src.write_bytes(b"poster")
+    kometa = tmp_path / "kometa"
+    old = kometa / "Dune (2021)" / "poster.jpg"
+    old.parent.mkdir(parents=True)
+    old.write_bytes(b"poster")
+    m = make_module()
+    m.config = SimpleNamespace(
+        destination_dir=str(kometa), asset_folders=True, dry_run=False, action_type="copy",
+        run_border_replacerr=False, print_only_renames=False,
+    )
+    for instance, folder in [("radarr-4k", "Dune (2021) {edition-4K}")] + [("radarr-hd", "Dune (2021)")] * shared:
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key, instance_name, folder, asset_type, title, year, renamed_file)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (f"{instance}|{folder}|None", instance, folder, "movie", "Dune", 2021, str(old)),
+        )
+    row = db.media.execute_query("SELECT * FROM media_cache WHERE instance_name='radarr-4k'", fetch_one=True)
+    m.rename_file(dict(row, original_file=str(src)), db)
+    assert (old.exists(), (kometa / "Dune (2021) {edition-4K}" / "poster.jpg").read_bytes()) == (shared, b"poster")
+
+
+@pytest.mark.parametrize("holder, recorded", [("collection", True), ("deleted item's asset", False)])
+def test_records_placed_path_reads_collections_and_only_live_items_assets(db, holder, recorded):
+    path = "/kometa/Marvel.jpg"
+    if holder == "collection":
+        db.collection.upsert({"title": "Marvel", "library_name": "Movies"}, "plex1")
+        db.collection.set_renamed_file(db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")["id"], path)
+    else:
+        db.media_asset_matches.upsert(
+            target_kind="media", target_id=99, image_type="logo", source="local", matched_file=path,
+            applied_method="kometa", applied_path=path, match_status="applied",
+        )
+    assert db.records_placed_path(path) is recorded
+
+
+def test_a_failed_placed_path_check_keeps_the_file(db, monkeypatch, stub_logger):
+    def locked(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(db.media, "execute_query", locked)
+    assert db.records_placed_path("/kometa/Dune (2021)/poster.jpg") is True
+    assert stub_logger.messages["warning"] == [
+        "Keeping /kometa/Dune (2021)/poster.jpg: could not check whether a row records it: database is locked"
+    ]
+
+
+def test_remove_superseded_keeps_the_poster_both_paths_name(tmp_path, db):
     real = tmp_path / "posters"
     real.mkdir()
     (tmp_path / "alias").symlink_to(real)
     poster = real / "Dune (2021).jpg"
     poster.write_bytes(b"x")
     m = _staging_module(destination_dir=str(real))
-    m._remove_superseded(str(tmp_path / "alias" / "Dune (2021).jpg"), str(poster))
+    m._remove_superseded(str(tmp_path / "alias" / "Dune (2021).jpg"), str(poster), db)
     assert poster.read_bytes() == b"x"
 
 
-def test_remove_superseded_ignores_paths_outside_destination(tmp_path):
+def test_remove_superseded_ignores_paths_outside_destination(tmp_path, db):
     """Never delete outside the staging tree, even if asked."""
     m = _staging_module(destination_dir=str(tmp_path / "assets"))
     (tmp_path / "assets").mkdir()
     outside = tmp_path / "elsewhere.jpg"
     outside.write_bytes(b"x")
-    m._remove_superseded(str(outside), str(tmp_path / "assets" / "poster.jpg"))
+    m._remove_superseded(str(outside), str(tmp_path / "assets" / "poster.jpg"), db)
     assert outside.exists()  # untouched
 
 

@@ -658,9 +658,8 @@ class AssetRenamerr(ChubModule):
         url: Optional[str],
         refusals: Optional[List[WriteRefused]] = None,
         kept_sources: Optional[List[OSError]] = None,
-        prev: Optional[dict] = None,
     ) -> Tuple[bool, str]:
-        """Place one asset for Kometa by action_type and drop what ``prev`` placed elsewhere; ``refusals``/``kept_sources`` collect at DEBUG."""
+        """Place one asset for Kometa by action_type; ``refusals``/``kept_sources`` collect at DEBUG."""
         # Kometa applies LOCAL files only — fanart art is never downloaded to
         # disk (it's Plex-only, streamed straight to Plex). fanart is already
         # filtered out of the Kometa source set in match_and_apply_assets, so
@@ -690,9 +689,15 @@ class AssetRenamerr(ChubModule):
                 return False, failure_text("file op", exc)
             if kept is not None:
                 note_kept_source(self.logger, kept, kept_sources)
-            if prev and prev.get("applied_method") == "kometa":
-                remove_superseded(prev.get("applied_path"), new_path, self.config.destination_dir, self.logger)
         return True, new_path
+
+    def _drop_superseded(self, db: ChubDB, prev: Optional[dict], new_path: str) -> None:
+        """Remove the file ``prev`` placed for Kometa now that ``new_path`` replaces it, unless a row still records it."""
+        cfg = self.config
+        old = (prev or {}).get("applied_path")
+        if cfg.dry_run or cfg.apply_method == "plex" or not old or prev.get("applied_method") != "kometa":
+            return
+        remove_superseded(old, new_path, cfg.destination_dir, self.logger, db.records_placed_path)
 
     def _kometa_path(self, media: dict, image_type: str, src: str) -> Tuple[Optional[str], str]:
         """Where a Kometa apply of ``src`` lands, resolved: ``(path, "")``, or ``(None, why not)``."""
@@ -763,13 +768,14 @@ class AssetRenamerr(ChubModule):
                 target_kind, target_id, image_type, True, matched_file=file
             )
         applied_libs: Optional[List[str]] = None
+        prev = None
         if apply_method == "plex":
             applied, detail, applied_libs = self._apply_direct(
                 db, media, image_type, file, None, is_collection
             )
         else:
             prev = db.media_asset_matches.get_one(target_kind, target_id, image_type) if target_id is not None else None
-            applied, detail = self._apply_kometa(media, image_type, "local", file, None, prev=prev)
+            applied, detail = self._apply_kometa(media, image_type, "local", file, None)
 
         if target_id is not None:
             db.media_asset_matches.upsert(
@@ -788,6 +794,8 @@ class AssetRenamerr(ChubModule):
                 match_status="applied" if applied else "failed",
                 detail=detail,
             )
+        if applied:
+            self._drop_superseded(db, prev, detail)
         return applied, detail
 
     def _placed_file(self, row: Optional[dict]) -> Optional[str]:
@@ -1133,7 +1141,7 @@ class AssetRenamerr(ChubModule):
                 else:
                     attempted += 1
                     applied, detail = self._apply_kometa(
-                        media, image_type, source, file, url, refusals, kept_sources, prev
+                        media, image_type, source, file, url, refusals, kept_sources
                     )
 
                 # On a dry run, NEVER persist match state: media_asset_matches
@@ -1163,6 +1171,8 @@ class AssetRenamerr(ChubModule):
                         detail=detail,
                         unless_locked=unlocked_at_start,
                     )
+                    if applied:
+                        self._drop_superseded(db, prev, detail)
 
                 output[image_type].append(
                     {

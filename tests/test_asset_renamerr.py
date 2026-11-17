@@ -2398,6 +2398,25 @@ def test_a_case_only_folder_rename_keeps_the_logo_on_a_case_insensitive_mount(db
     assert [p.read_bytes() for p in dest.iterdir()] == [b"png"]
 
 
+@pytest.mark.parametrize("live", [True, False], ids=["live", "deleted"])
+def test_a_logo_another_item_records_stays_after_a_rename(db, monkeypatch, tmp_path, live):
+    m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path)
+    other = db.media.execute_query(
+        "INSERT INTO media_cache (identity_key, instance_name, folder, asset_type) VALUES (?,?,?,?)",
+        ("radarr-4k|Dune (2021)|None", "radarr-4k", "Dune (2021)", "movie"),
+        last_row_id=True,
+    )
+    if not live:
+        db.media.execute_query("DELETE FROM media_cache WHERE id=?", (other,))
+    old = db.media_asset_matches.get_one("media", 1, "logo")["applied_path"]
+    db.media_asset_matches.upsert(
+        target_kind="media", target_id=other, image_type="logo", source="local", matched_file=old,
+        applied_method="kometa", applied_path=old, match_status="applied",
+    )
+    m.run()
+    assert (os.path.exists(old), (dest / "Dune (2021) [renamed]_logo.png").exists()) == (live, True)
+
+
 def test_a_dry_run_keeps_the_logo_placed_under_the_old_folder_name(db, monkeypatch, tmp_path):
     m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path)
     m.config.dry_run = True

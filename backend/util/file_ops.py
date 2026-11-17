@@ -127,14 +127,19 @@ def removing_takes(previous: str, current: str) -> bool:
     return previous.casefold() == current.casefold() and _same_inode(previous, current)
 
 
-def remove_superseded(previous: Optional[str], current: str, root: str, logger: Any) -> None:
-    """Remove the file placed at ``previous`` now that ``current`` replaces it, then its emptied folder; only inside ``root``."""
+def remove_superseded(
+    previous: Optional[str], current: str, root: str, logger: Any, recorded: Callable[[str], bool]
+) -> None:
+    """Remove the file placed at ``previous`` now that ``current`` replaces it, then its emptied folder; only inside ``root`` and unless ``recorded(previous)``."""
     if not previous or removing_takes(previous, current):
         return
     try:
         real_base = os.path.realpath(root)
         if not resolve_folder(previous).startswith(real_base + os.sep):
             return  # outside the destination: never ours to remove
+        # Call after the caller's own row records current: any row still holding previous keeps the file.
+        if recorded(previous):
+            return
         # A move has already taken it away; its emptied folder still goes.
         if os.path.lexists(previous):
             os.remove(previous)

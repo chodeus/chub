@@ -1,5 +1,6 @@
 # util/database/__init__.py
 
+import sqlite3
 import threading
 from typing import List, Optional
 
@@ -399,6 +400,25 @@ class ChubDB:
                 f"'{old_name}' to '{new_name}' ({service})"
             )
         return total
+
+    def records_placed_path(self, path: str) -> bool:
+        """True when a poster row, or a live item's asset row, records ``path`` as its placed file; True on a database error."""
+        self._ensure_initialized()
+        checks = (
+            (self.media, "SELECT 1 FROM media_cache WHERE renamed_file=? LIMIT 1"),
+            (self.collection, "SELECT 1 FROM collections_cache WHERE renamed_file=? LIMIT 1"),
+            (
+                self.media_asset_matches,
+                "SELECT 1 FROM media_asset_matches m WHERE m.applied_path=? AND ("
+                "(m.target_kind='media' AND m.target_id IN (SELECT id FROM media_cache)) OR "
+                "(m.target_kind='collection' AND m.target_id IN (SELECT id FROM collections_cache))) LIMIT 1",
+            ),
+        )
+        try:
+            return any(table.execute_query(sql, (path,), fetch_one=True) for table, sql in checks)
+        except sqlite3.Error as e:
+            self.logger.get_adapter("DATABASE").warning(f"Keeping {path}: could not check whether a row records it: {e}")
+            return True
 
     def close(self) -> None:
         """
