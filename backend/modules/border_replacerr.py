@@ -637,7 +637,11 @@ class BorderReplacerr(ChubModule):
                 renamed_file = asset["renamed_file"]
                 # Skip only a regular output whose source and settings match the last pass;
                 # a missing output or a link (a symlink run's) is bordered again.
-                if gate_enabled and os.path.exists(renamed_file) and not os.path.islink(renamed_file):
+                if (
+                    gate_enabled
+                    and os.path.isfile(renamed_file)
+                    and not os.path.islink(renamed_file)
+                ):
                     prev = state_map.get(renamed_file)
                     if prev and prev["variant_sig"] == sig:
                         st = self._safe_stat(original_file)
