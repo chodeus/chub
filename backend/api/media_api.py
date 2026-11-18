@@ -33,6 +33,7 @@ from backend.util.arr import arr_api_version, create_arr_client
 from backend.util.arr_delete import ArrDeleter, ArrOutcome
 from backend.util.arr_instances import instance_detail
 from backend.util.config import ConfigError, load_config
+from backend.util.normalization import normalize_titles
 from backend.util.public_error import failure_text
 from backend.util.database import (
     INCOMPLETE_METADATA_FIELDS,
@@ -746,6 +747,22 @@ def delete_collection(
         )
 
 
+def _title_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
+    """The title columns ``payload`` sets, normalized as a Plex sync stores them, or why they are invalid."""
+    fields: Dict[str, Any] = {}
+    if "title" in payload:
+        title = payload["title"]
+        if not isinstance(title, str) or not title.strip():
+            return {}, "Field 'title' must be a non-empty string"
+        fields.update(title=title, normalized_title=normalize_titles(title))
+    if "alternate_titles" in payload:
+        alts = payload["alternate_titles"]
+        if not isinstance(alts, list) or not all(isinstance(t, str) and t.strip() for t in alts):
+            return {}, "Field 'alternate_titles' must be a list of non-empty strings"
+        fields.update(alternate_titles=alts, normalized_alternate_titles=[normalize_titles(t) for t in alts])
+    return fields, None
+
+
 @router.post(
     "/collections",
     summary="Create collection",
@@ -763,7 +780,7 @@ def delete_collection(
                 }
             },
         },
-        400: {"description": "Missing 'title' or 'instance_name'"},
+        400: {"description": "Missing 'title' or 'instance_name', or a title field of the wrong type"},
         413: {"description": "Request body too large"},
     },
 )
@@ -801,19 +818,19 @@ async def create_collection(
                 status_code=400,
             )
 
+        titles, why = _title_fields(payload)
+        if why:
+            return error(why, code="INVALID_FIELDS", status_code=400)
         record = {
-            "title": title,
-            "normalized_title": title.lower().strip() if title else None,
             "year": payload.get("year"),
             "tmdb_id": payload.get("tmdb_id"),
             "tvdb_id": payload.get("tvdb_id"),
             "imdb_id": payload.get("imdb_id"),
             "folder": payload.get("folder"),
             "library_name": payload.get("library_name"),
-            "alternate_titles": payload.get("alternate_titles", []),
-            "normalized_alternate_titles": payload.get(
-                "normalized_alternate_titles", []
-            ),
+            "alternate_titles": [],
+            "normalized_alternate_titles": [],
+            **titles,
         }
 
         db.collection.upsert(record, instance_name)
@@ -852,7 +869,10 @@ async def create_collection(
                     }
                 }
             },
-        }
+        },
+        400: {"description": "A title field of the wrong type"},
+        404: {"description": "No collection with that id"},
+        409: {"description": "Another collection in this library already has that title"},
     },
 )
 async def update_collection(
@@ -897,30 +917,20 @@ async def update_collection(
                 status_code=404,
             )
 
-        # Merge updates into existing record
-        updatable_fields = [
-            "title",
-            "year",
-            "tmdb_id",
-            "tvdb_id",
-            "imdb_id",
-            "folder",
-            "library_name",
-            "alternate_titles",
-            "normalized_alternate_titles",
-        ]
-        for field in updatable_fields:
+        titles, why = _title_fields(payload)
+        if why:
+            return error(why, code="INVALID_FIELDS", status_code=400)
+        for field in ("year", "tmdb_id", "tvdb_id", "imdb_id", "folder", "library_name"):
             if field in payload:
                 existing[field] = payload[field]
-
-        # Update normalized_title if title changed
-        if "title" in payload:
-            existing["normalized_title"] = (
-                payload["title"].lower().strip() if payload["title"] else None
+        existing.update(titles)
+        # In place by id: an upsert keyed on the new title would add a second row.
+        if not db.collection.update_row(collection_id, existing):
+            return error(
+                "Another collection in this library already has that title",
+                code="COLLECTION_EXISTS",
+                status_code=409,
             )
-
-        instance_name = existing.get("instance_name")
-        db.collection.upsert(existing, instance_name)
 
         # Fetch the updated record
         updated = db.collection.get_by_id(collection_id)

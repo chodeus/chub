@@ -27,6 +27,7 @@ from backend.util.gdrive_source import (
 )
 from backend.util.helper import (
     as_list,
+    parse_alternate_titles,
     classify_match,
     is_id_match_reason,
     create_table,
@@ -529,15 +530,7 @@ class PosterRenamerr(ChubModule):
         season_number = media.get("season_number")
         expected_asset_type = "collection" if is_collection else asset_type
 
-        alt_titles = []
-        try:
-            alt_titles = json.loads(media.get("alternate_titles") or "[]")
-        except Exception:
-            pass
-        # The collections API stores these unchecked: keep only the strings.
-        if not isinstance(alt_titles, list):
-            alt_titles = []
-        alt_titles = [t for t in alt_titles if isinstance(t, str) and t]
+        alt_titles = parse_alternate_titles(media.get("alternate_titles"))
 
         reasons = []
         candidates = []

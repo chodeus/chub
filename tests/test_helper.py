@@ -2,8 +2,11 @@
 
 import os
 
+import pytest
+
 
 from backend.util.helper import (
+    parse_alternate_titles,
     classify_match,
     compare_strings,
     create_bar,
@@ -624,3 +627,12 @@ def test_is_match_both_years_present_and_differ_still_blocks():
     media = {"title": "The Lovers", "year": 2023}
     matched, _ = is_match(asset, media)
     assert matched is False
+
+
+@pytest.mark.parametrize(
+    "raw, titles",
+    [(None, []), ("", []), ("not json", []), ('{"Duna": 1}', []), ('"Duna"', []), ('[1, "", "Duna"]', ["Duna"])],
+)
+def test_parse_alternate_titles_keeps_only_string_titles(raw, titles):
+    parsed = parse_alternate_titles(raw)
+    assert parsed == titles

@@ -447,3 +447,63 @@ def test_create_collection_route_reads_back_the_created_row(db):
     collection = resp.json()["data"]["collection"]
     assert collection["title"] == "Marvel"
     assert collection["instance_name"] == "plex1"
+
+
+def _collection_rows(db):
+    rows = db.collection.execute_query(
+        "SELECT title, normalized_title, normalized_alternate_titles FROM collections_cache ORDER BY id",
+        fetch_all=True,
+    )
+    return [(r["title"], r["normalized_title"], r["normalized_alternate_titles"]) for r in rows]
+
+
+def test_create_collection_stores_titles_normalized_as_a_sync_does(db):
+    resp = _client(db).post(
+        "/api/media/collections",
+        json={"title": "The Matrix Collection", "instance_name": "plex1", "alternate_titles": ["Matrix"]},
+    )
+    rows = _collection_rows(db)
+    assert (resp.status_code, rows) == (200, [("The Matrix Collection", "thematrixcollection", '["matrix"]')])
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"alternate_titles": "Matrix"}, {"alternate_titles": ["Matrix", 7]}, {"alternate_titles": [" "]}, {"title": 7}],
+    ids=["string", "number-in-list", "blank", "numeric-title"],
+)
+def test_create_collection_refuses_title_fields_of_the_wrong_shape(db, body):
+    resp = _client(db).post("/api/media/collections", json={"title": "Marvel", "instance_name": "plex1", **body})
+    assert (resp.status_code, resp.json()["error_code"], _collection_rows(db)) == (400, "INVALID_FIELDS", [])
+
+
+def test_update_collection_renames_in_place_and_renormalizes(db):
+    client = _client(db)
+    created = client.post("/api/media/collections", json={"title": "Matrix", "instance_name": "plex1"})
+    cid = created.json()["data"]["collection"]["id"]
+    resp = client.put(
+        f"/api/media/collections/{cid}",
+        json={"title": "The Matrix Collection", "alternate_titles": ["Matrix"]},
+    )
+    rows = _collection_rows(db)
+    assert (resp.status_code, resp.json()["data"]["collection"]["title"], rows) == (
+        200,
+        "The Matrix Collection",
+        [("The Matrix Collection", "thematrixcollection", '["matrix"]')],
+    )
+
+
+@pytest.mark.parametrize(
+    "body, status, code",
+    [({"title": ""}, 400, "INVALID_FIELDS"), ({"title": "Marvel"}, 409, "COLLECTION_EXISTS")],
+    ids=["blank-title", "taken-title"],
+)
+def test_update_collection_refuses_a_title_it_cannot_store(db, body, status, code):
+    client = _client(db)
+    for title in ("Marvel", "Matrix"):
+        client.post(
+            "/api/media/collections", json={"title": title, "instance_name": "plex1", "library_name": "Movies"}
+        )
+    cid = db.collection.get_by_title_and_instance("Matrix", "plex1", "Movies")["id"]
+    resp = client.put(f"/api/media/collections/{cid}", json=body)
+    titles = [title for title, *_ in _collection_rows(db)]
+    assert (resp.status_code, resp.json()["error_code"], titles) == (status, code, ["Marvel", "Matrix"])

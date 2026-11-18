@@ -1,5 +1,5 @@
 /** "Refresh cache" reloads the duplicate list only after the refresh job ends. */
-import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { UIStateProvider } from '../../contexts/UIStateContext.jsx';
 import { apiCore } from '../../utils/api/core.js';
 
@@ -237,5 +237,25 @@ describe('MediaManagePage Refresh cache', () => {
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cache refresh failed'));
         expect(poll.pollJobUntilDone).not.toHaveBeenCalled();
         expect(media.fetchDuplicates).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('MediaManagePage Collections', () => {
+    beforeEach(() => {
+        media.fetchDuplicates.mockResolvedValue({ data: { duplicates: [] } });
+        media.fetchCollections.mockResolvedValue({
+            data: { collections: [{ id: 1, title: 'Marvel Cinematic Universe', year: 2008 }] },
+        });
+    });
+
+    it('lists Plex collections read-only and says where to change them', async () => {
+        render(<MediaManagePage />);
+        const section = (await screen.findByRole('heading', { name: 'Collections' })).closest(
+            'section'
+        );
+
+        expect(within(section).getByText('Marvel Cinematic Universe')).toBeTruthy();
+        expect(within(section).getByText(/Create, rename or delete them in Plex/)).toBeTruthy();
+        expect(within(section).queryAllByRole('button')).toEqual([]);
     });
 });

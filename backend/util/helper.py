@@ -684,6 +684,15 @@ def classify_match(matched: bool, reason: str) -> Tuple[str, float]:
     return "matched", _MATCH_CONF_EXACT
 
 
+def parse_alternate_titles(raw: Any) -> List[str]:
+    """The non-empty string titles in a row's ``alternate_titles`` JSON; [] when it is unreadable or not a list."""
+    try:
+        titles = json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return []
+    return [t for t in titles if isinstance(t, str) and t] if isinstance(titles, list) else []
+
+
 def generate_title_variants(title: str) -> Dict[str, List[str]]:
     """Produce alternate title candidates plus their normalized forms.
 

@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from typing import Any, List, Optional
 
 from .db_base import DatabaseBase
@@ -10,17 +11,44 @@ class CollectionCache(DatabaseBase):
     Provides CRUD and sync operations.
     """
 
-    def upsert(self, record: dict, instance_name: str) -> None:
-        """Insert or update a collection record for a given instance."""
-        record["instance_name"] = instance_name
-        record["asset_type"] = "collection"
-
-        # Serialize list/dict fields to JSON
+    @staticmethod
+    def _store_json(record: dict) -> None:
+        """Serialize ``record``'s title lists to JSON in place; a missing list is stored empty."""
         for key in ("alternate_titles", "normalized_alternate_titles"):
             if isinstance(record.get(key), (list, dict)):
                 record[key] = json.dumps(record[key])
             elif record.get(key) is None:
                 record[key] = json.dumps([])
+
+    def update_row(self, id: int, record: dict) -> bool:
+        """Write ``record``'s fields onto row ``id`` in place; False when its title is taken in that library and instance."""
+        self._store_json(record)
+        columns = (
+            "title",
+            "normalized_title",
+            "alternate_titles",
+            "normalized_alternate_titles",
+            "year",
+            "tmdb_id",
+            "tvdb_id",
+            "imdb_id",
+            "folder",
+            "library_name",
+        )
+        try:
+            self.execute_query(
+                f"UPDATE collections_cache SET {', '.join(c + '=?' for c in columns)} WHERE id=?",
+                (*(record.get(c) for c in columns), id),
+            )
+        except sqlite3.IntegrityError:
+            return False
+        return True
+
+    def upsert(self, record: dict, instance_name: str) -> None:
+        """Insert or update a collection record for a given instance."""
+        record["instance_name"] = instance_name
+        record["asset_type"] = "collection"
+        self._store_json(record)
 
         self.execute_query(
             """

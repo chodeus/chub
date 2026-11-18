@@ -6,7 +6,7 @@ import { mediaAPI } from '../../utils/api/media.js';
 import { nestarrAPI } from '../../utils/api/nestarr.js';
 import { apiCore } from '../../utils/api/core.js';
 import { Modal } from '../../components/modals/Modal';
-import { Button, LoadingButton, IconButton } from '../../components/ui/index.js';
+import { Button, LoadingButton } from '../../components/ui/index.js';
 import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
@@ -426,10 +426,6 @@ const MediaManagePage = () => {
     const [resolveDeleteFiles, setResolveDeleteFiles] = useState(false);
     const [resolveMembers, setResolveMembers] = useState(null);
     const [resolveMembersLoading, setResolveMembersLoading] = useState(false);
-    const [showCreateCollection, setShowCreateCollection] = useState(false);
-    const [newCollectionName, setNewCollectionName] = useState('');
-    const [editCollection, setEditCollection] = useState(null);
-    const [editCollectionName, setEditCollectionName] = useState('');
     const [nestedIssues, setNestedIssues] = useState([]);
     const [lastScanTime, setLastScanTime] = useState(null);
     const [unmatchedEnabled, setUnmatchedEnabled] = useState(true);
@@ -447,38 +443,9 @@ const MediaManagePage = () => {
         mediaAPI.exportMedia({ format: 'json' })
     );
 
-    const { execute: createCollection, isLoading: isCreatingCollection } = useApiMutation(
-        name => mediaAPI.createCollection({ name }),
-        {
-            successMessage: 'Collection created',
-            onSuccess: () => {
-                setShowCreateCollection(false);
-                setNewCollectionName('');
-                refreshCollections();
-            },
-        }
-    );
-
-    const { execute: updateCollectionMutation, isLoading: isUpdatingCollection } = useApiMutation(
-        // execute() forwards a single arg — take one object, not (id, data).
-        ({ id, data }) => mediaAPI.updateCollection(id, data),
-        {
-            successMessage: 'Collection updated',
-            onSuccess: () => {
-                setEditCollection(null);
-                setEditCollectionName('');
-                refreshCollections();
-            },
-        }
-    );
-
-    const { data: collectionsData, refresh: refreshCollections } = useApiData({
+    const { data: collectionsData } = useApiData({
         apiFunction: mediaAPI.fetchCollections,
         options: { showErrorToast: false },
-    });
-
-    const { execute: deleteCollection } = useApiMutation(id => mediaAPI.deleteCollection(id), {
-        successMessage: 'Collection deleted',
     });
 
     const { execute: deleteItem, isLoading: isDeleting } = useApiMutation(
@@ -672,24 +639,6 @@ const MediaManagePage = () => {
             setNestedIssues(prev => prev.filter(i => i.id !== targetId));
         } catch {
             toast.error('Failed to fix nested media');
-        }
-    };
-
-    const handleCreateCollection = async () => {
-        if (!newCollectionName.trim()) return;
-        try {
-            await createCollection(newCollectionName.trim());
-        } catch {
-            toast.error('Failed to create collection');
-        }
-    };
-
-    const handleDeleteCollection = async id => {
-        try {
-            await deleteCollection(id);
-            refreshCollections();
-        } catch {
-            toast.error('Failed to delete collection');
         }
     };
 
@@ -1108,20 +1057,16 @@ const MediaManagePage = () => {
                         title="Collections"
                         count={`${collections.length}`}
                         countClass="bg-primary/15 text-primary-hover"
-                    >
-                        <Button
-                            variant="ghost"
-                            icon="add"
-                            onClick={() => setShowCreateCollection(true)}
-                        >
-                            Create
-                        </Button>
-                    </ManageSectionHeader>
+                    />
+                    <p className="text-sm text-fg-muted mb-3">
+                        Your Plex collections as of the last sync. Create, rename or delete them in
+                        Plex.
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {collections.map((col, i) => (
                             <div
                                 key={col.id || i}
-                                className="p-3 rounded-lg bg-surface border border-border group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                                className="p-3 rounded-lg bg-surface border border-border flex items-center gap-2"
                             >
                                 <div className="flex items-center gap-2 min-w-0">
                                     <span className="font-medium text-fg truncate">
@@ -1132,27 +1077,6 @@ const MediaManagePage = () => {
                                             ({col.year})
                                         </span>
                                     )}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <IconButton
-                                        icon="edit"
-                                        aria-label="Edit collection"
-                                        title="Rename this collection"
-                                        variant="ghost"
-                                        className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100 transition-fast"
-                                        onClick={() => {
-                                            setEditCollection(col);
-                                            setEditCollectionName(col.title || col.name || '');
-                                        }}
-                                    />
-                                    <IconButton
-                                        icon="delete"
-                                        aria-label="Delete collection"
-                                        title="Delete this collection (media items are not deleted)"
-                                        variant="ghost"
-                                        className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100 transition-fast"
-                                        onClick={() => handleDeleteCollection(col.id)}
-                                    />
                                 </div>
                             </div>
                         ))}
@@ -1360,78 +1284,6 @@ const MediaManagePage = () => {
                         disabled={isResolving || !resolveKeepId}
                     >
                         {isResolving ? 'Resolving...' : 'Resolve'}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-            {/* Create Collection Modal */}
-            <Modal
-                isOpen={showCreateCollection}
-                onClose={() => {
-                    setShowCreateCollection(false);
-                    setNewCollectionName('');
-                }}
-                size="small"
-            >
-                <Modal.Header>Create Collection</Modal.Header>
-                <Modal.Body>
-                    <label className="block text-sm text-fg-muted mb-1">Collection Name</label>
-                    <input
-                        type="text"
-                        value={newCollectionName}
-                        onChange={e => setNewCollectionName(e.target.value)}
-                        placeholder="My Collection"
-                        className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm focus:border-primary focus:outline-none"
-                    />
-                </Modal.Body>
-                <Modal.Footer align="right">
-                    <Button variant="ghost" onClick={() => setShowCreateCollection(false)}>
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="primary"
-                        icon="add"
-                        onClick={handleCreateCollection}
-                        disabled={isCreatingCollection || !newCollectionName.trim()}
-                    >
-                        {isCreatingCollection ? 'Creating...' : 'Create'}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-            {/* Edit Collection Modal */}
-            <Modal
-                isOpen={!!editCollection}
-                onClose={() => {
-                    setEditCollection(null);
-                    setEditCollectionName('');
-                }}
-                size="small"
-            >
-                <Modal.Header>Edit Collection</Modal.Header>
-                <Modal.Body>
-                    <label className="block text-sm text-fg-muted mb-1">Collection Name</label>
-                    <input
-                        type="text"
-                        value={editCollectionName}
-                        onChange={e => setEditCollectionName(e.target.value)}
-                        className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm focus:border-primary focus:outline-none"
-                    />
-                </Modal.Body>
-                <Modal.Footer align="right">
-                    <Button variant="ghost" onClick={() => setEditCollection(null)}>
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="primary"
-                        icon="save"
-                        onClick={() =>
-                            updateCollectionMutation({
-                                id: editCollection.id,
-                                data: { name: editCollectionName.trim() },
-                            })
-                        }
-                        disabled={isUpdatingCollection || !editCollectionName.trim()}
-                    >
-                        {isUpdatingCollection ? 'Saving...' : 'Save'}
                     </Button>
                 </Modal.Footer>
             </Modal>
