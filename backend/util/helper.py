@@ -453,17 +453,6 @@ def is_match(
             )
             media["normalized_folder_title"] = normalize_titles(media["folder_title"])
 
-    def json_list(value: Any) -> List[Any]:
-        if isinstance(value, list):
-            return value
-        if isinstance(value, str):
-            try:
-                parsed = json.loads(value)
-                return parsed if isinstance(parsed, list) else []
-            except Exception:
-                return []
-        return []
-
     asset_alt_titles = json_list(asset.get("alternate_titles"))
     asset_norm_alt_titles = json_list(asset.get("normalized_alternate_titles"))
     media_alt_titles = json_list(media.get("alternate_titles"))
@@ -684,13 +673,22 @@ def classify_match(matched: bool, reason: str) -> Tuple[str, float]:
     return "matched", _MATCH_CONF_EXACT
 
 
+def json_list(value: Any) -> List[Any]:
+    """``value`` as a list: itself, or the list its JSON holds; [] for anything else."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return []
+        return parsed if isinstance(parsed, list) else []
+    return []
+
+
 def parse_alternate_titles(raw: Any) -> List[str]:
-    """The non-empty string titles in a row's ``alternate_titles`` JSON; [] when it is unreadable or not a list."""
-    try:
-        titles = json.loads(raw or "[]")
-    except (TypeError, ValueError):
-        return []
-    return [t for t in titles if isinstance(t, str) and t] if isinstance(titles, list) else []
+    """The non-empty string titles in a row's ``alternate_titles`` (a list or its JSON)."""
+    return [t for t in json_list(raw) if isinstance(t, str) and t]
 
 
 def generate_title_variants(title: str) -> Dict[str, List[str]]:

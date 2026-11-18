@@ -631,7 +631,15 @@ def test_is_match_both_years_present_and_differ_still_blocks():
 
 @pytest.mark.parametrize(
     "raw, titles",
-    [(None, []), ("", []), ("not json", []), ('{"Duna": 1}', []), ('"Duna"', []), ('[1, "", "Duna"]', ["Duna"])],
+    [
+        (None, []),
+        ("", []),
+        ("not json", []),
+        ('{"Duna": 1}', []),
+        ('"Duna"', []),
+        ('[1, "", "Duna"]', ["Duna"]),
+        (["Duna", 1], ["Duna"]),
+    ],
 )
 def test_parse_alternate_titles_keeps_only_string_titles(raw, titles):
     parsed = parse_alternate_titles(raw)
