@@ -753,8 +753,8 @@ def _is_text(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _collection_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
-    """The collection columns ``payload`` sets, titles derived as a Plex sync derives them, or why one is invalid."""
+def _scalar_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
+    """The year, ids, folder and library ``payload`` sets, or why one is invalid."""
     fields: Dict[str, Any] = {}
     for key in ("year", "tmdb_id", "tvdb_id"):
         if key in payload:
@@ -771,6 +771,14 @@ def _collection_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
         if not _is_text(payload["library_name"]):
             return {}, "Field 'library_name' must be a non-empty string"
         fields["library_name"] = payload["library_name"]
+    return fields, None
+
+
+def _collection_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
+    """The collection columns ``payload`` sets (a title derived as a Plex sync derives it), or why one is invalid."""
+    fields, why = _scalar_fields(payload)
+    if why:
+        return {}, why
     if "title" in payload:
         if not _is_text(payload["title"]):
             return {}, "Field 'title' must be a non-empty string"

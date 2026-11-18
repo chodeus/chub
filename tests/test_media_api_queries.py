@@ -451,10 +451,10 @@ def test_create_collection_route_reads_back_the_created_row(db):
 
 def _collection_rows(db):
     rows = db.collection.execute_query(
-        "SELECT title, normalized_title, normalized_alternate_titles FROM collections_cache ORDER BY id",
+        "SELECT title, normalized_title, alternate_titles, normalized_alternate_titles FROM collections_cache ORDER BY id",
         fetch_all=True,
     )
-    return [(r["title"], r["normalized_title"], r["normalized_alternate_titles"]) for r in rows]
+    return [(r["title"], r["normalized_title"], r["alternate_titles"], r["normalized_alternate_titles"]) for r in rows]
 
 
 def _plex_sync(db, titles, library="Movies", instance="plex1"):
@@ -524,10 +524,18 @@ def test_create_collection_refuses_fields_of_the_wrong_shape(db, body):
 @pytest.mark.parametrize(
     "body, row",
     [
-        ({"title": "Star Wars Collection"}, ("Star Wars Collection", "starwarscollection", '["starwarscollection", "starwars"]')),
         (
-            {"title": "Star Wars Collection", "alternate_titles": ["Star Wars"]},
-            ("Star Wars Collection", "starwarscollection", '["starwars"]'),
+            {"title": "Star Wars Collection"},
+            (
+                "Star Wars Collection",
+                "starwarscollection",
+                '["Star Wars Collection", "Star Wars"]',
+                '["starwarscollection", "starwars"]',
+            ),
+        ),
+        (
+            {"title": "Star Wars Collection", "alternate_titles": [" Star Wars "]},
+            ("Star Wars Collection", "starwarscollection", '["Star Wars"]', '["starwars"]'),
         ),
     ],
     ids=["variants-regenerated", "variants-given"],
@@ -537,6 +545,14 @@ def test_update_collection_renames_in_place_and_rederives_its_titles(db, body, r
     cid = db.collection.get_by_title_and_instance("The Matrix Collection", "plex1", "Movies")["id"]
     resp = _client(db).put(f"/api/media/collections/{cid}", json=body)
     assert (resp.status_code, resp.json()["data"]["collection"]["id"], _collection_rows(db)) == (200, cid, [row])
+
+
+def test_update_collection_clears_the_fields_it_is_sent_as_null(db):
+    created = _post_collection(_client(db), year=2012, tmdb_id=86311, folder="Marvel")
+    cid = created.json()["data"]["collection"]["id"]
+    resp = _client(db).put(f"/api/media/collections/{cid}", json={"year": None, "tmdb_id": None, "folder": None})
+    row = db.collection.get_by_id(cid)
+    assert (resp.status_code, row["year"], row["tmdb_id"], row["folder"]) == (200, None, None, None)
 
 
 class _ErrorLog(_StubLog):
