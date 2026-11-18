@@ -514,8 +514,8 @@ class AssetRenamerr(ChubModule):
         )
         if recorded is None:
             return False
-        # Kometa: the placed file must still exist, be no link the File Action stopped placing, and,
-        # when a run can place it, sit where it lands now.
+        # Kometa: the placed entry must still be there (a link need not resolve), be no link the File Action
+        # stopped placing, and, when a run can place it, sit where it lands now.
         if apply_method == "kometa":
             applied_path = prev.get("applied_path")
             if not applied_path or not os.path.lexists(applied_path):
