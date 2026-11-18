@@ -1086,12 +1086,16 @@ class PosterRenamerr(ChubModule):
         src = row.get("original_file") or row.get("file")
         return None if src and os.path.lexists(src) else staged
 
-    def _remove_superseded(self, previous: Optional[str], new_file_path: str) -> None:
+    def _remove_superseded(self, previous: Optional[str], new_file_path: str, db: ChubDB) -> None:
         """Drop the file an asset was staged to before it moved (e.g. a folder rename): Kometa ignores it and the orphan pass spares its id."""
         config = self.config
         if config.dry_run or config.run_border_replacerr:
             return
-        remove_superseded(previous, new_file_path, config.destination_dir, self.logger)
+        remove_superseded(previous, new_file_path, config.destination_dir, self.logger, db.records_placed_path)
+
+    def _carry_action(self, moved: Optional[str], db: ChubDB) -> str:
+        """The file action, once _record_staged moved our row off ``moved``: a carry copies while another row records it."""
+        return "copy" if moved and db.records_placed_path(moved) else self.config.action_type
 
     def _rename_failed(self, log: Callable[[str], None], message: str) -> None:
         """Log why one poster was not staged, and count it for the Run Summary."""
@@ -1212,7 +1216,7 @@ class PosterRenamerr(ChubModule):
             if (
                 file_ops_enabled
                 and not config.dry_run
-                and not self.process_file(file, new_file_path, config.action_type)
+                and not self.process_file(file, new_file_path, self._carry_action(moved, db))
             ):
                 self._rename_failed(
                     self.logger.warning,
@@ -1228,7 +1232,7 @@ class PosterRenamerr(ChubModule):
         # Now that the asset is staged at its current path, drop any copy left
         # behind at the previous path (folder-rename self-cleanup).
         if file_ops_enabled and not config.dry_run:
-            self._remove_superseded(previous_renamed, new_file_path)
+            self._remove_superseded(previous_renamed, new_file_path, db)
 
         if messages or discord_message:
             return {
