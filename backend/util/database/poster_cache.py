@@ -2,7 +2,7 @@ import json
 from typing import Optional
 
 from backend.util.helper import parse_search_id
-from backend.util.normalization import normalize_titles
+from backend.util.normalization import normalize_titles, title_prefix
 
 from .db_base import DatabaseBase, escape_like
 
@@ -32,6 +32,8 @@ ARTWORK_IMAGE_TYPES = ("logo", "squareart", "background")
 #      (later-inserted file wins).
 #   3. SyncGDrive._refresh_poster_cache_for_folder looks up the priority
 #      for the folder being refreshed so per-folder syncs preserve it.
+#   4. PosterRenamerr.find_asset_candidate re-ranks id and title hits
+#      together: see _match_rank.
 #
 # Guardrail: tests/test_poster_renamerr.py::test_source_dirs_bottom_wins.
 # Removing the ORDER BY clauses, the priority column, or the priority
@@ -353,7 +355,29 @@ class PosterCache(DatabaseBase):
         image_type: Optional[str] = "poster",
         conn=None,
     ) -> Optional[dict]:
-        """Get poster cache record by ID field.
+        """Get the top-ranked poster cache record for an id (see get_all_by_id)."""
+        rows = self.get_all_by_id(
+            id_field,
+            id_val,
+            season_number,
+            asset_type=asset_type,
+            image_type=image_type,
+            conn=conn,
+            limit=1,
+        )
+        return rows[0] if rows else None
+
+    def get_all_by_id(
+        self,
+        id_field: str,
+        id_val,
+        season_number=None,
+        asset_type: Optional[str] = None,
+        image_type: Optional[str] = "poster",
+        conn=None,
+        limit: Optional[int] = None,
+    ) -> list:
+        """Get every poster cache record carrying an id, best first.
 
         Ordering enforces the bottom-wins source_dir contract — see
         CONTRACT block at top of file. ``image_type`` defaults to "poster";
@@ -379,8 +403,11 @@ class PosterCache(DatabaseBase):
         else:
             sql += " AND season_number IS NULL"
 
-        sql += " ORDER BY priority DESC, id DESC LIMIT 1"
-        return self.execute_query(sql, params, fetch_one=True, conn=conn)
+        sql += " ORDER BY priority DESC, id DESC"
+        if limit:
+            sql += " LIMIT ?"
+            params.append(limit)
+        return self.execute_query(sql, params, fetch_all=True, conn=conn) or []
 
     def get_by_normalized_title(
         self,
@@ -683,13 +710,14 @@ class PosterCache(DatabaseBase):
         asset_type: Optional[str] = None,
         image_type: Optional[str] = "poster",
         conn=None,
+        above_priority: Optional[int] = None,
     ) -> list:
-        """Get poster candidates by title prefix.
+        """Get poster candidates by title prefix (only rows ranked above ``above_priority`` when set).
 
         Ordering enforces the bottom-wins source_dir contract — see
-        CONTRACT block at top of file. The match phase walks this list
-        and takes the first row that passes is_match(), so higher-
-        priority candidates must come first.
+        CONTRACT block at top of file. The match phase re-ranks the rows that
+        pass is_match() (PosterRenamerr._match_rank); other callers rely on
+        this order.
 
         The prefix is derived with normalize_titles() — the SAME function that
         produced the stored `normalized_title` column — so they stay
@@ -698,19 +726,16 @@ class PosterCache(DatabaseBase):
         no-id, article-prefixed title, e.g. season posters, silently failed to
         match.)
         """
-        prefix = normalize_titles(title)[:length]
+        prefix = title_prefix(title, length)
         if not prefix:
             return []
 
-        # normalized_title is already lowercased by normalize_titles (the same
-        # function that built `prefix` above), so LOWER() here is redundant and
-        # makes the column non-sargable — it forces a full table scan instead
-        # of a range scan on poster_cache_normalized_title_idx. Comparing the
-        # raw column lets SQLite use the index for the `prefix%` range.
-        sql = "SELECT * FROM poster_cache WHERE normalized_title LIKE ?"
-        params = [f"{prefix}%"]
+        # A range, not LIKE: LIKE is case-insensitive so it can't use the BINARY title index (prefix is ASCII).
+        # "+asset_type" keeps the planner off poster_cache_asset_type_idx, which scans a whole type.
+        sql = "SELECT * FROM poster_cache WHERE normalized_title >= ? AND normalized_title < ?"
+        params = [prefix, prefix[:-1] + chr(ord(prefix[-1]) + 1)]
         if asset_type:
-            sql += " AND asset_type=?"
+            sql += " AND +asset_type=?"
             params.append(asset_type)
 
         it_sql, it_params = self._image_type_clause(image_type)
@@ -719,6 +744,10 @@ class PosterCache(DatabaseBase):
 
         # Search-only rows (gdrive-only assets) are never match candidates.
         sql += " AND search_only=0"
+
+        if above_priority is not None:
+            sql += " AND priority > ?"
+            params.append(above_priority)
 
         sql += " ORDER BY priority DESC, id DESC"
         return self.execute_query(sql, params, fetch_all=True, conn=conn) or []

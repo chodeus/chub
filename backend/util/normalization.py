@@ -179,3 +179,8 @@ def normalize_titles(title: str) -> str:
     normalized_title = re.sub(remove_special_chars, "", normalized_title)
     normalized_title = normalized_title.replace(" ", "").lower()
     return normalized_title.strip()
+
+
+def title_prefix(title: str, length: int = 3) -> str:
+    """The key PosterCache.get_candidates_by_prefix searches on: the start of normalize_titles(title)."""
+    return normalize_titles(title)[:length]

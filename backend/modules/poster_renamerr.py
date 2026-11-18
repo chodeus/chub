@@ -28,6 +28,7 @@ from backend.util.gdrive_source import (
 from backend.util.helper import (
     as_list,
     classify_match,
+    is_id_match_reason,
     create_table,
     extract_ids,
     extract_mbid,
@@ -37,7 +38,7 @@ from backend.util.helper import (
     print_settings,
     progress,
 )
-from backend.util.normalization import parse_asset_filename
+from backend.util.normalization import parse_asset_filename, title_prefix
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex_index import PlexMediaIndex
@@ -66,6 +67,8 @@ from backend.util.writable import ensure_writable_dir, log_kept_sources, note_ke
 # half-empty cache and mark posters as unmatched. Both rebuild sites take this
 # lock so the clear+rebuild is atomic with respect to each other.
 _POSTER_CACHE_REBUILD_LOCK = threading.Lock()
+
+_IDENTITY_ID_FIELDS = ("tmdb_id", "imdb_id", "tvdb_id")
 
 
 # Filenames (sans extension/suffix) that denote artist-level art in a music
@@ -457,20 +460,34 @@ class PosterRenamerr(ChubModule):
         norm_titles = {c.get("normalized_title") or "" for c in matched_candidates}
         if len(norm_titles) > 1:
             return True
+        return PosterRenamerr._ids_disagree(matched_candidates)
 
-        def distinct_ids(field: str) -> set:
-            vals = set()
-            for c in matched_candidates:
-                v = c.get(field)
-                if v not in (None, "", 0, "0"):
-                    vals.add(str(v).lower())
-            return vals
-
-        return (
-            len(distinct_ids("tmdb_id")) > 1
-            or len(distinct_ids("imdb_id")) > 1
-            or len(distinct_ids("tvdb_id")) > 1
+    @staticmethod
+    def _ids_disagree(posters: list) -> bool:
+        """True when two posters set different values in the same id field."""
+        return any(
+            len(PosterRenamerr._distinct_ids(posters, f)) > 1
+            for f in _IDENTITY_ID_FIELDS
         )
+
+    @staticmethod
+    def _distinct_ids(posters: list, field: str) -> set:
+        """The set values of ``field`` across ``posters``, lowercased."""
+        return {
+            str(p.get(field)).lower()
+            for p in posters
+            if p.get(field) not in (None, "", 0, "0")
+        }
+
+    @staticmethod
+    def _contradicts_id_hits(poster: dict, id_hits: list) -> bool:
+        """True when an id ``poster`` sets is also set on the id hits, to other values only."""
+        for field in _IDENTITY_ID_FIELDS:
+            known = PosterRenamerr._distinct_ids(id_hits, field)
+            own = PosterRenamerr._distinct_ids([poster], field)
+            if known and own and not own & known:
+                return True
+        return False
 
     @staticmethod
     def find_asset_candidate(
@@ -483,21 +500,21 @@ class PosterRenamerr(ChubModule):
         """Find the best poster_cache candidate for ``media``, scoped to
         ``image_type``.
 
-        This is the shared candidate-finding core (ID lookup, then prefix/AKA
-        name lookup with season + identity checks) used both by poster matching
+        This is the shared candidate-finding core (ID lookup plus prefix/AKA
+        name lookup with season + identity checks, ranked by ``_match_rank``) used both by poster matching
         (``image_type="poster"``) and by the asset pipeline (logo / squareart /
         background / banner). It performs NO writeback — callers decide where to
         record the result (media_cache for posters, media_asset_matches for
         assets).
 
         Returns a dict with: ``candidate`` (best row or None), ``matched``
-        (bool), ``win_reason`` (str), ``matched_candidates`` (every row that
-        passed is_match — used for conflict detection), ``candidates`` (the
-        considered set), and ``reasons`` (human-readable trace).
+        (bool), ``win_reason`` (str), ``conflicting`` (title-only matches
+        disagree), ``matched_candidates`` (every fetched row accepted as a
+        match, best first), ``candidates`` (the considered set), and
+        ``reasons`` (human-readable trace).
         """
         asset_type = media.get("asset_type")
         title = media.get("title")
-        normalized_title = media.get("normalized_title")
         season_number = media.get("season_number")
         expected_asset_type = "collection" if is_collection else asset_type
 
@@ -506,96 +523,140 @@ class PosterRenamerr(ChubModule):
             alt_titles = json.loads(media.get("alternate_titles") or "[]")
         except Exception:
             pass
+        # The collections API stores these unchecked: keep only the strings.
+        if not isinstance(alt_titles, list):
+            alt_titles = []
+        alt_titles = [t for t in alt_titles if isinstance(t, str) and t]
 
         reasons = []
-        matched = False
-        candidate = None
         candidates = []
-        win_reason = ""
-        # Every poster that passed is_match() for this media — used to detect
-        # ambiguous (conflicting-identity) matches.
-        matched_candidates = []
+        seen_files = set()
+        # (poster, is_match reason) for every poster accepted as a match.
+        passed = []
 
         for id_field in ["imdb_id", "tmdb_id", "tvdb_id", "musicbrainz_id"]:
             id_val = media.get(id_field)
-            if id_val:
-                c = db.poster.get_by_id(
-                    id_field,
-                    id_val,
-                    season_number,
-                    asset_type=expected_asset_type,
-                    image_type=image_type,
-                    conn=conn,
-                )
-                if c:
-                    matched, reason = is_match(c, media)
-                    if matched:
-                        reasons.append(
-                            f"Matched by {id_field}: {id_val} (season {season_number}) [{reason}]"
-                        )
-                        candidate = c
-                        candidates = [c]
-                        win_reason = reason
-                        matched_candidates = [c]
-                        break
-
-        if not candidate:
-            # Look up candidates by the prefix of EVERY title the media is known
-            # by — primary plus alternates — not just the primary. Otherwise a
-            # poster named by an AKA (e.g. "Origen" for "Inception") is never in
-            # the candidate set, so the alt-title check below can't fire. This
-            # is what makes TMDB AKA hydration actually pay off.
-            search_titles = [title] if title else []
-            search_titles += [t for t in alt_titles if t]
-            candidates = []
-            seen_files = set()
-            for st in search_titles:
-                for c in db.poster.get_candidates_by_prefix(
-                    st, asset_type=expected_asset_type, image_type=image_type, conn=conn
-                ):
-                    key = c.get("file")
-                    if key not in seen_files:
-                        seen_files.add(key)
-                        candidates.append(c)
-
-            all_titles = set()
-            if normalized_title:
-                all_titles.add(normalized_title)
-            all_titles.update({normalize_titles(t) for t in alt_titles if t})
-
-            for cand in candidates:
-                cand_season = cand.get("season_number")
-                if season_number is not None and cand_season != season_number:
+            if not id_val:
+                continue
+            for c in db.poster.get_all_by_id(
+                id_field,
+                id_val,
+                season_number,
+                asset_type=expected_asset_type,
+                image_type=image_type,
+                conn=conn,
+            ):
+                if c.get("file") in seen_files:
                     continue
-                if season_number is None and cand_season is not None:
-                    continue
-                cand_norm_title = cand.get("normalized_title", "")
-                cand_alt_titles = set(
-                    json.loads(cand.get("normalized_alternate_titles", "[]") or "[]")
+                seen_files.add(c.get("file"))
+                candidates.append(c)
+                m, reason = is_match(c, media)
+                if m:
+                    reasons.append(
+                        f"Matched by {id_field}: {id_val} (season {season_number}) [{reason}]"
+                    )
+                    passed.append((c, reason))
+
+        id_hits = [c for c, r in passed if is_id_match_reason(r)]
+        # Title posters at or below the best id hit's priority aren't fetched,
+        # so the id hit wins those ties.
+        id_floor = max((c.get("priority") or 0 for c in id_hits), default=None)
+        title_candidates = PosterRenamerr._fetch_title_candidates(
+            db,
+            ([title] if title else []) + alt_titles,
+            dict(
+                asset_type=expected_asset_type,
+                image_type=image_type,
+                conn=conn,
+                above_priority=id_floor,
+            ),
+            seen_files,
+        )
+        candidates.extend(title_candidates)
+
+        all_titles = {normalize_titles(t) for t in alt_titles}
+        if media.get("normalized_title"):
+            all_titles.add(media["normalized_title"])
+        for cand in title_candidates:
+            reason = PosterRenamerr._title_match_reason(
+                cand, media, all_titles, id_hits
+            )
+            if reason:
+                reasons.append(
+                    f"Prefix/name candidate: {cand.get('title')} (season {cand.get('season_number')}) [{reason}]"
                 )
+                passed.append((cand, reason))
 
-                if cand_norm_title in all_titles or bool(
-                    all_titles & set(cand_alt_titles)
-                ):
-                    m, reason = is_match(cand, media)
-                    if m:
-                        reasons.append(
-                            f"Prefix/name candidate: {cand.get('title')} (season {cand.get('season_number')}) [{reason}]"
-                        )
-                        matched_candidates.append(cand)
-                        if not candidate:
-                            candidate = cand
-                            matched = True
-                            win_reason = reason
-
+        passed.sort(
+            key=lambda p: PosterRenamerr._match_rank(p, beside_id_hit=bool(id_hits)),
+            reverse=True,
+        )
+        candidate, win_reason = passed[0] if passed else (None, "")
+        # Only title-only matches are checked, and beside an id hit (which settles the
+        # title) only their ids; ones contradicting an id hit were dropped above.
+        title_only = [c for c, r in passed if not is_id_match_reason(r)]
+        if id_hits:
+            conflicting = PosterRenamerr._ids_disagree(title_only)
+        else:
+            conflicting = PosterRenamerr._has_identity_conflict(title_only)
         return {
             "candidate": candidate,
-            "matched": bool(matched),
+            "matched": bool(passed),
             "win_reason": win_reason,
-            "matched_candidates": matched_candidates,
+            "conflicting": conflicting,
+            "matched_candidates": [c for c, _reason in passed],
             "candidates": candidates,
             "reasons": reasons,
         }
+
+    @staticmethod
+    def _fetch_title_candidates(
+        db: ChubDB, titles: list, query: dict, seen_files: set
+    ) -> list:
+        """Unseen posters sharing a title prefix with any of ``titles``; one query per prefix."""
+        found, prefixes = [], set()
+        for t in titles:
+            prefix = title_prefix(t)
+            if not prefix or prefix in prefixes:
+                continue
+            prefixes.add(prefix)
+            for c in db.poster.get_candidates_by_prefix(t, **query):
+                if c.get("file") not in seen_files:
+                    seen_files.add(c.get("file"))
+                    found.append(c)
+        return found
+
+    @staticmethod
+    def _title_match_reason(
+        cand: dict, media: dict, all_titles: set, id_hits: list
+    ) -> str:
+        """is_match()'s reason when a title-lookup poster belongs to ``media``, else ""."""
+        if cand.get("season_number") != media.get("season_number"):
+            return ""
+        cand_alt_titles = set(
+            json.loads(cand.get("normalized_alternate_titles", "[]") or "[]")
+        )
+        if (
+            cand.get("normalized_title", "") not in all_titles
+            and not all_titles & cand_alt_titles
+        ):
+            return ""
+        if PosterRenamerr._contradicts_id_hits(cand, id_hits):
+            return ""
+        m, reason = is_match(cand, media)
+        return reason if m else ""
+
+    @staticmethod
+    def _match_rank(
+        passed: Tuple[dict, str], beside_id_hit: bool
+    ) -> Tuple[bool, int, int]:
+        """Sort key (firm, priority, row id); firm: an id, or a non-loose title (yeared beside an id hit)."""
+        poster, reason = passed
+        firm = is_id_match_reason(reason) or (
+            classify_match(True, reason)[0] == "matched"
+            and (bool(poster.get("year")) or not beside_id_hit)
+        )
+        return (firm, poster.get("priority") or 0, poster.get("id") or 0)
 
     def match_item(self, media: dict, db: ChubDB, is_collection=False) -> dict:
         asset_type = media.get("asset_type")
@@ -638,7 +699,7 @@ class PosterRenamerr(ChubModule):
         # priority-winner is still applied but flagged with its rivals.
         match_status, match_confidence = classify_match(matched, win_reason)
         conflict_json = "[]"
-        if self._has_identity_conflict(matched_candidates):
+        if found["conflicting"]:
             match_status = "needs_review"
             conflict_json = json.dumps(
                 [

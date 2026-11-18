@@ -433,21 +433,11 @@ class AssetRenamerr(ChubModule):
         loop passes one so the per-item candidate lookups don't each open a
         fresh connection.
         """
-        from backend.modules.poster_renamerr import PosterRenamerr
-
         for source in self._sources():
             if source == "local":
-                found = PosterRenamerr.find_asset_candidate(
-                    media,
-                    db,
-                    image_type=image_type,
-                    is_collection=is_collection,
-                    conn=conn,
-                )
-                cand = found.get("candidate")
-                # A missing source root keeps its cached rows: skip one whose file is gone.
-                if found.get("matched") and cand and cand.get("file") and os.path.isfile(cand["file"]):
-                    return ("local", cand["file"], None)
+                path = self._local_file(media, db, image_type, is_collection, conn)
+                if path:
+                    return ("local", path, None)
             elif source == "fanart":
                 fanart_key = FANART_IMAGE_KEY.get(image_type)
                 # fanart has no squareart/banner; collections aren't supported.
@@ -459,6 +449,21 @@ class AssetRenamerr(ChubModule):
                 url = (images or {}).get(fanart_key)
                 if url:
                     return ("fanart", None, url)
+        return None
+
+    @staticmethod
+    def _local_file(
+        media: dict, db: ChubDB, image_type: str, is_collection: bool, conn
+    ) -> Optional[str]:
+        """The best fetched local match still on disk: a missing source root keeps its cached rows."""
+        from backend.modules.poster_renamerr import PosterRenamerr
+
+        found = PosterRenamerr.find_asset_candidate(
+            media, db, image_type=image_type, is_collection=is_collection, conn=conn
+        )
+        for cand in found.get("matched_candidates") or []:
+            if cand.get("file") and os.path.isfile(cand["file"]):
+                return cand["file"]
         return None
 
     # ----- apply ----------------------------------------------------------

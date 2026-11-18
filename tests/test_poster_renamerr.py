@@ -657,6 +657,466 @@ def test_match_item_conflicting_candidates_flagged_review(tmp_path):
         db.__exit__(None, None, None)
 
 
+def _insert_media_row(db, identity_key: str, sql_values: str) -> dict:
+    """Insert one media_cache row (values after identity_key, as SQL) and read it back."""
+    db.media.execute_query(
+        "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,year,"
+        f"tmdb_id,tvdb_id,imdb_id,instance_name) VALUES ('{identity_key}',{sql_values})"
+    )
+    return dict(
+        db.media.execute_query(
+            "SELECT * FROM media_cache WHERE identity_key=?",
+            (identity_key,),
+            fetch_one=True,
+        )
+    )
+
+
+def _insert_poster(db, sql_columns: str, sql_values: str) -> None:
+    db.poster.execute_query(
+        f"INSERT INTO poster_cache ({sql_columns}) VALUES ({sql_values})"
+    )
+
+
+def test_match_item_bottom_wins_across_id_fields(tmp_path):
+    """Id hits from different fields are ranked together: the drive further down the source list wins."""
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,tmdb_id,imdb_id,file,priority) "
+            "VALUES ('show','Monster The Lizzie Borden Story','monsterthelizziebordenstory',2026,"
+            "299939,'tt13207736','/Bostafari/Monster The Lizzie Borden Story (2026).jpg',26)"
+        )
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,tvdb_id,file,priority) "
+            "VALUES ('show','Monster','monster',2022,389492,'/Dweagle79/Monster (2022).jpg',40)"
+        )
+        media = _insert_media_row(
+            db,
+            "mk",
+            "'show','Monster','monster','2022',113988,389492,'tt13207736','sonarr'",
+        )
+        m.match_item(media, db)
+        updated = db.media.get_by_id(media["id"])
+        assert updated["original_file"] == "/Dweagle79/Monster (2022).jpg"
+        # Both posters are tied to the item by an id, so their titles never conflict.
+        assert updated["match_status"] == "matched"
+        assert updated["conflict_ids"] == "[]"
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_item_bottom_wins_over_an_id_hit_from_a_higher_drive(tmp_path):
+    """A same-title poster with a year but no ids on a lower drive beats an id-tagged one above it."""
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,tmdb_id,file,priority) "
+            "VALUES ('movie','Inception','inception',2010,27205,'/top/Inception (2010).jpg',0)"
+        )
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,file,priority) "
+            "VALUES ('movie','Inception','inception',2010,'/bottom/Inception (2010).jpg',1)"
+        )
+        media = _insert_media_row(
+            db, "mk", "'movie','Inception','inception','2010',27205,NULL,NULL,'radarr'"
+        )
+        m.match_item(media, db)
+        updated = db.media.get_by_id(media["id"])
+        assert updated["original_file"] == "/bottom/Inception (2010).jpg"
+        assert updated["match_status"] == "matched"
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_item_id_hit_wins_a_tie_on_the_same_drive(tmp_path):
+    """On one drive an id-tagged poster beats a newer same-titled variant without ids."""
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = "asset_type,title,normalized_title,year,tmdb_id,file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'movie','Inception','inception',2010,27205,'/d/Inception (2010) {tmdb-27205}.jpg',4",
+        )
+        _insert_poster(
+            db,
+            cols,
+            "'movie','Inception','inception',2010,NULL,'/d/Inception (2010).jpg',4",
+        )
+        media = _insert_media_row(
+            db, "mk", "'movie','Inception','inception','2010',27205,NULL,NULL,'radarr'"
+        )
+        m.match_item(media, db)
+        assert (
+            db.media.get_by_id(media["id"])["original_file"]
+            == "/d/Inception (2010) {tmdb-27205}.jpg"
+        )
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_item_yearless_title_poster_never_beats_an_id_hit(tmp_path):
+    """A poster with no year and no ids on a lower drive loses to an id-tagged one above it."""
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        _insert_poster(
+            db,
+            "asset_type,title,normalized_title,year,tvdb_id,file,priority",
+            "'show','The Office','theoffice',2005,73244,'/top/The Office (2005) {tvdb-73244}.jpg',0",
+        )
+        _insert_poster(
+            db,
+            "asset_type,title,normalized_title,file,priority",
+            "'show','The Office','theoffice','/bottom/The Office.jpg',1",
+        )
+        media = _insert_media_row(
+            db,
+            "mk",
+            "'show','The Office','theoffice','2005',2316,73244,'tt0386676','sonarr'",
+        )
+        m.match_item(media, db)
+        assert (
+            db.media.get_by_id(media["id"])["original_file"]
+            == "/top/The Office (2005) {tvdb-73244}.jpg"
+        )
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_item_alternate_title_poster_beside_an_id_hit_is_no_conflict(tmp_path):
+    """An id-matched poster and an alternate-title poster of the same film are not rivals."""
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        _insert_poster(
+            db,
+            "asset_type,title,normalized_title,year,tmdb_id,file,priority",
+            "'movie','Amelie','amelie',2001,194,'/top/Amelie (2001) {tmdb-194}.jpg',0",
+        )
+        _insert_poster(
+            db,
+            "asset_type,title,normalized_title,year,file,priority",
+            "'movie','Le Fabuleux Destin','lefabuleuxdestin',2001,'/bottom/Le Fabuleux Destin (2001).jpg',1",
+        )
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,year,tmdb_id,"
+            "alternate_titles,normalized_alternate_titles,instance_name) VALUES "
+            "('mk','movie','Amelie','amelie','2001',194,'[\"Le Fabuleux Destin\"]','[\"lefabuleuxdestin\"]','radarr')"
+        )
+        media = dict(
+            db.media.execute_query(
+                "SELECT * FROM media_cache WHERE identity_key='mk'", fetch_one=True
+            )
+        )
+        m.match_item(media, db)
+        updated = db.media.get_by_id(media["id"])
+        assert updated["original_file"] == "/bottom/Le Fabuleux Destin (2001).jpg"
+        assert updated["match_status"] == "matched"
+        assert updated["conflict_ids"] == "[]"
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_title_lookup_skips_posters_ranked_at_or_below_the_id_floor(tmp_path):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        for p in (0, 1, 2):
+            _insert_poster(
+                db,
+                "asset_type,title,normalized_title,file,priority",
+                f"'movie','Heat','heat','/{p}/Heat.jpg',{p}",
+            )
+        rows = db.poster.get_candidates_by_prefix(
+            "Heat", asset_type="movie", above_priority=1
+        )
+        assert [r["file"] for r in rows] == ["/2/Heat.jpg"]
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_title_prefix_lookup_returns_only_titles_starting_with_the_prefix(tmp_path):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        for t, kind in (
+            ("ab", "movie"),
+            ("abb~", "movie"),
+            ("abc", "movie"),
+            ("abcz", "movie"),
+            ("abd", "movie"),
+            ("abcq", "show"),
+        ):
+            _insert_poster(
+                db,
+                "asset_type,title,normalized_title,file",
+                f"'{kind}','{t}','{t}','/{t}.jpg'",
+            )
+        rows = db.poster.get_candidates_by_prefix("Abc", asset_type="movie")
+        assert sorted(r["normalized_title"] for r in rows) == ["abc", "abcz"]
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_title_prefix_lookup_searches_the_title_index(tmp_path, monkeypatch):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        real, calls = db.poster.execute_query, []
+        monkeypatch.setattr(
+            db.poster,
+            "execute_query",
+            lambda sql, params=(), **kw: (
+                calls.append((sql, params)) or real(sql, params, **kw)
+            ),
+        )
+        db.poster.get_candidates_by_prefix("Heat", asset_type="movie", above_priority=0)
+        sql, params = calls[-1]
+        plan = [
+            r["detail"]
+            for r in real("EXPLAIN QUERY PLAN " + sql, tuple(params), fetch_all=True)
+        ]
+        assert any(
+            "USING INDEX poster_cache_normalized_title_idx" in d for d in plan
+        ), plan
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_rank_puts_a_loose_match_below_a_firm_one():
+    """A loose title match on the bottom drive loses to an exact yeared title and an id hit above it."""
+    loose = (
+        {"file": "/bottom/x.jpg", "priority": 9, "id": 2, "year": 2010},
+        "Titles match under loose string comparison",
+    )
+    exact = (
+        {"file": "/top/x.jpg", "priority": 0, "id": 1, "year": 2010},
+        "Asset title equals media title",
+    )
+    by_id = (
+        {"file": "/mid/x.jpg", "priority": 5, "id": 3, "year": None},
+        "ID match: tvdb_id",
+    )
+    ranked = sorted(
+        [loose, exact, by_id],
+        key=lambda p: PosterRenamerr._match_rank(p, beside_id_hit=True),
+        reverse=True,
+    )
+    assert [p["file"] for p, _ in ranked] == [
+        "/mid/x.jpg",
+        "/top/x.jpg",
+        "/bottom/x.jpg",
+    ]
+
+
+def _season_media(db, key: str, sql_values: str, season: int) -> dict:
+    _insert_media_row(db, key, sql_values)
+    db.media.execute_query(
+        "UPDATE media_cache SET season_number=? WHERE identity_key=?", (season, key)
+    )
+    return dict(
+        db.media.execute_query(
+            "SELECT * FROM media_cache WHERE identity_key=?", (key,), fetch_one=True
+        )
+    )
+
+
+def test_match_item_yearless_title_poster_on_a_lower_drive_wins_without_an_id_hit(
+    tmp_path,
+):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = "asset_type,title,normalized_title,year,season_number,file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'show','Breaking Bad','breakingbad',2008,1,'/top/Breaking Bad (2008) - Season 1.jpg',0",
+        )
+        _insert_poster(
+            db,
+            cols,
+            "'show','Breaking Bad','breakingbad',NULL,1,'/bottom/Breaking Bad - Season 1.jpg',1",
+        )
+        media = _season_media(
+            db,
+            "bb",
+            "'show','Breaking Bad','breakingbad','2008',NULL,81189,NULL,'sonarr'",
+            1,
+        )
+        m.match_item(media, db)
+        assert (
+            db.media.get_by_id(media["id"])["original_file"]
+            == "/bottom/Breaking Bad - Season 1.jpg"
+        )
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_item_title_poster_contradicting_an_id_hit_does_not_win(tmp_path):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = "asset_type,title,normalized_title,year,tvdb_id,tmdb_id,file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'show','Ghosts','ghosts',2021,389963,118357,'/top/Ghosts (2021) {tvdb-389963}.jpg',0",
+        )
+        _insert_poster(
+            db,
+            cols,
+            "'show','Ghosts','ghosts',2020,NULL,88528,'/bottom/Ghosts (2020) {tmdb-88528}.jpg',1",
+        )
+        media = _insert_media_row(
+            db, "gh", "'show','Ghosts','ghosts','2021',NULL,389963,NULL,'sonarr'"
+        )
+        m.match_item(media, db)
+        row = db.media.get_by_id(media["id"])
+        assert (row["original_file"], row["match_status"]) == (
+            "/top/Ghosts (2021) {tvdb-389963}.jpg",
+            "matched",
+        )
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_find_asset_candidate_queries_each_title_prefix_once(tmp_path, monkeypatch):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = "asset_type,title,normalized_title,year,tvdb_id,file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'show','The Office','theoffice',2005,73244,'/d/The Office (2005) {tvdb-73244}.jpg',0",
+        )
+        alts = ["The Office US", "The Office (US)", "Office", "The Office USA"]
+        media = {
+            "asset_type": "show",
+            "title": "The Office",
+            "normalized_title": "theoffice",
+            "year": 2005,
+            "tvdb_id": 73244,
+            "season_number": None,
+            "alternate_titles": json.dumps(alts),
+        }
+        real, calls = db.poster.get_candidates_by_prefix, []
+        monkeypatch.setattr(
+            db.poster,
+            "get_candidates_by_prefix",
+            lambda t, **kw: calls.append(t) or real(t, **kw),
+        )
+        found = PosterRenamerr.find_asset_candidate(media, db)
+        assert (found["candidate"]["file"], calls) == (
+            "/d/The Office (2005) {tvdb-73244}.jpg",
+            ["The Office", "Office"],
+        )
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_item_loose_tmdb_row_sets_no_floor_over_a_title_poster(tmp_path):
+    """A tmdb row that only passed on a loose title is no id hit, so it sets no floor."""
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = "asset_type,title,normalized_title,year,tmdb_id,file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'movie','Fast Furious','fastfurious',NULL,13804,'/low/Fast Furious.jpg',5",
+        )
+        _insert_poster(
+            db,
+            cols,
+            "'movie','Fast & Furious','fastandfurious',2009,NULL,'/high/Fast & Furious (2009).jpg',3",
+        )
+        media = _insert_media_row(
+            db,
+            "ff",
+            "'movie','Fast & Furious','fastandfurious','2009',13804,NULL,NULL,'radarr'",
+        )
+        m.match_item(media, db)
+        row = db.media.get_by_id(media["id"])
+        assert row["original_file"] == "/high/Fast & Furious (2009).jpg"
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_item_aka_title_posters_beside_an_id_hit_are_not_a_conflict(tmp_path):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = "asset_type,title,normalized_title,year,imdb_id,file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'movie','Inception','inception',2010,'tt1375666','/a/Inception (2010) {imdb-tt1375666}.jpg',1",
+        )
+        _insert_poster(
+            db, cols, "'movie','Inception','inception',NULL,NULL,'/b/Inception.jpg',3"
+        )
+        _insert_poster(
+            db, cols, "'movie','Origen','origen',NULL,NULL,'/b/Origen.jpg',3"
+        )
+        _insert_media_row(
+            db,
+            "inc",
+            "'movie','Inception','inception','2010',NULL,NULL,'tt1375666','radarr'",
+        )
+        db.media.execute_query(
+            "UPDATE media_cache SET alternate_titles=?, normalized_alternate_titles=? WHERE identity_key='inc'",
+            ('["Origen"]', '["origen"]'),
+        )
+        media = dict(
+            db.media.execute_query(
+                "SELECT * FROM media_cache WHERE identity_key='inc'", fetch_one=True
+            )
+        )
+        m.match_item(media, db)
+        row = db.media.get_by_id(media["id"])
+        assert (row["original_file"], row["match_status"], row["conflict_ids"]) == (
+            "/a/Inception (2010) {imdb-tt1375666}.jpg",
+            "matched",
+            "[]",
+        )
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_find_asset_candidate_skips_alternate_titles_that_are_not_strings(tmp_path):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = "asset_type,title,normalized_title,tmdb_id,file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'collection','Alien Collection','aliencollection',8091,'/d/Alien Collection {tmdb-8091}.jpg',0",
+        )
+        for stored in ('[123, null, "Alien Saga"]', '{"a": 1}', '"Alien"'):
+            media = {
+                "asset_type": "collection",
+                "title": "Alien Collection",
+                "normalized_title": "aliencollection",
+                "tmdb_id": 8091,
+                "season_number": None,
+                "alternate_titles": stored,
+            }
+            found = PosterRenamerr.find_asset_candidate(media, db, is_collection=True)
+            assert (
+                found["candidate"]["file"] == "/d/Alien Collection {tmdb-8091}.jpg"
+            ), stored
+    finally:
+        db.__exit__(None, None, None)
+
+
 def test_match_item_stamps_matched_at_and_recently_matched(tmp_path):
     """A new match stamps matched_at + matched_poster_file and surfaces in
     get_recently_matched; re-confirming the same match keeps the original
