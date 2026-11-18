@@ -1538,7 +1538,8 @@ def test_a_staged_link_is_restaged_only_where_kometa_reads_it(tmp_path, apply_me
     staged = tmp_path / folder / "poster.jpg"
     staged.symlink_to(src)
     row = {"asset_type": "movie", "matched": 1, "folder": folder, "original_file": str(src), "season_number": None}
-    assert m._needs_staging(dict(row, renamed_file=str(staged))) is restage
+    needs = m._needs_staging(dict(row, renamed_file=str(staged)))
+    assert needs is restage
 
 
 def test_needs_staging_false_when_path_current(tmp_path):
