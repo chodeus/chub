@@ -2380,11 +2380,12 @@ def test_a_logo_leaves_no_empty_folder_once_asset_folders_is_off(db, monkeypatch
     assert _tree(dest) == ["Dune (2021)_logo.png"]
 
 
-def test_a_hardlinked_logo_carried_as_a_symlink_leaves_no_old_file(db, monkeypatch, tmp_path):
+def test_a_hardlinked_logo_relinked_to_its_source_leaves_no_old_file(db, monkeypatch, tmp_path):
     m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path, action_type="hardlink")
     m.config.action_type = "symlink"
     m.run()
-    assert (_tree(dest), (dest / "Dune (2021) [renamed]_logo.png").is_symlink()) == (["Dune (2021) [renamed]_logo.png"], True)
+    landed = dest / "Dune (2021) [renamed]_logo.png"
+    assert (_tree(dest), landed.is_symlink(), landed.read_bytes()) == ([landed.name], True, b"png")
 
 
 def test_a_case_only_folder_rename_keeps_the_logo_on_a_case_insensitive_mount(db, monkeypatch, tmp_path):
