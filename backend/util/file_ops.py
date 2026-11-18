@@ -75,7 +75,7 @@ def stale_link(path: str, action_type: str) -> bool:
 
 
 def already_in_place(src: str, dest: str, action_type: str) -> bool:
-    """True when ``dest`` holds ``src``'s bytes, unless it is a stale link or a move still has ``src`` to remove."""
+    """True when ``dest`` holds ``src``'s bytes, unless it is a stale link or, for a move, another name for ``src``'s file."""
     if stale_link(dest, action_type):
         return False
     if action_type == "move" and not _same_entry(src, dest) and os.path.samefile(src, dest):

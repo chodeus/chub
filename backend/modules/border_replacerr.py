@@ -194,7 +194,7 @@ class BorderReplacerr(ChubModule):
         return h.hexdigest()
 
     def _save_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
-        """Write ``out_img`` to ``renamed_file`` if the bytes changed; True if so."""
+        """Write ``out_img`` to ``renamed_file`` if the bytes changed or a link is there; True if written."""
         try:
             return self._replace_if_changed(out_img, renamed_file)
         except OSError as e:
@@ -383,15 +383,7 @@ class BorderReplacerr(ChubModule):
         return False
 
     def _stage_unbordered(self, asset: dict) -> None:
-        """A border-excluded asset still needs its poster staged: with borders
-        enabled poster_renamerr skips the copy (the border op is the sole file
-        writer), so an excluded title would otherwise never get a file at
-        renamed_file — on the plex path the uploader then fails to read it on
-        every run, and on the kometa path the destination stays empty. Copy
-        the raw source to renamed_file (temp-name + os.replace, crash-safe)
-        when it is missing or differs; never in dry-run. Best-effort — a
-        failure only warns.
-        """
+        """Copy a border-excluded asset's raw source to renamed_file when that is missing, differs or is a link; a failure only warns."""
         src = asset.get("original_file")
         dest = asset.get("renamed_file")
         if not src or not dest or self.config.dry_run:
@@ -643,15 +635,8 @@ class BorderReplacerr(ChubModule):
                 sig = _variant_sig(variant)
                 original_file = asset["original_file"]
                 renamed_file = asset["renamed_file"]
-                # Gate on the SOURCE file (the border op's actual input): if the
-                # input poster is unchanged and the settings signature matches,
-                # the output we'd produce is byte-identical, so the decode/encode
-                # is skippable. Output existence is required so a deleted output
-                # is regenerated, and a link (a symlink run's) is never our output.
-                # Keying on source (not output) is correct
-                # whether the border is applied in place (source == output) or to
-                # a separate path: a re-downloaded source bumps its mtime/size
-                # and forces a reprocess even if the stale output was untouched.
+                # Skip only a regular output whose source and settings match the last pass;
+                # a missing output or a link (a symlink run's) is bordered again.
                 if gate_enabled and os.path.exists(renamed_file) and not os.path.islink(renamed_file):
                     prev = state_map.get(renamed_file)
                     if prev and prev["variant_sig"] == sig:
