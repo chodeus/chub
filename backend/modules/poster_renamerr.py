@@ -481,19 +481,21 @@ class PosterRenamerr(ChubModule):
 
     @staticmethod
     def _review_rows(matched: list, limit: int = 5) -> list:
-        """Up to ``limit`` matches in rank order, first keeping each row that adds a new id value or title."""
-        seen, firsts = set(), []
-        for c in matched:
-            keys = {
+        """Up to ``limit`` matches in rank order, picked as: the winner, each new id value, each new title, the rest."""
+        keep = matched[:1]
+        for keys_of in (
+            lambda c: {
                 (f, v)
                 for f in _IDENTITY_ID_FIELDS
                 for v in PosterRenamerr._distinct_ids([c], f)
-            }
-            keys.add(("title", c.get("normalized_title") or ""))
-            if not keys <= seen:
-                firsts.append(c)
-                seen |= keys
-        keep = firsts[:limit]
+            },
+            lambda c: {c.get("normalized_title") or ""},
+        ):
+            seen = set().union(*map(keys_of, keep))
+            for c in matched:
+                if len(keep) < limit and not keys_of(c) <= seen:
+                    keep.append(c)
+                    seen |= keys_of(c)
         keep += [c for c in matched if c not in keep][: limit - len(keep)]
         return [c for c in matched if c in keep]
 

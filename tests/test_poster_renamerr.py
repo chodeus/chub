@@ -1032,16 +1032,20 @@ def test_match_item_flags_an_id_hit_setting_another_value_for_the_same_id(
         db.__exit__(None, None, None)
 
 
-def test_match_item_keeps_a_rival_ranked_past_five_in_conflict_ids(tmp_path):
+@pytest.mark.parametrize("distinct_titles", [False, True], ids=["same-title", "five-titles"])
+def test_match_item_keeps_a_rival_ranked_past_five_in_conflict_ids(
+    tmp_path, distinct_titles
+):
     m = make_module()
     db = _open_db(tmp_path, m.logger)
     try:
         cols = "asset_type,title,normalized_title,year,imdb_id,tmdb_id,file,priority"
         for p in range(6, 11):
+            suffix = f" {p}" if distinct_titles else ""
             _insert_poster(
                 db,
                 cols,
-                f"'movie','Harbor Lights','harborlights',2020,NULL,101,'/d{p}/Harbor Lights (2020).jpg',{p}",
+                f"'movie','Harbor Lights{suffix}','harborlights{suffix.strip()}',2020,NULL,101,'/d{p}/Harbor Lights (2020).jpg',{p}",
             )
         _insert_poster(
             db,
