@@ -33,6 +33,7 @@ from backend.util.arr import arr_api_version, create_arr_client
 from backend.util.arr_delete import ArrDeleter, ArrOutcome
 from backend.util.arr_instances import instance_detail
 from backend.util.config import ConfigError, load_config
+from backend.util.helper import collection_title_fields
 from backend.util.normalization import normalize_titles
 from backend.util.public_error import failure_text
 from backend.util.database import (
@@ -747,18 +748,38 @@ def delete_collection(
         )
 
 
-def _title_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
-    """The title columns ``payload`` sets, normalized as a Plex sync stores them, or why they are invalid."""
+def _is_text(value: Any) -> bool:
+    """A string with more than whitespace in it."""
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _collection_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
+    """The collection columns ``payload`` sets, titles derived as a Plex sync derives them, or why one is invalid."""
     fields: Dict[str, Any] = {}
+    for key in ("year", "tmdb_id", "tvdb_id"):
+        if key in payload:
+            number = None if payload[key] is None else _media_id(payload[key])
+            if payload[key] is not None and number is None:
+                return {}, f"Field '{key}' must be a positive whole number or null"
+            fields[key] = number
+    for key in ("imdb_id", "folder"):
+        if key in payload:
+            if payload[key] is not None and not isinstance(payload[key], str):
+                return {}, f"Field '{key}' must be a string or null"
+            fields[key] = payload[key]
+    if "library_name" in payload:
+        if not _is_text(payload["library_name"]):
+            return {}, "Field 'library_name' must be a non-empty string"
+        fields["library_name"] = payload["library_name"]
     if "title" in payload:
-        title = payload["title"]
-        if not isinstance(title, str) or not title.strip():
+        if not _is_text(payload["title"]):
             return {}, "Field 'title' must be a non-empty string"
-        fields.update(title=title, normalized_title=normalize_titles(title))
+        fields.update(collection_title_fields(payload["title"].strip()))
     if "alternate_titles" in payload:
         alts = payload["alternate_titles"]
-        if not isinstance(alts, list) or not all(isinstance(t, str) and t.strip() for t in alts):
+        if not isinstance(alts, list) or not all(_is_text(t) for t in alts):
             return {}, "Field 'alternate_titles' must be a list of non-empty strings"
+        alts = [t.strip() for t in alts]
         fields.update(alternate_titles=alts, normalized_alternate_titles=[normalize_titles(t) for t in alts])
     return fields, None
 
@@ -780,7 +801,7 @@ def _title_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
                 }
             },
         },
-        400: {"description": "Missing 'title' or 'instance_name', or a title field of the wrong type"},
+        400: {"description": "Missing 'title', 'instance_name' or 'library_name', or a field of the wrong type"},
         413: {"description": "Request body too large"},
     },
 )
@@ -804,8 +825,7 @@ async def create_collection(
             return body_too_large_error()
         logger.debug(f"Serving POST /api/media/collections with payload: {payload}")
 
-        title = payload.get("title")
-        if not title:
+        if "title" not in payload:
             return error(
                 "Field 'title' is required", code="MISSING_TITLE", status_code=400
             )
@@ -818,26 +838,21 @@ async def create_collection(
                 status_code=400,
             )
 
-        titles, why = _title_fields(payload)
+        if "library_name" not in payload:
+            return error(
+                "Field 'library_name' is required",
+                code="MISSING_LIBRARY",
+                status_code=400,
+            )
+        record, why = _collection_fields(payload)
         if why:
             return error(why, code="INVALID_FIELDS", status_code=400)
-        record = {
-            "year": payload.get("year"),
-            "tmdb_id": payload.get("tmdb_id"),
-            "tvdb_id": payload.get("tvdb_id"),
-            "imdb_id": payload.get("imdb_id"),
-            "folder": payload.get("folder"),
-            "library_name": payload.get("library_name"),
-            "alternate_titles": [],
-            "normalized_alternate_titles": [],
-            **titles,
-        }
 
         db.collection.upsert(record, instance_name)
 
-        # Fetch the created/updated record
+        # Read back by the stored title: the sync's derivation may have changed it.
         created = db.collection.get_by_title_and_instance(
-            title, instance_name, record["library_name"]
+            record["title"], instance_name, record["library_name"]
         )
 
         return ok("Collection created successfully", {"collection": created})
@@ -870,7 +885,7 @@ async def create_collection(
                 }
             },
         },
-        400: {"description": "A title field of the wrong type"},
+        400: {"description": "No updatable field, or a field of the wrong type"},
         404: {"description": "No collection with that id"},
         409: {"description": "Another collection in this library already has that title"},
     },
@@ -885,7 +900,7 @@ async def update_collection(
     Update a media collection by ID.
 
     Fetches the existing collection, merges in the provided updates,
-    and upserts the result back to the database.
+    and writes the result back onto that row.
 
     Args:
         collection_id: The unique identifier of the collection to update
@@ -898,7 +913,7 @@ async def update_collection(
         if payload is BODY_TOO_LARGE:
             return body_too_large_error()
         # An unusable body used to raise into the 500 handler; keep that
-        # response — falling through would upsert the record unchanged.
+        # response — falling through would write the record unchanged.
         if not isinstance(payload, dict) or not payload:
             return error(
                 "Error updating collection",
@@ -917,23 +932,27 @@ async def update_collection(
                 status_code=404,
             )
 
-        titles, why = _title_fields(payload)
+        fields, why = _collection_fields(payload)
         if why:
             return error(why, code="INVALID_FIELDS", status_code=400)
-        for field in ("year", "tmdb_id", "tvdb_id", "imdb_id", "folder", "library_name"):
-            if field in payload:
-                existing[field] = payload[field]
-        existing.update(titles)
+        if not fields:
+            return error("No valid fields to update", code="NO_FIELDS", status_code=400)
+        existing.update(fields)
         # In place by id: an upsert keyed on the new title would add a second row.
-        if not db.collection.update_row(collection_id, existing):
+        written = db.collection.update_row(collection_id, existing)
+        updated = db.collection.get_by_id(collection_id)
+        if updated is None:
+            return error(
+                f"Collection {collection_id} not found",
+                code="COLLECTION_NOT_FOUND",
+                status_code=404,
+            )
+        if not written:
             return error(
                 "Another collection in this library already has that title",
                 code="COLLECTION_EXISTS",
                 status_code=409,
             )
-
-        # Fetch the updated record
-        updated = db.collection.get_by_id(collection_id)
 
         return ok("Collection updated successfully", {"collection": updated})
 

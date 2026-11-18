@@ -639,6 +639,7 @@ def test_is_match_both_years_present_and_differ_still_blocks():
         ('"Duna"', []),
         ('[1, "", "Duna"]', ["Duna"]),
         (["Duna", 1], ["Duna"]),
+        pytest.param("[" * 100_000, [], id="deep-nesting"),
     ],
 )
 def test_parse_alternate_titles_keeps_only_string_titles(raw, titles):

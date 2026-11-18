@@ -637,9 +637,7 @@ class PosterRenamerr(ChubModule):
         """is_match()'s reason when a title-lookup poster belongs to ``media``, else ""."""
         if cand.get("season_number") != media.get("season_number"):
             return ""
-        cand_alt_titles = set(
-            json.loads(cand.get("normalized_alternate_titles", "[]") or "[]")
-        )
+        cand_alt_titles = set(parse_alternate_titles(cand.get("normalized_alternate_titles")))
         if (
             cand.get("normalized_title", "") not in all_titles
             and not all_titles & cand_alt_titles

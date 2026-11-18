@@ -1,5 +1,4 @@
 import json
-import sqlite3
 from typing import Any, List, Optional
 
 from .db_base import DatabaseBase
@@ -21,7 +20,7 @@ class CollectionCache(DatabaseBase):
                 record[key] = json.dumps([])
 
     def update_row(self, id: int, record: dict) -> bool:
-        """Write ``record``'s fields onto row ``id`` in place; False when its title is taken in that library and instance."""
+        """Write ``record``'s fields onto row ``id`` in place; False when that row is gone or another holds its key."""
         self._store_json(record)
         columns = (
             "title",
@@ -35,14 +34,20 @@ class CollectionCache(DatabaseBase):
             "folder",
             "library_name",
         )
-        try:
-            self.execute_query(
-                f"UPDATE collections_cache SET {', '.join(c + '=?' for c in columns)} WHERE id=?",
-                (*(record.get(c) for c in columns), id),
-            )
-        except sqlite3.IntegrityError:
-            return False
-        return True
+        # `IS`: the UNIQUE key treats NULL libraries as distinct, so it never refuses a clash there.
+        written = self.execute_query(
+            f"UPDATE collections_cache SET {', '.join(c + '=?' for c in columns)} WHERE id=? AND NOT EXISTS "
+            "(SELECT 1 FROM collections_cache WHERE title IS ? AND library_name IS ? AND instance_name IS ? AND id<>?)",
+            (
+                *(record.get(c) for c in columns),
+                id,
+                record.get("title"),
+                record.get("library_name"),
+                record.get("instance_name"),
+                id,
+            ),
+        )
+        return bool(written)
 
     def upsert(self, record: dict, instance_name: str) -> None:
         """Insert or update a collection record for a given instance."""

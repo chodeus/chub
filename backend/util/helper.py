@@ -1,6 +1,7 @@
 # util/helper.py
 
 import copy
+import html
 import json
 import os
 import re
@@ -12,6 +13,7 @@ from functools import partialmethod
 
 import yaml
 from tqdm import tqdm
+from unidecode import unidecode
 
 from backend.util.constants import (
     folder_year_regex,
@@ -680,14 +682,14 @@ def json_list(value: Any) -> List[Any]:
     if isinstance(value, str):
         try:
             parsed = json.loads(value)
-        except ValueError:
+        except (ValueError, RecursionError):
             return []
         return parsed if isinstance(parsed, list) else []
     return []
 
 
 def parse_alternate_titles(raw: Any) -> List[str]:
-    """The non-empty string titles in a row's ``alternate_titles`` (a list or its JSON)."""
+    """The non-empty strings in an alternate-titles column, raw or normalized (a list or its JSON)."""
     return [t for t in json_list(raw) if isinstance(t, str) and t]
 
 
@@ -763,3 +765,9 @@ def generate_title_variants(title: str) -> Dict[str, List[str]]:
         "alternate_titles": alternate_titles,
         "normalized_alternate_titles": normalized_alternate_titles,
     }
+
+
+def collection_title_fields(title: str) -> Dict[str, Any]:
+    """The title columns collections_cache stores for a Plex collection named ``title``."""
+    plain = unidecode(html.unescape(title))
+    return {"title": plain, "normalized_title": normalize_titles(plain), **generate_title_variants(plain)}

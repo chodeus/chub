@@ -938,7 +938,7 @@ def test_optimize_keeps_the_original_when_the_cache_update_fails(
 
 @pytest.mark.parametrize("stored", ['{"Duna": 1}', '[1, "Duna"]', "not json"])
 def test_rank_candidates_ranks_a_row_with_odd_alternate_titles(db, stored):
-    """A row stored with non-string alternate titles still ranks: only its string titles are looked up."""
+    """A row whose stored alternate titles are not a list of strings still ranks instead of raising."""
     from backend.util.asset_candidates import rank_candidates
 
     _seed_poster(db, "Dune", file="/src/Dune (2021).jpg")
