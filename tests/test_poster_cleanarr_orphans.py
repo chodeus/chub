@@ -788,6 +788,34 @@ def test_execute_orphan_mode_move_renames_through_both_parent_descriptors(
     assert src_fd is not None and dst_fd is not None  # ...against both fds
 
 
+def test_execute_orphan_mode_move_keeps_an_earlier_restore_copy(tmp_path, monkeypatch):
+    allowed = tmp_path / "allowed"
+    restore = allowed / ORPHAN_RESTORE_DIR_NAME
+    restore.mkdir(parents=True)
+    (restore / "orphan.png").write_bytes(b"earlier")
+    f = allowed / "orphan.png"
+    f.write_bytes(b"later")
+    m = _make(allowed)
+    _live(monkeypatch, allowed)
+    res = m._execute_orphan_mode([_orphan_item(f, allowed)], "move", _logger())
+    kept = {p.name: p.read_bytes() for p in restore.iterdir()}
+    assert (res["count"], kept) == (1, {"orphan.png": b"earlier", "orphan (1).png": b"later"})
+
+
+def test_the_kometa_scan_names_each_stale_files_current_folder(db, tmp_path, monkeypatch, no_kometa_cache):
+    assets, _ = _asset_dir(db, tmp_path, monkeypatch)
+    db.media.execute_query(
+        "INSERT INTO media_cache (identity_key, instance_name, folder, tmdb_id, asset_type) VALUES (?,?,?,?,?)",
+        ("d1", "radarr1", "Dune (2021) {tmdb-1}", 1, "movie"),
+    )
+    for name in ("Dune (2021) {tmdb-1}_logo.png", "Dune Part One (2021) {tmdb-1}_logo.png"):
+        (assets / name).write_bytes(b"x")
+    stale = scan_kometa_assets(db, _logger(), force=True)["stale"]
+    assert [(s["name"], s["canonical_folder"]) for s in stale] == [
+        ("Dune Part One (2021) {tmdb-1}_logo.png", "Dune (2021) {tmdb-1}")
+    ]
+
+
 def test_execute_orphan_mode_move_refuses_a_parent_swapped_after_the_check(
     tmp_path, monkeypatch
 ):
@@ -1157,6 +1185,7 @@ def test_stale_removal_drops_the_cached_scan(tmp_path, monkeypatch, no_kometa_ca
         "asset_dir": str(root),
         "name": old.name,
         "canonical": "Gone Show (2018) {tvdb-1}",
+        "canonical_folder": "Gone Show (2018) {tvdb-1}",
         "canonical_present": True,
         "is_dir": True,
         "id": ("tvdb", 1),

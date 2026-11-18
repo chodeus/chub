@@ -754,7 +754,9 @@ const PosterCleanarrPage = () => {
             let b = s.rating_key != null ? byRk.get(String(s.rating_key)) : null;
             if (!b && s.plex_title) b = byTY.get(titleYearKey(s.plex_title, s.plex_year));
             if (!b) {
-                const { title, year } = parseFolderTitleYear(s.canonical || s.name);
+                const { title, year } = parseFolderTitleYear(
+                    s.canonical_folder || s.canonical || s.name
+                );
                 b = byTY.get(titleYearKey(title, year));
             }
             if (b) counts.set(b.bundle_path, (counts.get(b.bundle_path) || 0) + 1);
@@ -1627,7 +1629,8 @@ const PosterCleanarrPage = () => {
                                 <span style={typeBadge}>{unmatchedStale.length}</span>
                                 <span className="text-fg-subtle text-xs">
                                     Renamed asset folders and files whose title isn&apos;t in the
-                                    Plex bundle scan — still cleaned by the Stale pass
+                                    Plex bundle scan — the Stale pass still moves or removes each
+                                    once its current copy is in place
                                 </span>
                             </div>
                             <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>

@@ -23,6 +23,7 @@ from backend.util.constants import (
     tvdb_id_regex,
 )
 from backend.util.database import ChubDB
+from backend.util.file_ops import removing_takes
 from backend.util.helper import create_table
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
@@ -128,14 +129,40 @@ def _live_id(
     return None
 
 
-def _canonical_copy(asset_dir: str, folder: str, suffix: str) -> Optional[str]:
-    """The name ``folder``'s placement has on disk in ``asset_dir``: the folder, or its flat file under any image extension."""
-    if not suffix:
-        return folder if os.path.isdir(os.path.join(asset_dir, folder)) else None
-    base = folder + suffix.rsplit(".", 1)[0]
-    for name in (folder + suffix, *(base + ext for ext in ASSET_IMAGE_EXTS)):
-        if os.path.isfile(os.path.join(asset_dir, name)):
-            return name
+def _ext_key(name: str) -> str:
+    """``name`` with an image extension lower-cased, so ``.PNG`` and ``.png`` meet."""
+    stem, ext = os.path.splitext(name)
+    return stem + ext.lower() if ext.lower() in ASSET_IMAGE_EXTS else name
+
+
+def _flat_folders(name: str, flat: Optional["re.Match[str]"]) -> List[str]:
+    """Every folder name ``name`` can be the placement of: itself, or a flat file's stem cut at each ``_`` of its suffix."""
+    if flat is None:
+        return [name]
+    stem = name[: name.rindex(".")]
+    return [
+        stem[:i]
+        for i in range(flat.start(), len(stem) + 1)
+        if i == len(stem) or stem[i] == "_"
+    ]
+
+
+def _canonical_copy(
+    asset_dir: str, folder: str, suffix: str, stale: str, names: Dict[str, str]
+) -> Optional[str]:
+    """The entry in ``names`` holding ``folder``'s placement (the folder, or its flat file under any image extension), unless removing ``stale`` takes it too."""
+    if suffix:
+        stem = folder + suffix.rsplit(".", 1)[0]
+        keys, is_copy = (
+            [_ext_key(folder + suffix), *(stem + ext for ext in ASSET_IMAGE_EXTS)],
+            os.path.isfile,
+        )
+    else:
+        keys, is_copy = [folder], os.path.isdir
+    for key in keys:
+        path = os.path.join(asset_dir, names[key]) if key in names else None
+        if path and is_copy(path) and not removing_takes(stale, path):
+            return names[key]
     return None
 
 
@@ -154,6 +181,16 @@ def _disk_size(path: str) -> int:
             except OSError:
                 pass  # file vanished mid-walk — don't count it
     return size
+
+
+def _unused_path(path: str, is_dir: bool) -> str:
+    """``path``, or the first free ``<name> (n)`` beside it, so a move never replaces an earlier restore copy."""
+    stem, ext = (path, "") if is_dir else os.path.splitext(path)
+    n = 0
+    while os.path.lexists(path):
+        n += 1
+        path = f"{stem} ({n}){ext}"
+    return path
 
 
 class PosterCleanarr(ChubModule):
@@ -1342,17 +1379,21 @@ class PosterCleanarr(ChubModule):
                 entries = sorted(os.listdir(asset_dir))
             except OSError:
                 continue
+            names = {_ext_key(n): n for n in entries}
             for name in entries:
-                entry = self._stale_entry(asset_dir, name, canonical_by_id)
+                entry = self._stale_entry(asset_dir, name, canonical_by_id, names)
                 if entry is not None:
                     out.append(entry)
         return out
 
     @staticmethod
     def _stale_entry(
-        asset_dir: str, name: str, canonical_by_id: Dict[Tuple[str, int], Set[str]]
+        asset_dir: str,
+        name: str,
+        canonical_by_id: Dict[Tuple[str, int], Set[str]],
+        names: Dict[str, str],
     ) -> Optional[Dict[str, Any]]:
-        """The stale-duplicate entry for one top-level name in ``asset_dir``, or None."""
+        """The stale-duplicate entry for one top-level name in ``asset_dir`` (listed in ``names`` by _ext_key), or None."""
         flat = _FLAT_SUFFIX.search(name) if name.lower().endswith(ASSET_IMAGE_EXTS) else None
         old_folder, suffix = (name[: flat.start()], flat.group()) if flat else (name, "")
         ident = _live_id(old_folder, canonical_by_id)
@@ -1360,14 +1401,22 @@ class PosterCleanarr(ChubModule):
             return None  # no live id match -> orphan-pass territory, not stale
         folders = canonical_by_id[ident]
         full = os.path.join(asset_dir, name)
-        if old_folder in folders or not (os.path.isfile if flat else os.path.isdir)(full):
-            return None  # a canonical copy, or no placement at all
-        copies = [c for c in (_canonical_copy(asset_dir, f, suffix) for f in sorted(folders)) if c]
+        if not folders.isdisjoint(_flat_folders(name, flat)):
+            return None  # a current placement, wherever its suffix starts
+        if not (os.path.isfile if flat else os.path.isdir)(full):
+            return None
+        copies = [
+            (f, c)
+            for f in sorted(folders)
+            if (c := _canonical_copy(asset_dir, f, suffix, full, names))
+        ]
+        folder = copies[0][0] if copies else min(folders)
         return {
             "folder": full,
             "asset_dir": asset_dir,
             "name": name,
-            "canonical": copies[0] if copies else min(folders) + suffix,
+            "canonical": copies[0][1] if copies else folder + suffix,
+            "canonical_folder": folder,
             "canonical_present": bool(copies),
             "is_dir": flat is None,
             "id": ident,
@@ -1403,7 +1452,7 @@ class PosterCleanarr(ChubModule):
                 continue
             if mode == "move":
                 dest_root = os.path.join(d["asset_dir"], ORPHAN_RESTORE_DIR_NAME)
-                dest = os.path.join(dest_root, d["name"])
+                dest = _unused_path(os.path.join(dest_root, d["name"]), d["is_dir"])
                 if self._confined_target(folder, config, logger) is None:
                     continue
                 try:
@@ -1661,7 +1710,7 @@ class PosterCleanarr(ChubModule):
             if mode == "move":
                 dest_root = os.path.join(item["asset_dir"], ORPHAN_RESTORE_DIR_NAME)
                 rel = os.path.relpath(path, item["asset_dir"])
-                dest = os.path.join(dest_root, rel)
+                dest = _unused_path(os.path.join(dest_root, rel), os.path.isdir(path))
                 if self._confined_target(path, config, logger) is None:
                     continue
                 try:
@@ -1999,6 +2048,7 @@ def scan_kometa_assets(
             "plex_year": (match.get(d["id"]) or {}).get("year"),
             "name": d["name"],
             "canonical": d["canonical"],
+            "canonical_folder": d["canonical_folder"],
             "canonical_present": d["canonical_present"],
             "size": d["size"],
             "folder": d["folder"],

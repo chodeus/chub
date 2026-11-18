@@ -220,6 +220,39 @@ describe('Poster Cleanarr — stale folder attribution', () => {
         await screen.findAllByText('(unknown)');
         expect(screen.queryByTitle('Stale duplicate asset folder')).not.toBeInTheDocument();
     });
+
+    it('attributes a stale flat file with no Plex match by its current folder name', async () => {
+        const ANCHORED = {
+            ...GHOST_A,
+            bundle_path: '/plex/Metadata/Movies/r/real.bundle',
+            rating_key: 4242,
+            title: 'Real Movie',
+            year: 2019,
+            variants: [variant('/plex/.../real/only_real', 'only_real')],
+        };
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: {
+                stale: [
+                    {
+                        rating_key: null,
+                        plex_title: '',
+                        plex_year: null,
+                        name: 'Real Film (2019) {tmdb-1}_logo.png',
+                        canonical: 'Real Movie (2019) {tmdb-1}_logo.png',
+                        canonical_folder: 'Real Movie (2019) {tmdb-1}',
+                        canonical_present: true,
+                        size: 10,
+                        folder: '/assets/Real Film (2019) {tmdb-1}_logo.png',
+                    },
+                ],
+                orphans: [],
+            },
+        });
+        scanPayload = payload([ANCHORED, GHOST_A]);
+        render(<PosterCleanarrPage />);
+
+        expect(await screen.findByTitle('Stale duplicate asset folder')).toHaveTextContent('1');
+    });
 });
 
 describe('Poster Cleanarr — persisted tree state', () => {

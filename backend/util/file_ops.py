@@ -116,12 +116,17 @@ def _links_to(link: str, path: str) -> bool:
     return os.path.islink(link) and os.path.realpath(link) == resolve_folder(path)
 
 
+def removing_takes(previous: str, current: str) -> bool:
+    """Whether removing ``previous`` would also take what ``current`` shows: one entry, a link to it, or a case-only twin."""
+    if _same_entry(previous, current) or _links_to(current, previous):
+        return True
+    # A case-insensitive mount (SMB, macOS) sees a case-only rename as one entry.
+    return previous.casefold() == current.casefold() and _same_inode(previous, current)
+
+
 def remove_superseded(previous: Optional[str], current: str, root: str, logger: Any) -> None:
     """Remove the file placed at ``previous`` now that ``current`` replaces it, then its emptied folder; only inside ``root``."""
-    if not previous or _same_entry(previous, current) or _links_to(current, previous):
-        return
-    # A case-insensitive mount (SMB, macOS) sees a case-only rename as one entry: the file just placed.
-    if previous.casefold() == current.casefold() and _same_inode(previous, current):
+    if not previous or removing_takes(previous, current):
         return
     try:
         real_base = os.path.realpath(root)
