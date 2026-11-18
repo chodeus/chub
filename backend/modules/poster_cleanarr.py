@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import threading
 import time
 import zipfile
@@ -147,10 +148,10 @@ def _flat_folders(name: str, flat: Optional["re.Match[str]"]) -> List[str]:
     ]
 
 
-def _canonical_copy(
-    asset_dir: str, folder: str, suffix: str, stale: str, names: Dict[str, str]
-) -> Optional[str]:
-    """The entry in ``names`` holding ``folder``'s placement (the folder, or its flat file under any image extension), unless removing ``stale`` takes it too."""
+def _current_copies(
+    asset_dir: str, folder: str, suffix: str, names: Dict[str, List[str]]
+) -> List[str]:
+    """Paths of ``folder``'s placement on disk: the folder, or its flat file under any image extension."""
     if suffix:
         stem = folder + suffix.rsplit(".", 1)[0]
         keys, is_copy = (
@@ -159,38 +160,26 @@ def _canonical_copy(
         )
     else:
         keys, is_copy = [folder], os.path.isdir
-    for key in keys:
-        path = os.path.join(asset_dir, names[key]) if key in names else None
-        if path and is_copy(path) and not removing_takes(stale, path):
-            return names[key]
-    return None
-
-
-def _first_copy(
-    asset_dir: str, folders: Set[str], suffix: str, stale: str, names: Dict[str, str]
-) -> Optional[Tuple[str, str]]:
-    """(folder, entry) for the first of ``folders`` with a copy under ``suffix`` (see _canonical_copy), or None."""
-    for folder in sorted(folders):
-        copy = _canonical_copy(asset_dir, folder, suffix, stale, names)
-        if copy:
-            return folder, copy
-    return None
+    # An unlisted key is still probed: a case-insensitive mount finds it under another case.
+    entries = dict.fromkeys(e for k in keys for e in names.get(k, [k]))
+    return [p for e in entries if is_copy(p := os.path.join(asset_dir, e))]
 
 
 def _disk_size(path: str) -> int:
-    """Bytes in the file at ``path``, or in every file under the folder at ``path``."""
-    if not os.path.isdir(path):
-        try:
-            return os.path.getsize(path)
-        except OSError:
-            return 0
+    """Bytes in ``path``'s files, skipping links and hard-linked files, whose data another name may still hold."""
+    files = (
+        [os.path.join(r, f) for r, _d, fs in os.walk(path) for f in fs]
+        if os.path.isdir(path) and not os.path.islink(path)
+        else [path]
+    )
     size = 0
-    for r, _d, files in os.walk(path):
-        for f in files:
-            try:
-                size += os.path.getsize(os.path.join(r, f))
-            except OSError:
-                pass  # file vanished mid-walk — don't count it
+    for f in files:
+        try:
+            st = os.lstat(f)
+        except OSError:
+            continue  # vanished mid-walk
+        if not stat.S_ISLNK(st.st_mode) and st.st_nlink == 1:
+            size += st.st_size
     return size
 
 
@@ -1390,7 +1379,9 @@ class PosterCleanarr(ChubModule):
                 entries = sorted(os.listdir(asset_dir))
             except OSError:
                 continue
-            names = {_ext_key(n): n for n in entries}
+            names: Dict[str, List[str]] = {}
+            for n in entries:
+                names.setdefault(_ext_key(n), []).append(n)
             for name in entries:
                 entry = self._stale_entry(asset_dir, name, canonical_by_id, names)
                 if entry is not None:
@@ -1402,7 +1393,7 @@ class PosterCleanarr(ChubModule):
         asset_dir: str,
         name: str,
         canonical_by_id: Dict[Tuple[str, int], Set[str]],
-        names: Dict[str, str],
+        names: Dict[str, List[str]],
     ) -> Optional[Dict[str, Any]]:
         """The stale-duplicate entry for one top-level name in ``asset_dir`` (listed in ``names`` by _ext_key), or None."""
         flat = _FLAT_SUFFIX.search(name) if name.lower().endswith(ASSET_IMAGE_EXTS) else None
@@ -1417,20 +1408,33 @@ class PosterCleanarr(ChubModule):
         if not (os.path.isfile if flat else os.path.isdir)(full):
             return None
         # Each place the suffix can start names another asset: every one needs a current copy.
-        found = [
-            _first_copy(asset_dir, folders, name[len(c) :], full, names) for c in cuts
-        ]
-        gap = next((c for c, hit in zip(cuts, found) if hit is None), None)
-        folder, canonical = (
-            found[0] if gap is None else (min(folders), min(folders) + name[len(gap) :])
+        copies = {
+            cut: [
+                (f, p)
+                for f in sorted(folders)
+                for p in _current_copies(asset_dir, f, name[len(cut) :], names)
+            ]
+            for cut in cuts
+        }
+        # A current name showing this entry (the same entry, or a link to or into it) keeps it.
+        shown = any(
+            removing_takes(full, p) for hits in copies.values() for _f, p in hits
         )
+        gap = next((c for c in cuts if not copies[c]), None)
+        present = not shown and gap is None
+        if present:
+            folder, path = copies[cuts[0]][0]
+            canonical = os.path.basename(path)
+        else:
+            folder = min(folders)
+            canonical = folder + name[len(gap or cuts[0]) :]
         return {
             "folder": full,
             "asset_dir": asset_dir,
             "name": name,
             "canonical": canonical,
             "canonical_folder": folder,
-            "canonical_present": gap is None,
+            "canonical_present": present,
             "is_dir": flat is None,
             "id": ident,
             "size": _disk_size(full),
@@ -1439,7 +1443,7 @@ class PosterCleanarr(ChubModule):
     def _execute_stale_mode(
         self, dupes: List[Dict[str, Any]], mode: str, logger: Logger
     ) -> Dict[str, Any]:
-        """report/move/remove stale duplicates; move/remove keep one whose canonical copy is not on disk yet (the only copy)."""
+        """report/move/remove stale duplicates; move/remove keep one with no separate current copy on disk."""
         count = 0
         total_size = 0
         touched: Set[str] = set()
@@ -1453,8 +1457,8 @@ class PosterCleanarr(ChubModule):
                 continue
             if not d.get("canonical_present"):
                 logger.info(
-                    f"  [STALE KEPT] {folder} — canonical '{d['canonical']}' "
-                    "not staged yet; keeping the only copy"
+                    f"  [STALE KEPT] {folder} — no separate copy of "
+                    f"'{d['canonical']}' on disk; keeping it"
                 )
                 continue
             # Re-read per item, not once per batch: a root dropped from config

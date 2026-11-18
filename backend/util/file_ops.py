@@ -112,12 +112,15 @@ def move_into_place(src: str, dest: str) -> Optional[OSError]:
 
 
 def _links_to(link: str, path: str) -> bool:
-    # A link resolving to the file at path (a carry under symlink): that file may be the only copy.
-    return os.path.islink(link) and os.path.realpath(link) == resolve_folder(path)
+    # A link resolving to path or into its tree (a carry under symlink): that file may be the only copy.
+    if not os.path.islink(link):
+        return False
+    target, root = os.path.realpath(link), resolve_folder(path)
+    return target == root or target.startswith(root + os.sep)
 
 
 def removing_takes(previous: str, current: str) -> bool:
-    """Whether removing ``previous`` would also take what ``current`` shows: one entry, a link to it, or a case-only twin."""
+    """Whether removing ``previous`` would also take what ``current`` shows: one entry, a link to or into it, or a case-only twin."""
     if _same_entry(previous, current) or _links_to(current, previous):
         return True
     # A case-insensitive mount (SMB, macOS) sees a case-only rename as one entry.

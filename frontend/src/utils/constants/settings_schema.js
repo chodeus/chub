@@ -1493,7 +1493,7 @@ const CORE_SETTINGS_SCHEMA = [
                 kind: 'pass',
                 enableField: 'stale_duplicates_enabled',
                 modeField: 'stale_duplicates_mode',
-                note: 'The canonical copy is always kept — the pass only acts on the stale, renamed copy.',
+                note: 'Current copies are always kept — the pass only acts on stale, renamed copies.',
             },
         ],
         fields: [
@@ -1628,7 +1628,7 @@ const CORE_SETTINGS_SCHEMA = [
                 section: 'sources',
                 description: 'Radarr / Sonarr libraries that define which assets are legitimate.',
                 helpText:
-                    "Radarr/Sonarr instances whose libraries define which assets are legitimate — used by BOTH passes below. Orphan flags an asset when it matches none of these libraries (by {tmdb-N}/{tvdb-N} id or title); Stale uses them to resolve each item's canonical folder. Leave empty to fall back to the Plex Bloat 'Plex Instance(s)' selection. The comparison set is read from CHUB's media cache, populated by poster_renamerr — run it first if the cache is stale.",
+                    "Radarr/Sonarr instances whose libraries define which assets are legitimate — used by BOTH passes below. Orphan flags an asset when it matches none of these libraries (by {tmdb-N}/{tvdb-N} id or title); Stale uses them to resolve each item's current folder names. Leave empty to fall back to the Plex Bloat 'Plex Instance(s)' selection. The comparison set is read from CHUB's media cache, populated by poster_renamerr — run it first if the cache is stale.",
             },
             {
                 key: 'orphan_assets_enabled',
@@ -1682,7 +1682,7 @@ const CORE_SETTINGS_SCHEMA = [
                 description:
                     'Find asset folders and files left behind under an old name after a library rename.',
                 helpText:
-                    'Scans the Asset Directories for Kometa asset folders, and flat-layout files named after a folder, whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances to resolve each item’s canonical folder. The canonical copy is always kept. Report lists every non-canonical duplicate; Move and Remove skip one whose canonical folder or file is not on disk yet. A stale folder goes whole, with any file its canonical folder lacks; Move keeps those in .chub_orphan_restore.',
+                    'Scans the Asset Directories for Kometa asset folders, and flat-layout files named after a folder, whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name matches none of the item’s current folder names (one per selected Library Instance; e.g. after a Sonarr/Radarr folder rename). Current copies are always kept. Report lists every non-canonical duplicate; Move and Remove skip one whose current folder or file is not on disk yet, or is only a link to it. A stale folder goes whole, with any file its current folder lacks; Move keeps those in .chub_orphan_restore.',
             },
             {
                 key: 'stale_duplicates_mode',

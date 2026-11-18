@@ -221,40 +221,43 @@ describe('Poster Cleanarr — stale folder attribution', () => {
         expect(screen.queryByTitle('Stale duplicate asset')).not.toBeInTheDocument();
     });
 
-    it('attributes a stale flat file with no Plex match by its current folder name', async () => {
-        const ANCHORED = {
-            ...GHOST_A,
-            bundle_path: '/plex/Metadata/Movies/r/real.bundle',
-            rating_key: 4242,
-            title: 'Real Movie',
-            year: 2019,
-            variants: [variant('/plex/.../real/only_real', 'only_real')],
-        };
-        mockPostersAPI.scanKometaAssets.mockResolvedValue({
-            data: {
-                stale: [
-                    {
-                        rating_key: null,
-                        plex_title: '',
-                        plex_year: null,
-                        name: 'Real Film (2019) {tmdb-1}_logo.png',
-                        canonical: 'Real Movie (2019) {tmdb-1}_logo.png',
-                        canonical_folder: 'Real Movie (2019) {tmdb-1} [x]',
-                        canonical_present: true,
-                        size: 10,
-                        folder: '/assets/Real Film (2019) {tmdb-1}_logo.png',
-                    },
-                ],
-                orphans: [],
-            },
-        });
-        scanPayload = payload([ANCHORED, GHOST_A]);
-        render(<PosterCleanarrPage />);
+    it.each(['Real Movie (2019) {tmdb-1} [x]', 'Real Movie (2019) {tmdb-1} Remastered'])(
+        'attributes a stale flat file with no Plex match by its current folder name (%s)',
+        async canonicalFolder => {
+            const ANCHORED = {
+                ...GHOST_A,
+                bundle_path: '/plex/Metadata/Movies/r/real.bundle',
+                rating_key: 4242,
+                title: 'Real Movie',
+                year: 2019,
+                variants: [variant('/plex/.../real/only_real', 'only_real')],
+            };
+            mockPostersAPI.scanKometaAssets.mockResolvedValue({
+                data: {
+                    stale: [
+                        {
+                            rating_key: null,
+                            plex_title: '',
+                            plex_year: null,
+                            name: 'Real Film (2019) {tmdb-1}_logo.png',
+                            canonical: 'Real Movie (2019) {tmdb-1}_logo.png',
+                            canonical_folder: canonicalFolder,
+                            canonical_present: true,
+                            size: 10,
+                            folder: '/assets/Real Film (2019) {tmdb-1}_logo.png',
+                        },
+                    ],
+                    orphans: [],
+                },
+            });
+            scanPayload = payload([ANCHORED, GHOST_A]);
+            render(<PosterCleanarrPage />);
 
-        const row = (await screen.findByText('Real Movie (2019)')).closest('.flex-1');
-        expect(await within(row).findByTitle('Stale duplicate asset')).toHaveTextContent('1');
-        expect(screen.getAllByTitle('Stale duplicate asset')).toHaveLength(1);
-    });
+            const row = (await screen.findByText('Real Movie (2019)')).closest('.flex-1');
+            expect(await within(row).findByTitle('Stale duplicate asset')).toHaveTextContent('1');
+            expect(screen.getAllByTitle('Stale duplicate asset')).toHaveLength(1);
+        }
+    );
 });
 
 describe('Poster Cleanarr — persisted tree state', () => {

@@ -77,8 +77,8 @@ def test_canonical_folder_map_keys_by_id(db):
     m = _make()
     _seed(db, "sonarr", "Dune Prophecy (2024) {tvdb-367118}", tvdb=367118)
     _seed(db, "radarr", "Inception (2010) {tmdb-27205}", tmdb=27205)
-    # A season row must NOT define the canonical (folder is the same, season set):
-    _seed(db, "sonarr", "Dune Prophecy (2024) {tvdb-367118}", tvdb=367118, season=1)
+    # A season row must NOT add a canonical name:
+    _seed(db, "sonarr", "Dune Prophecy Season (2024) {tvdb-367118}", tvdb=367118, season=1)
     cmap = m._build_canonical_folder_map(db, ["sonarr", "radarr"])
     assert cmap[("tvdb", 367118)] == {"Dune Prophecy (2024) {tvdb-367118}"}
     assert cmap[("tmdb", 27205)] == {"Inception (2010) {tmdb-27205}"}
@@ -466,6 +466,75 @@ def test_stale_move_keeps_an_earlier_restore_copy_of_the_same_name(db, tmp_path,
     res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="move", logger=_logger())
     kept = {p.name: _bytes(p) for p in restore.iterdir()}
     assert (res["count"], kept) == (1, {f"{_OLD}{ext}": b"earlier", f"{_OLD} (1){ext}": b"later"})
+
+
+def test_stale_pass_finds_a_current_folder_listed_under_another_case(db, tmp_path, monkeypatch):
+    (tmp_path / "probe").touch()
+    if not (tmp_path / "PROBE").exists():
+        pytest.skip("needs a case-insensitive filesystem")
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    root.mkdir()
+    upper = _CANON.replace("Prophecy", "PROPHECY")
+    _place(root / upper, True)
+    _place(root / _OLD, True)
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    assert (res["count"], sorted(p.name for p in root.iterdir())) == (1, [upper])
+
+
+def test_stale_pass_keeps_a_folder_a_canonical_link_points_into(db, tmp_path, monkeypatch):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    (root / _OLD).mkdir(parents=True)
+    _place(root / _OLD / "art", True)
+    (root / _CANON).symlink_to(root / _OLD / "art")
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    assert (res["count"], (root / _CANON / "poster.jpg").exists()) == (0, True)
+
+
+def test_stale_pass_keeps_stale_files_that_current_names_link_to(db, tmp_path, monkeypatch):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    root.mkdir()
+    a, b = root / f"{_OLD}.jpg", root / "Dune (2024) {tvdb-367118}.jpg"
+    _place(a, False, b"a")
+    _place(b, False, b"b")
+    (root / f"{_CANON}.jpg").symlink_to(a)
+    (root / f"{_CANON}.png").symlink_to(b)
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    current = [(root / f"{_CANON}{ext}").exists() for ext in (".jpg", ".png")]
+    assert (res["count"], current) == (0, [True, True])
+
+
+@pytest.mark.parametrize(
+    "kind, size", [("file", 4), ("symlink", 0), ("hardlink", 0), ("folder", 4)]
+)
+def test_scan_stale_counts_only_bytes_no_other_name_holds(tmp_path, kind, size):
+    m = _make()
+    root = tmp_path / "assets"
+    root.mkdir()
+    source = tmp_path / "source.jpg"
+    source.write_bytes(b"1234")
+    old = root / ("Old Show {tvdb-1}" if kind == "folder" else "Old Show {tvdb-1}.jpg")
+    if kind == "file":
+        old.write_bytes(b"1234")
+    elif kind == "symlink":
+        old.symlink_to(source)
+    elif kind == "hardlink":
+        os.link(source, old)
+    else:
+        old.mkdir()
+        (old / "logo.png").write_bytes(b"1234")
+        (old / "poster.jpg").symlink_to(source)
+        os.link(source, old / "background.jpg")
+    stale = m._scan_stale_duplicates([str(root)], {("tvdb", 1): {"New Show {tvdb-1}"}})
+    assert [(e["name"], e["size"]) for e in stale] == [(old.name, size)]
 
 
 def _seed_stale_pair(root, canonical="Dune Prophecy (2024) {tvdb-367118}"):

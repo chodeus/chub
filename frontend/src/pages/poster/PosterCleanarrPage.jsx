@@ -155,16 +155,15 @@ async function readKometaAssets(force, token) {
 // ---------------------------------------------------------------------------
 // Stale-duplicate → bundle matching helpers
 // ---------------------------------------------------------------------------
-// A stale asset folder or flat file is identified by its {tvdb/tmdb} id; the scan resolves
-// that to a Plex rating_key + title/year via plex_media_cache. The cached
-// rating_key frequently drifts from the live bundle scan (a re-add/re-match
-// mints a new key), so we match by rating_key first, then fall back to the
-// Plex title+year, then its current folder's parsed title+year.
+// Match by rating_key, then Plex title+year, then the current folder's title+year:
+// the cached rating_key drifts when Plex re-matches an item.
 const normTitle = t => (t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const titleYearKey = (title, year) => `${normTitle(title)}|${year ?? ''}`;
-// Parse "Show Name (2019) {tvdb-123} [x]" → { title: 'Show Name', year: 2019 }.
+// Parse "Show Name (2019) {tvdb-123} Remastered" → { title: 'Show Name', year: 2019 }.
 const parseFolderTitleYear = name => {
-    const noId = (name || '').replace(/(?:\s*(?:\{[^}]*\}|\[[^\]]*\]))+\s*$/, '');
+    const noId = (name || '')
+        .replace(/\s*[{[](?:tmdb|tvdb|imdb)[^}\]]*[}\]].*$/i, '')
+        .replace(/(?:\s*(?:\{[^}]*\}|\[[^\]]*\]))+\s*$/, '');
     const ym = noId.match(/\((\d{4})\)\s*$/);
     const year = ym ? Number(ym[1]) : null;
     const title = noId.replace(/\s*\(\d{4}\)\s*$/, '').trim();
