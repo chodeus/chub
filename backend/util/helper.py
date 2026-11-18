@@ -655,6 +655,11 @@ _MATCH_CONF_ALTERNATE = 0.80
 _MATCH_CONF_LOOSE = 0.55
 
 
+def is_id_match_reason(reason: str) -> bool:
+    """True when an is_match() reason says an id matched."""
+    return (reason or "").lower().startswith("id match")
+
+
 def classify_match(matched: bool, reason: str) -> Tuple[str, float]:
     """Map an is_match() result to a (match_status, match_confidence) pair.
 
@@ -667,7 +672,7 @@ def classify_match(matched: bool, reason: str) -> Tuple[str, float]:
         return "unmatched", 0.0
 
     text = (reason or "").lower()
-    if text.startswith("id match"):
+    if is_id_match_reason(reason):
         return "matched", _MATCH_CONF_ID
     if "loose string comparison" in text:
         return "needs_review", _MATCH_CONF_LOOSE

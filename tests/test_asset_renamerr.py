@@ -195,7 +195,7 @@ def _media(**over):
     return base
 
 
-def _seed(db, image_type, fname, folder="/x"):
+def _seed(db, image_type, fname, folder="/x", priority=0):
     db.poster.upsert(
         {
             "asset_type": "movie",
@@ -209,7 +209,7 @@ def _seed(db, image_type, fname, folder="/x"):
             "folder": "x",
             "file": f"{folder}/{fname}",
             "style": None,
-            "priority": 0,
+            "priority": priority,
             "image_type": image_type,
         }
     )
@@ -278,6 +278,35 @@ def test_source_priority_local_first(db, tmp_path):
     _seed(db, "logo", logo.name, folder=str(tmp_path))
     m = make_module(sources=["local", "fanart"])
     assert m._resolve_source(_media(), db, "logo", False, _fake_fanart()) == ("local", str(logo), None)
+
+
+def test_local_source_falls_back_when_the_winner_file_is_gone(db, tmp_path):
+    """A cached row whose source root is gone yields to the next match still on disk."""
+    logo = tmp_path / "8 A.M. Metro (2023) - Logo.png"
+    logo.write_bytes(b"png")
+    _seed(db, "logo", logo.name, folder=str(tmp_path), priority=0)
+    _seed(db, "logo", logo.name, folder=str(tmp_path / "unmounted"), priority=1)
+    m = make_module(sources=["local"])
+    resolved = m._resolve_source(_media(), db, "logo", False, None)
+    assert resolved == ("local", str(logo), None)
+
+
+def test_local_source_skips_a_title_match_ranked_below_a_gone_id_hit(db, tmp_path):
+    """The id hit outranks the title logo, so with its drive gone fanart is next."""
+    logo = tmp_path / "8 A.M. Metro (2023) - Logo.png"
+    logo.write_bytes(b"png")
+    _seed(db, "logo", logo.name, folder=str(tmp_path), priority=0)
+    db.poster.execute_query("UPDATE poster_cache SET tmdb_id=NULL, imdb_id=NULL")
+    _seed(
+        db,
+        "logo",
+        "8 A.M. Metro (2023) {tmdb-1121330} - Logo.png",
+        folder=str(tmp_path / "unmounted"),
+        priority=1,
+    )
+    m = make_module(sources=["local", "fanart"])
+    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_fanart())
+    assert (src, file) == ("fanart", None) and url
 
 
 def test_source_priority_fanart_first(db):
