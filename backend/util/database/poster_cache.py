@@ -377,7 +377,7 @@ class PosterCache(DatabaseBase):
         conn=None,
         limit: Optional[int] = None,
     ) -> list:
-        """Every poster_cache row carrying the id, in bottom-wins order (CONTRACT, top of file)."""
+        """Rows carrying the id for the given season and types, in bottom-wins order (CONTRACT)."""
         sql = f"SELECT * FROM poster_cache WHERE {id_field}=?"
         params = [id_val]
 
