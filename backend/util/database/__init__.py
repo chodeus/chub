@@ -2,7 +2,7 @@
 
 import sqlite3
 import threading
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from backend.util.paths import get_db_path
 from backend.util.logger import Logger
@@ -401,21 +401,23 @@ class ChubDB:
             )
         return total
 
-    def records_placed_path(self, path: str) -> bool:
-        """True when a poster row, or a live item's asset row, records ``path`` as its placed file; True on a database error."""
-        self._ensure_initialized()
-        checks = (
-            (self.media, "SELECT 1 FROM media_cache WHERE renamed_file=? LIMIT 1"),
-            (self.collection, "SELECT 1 FROM collections_cache WHERE renamed_file=? LIMIT 1"),
-            (
-                self.media_asset_matches,
+    def records_placed_path(self, path: str, own: Optional[Tuple[str, int, str]] = None) -> bool:
+        """True when a poster row, or a live item's asset row other than ``own`` (kind, id, image type), records ``path``; True on a database error."""
+        try:
+            self._ensure_initialized()
+            assets = (
                 "SELECT 1 FROM media_asset_matches m WHERE m.applied_path=? AND ("
                 "(m.target_kind='media' AND m.target_id IN (SELECT id FROM media_cache)) OR "
-                "(m.target_kind='collection' AND m.target_id IN (SELECT id FROM collections_cache))) LIMIT 1",
-            ),
-        )
-        try:
-            return any(table.execute_query(sql, (path,), fetch_one=True) for table, sql in checks)
+                "(m.target_kind='collection' AND m.target_id IN (SELECT id FROM collections_cache)))"
+            )
+            if own:
+                assets += " AND NOT (m.target_kind=? AND m.target_id=? AND m.image_type=?)"
+            checks = (
+                (self.media, "SELECT 1 FROM media_cache WHERE renamed_file=? LIMIT 1", (path,)),
+                (self.collection, "SELECT 1 FROM collections_cache WHERE renamed_file=? LIMIT 1", (path,)),
+                (self.media_asset_matches, assets + " LIMIT 1", (path, *(own or ()))),
+            )
+            return any(table.execute_query(sql, args, fetch_one=True) for table, sql, args in checks)
         except sqlite3.Error as e:
             self.logger.get_adapter("DATABASE").warning(f"Keeping {path}: could not check whether a row records it: {e}")
             return True

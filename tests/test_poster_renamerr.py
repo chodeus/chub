@@ -1613,18 +1613,20 @@ def db(tmp_path, stub_logger):
         yield database
 
 
+@pytest.mark.parametrize("action_type", ["copy", "move"])
 @pytest.mark.parametrize("shared", [True, False], ids=["shared", "own"])
-def test_a_renamed_poster_leaves_the_old_file_only_while_another_row_records_it(tmp_path, db, shared):
+def test_a_renamed_poster_leaves_the_old_file_only_while_another_row_records_it(tmp_path, db, shared, action_type):
     src = tmp_path / "src" / "Dune (2021).jpg"
     src.parent.mkdir()
-    src.write_bytes(b"poster")
+    if action_type == "copy":
+        src.write_bytes(b"poster")  # under move the source is gone: the staged file is carried
     kometa = tmp_path / "kometa"
     old = kometa / "Dune (2021)" / "poster.jpg"
     old.parent.mkdir(parents=True)
     old.write_bytes(b"poster")
     m = make_module()
     m.config = SimpleNamespace(
-        destination_dir=str(kometa), asset_folders=True, dry_run=False, action_type="copy",
+        destination_dir=str(kometa), asset_folders=True, dry_run=False, action_type=action_type,
         run_border_replacerr=False, print_only_renames=False,
     )
     for instance, folder in [("radarr-4k", "Dune (2021) {edition-4K}")] + [("radarr-hd", "Dune (2021)")] * shared:
@@ -1649,18 +1651,22 @@ def test_records_placed_path_reads_collections_and_only_live_items_assets(db, ho
             target_kind="media", target_id=99, image_type="logo", source="local", matched_file=path,
             applied_method="kometa", applied_path=path, match_status="applied",
         )
-    assert db.records_placed_path(path) is recorded
+    found = db.records_placed_path(path)
+    assert found is recorded
 
 
-def test_a_failed_placed_path_check_keeps_the_file(db, monkeypatch, stub_logger):
+@pytest.mark.parametrize("step", ["query", "schema"])
+def test_a_failed_placed_path_check_keeps_the_file(db, monkeypatch, stub_logger, step):
     def locked(*a, **k):
         raise sqlite3.OperationalError("database is locked")
 
-    monkeypatch.setattr(db.media, "execute_query", locked)
-    assert db.records_placed_path("/kometa/Dune (2021)/poster.jpg") is True
-    assert stub_logger.messages["warning"] == [
-        "Keeping /kometa/Dune (2021)/poster.jpg: could not check whether a row records it: database is locked"
-    ]
+    target, name = (db.media, "execute_query") if step == "query" else (db, "_ensure_initialized")
+    monkeypatch.setattr(target, name, locked)
+    kept = db.records_placed_path("/kometa/Dune (2021)/poster.jpg")
+    assert (kept, stub_logger.messages["warning"]) == (
+        True,
+        ["Keeping /kometa/Dune (2021)/poster.jpg: could not check whether a row records it: database is locked"],
+    )
 
 
 def test_remove_superseded_keeps_the_poster_both_paths_name(tmp_path, db):

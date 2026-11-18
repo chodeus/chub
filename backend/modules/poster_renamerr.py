@@ -1093,6 +1093,10 @@ class PosterRenamerr(ChubModule):
             return
         remove_superseded(previous, new_file_path, config.destination_dir, self.logger, db.records_placed_path)
 
+    def _carry_action(self, moved: Optional[str], db: ChubDB) -> str:
+        """The file action, once _record_staged moved our row off ``moved``: a carry copies while another row records it."""
+        return "copy" if moved and db.records_placed_path(moved) else self.config.action_type
+
     def _rename_failed(self, log: Callable[[str], None], message: str) -> None:
         """Log why one poster was not staged, and count it for the Run Summary."""
         log(message)
@@ -1212,7 +1216,7 @@ class PosterRenamerr(ChubModule):
             if (
                 file_ops_enabled
                 and not config.dry_run
-                and not self.process_file(file, new_file_path, config.action_type)
+                and not self.process_file(file, new_file_path, self._carry_action(moved, db))
             ):
                 self._rename_failed(
                     self.logger.warning,

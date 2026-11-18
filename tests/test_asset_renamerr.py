@@ -2398,9 +2398,10 @@ def test_a_case_only_folder_rename_keeps_the_logo_on_a_case_insensitive_mount(db
     assert [p.read_bytes() for p in dest.iterdir()] == [b"png"]
 
 
+@pytest.mark.parametrize("action_type", ["copy", "move"])
 @pytest.mark.parametrize("live", [True, False], ids=["live", "deleted"])
-def test_a_logo_another_item_records_stays_after_a_rename(db, monkeypatch, tmp_path, live):
-    m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path)
+def test_a_logo_another_item_records_stays_after_a_rename(db, monkeypatch, tmp_path, live, action_type):
+    m, dest = _logo_run_then_rename(db, monkeypatch, tmp_path, action_type=action_type)
     other = db.media.execute_query(
         "INSERT INTO media_cache (identity_key, instance_name, folder, asset_type) VALUES (?,?,?,?)",
         ("radarr-4k|Dune (2021)|None", "radarr-4k", "Dune (2021)", "movie"),
