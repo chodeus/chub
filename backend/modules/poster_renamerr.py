@@ -582,19 +582,19 @@ class PosterRenamerr(ChubModule):
             reverse=True,
         )
         candidate, win_reason = passed[0] if passed else (None, "")
-        # Only title-only matches are checked, and beside an id hit (which settles the
-        # title) only their ids; ones contradicting an id hit were dropped above.
-        title_only = [c for c, r in passed if not is_id_match_reason(r)]
+        matched_rows = [c for c, _r in passed]
+        # Beside an id hit (which settles the title) only ids can conflict, across every
+        # match; title-lookup posters contradicting an id hit were dropped above.
         if id_hits:
-            conflicting = PosterRenamerr._ids_disagree(title_only)
+            conflicting = PosterRenamerr._ids_disagree(matched_rows)
         else:
-            conflicting = PosterRenamerr._has_identity_conflict(title_only)
+            conflicting = PosterRenamerr._has_identity_conflict(matched_rows)
         return {
             "candidate": candidate,
             "matched": bool(passed),
             "win_reason": win_reason,
             "conflicting": conflicting,
-            "matched_candidates": [c for c, _reason in passed],
+            "matched_candidates": matched_rows,
             "candidates": candidates,
             "reasons": reasons,
         }

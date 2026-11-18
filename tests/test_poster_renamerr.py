@@ -986,6 +986,52 @@ def test_match_item_title_poster_contradicting_an_id_hit_does_not_win(tmp_path):
         db.__exit__(None, None, None)
 
 
+@pytest.mark.parametrize(
+    "media_year,second_id,expected",
+    [
+        ("2020", "tmdb_id", "needs_review"),
+        ("NULL", "tmdb_id", "needs_review"),
+        ("2020", "tvdb_id", "matched"),
+    ],
+    ids=["two-id-hits", "tmdb-row-on-title", "other-id-fields"],
+)
+def test_match_item_flags_an_id_hit_setting_another_value_for_the_same_id(
+    tmp_path, media_year, second_id, expected
+):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = f"asset_type,title,normalized_title,year,imdb_id,{second_id},file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'movie','Harbor Lights','harborlights',2020,'tt0000101',202,'/a/Harbor Lights (2020).jpg',0",
+        )
+        cols = "asset_type,title,normalized_title,year,tmdb_id,file,priority"
+        _insert_poster(
+            db,
+            cols,
+            "'movie','Harbor Lights','harborlights',2020,101,'/b/Harbor Lights (2020).jpg',1",
+        )
+        media = _insert_media_row(
+            db,
+            "hl",
+            f"'movie','Harbor Lights','harborlights',{media_year},101,NULL,'tt0000101','radarr'",
+        )
+        m.match_item(media, db)
+        row = db.media.get_by_id(media["id"])
+        flagged = [c["file"] for c in json.loads(row["conflict_ids"])]
+        assert (row["original_file"], row["match_status"], flagged) == (
+            "/b/Harbor Lights (2020).jpg",
+            expected,
+            ["/b/Harbor Lights (2020).jpg", "/a/Harbor Lights (2020).jpg"]
+            if expected == "needs_review"
+            else [],
+        )
+    finally:
+        db.__exit__(None, None, None)
+
+
 def test_find_asset_candidate_queries_each_title_prefix_once(tmp_path, monkeypatch):
     m = make_module()
     db = _open_db(tmp_path, m.logger)
