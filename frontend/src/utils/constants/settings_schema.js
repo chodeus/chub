@@ -1682,7 +1682,7 @@ const CORE_SETTINGS_SCHEMA = [
                 description:
                     'Find asset folders and files left behind under an old name after a library rename.',
                 helpText:
-                    'Scans the Asset Directories for Kometa asset folders, and flat-layout files named after a folder, whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances to resolve each item’s canonical folder. The canonical copy is always kept. Report lists every non-canonical duplicate; Move and Remove skip one whose canonical copy is not staged yet, so the only copy is never deleted.',
+                    'Scans the Asset Directories for Kometa asset folders, and flat-layout files named after a folder, whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances to resolve each item’s canonical folder. The canonical copy is always kept. Report lists every non-canonical duplicate; Move and Remove skip one whose canonical folder or file is not on disk yet. A stale folder goes whole, with any file its canonical folder lacks; Move keeps those in .chub_orphan_restore.',
             },
             {
                 key: 'stale_duplicates_mode',
