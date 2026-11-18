@@ -287,11 +287,8 @@ def test_local_source_falls_back_when_the_winner_file_is_gone(db, tmp_path):
     _seed(db, "logo", logo.name, folder=str(tmp_path), priority=0)
     _seed(db, "logo", logo.name, folder=str(tmp_path / "unmounted"), priority=1)
     m = make_module(sources=["local"])
-    assert m._resolve_source(_media(), db, "logo", False, None) == (
-        "local",
-        str(logo),
-        None,
-    )
+    resolved = m._resolve_source(_media(), db, "logo", False, None)
+    assert resolved == ("local", str(logo), None)
 
 
 def test_local_source_skips_a_title_match_ranked_below_a_gone_id_hit(db, tmp_path):

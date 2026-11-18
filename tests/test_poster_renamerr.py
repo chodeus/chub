@@ -1032,6 +1032,38 @@ def test_match_item_flags_an_id_hit_setting_another_value_for_the_same_id(
         db.__exit__(None, None, None)
 
 
+def test_match_item_keeps_a_rival_ranked_past_five_in_conflict_ids(tmp_path):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        cols = "asset_type,title,normalized_title,year,imdb_id,tmdb_id,file,priority"
+        for p in range(6, 11):
+            _insert_poster(
+                db,
+                cols,
+                f"'movie','Harbor Lights','harborlights',2020,NULL,101,'/d{p}/Harbor Lights (2020).jpg',{p}",
+            )
+        _insert_poster(
+            db,
+            cols,
+            "'movie','Harbor Lights','harborlights',2020,'tt0000101',202,'/d0/Harbor Lights (2020).jpg',0",
+        )
+        media = _insert_media_row(
+            db,
+            "hl",
+            "'movie','Harbor Lights','harborlights','2020',101,NULL,'tt0000101','radarr'",
+        )
+        m.match_item(media, db)
+        row = db.media.get_by_id(media["id"])
+        flagged = [c["file"].split("/")[1] for c in json.loads(row["conflict_ids"])]
+        assert (row["match_status"], flagged) == (
+            "needs_review",
+            ["d10", "d9", "d8", "d7", "d0"],
+        )
+    finally:
+        db.__exit__(None, None, None)
+
+
 def test_find_asset_candidate_queries_each_title_prefix_once(tmp_path, monkeypatch):
     m = make_module()
     db = _open_db(tmp_path, m.logger)

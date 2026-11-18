@@ -480,6 +480,24 @@ class PosterRenamerr(ChubModule):
         }
 
     @staticmethod
+    def _review_rows(matched: list, limit: int = 5) -> list:
+        """Up to ``limit`` matches in rank order, first keeping each row that adds a new id value or title."""
+        seen, firsts = set(), []
+        for c in matched:
+            keys = {
+                (f, v)
+                for f in _IDENTITY_ID_FIELDS
+                for v in PosterRenamerr._distinct_ids([c], f)
+            }
+            keys.add(("title", c.get("normalized_title") or ""))
+            if not keys <= seen:
+                firsts.append(c)
+                seen |= keys
+        keep = firsts[:limit]
+        keep += [c for c in matched if c not in keep][: limit - len(keep)]
+        return [c for c in matched if c in keep]
+
+    @staticmethod
     def _contradicts_id_hits(poster: dict, id_hits: list) -> bool:
         """True when an id ``poster`` sets is also set on the id hits, to other values only."""
         for field in _IDENTITY_ID_FIELDS:
@@ -701,7 +719,7 @@ class PosterRenamerr(ChubModule):
                         "imdb_id": c.get("imdb_id"),
                         "tvdb_id": c.get("tvdb_id"),
                     }
-                    for c in matched_candidates[:5]
+                    for c in PosterRenamerr._review_rows(matched_candidates)
                 ]
             )
 
