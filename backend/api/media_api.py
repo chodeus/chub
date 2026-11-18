@@ -844,11 +844,17 @@ async def create_collection(
                 "Field 'title' is required", code="MISSING_TITLE", status_code=400
             )
 
-        instance_name = payload.get("instance_name")
-        if not instance_name:
+        if "instance_name" not in payload:
             return error(
                 "Field 'instance_name' is required",
                 code="MISSING_INSTANCE",
+                status_code=400,
+            )
+        instance_name = payload["instance_name"]
+        if not _is_text(instance_name):
+            return error(
+                "Field 'instance_name' must be a non-empty string",
+                code="INVALID_FIELDS",
                 status_code=400,
             )
 

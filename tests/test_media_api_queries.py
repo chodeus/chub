@@ -491,8 +491,9 @@ def test_create_collection_stores_the_title_columns_a_sync_stores(tmp_path, titl
     [
         ({"instance_name": "plex1", "library_name": "Movies"}, "MISSING_TITLE"),
         ({"title": "Marvel", "instance_name": "plex1"}, "MISSING_LIBRARY"),
+        ({"title": "Marvel", "library_name": "Movies"}, "MISSING_INSTANCE"),
     ],
-    ids=["no-title", "no-library"],
+    ids=["no-title", "no-library", "no-instance"],
 )
 def test_create_collection_refuses_a_body_missing_a_key_field(db, body, code):
     resp = _client(db).post("/api/media/collections", json=body)
@@ -511,6 +512,8 @@ def test_create_collection_refuses_a_body_missing_a_key_field(db, body, code):
         {"title": "&#32;"},
         {"title": "\U0001F600"},
         {"library_name": ""},
+        {"instance_name": {"name": "plex1"}},
+        {"instance_name": " "},
         {"year": [2008]},
         {"year": True},
         {"tmdb_id": 2**63},
@@ -526,6 +529,8 @@ def test_create_collection_refuses_a_body_missing_a_key_field(db, body, code):
         "entity-blank",
         "emoji-only",
         "blank-library",
+        "object-instance",
+        "blank-instance",
         "list-year",
         "bool-year",
         "huge-id",
