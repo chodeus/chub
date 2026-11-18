@@ -191,7 +191,7 @@ describe('Poster Cleanarr — stale folder attribution', () => {
         render(<PosterCleanarrPage />);
 
         // The pill renders "⧉ 1" only on the row that owns the stale folder.
-        expect(await screen.findByTitle('Stale duplicate asset folder')).toHaveTextContent('1');
+        expect(await screen.findByTitle('Stale duplicate asset')).toHaveTextContent('1');
     });
 
     it('does not attribute an unmatchable stale folder to an arbitrary unanchored bundle', async () => {
@@ -218,7 +218,7 @@ describe('Poster Cleanarr — stale folder attribution', () => {
         render(<PosterCleanarrPage />);
 
         await screen.findAllByText('(unknown)');
-        expect(screen.queryByTitle('Stale duplicate asset folder')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Stale duplicate asset')).not.toBeInTheDocument();
     });
 
     it('attributes a stale flat file with no Plex match by its current folder name', async () => {
@@ -239,7 +239,7 @@ describe('Poster Cleanarr — stale folder attribution', () => {
                         plex_year: null,
                         name: 'Real Film (2019) {tmdb-1}_logo.png',
                         canonical: 'Real Movie (2019) {tmdb-1}_logo.png',
-                        canonical_folder: 'Real Movie (2019) {tmdb-1}',
+                        canonical_folder: 'Real Movie (2019) {tmdb-1} [x]',
                         canonical_present: true,
                         size: 10,
                         folder: '/assets/Real Film (2019) {tmdb-1}_logo.png',
@@ -251,7 +251,9 @@ describe('Poster Cleanarr — stale folder attribution', () => {
         scanPayload = payload([ANCHORED, GHOST_A]);
         render(<PosterCleanarrPage />);
 
-        expect(await screen.findByTitle('Stale duplicate asset folder')).toHaveTextContent('1');
+        const row = (await screen.findByText('Real Movie (2019)')).closest('.flex-1');
+        expect(await within(row).findByTitle('Stale duplicate asset')).toHaveTextContent('1');
+        expect(screen.getAllByTitle('Stale duplicate asset')).toHaveLength(1);
     });
 });
 

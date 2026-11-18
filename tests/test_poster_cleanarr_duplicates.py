@@ -335,6 +335,7 @@ def test_scan_stale_names_a_flat_files_copy_after_the_canonical_id_tag(tmp_path)
     root.mkdir()
     canonical = "Dune Prophecy (2024) {tvdb-1} [x]"
     (root / f"{canonical}_logo.png").write_bytes(b"x")
+    (root / f"{canonical}.jpg").write_bytes(b"x")
     (root / "Dune (2024) {tvdb-1}_logo.png").write_bytes(b"x")
     stale = m._scan_stale_duplicates([str(root)], {("tvdb", 1): {canonical}})
     assert [(e["name"], e["canonical"], e["canonical_folder"], e["canonical_present"]) for e in stale] == [
@@ -391,6 +392,21 @@ def test_scan_stale_keeps_a_file_named_for_a_current_folder_that_ends_like_a_suf
         (root / name).write_bytes(b"x")
     folders = {"Show {tvdb-1}_logo", "Renamed Show {tvdb-1}"}
     assert m._scan_stale_duplicates([str(root)], {("tvdb", 1): folders}) == []
+
+
+@pytest.mark.parametrize("current_poster", [False, True])
+def test_scan_stale_needs_a_current_copy_for_each_asset_an_ambiguous_name_can_be(tmp_path, current_poster):
+    m = _make()
+    root = tmp_path / "assets"
+    root.mkdir()
+    names = ["Old Show {tvdb-1}_logo.jpg", "New Show {tvdb-1}_logo.png"] + ["New Show {tvdb-1}.jpg"] * current_poster
+    for name in names:
+        (root / name).write_bytes(b"x")
+    stale = m._scan_stale_duplicates([str(root)], {("tvdb", 1): {"New Show {tvdb-1}"}})
+    want = "New Show {tvdb-1}_logo.png" if current_poster else "New Show {tvdb-1}.jpg"
+    assert [(e["name"], e["canonical"], e["canonical_present"]) for e in stale] == [
+        ("Old Show {tvdb-1}_logo.jpg", want, current_poster)
+    ]
 
 
 def _place(path, is_dir, data=b"x"):

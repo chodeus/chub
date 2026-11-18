@@ -155,16 +155,16 @@ async function readKometaAssets(force, token) {
 // ---------------------------------------------------------------------------
 // Stale-duplicate → bundle matching helpers
 // ---------------------------------------------------------------------------
-// A stale asset folder is identified by its {tvdb/tmdb} id; the scan resolves
+// A stale asset folder or flat file is identified by its {tvdb/tmdb} id; the scan resolves
 // that to a Plex rating_key + title/year via plex_media_cache. The cached
 // rating_key frequently drifts from the live bundle scan (a re-add/re-match
 // mints a new key), so we match by rating_key first, then fall back to the
-// Plex title+year, then the folder's own parsed title+year.
+// Plex title+year, then its current folder's parsed title+year.
 const normTitle = t => (t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const titleYearKey = (title, year) => `${normTitle(title)}|${year ?? ''}`;
-// Parse "Show Name (2019) {tvdb-123}" → { title: 'Show Name', year: 2019 }.
+// Parse "Show Name (2019) {tvdb-123} [x]" → { title: 'Show Name', year: 2019 }.
 const parseFolderTitleYear = name => {
-    const noId = (name || '').replace(/\s*\{[^}]*\}\s*$/, '');
+    const noId = (name || '').replace(/(?:\s*(?:\{[^}]*\}|\[[^\]]*\]))+\s*$/, '');
     const ym = noId.match(/\((\d{4})\)\s*$/);
     const year = ym ? Number(ym[1]) : null;
     const title = noId.replace(/\s*\(\d{4}\)\s*$/, '').trim();
@@ -734,8 +734,8 @@ const PosterCleanarrPage = () => {
         return m;
     }, [bundles]);
 
-    // Attribute each stale folder to a bundle: rating_key first, then Plex
-    // title+year, then the folder's own parsed title+year. Folders that match
+    // Attribute each stale entry to a bundle: rating_key first, then Plex
+    // title+year, then its current folder's parsed title+year. Entries that match
     // no bundle (no poster row exists, or the title isn't in Plex) are surfaced
     // separately so they aren't silently dropped.
     const { staleByBundle, unmatchedStale } = useMemo(() => {
@@ -1978,7 +1978,7 @@ const BundleTreeRow = ({
                         </span>
                         {bloatCount > 0 && <span style={bloatPill}>● {bloatCount}</span>}
                         {staleCount > 0 && (
-                            <span style={stalePill} title="Stale duplicate asset folder">
+                            <span style={stalePill} title="Stale duplicate asset">
                                 ⧉ {staleCount}
                             </span>
                         )}

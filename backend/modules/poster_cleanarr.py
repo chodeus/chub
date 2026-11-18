@@ -166,6 +166,17 @@ def _canonical_copy(
     return None
 
 
+def _first_copy(
+    asset_dir: str, folders: Set[str], suffix: str, stale: str, names: Dict[str, str]
+) -> Optional[Tuple[str, str]]:
+    """(folder, entry) for the first of ``folders`` with a copy under ``suffix`` (see _canonical_copy), or None."""
+    for folder in sorted(folders):
+        copy = _canonical_copy(asset_dir, folder, suffix, stale, names)
+        if copy:
+            return folder, copy
+    return None
+
+
 def _disk_size(path: str) -> int:
     """Bytes in the file at ``path``, or in every file under the folder at ``path``."""
     if not os.path.isdir(path):
@@ -1395,29 +1406,31 @@ class PosterCleanarr(ChubModule):
     ) -> Optional[Dict[str, Any]]:
         """The stale-duplicate entry for one top-level name in ``asset_dir`` (listed in ``names`` by _ext_key), or None."""
         flat = _FLAT_SUFFIX.search(name) if name.lower().endswith(ASSET_IMAGE_EXTS) else None
-        old_folder, suffix = (name[: flat.start()], flat.group()) if flat else (name, "")
-        ident = _live_id(old_folder, canonical_by_id)
+        ident = _live_id(name[: flat.start()] if flat else name, canonical_by_id)
         if ident is None:
             return None  # no live id match -> orphan-pass territory, not stale
         folders = canonical_by_id[ident]
         full = os.path.join(asset_dir, name)
-        if not folders.isdisjoint(_flat_folders(name, flat)):
+        cuts = _flat_folders(name, flat)
+        if not folders.isdisjoint(cuts):
             return None  # a current placement, wherever its suffix starts
         if not (os.path.isfile if flat else os.path.isdir)(full):
             return None
-        copies = [
-            (f, c)
-            for f in sorted(folders)
-            if (c := _canonical_copy(asset_dir, f, suffix, full, names))
+        # Each place the suffix can start names another asset: every one needs a current copy.
+        found = [
+            _first_copy(asset_dir, folders, name[len(c) :], full, names) for c in cuts
         ]
-        folder = copies[0][0] if copies else min(folders)
+        gap = next((c for c, hit in zip(cuts, found) if hit is None), None)
+        folder, canonical = (
+            found[0] if gap is None else (min(folders), min(folders) + name[len(gap) :])
+        )
         return {
             "folder": full,
             "asset_dir": asset_dir,
             "name": name,
-            "canonical": copies[0][1] if copies else folder + suffix,
+            "canonical": canonical,
             "canonical_folder": folder,
-            "canonical_present": bool(copies),
+            "canonical_present": gap is None,
             "is_dir": flat is None,
             "id": ident,
             "size": _disk_size(full),
