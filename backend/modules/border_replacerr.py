@@ -209,9 +209,12 @@ class BorderReplacerr(ChubModule):
         os.close(fd)
         try:
             out_img.save(tmp_path)
-            # shallow=False: never trust a size+mtime match over the bytes.
-            if not os.path.exists(renamed_file) or not filecmp.cmp(
-                renamed_file, tmp_path, shallow=False
+            # shallow=False: never trust a size+mtime match over the bytes; a link is
+            # replaced even when its target matches.
+            if (
+                not os.path.exists(renamed_file)
+                or os.path.islink(renamed_file)
+                or not filecmp.cmp(renamed_file, tmp_path, shallow=False)
             ):
                 os.replace(tmp_path, renamed_file)
                 return True

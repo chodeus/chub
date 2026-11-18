@@ -758,6 +758,23 @@ def test_a_bordered_poster_a_link_replaced_is_bordered_again(tmp_path, monkeypat
     assert (dest.is_symlink(), dest.read_bytes() == bordered) == (False, True)
 
 
+def test_a_link_to_the_bordered_bytes_is_replaced_by_a_file(tmp_path, monkeypatch):
+    br, dest_dir, by_id = _subset_harness(tmp_path, monkeypatch)
+    manifest = {"media_cache": [1], "collections_cache": []}
+    br.run(manifest, process_all=False)
+    dest = dest_dir / "inman.jpg"
+    twin = tmp_path / "twin.jpg"
+    twin.write_bytes(dest.read_bytes())
+    dest.unlink()
+    dest.symlink_to(twin)
+    br.run(manifest, process_all=False)
+    assert (dest.is_symlink(), dest.read_bytes(), twin.exists()) == (
+        False,
+        twin.read_bytes(),
+        True,
+    )
+
+
 def test_a_second_refresh_does_not_delete_the_first_runs_previews(
     tmp_path, monkeypatch
 ):
