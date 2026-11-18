@@ -77,11 +77,11 @@ def test_canonical_folder_map_keys_by_id(db):
     m = _make()
     _seed(db, "sonarr", "Dune Prophecy (2024) {tvdb-367118}", tvdb=367118)
     _seed(db, "radarr", "Inception (2010) {tmdb-27205}", tmdb=27205)
-    # A season row must NOT define the canonical (folder is the same, season set):
-    _seed(db, "sonarr", "Dune Prophecy (2024) {tvdb-367118}", tvdb=367118, season=1)
+    # A season row must NOT add a canonical name:
+    _seed(db, "sonarr", "Dune Prophecy Season (2024) {tvdb-367118}", tvdb=367118, season=1)
     cmap = m._build_canonical_folder_map(db, ["sonarr", "radarr"])
-    assert cmap[("tvdb", 367118)] == "Dune Prophecy (2024) {tvdb-367118}"
-    assert cmap[("tmdb", 27205)] == "Inception (2010) {tmdb-27205}"
+    assert cmap[("tvdb", 367118)] == {"Dune Prophecy (2024) {tvdb-367118}"}
+    assert cmap[("tmdb", 27205)] == {"Inception (2010) {tmdb-27205}"}
 
 
 def test_canonical_folder_map_respects_instances(db):
@@ -100,7 +100,7 @@ def test_scan_stale_flags_wrong_named_folder(tmp_path):
     old.mkdir(parents=True)
     (old / "poster.jpg").write_bytes(b"x")
     (old / "Season01.jpg").write_bytes(b"yy")
-    cmap = {("tvdb", 367118): "Dune Prophecy (2024) {tvdb-367118}"}
+    cmap = {("tvdb", 367118): {"Dune Prophecy (2024) {tvdb-367118}"}}
     stale = m._scan_stale_duplicates([str(root)], cmap)
     assert len(stale) == 1
     e = stale[0]
@@ -118,7 +118,7 @@ def test_scan_stale_skips_canonical_folder(tmp_path):
     good = root / "Dune Prophecy (2024) {tvdb-367118}"
     good.mkdir(parents=True)
     (good / "poster.jpg").write_bytes(b"x")
-    cmap = {("tvdb", 367118): "Dune Prophecy (2024) {tvdb-367118}"}
+    cmap = {("tvdb", 367118): {"Dune Prophecy (2024) {tvdb-367118}"}}
     assert m._scan_stale_duplicates([str(root)], cmap) == []
 
 
@@ -128,7 +128,7 @@ def test_scan_stale_ignores_unknown_id(tmp_path):
     folder = root / "Some Show (2020) {tvdb-999}"
     folder.mkdir(parents=True)
     (folder / "poster.jpg").write_bytes(b"x")
-    assert m._scan_stale_duplicates([str(root)], {("tvdb", 1): "X"}) == []
+    assert m._scan_stale_duplicates([str(root)], {("tvdb", 1): {"X"}}) == []
 
 
 def test_scan_stale_marks_canonical_present(tmp_path):
@@ -138,7 +138,7 @@ def test_scan_stale_marks_canonical_present(tmp_path):
     old = root / "Dune - Prophecy (2024) {tvdb-367118}"
     old.mkdir(parents=True)
     (old / "poster.jpg").write_bytes(b"x")
-    cmap = {("tvdb", 367118): "Dune Prophecy (2024) {tvdb-367118}"}
+    cmap = {("tvdb", 367118): {"Dune Prophecy (2024) {tvdb-367118}"}}
     stale = m._scan_stale_duplicates([str(root)], cmap)
     assert len(stale) == 1
     assert stale[0]["canonical_present"] is True
@@ -159,6 +159,7 @@ def test_execute_stale_remove_deletes_old_folder(tmp_path, monkeypatch):
             "name": old.name,
             "canonical": "Dune Prophecy (2024) {tvdb-1}",
             "canonical_present": True,
+            "is_dir": True,
             "id": ("tvdb", 1),
             "size": 1,
         }
@@ -184,6 +185,7 @@ def test_execute_stale_remove_keeps_only_copy(tmp_path, monkeypatch):
             "name": old.name,
             "canonical": "Dune Prophecy (2024) {tvdb-1}",
             "canonical_present": False,
+            "is_dir": True,
             "id": ("tvdb", 1),
             "size": 1,
         }
@@ -207,6 +209,7 @@ def test_execute_stale_report_deletes_nothing(tmp_path, monkeypatch):
             "name": old.name,
             "canonical": "Dune Prophecy (2024) {tvdb-1}",
             "canonical_present": True,
+            "is_dir": True,
             "id": ("tvdb", 1),
             "size": 1,
         }
@@ -236,6 +239,7 @@ def test_execute_stale_move_moves_folder(tmp_path, monkeypatch):
             "name": old.name,
             "canonical": canonical_name,
             "canonical_present": True,
+            "is_dir": True,
             "id": ("tvdb", 1),
             "size": 1,
         }
@@ -255,8 +259,8 @@ def test_scan_stale_both_ids_resolves_via_tvdb(db, tmp_path):
     tvdb_canonical = "Show (2024) {tvdb-1}"
     tmdb_canonical = "Show (2024) {tmdb-2}"
     cmap = {
-        ("tvdb", 1): tvdb_canonical,
-        ("tmdb", 2): tmdb_canonical,
+        ("tvdb", 1): {tvdb_canonical},
+        ("tmdb", 2): {tmdb_canonical},
     }
     root = tmp_path / "assets"
     # Folder name carries BOTH ids but a different name (stale for both)
@@ -301,6 +305,236 @@ def test_run_stale_pass_reports(db, tmp_path, monkeypatch):
         logger=_logger(),
     )
     assert res["count"] == 1
+
+
+_OLD = "Dune - Prophecy (2024) {tvdb-367118}"
+_CANON = "Dune Prophecy (2024) {tvdb-367118}"
+
+
+@pytest.mark.parametrize("mode", ["move", "remove"])
+def test_stale_pass_clears_flat_files_under_an_old_folder_name(db, tmp_path, monkeypatch, mode):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    root.mkdir()
+    untouched = [f"{_OLD}.nfo", f"{_OLD}_Season01.jpg", "No Id (2020).jpg", "Other (2020) {tvdb-9}.jpg"]
+    for name in [f"{_CANON}.jpg", f"{_CANON}_logo.png", f"{_OLD}.jpg", f"{_OLD}_logo.png", *untouched]:
+        (root / name).write_bytes(b"x")
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode=mode, logger=_logger())
+    restore = root / ORPHAN_RESTORE_DIR_NAME
+    left = sorted(p.name for p in root.iterdir() if p != restore)
+    moved = sorted(p.name for p in restore.iterdir()) if restore.exists() else []
+    assert (res["count"], left) == (2, sorted([f"{_CANON}.jpg", f"{_CANON}_logo.png", *untouched]))
+    assert moved == ([f"{_OLD}.jpg", f"{_OLD}_logo.png"] if mode == "move" else [])
+
+
+def test_scan_stale_names_a_flat_files_copy_after_the_canonical_id_tag(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    root.mkdir()
+    canonical = "Dune Prophecy (2024) {tvdb-1} [x]"
+    (root / f"{canonical}_logo.png").write_bytes(b"x")
+    (root / f"{canonical}.jpg").write_bytes(b"x")
+    (root / "Dune (2024) {tvdb-1}_logo.png").write_bytes(b"x")
+    stale = m._scan_stale_duplicates([str(root)], {("tvdb", 1): {canonical}})
+    assert [(e["name"], e["canonical"], e["canonical_folder"], e["canonical_present"]) for e in stale] == [
+        ("Dune (2024) {tvdb-1}_logo.png", f"{canonical}_logo.png", canonical, True)
+    ]
+
+
+def test_scan_stale_reads_the_folder_name_before_the_placement_suffix(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    root.mkdir()
+    canon = "Dune Prophecy (2024) {tvdb-1}"
+    old = "Dune (2024) {tvdb-1} {imdb-tt9}"
+    for name in [f"{canon}.png", f"{canon}_logo.png", f"{canon}_Season01_logo.png", f"{old}.jpg", f"{old}_logo.png"]:
+        (root / name).write_bytes(b"x")
+    stale = m._scan_stale_duplicates([str(root)], {("tvdb", 1): {canon}})
+    assert [(e["name"], e["canonical"], e["canonical_present"]) for e in stale] == [
+        (f"{old}.jpg", f"{canon}.png", True),
+        (f"{old}_logo.png", f"{canon}_logo.png", True),
+    ]
+
+
+def test_stale_pass_keeps_each_instances_folder_for_one_id(db, tmp_path, monkeypatch):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    _seed(db, "sonarr-4k", _OLD, tvdb=367118)
+    root = tmp_path / "assets"
+    root.mkdir()
+    for folder in (_CANON, _OLD):
+        _place(root / folder, True)
+        _place(root / f"{folder}.jpg", False)
+    (root / "Dune Gone (2024) {tvdb-367118}.jpg").write_bytes(b"x")
+    res = m._run_stale_pass(db=db, instances=["sonarr", "sonarr-4k"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    left = sorted(p.name for p in root.iterdir())
+    assert (res["count"], left) == (1, sorted([_CANON, f"{_CANON}.jpg", _OLD, f"{_OLD}.jpg"]))
+
+
+def test_scan_stale_finds_the_canonical_copy_under_an_upper_case_extension(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    root.mkdir()
+    for name in ("Dune (2024) {tvdb-1}.jpg", "Dune Prophecy (2024) {tvdb-1}.PNG"):
+        (root / name).write_bytes(b"x")
+    stale = m._scan_stale_duplicates([str(root)], {("tvdb", 1): {"Dune Prophecy (2024) {tvdb-1}"}})
+    assert [(e["canonical"], e["canonical_present"]) for e in stale] == [("Dune Prophecy (2024) {tvdb-1}.PNG", True)]
+
+
+def test_scan_stale_keeps_a_file_named_for_a_current_folder_that_ends_like_a_suffix(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    root.mkdir()
+    for name in ("Show {tvdb-1}_logo.jpg", "Renamed Show {tvdb-1}_logo.jpg"):
+        (root / name).write_bytes(b"x")
+    folders = {"Show {tvdb-1}_logo", "Renamed Show {tvdb-1}"}
+    assert m._scan_stale_duplicates([str(root)], {("tvdb", 1): folders}) == []
+
+
+@pytest.mark.parametrize("current_poster", [False, True])
+def test_scan_stale_needs_a_current_copy_for_each_asset_an_ambiguous_name_can_be(tmp_path, current_poster):
+    m = _make()
+    root = tmp_path / "assets"
+    root.mkdir()
+    names = ["Old Show {tvdb-1}_logo.jpg", "New Show {tvdb-1}_logo.png"] + ["New Show {tvdb-1}.jpg"] * current_poster
+    for name in names:
+        (root / name).write_bytes(b"x")
+    stale = m._scan_stale_duplicates([str(root)], {("tvdb", 1): {"New Show {tvdb-1}"}})
+    want = "New Show {tvdb-1}_logo.png" if current_poster else "New Show {tvdb-1}.jpg"
+    assert [(e["name"], e["canonical"], e["canonical_present"]) for e in stale] == [
+        ("Old Show {tvdb-1}_logo.jpg", want, current_poster)
+    ]
+
+
+def _place(path, is_dir, data=b"x"):
+    """A flat file, or a folder holding poster.jpg, at ``path`` with ``data``."""
+    if is_dir:
+        path.mkdir()
+        path = path / "poster.jpg"
+    path.write_bytes(data)
+
+
+def _bytes(path):
+    """What ``path`` holds: a flat file's bytes, or its folder's poster.jpg."""
+    return (path / "poster.jpg" if path.is_dir() else path).read_bytes()
+
+
+@pytest.mark.parametrize("is_dir", [False, True])
+def test_stale_pass_keeps_the_copy_a_canonical_link_points_at(db, tmp_path, monkeypatch, is_dir):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    root.mkdir()
+    ext = "" if is_dir else ".jpg"
+    _place(root / f"{_OLD}{ext}", is_dir)
+    (root / f"{_CANON}{ext}").symlink_to(root / f"{_OLD}{ext}")
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    assert (res["count"], _bytes(root / f"{_CANON}{ext}")) == (0, b"x")
+
+
+def test_stale_pass_keeps_a_case_only_rename_on_a_case_insensitive_mount(db, tmp_path, monkeypatch):
+    (tmp_path / "probe").touch()
+    if not (tmp_path / "PROBE").exists():
+        pytest.skip("needs a case-insensitive filesystem")
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON.replace("Prophecy", "PROPHECY"), tvdb=367118)
+    root = tmp_path / "assets"
+    root.mkdir()
+    _place(root / _CANON, True)
+    _place(root / f"{_CANON}.jpg", False)
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    assert (res["count"], sorted(p.name for p in root.iterdir())) == (0, [_CANON, f"{_CANON}.jpg"])
+
+
+@pytest.mark.parametrize("is_dir", [False, True])
+def test_stale_move_keeps_an_earlier_restore_copy_of_the_same_name(db, tmp_path, monkeypatch, is_dir):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    restore = root / ORPHAN_RESTORE_DIR_NAME
+    restore.mkdir(parents=True)
+    ext = "" if is_dir else ".jpg"
+    _place(restore / f"{_OLD}{ext}", is_dir, b"earlier")
+    _place(root / f"{_CANON}{ext}", is_dir)
+    _place(root / f"{_OLD}{ext}", is_dir, b"later")
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="move", logger=_logger())
+    kept = {p.name: _bytes(p) for p in restore.iterdir()}
+    assert (res["count"], kept) == (1, {f"{_OLD}{ext}": b"earlier", f"{_OLD} (1){ext}": b"later"})
+
+
+def test_stale_pass_finds_a_current_folder_listed_under_another_case(db, tmp_path, monkeypatch):
+    (tmp_path / "probe").touch()
+    if not (tmp_path / "PROBE").exists():
+        pytest.skip("needs a case-insensitive filesystem")
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    root.mkdir()
+    upper = _CANON.replace("Prophecy", "PROPHECY")
+    _place(root / upper, True)
+    _place(root / _OLD, True)
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    assert (res["count"], sorted(p.name for p in root.iterdir())) == (1, [upper])
+
+
+def test_stale_pass_keeps_a_folder_a_canonical_link_points_into(db, tmp_path, monkeypatch):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    (root / _OLD).mkdir(parents=True)
+    _place(root / _OLD / "art", True)
+    (root / _CANON).symlink_to(root / _OLD / "art")
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    assert (res["count"], (root / _CANON / "poster.jpg").exists()) == (0, True)
+
+
+def test_stale_pass_keeps_stale_files_that_current_names_link_to(db, tmp_path, monkeypatch):
+    m = _make(tmp_path)
+    _live(monkeypatch, tmp_path)
+    _seed(db, "sonarr", _CANON, tvdb=367118)
+    root = tmp_path / "assets"
+    root.mkdir()
+    a, b = root / f"{_OLD}.jpg", root / "Dune (2024) {tvdb-367118}.jpg"
+    _place(a, False, b"a")
+    _place(b, False, b"b")
+    (root / f"{_CANON}.jpg").symlink_to(a)
+    (root / f"{_CANON}.png").symlink_to(b)
+    res = m._run_stale_pass(db=db, instances=["sonarr"], asset_dirs=[str(root)], mode="remove", logger=_logger())
+    current = [(root / f"{_CANON}{ext}").exists() for ext in (".jpg", ".png")]
+    assert (res["count"], current) == (0, [True, True])
+
+
+@pytest.mark.parametrize(
+    "kind, size", [("file", 4), ("symlink", 0), ("hardlink", 0), ("folder", 4)]
+)
+def test_scan_stale_counts_only_bytes_no_other_name_holds(tmp_path, kind, size):
+    m = _make()
+    root = tmp_path / "assets"
+    root.mkdir()
+    source = tmp_path / "source.jpg"
+    source.write_bytes(b"1234")
+    old = root / ("Old Show {tvdb-1}" if kind == "folder" else "Old Show {tvdb-1}.jpg")
+    if kind == "file":
+        old.write_bytes(b"1234")
+    elif kind == "symlink":
+        old.symlink_to(source)
+    elif kind == "hardlink":
+        os.link(source, old)
+    else:
+        old.mkdir()
+        (old / "logo.png").write_bytes(b"1234")
+        (old / "poster.jpg").symlink_to(source)
+        os.link(source, old / "background.jpg")
+    stale = m._scan_stale_duplicates([str(root)], {("tvdb", 1): {"New Show {tvdb-1}"}})
+    assert [(e["name"], e["size"]) for e in stale] == [(old.name, size)]
 
 
 def _seed_stale_pair(root, canonical="Dune Prophecy (2024) {tvdb-367118}"):
@@ -403,6 +637,7 @@ def _swap_parent_for_link(allowed, outside):
         "name": scanned.name,
         "canonical": "Dune Prophecy (2024) {tvdb-1}",
         "canonical_present": True,
+        "is_dir": True,
         "id": ("tvdb", 1),
         "size": 1,
     }
@@ -497,6 +732,7 @@ def test_execute_stale_remove_rmtrees_through_a_parent_descriptor(
         "name": stale.name,
         "canonical": "Dune Prophecy (2024) {tvdb-1}",
         "canonical_present": True,
+        "is_dir": True,
         "id": ("tvdb", 1),
         "size": 1,
     }
@@ -599,6 +835,7 @@ def test_stale_remove_passes_the_descriptor_to_rmtree(tmp_path, monkeypatch):
         "name": stale.name,
         "canonical": "Dune Prophecy (2024) {tvdb-1}",
         "canonical_present": True,
+        "is_dir": True,
         "id": ("tvdb", 1),
         "size": 1,
     }
@@ -618,7 +855,9 @@ def _stale_entry(folder, asset_dir, canonical):
         "asset_dir": str(asset_dir),
         "name": os.path.basename(str(folder)),
         "canonical": canonical,
+        "canonical_folder": canonical,
         "canonical_present": True,
+        "is_dir": True,
         "id": ("tvdb", 1),
         "size": 1,
     }
