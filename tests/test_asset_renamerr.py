@@ -2404,10 +2404,26 @@ def test_a_symlinked_logo_becomes_a_file_once_the_action_is_not_symlink(db, monk
     m.run()
     assert (placed.is_symlink(), placed.read_bytes(), src.exists()) == (False, b"png", action != "move")
     assert (src.exists() and os.path.samefile(placed, src)) == (action == "hardlink")
-    m.logger.messages["debug"].clear()
+    before = os.lstat(placed)
     m.run()
-    placed_again = [line for line in m.logger.messages["debug"] if line.startswith(("[COPY]", "[HARDLINK]", "[MOVE]"))]
-    assert (placed_again, m.logger.messages["warning"]) == ([], [])
+    after = os.lstat(placed)
+    assert (after.st_ino, after.st_ctime_ns) == (before.st_ino, before.st_ctime_ns)
+    assert m.logger.messages["warning"] == []
+
+
+@pytest.mark.parametrize("action", ["copy", "hardlink", "move"])
+def test_a_symlinked_logo_whose_source_is_no_longer_listed_becomes_a_file(db, monkeypatch, tmp_path, action):
+    m, placed, src = _symlinked_logo(db, monkeypatch, tmp_path)
+    m.config.source_dirs = []
+    db.poster.delete_asset_rows_by_path_prefix(str(src.parent))
+    m.config.action_type = action
+    m.run()
+    assert (placed.is_symlink(), placed.read_bytes(), src.read_bytes()) == (False, b"png", b"png")
+    assert os.path.samefile(placed, src) == (action == "hardlink")
+    before = os.lstat(placed)
+    m.run()
+    after = os.lstat(placed)
+    assert (after.st_ino, after.st_ctime_ns, m.logger.messages["warning"]) == (before.st_ino, before.st_ctime_ns, [])
 
 
 def test_a_logo_picked_with_move_during_a_run_stays_through_the_next_run(db, monkeypatch, tmp_path):

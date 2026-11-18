@@ -85,9 +85,14 @@ def already_in_place(src: str, dest: str, action_type: str) -> bool:
 
 def move_into_place(src: str, dest: str) -> Optional[OSError]:
     """Move ``src`` to ``dest``; once it has landed, return why ``src`` could not be deleted, if it could not."""
-    if _same_entry(src, dest):
+    if os.path.islink(src):
+        # A link is never moved: dest gets the bytes it points at, which stay where they are.
+        _into_place(dest, lambda tmp: _copy(src, tmp, shutil.copystat))
+        if _same_entry(src, dest):
+            return None
+    elif _same_entry(src, dest):
         return None
-    if not _same_inode(src, dest):
+    elif not _same_inode(src, dest):
         try:
             os.replace(src, dest)
             return None

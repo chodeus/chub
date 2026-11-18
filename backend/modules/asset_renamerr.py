@@ -672,9 +672,8 @@ class AssetRenamerr(ChubModule):
         if new_path is None:
             return False, why
 
-        # Normalise the source too; it is a scanned asset path, never raw HTTP
-        # input, but realpath keeps the file op operating on a canonical path.
-        src = os.path.realpath(src)
+        # A move takes a link, never the file it points at; the other actions work on the final file.
+        src = resolve_folder(src) if self.config.action_type == "move" else os.path.realpath(src)
         if not self.config.dry_run:
             try:
                 os.makedirs(os.path.dirname(new_path), exist_ok=True)
@@ -1033,9 +1032,11 @@ class AssetRenamerr(ChubModule):
                         conn=poster_conn,
                     )
                 if not resolved and placed:
-                    if self._at_current_target(media, image_type, placed):
+                    if self._at_current_target(media, image_type, placed) and not stale_link(
+                        placed, self.config.action_type
+                    ):
                         continue
-                    # No source is left (as after a move) and the destination changed: place from the file last placed.
+                    # No source is left (as after a move) and the destination changed or is a stale link: place from the file last placed.
                     resolved = ("local", placed, None)
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a

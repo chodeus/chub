@@ -136,6 +136,16 @@ def test_placing_a_file_onto_its_own_path_keeps_the_file(tmp_path, place, spelli
     assert src.read_bytes() == b"img"
 
 
+@pytest.mark.parametrize("onto_itself", [False, True])
+def test_a_move_of_a_link_places_its_bytes_and_leaves_its_target(tmp_path, onto_itself):
+    src_dir, target, _dest_dir, dest = _folders(tmp_path)
+    link = dest if onto_itself else src_dir / "link.png"
+    os.symlink(target, link)
+    kept = move_into_place(str(link), str(dest))
+    assert (kept, dest.is_symlink(), dest.read_bytes(), target.read_bytes()) == (None, False, b"img", b"img")
+    assert os.path.lexists(link) is onto_itself
+
+
 def test_a_move_onto_a_symlink_to_the_source_puts_the_file_there(tmp_path):
     src_dir, src, dest_dir, dest = _folders(tmp_path)
     os.symlink(src, dest)

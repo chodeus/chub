@@ -2465,10 +2465,24 @@ def test_a_symlinked_poster_becomes_a_file_once_the_action_is_not_symlink(tmp_pa
     m.run()
     assert (placed.is_symlink(), placed.read_bytes(), src.exists()) == (False, b"poster", action != "move")
     assert (src.exists() and os.path.samefile(placed, src)) == (action == "hardlink")
-    m.logger.messages["debug"].clear()
+    before = os.lstat(placed)
     m.run()
-    placed_again = [line for line in m.logger.messages["debug"] if line.startswith(("[COPY]", "[HARDLINK]", "[MOVE]"))]
-    assert (placed_again, m.logger.messages["warning"], m.logger.messages["error"]) == ([], [], [])
+    after = os.lstat(placed)
+    assert (after.st_ino, after.st_ctime_ns) == (before.st_ino, before.st_ctime_ns)
+    assert (m.logger.messages["warning"], m.logger.messages["error"]) == ([], [])
+
+
+def test_a_poster_whose_source_is_a_link_is_moved_in_as_a_file(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    src = tmp_path / "src" / "Dune (2021) {tmdb-438631}.jpg"
+    target = tmp_path / "elsewhere.jpg"
+    os.replace(src, target)
+    os.symlink(target, src)
+    m.config.action_type = "move"
+    m.run()
+    placed = posters / "Dune (2021).jpg"
+    assert (placed.is_symlink(), placed.read_bytes()) == (False, b"poster")
+    assert (os.path.lexists(src), target.read_bytes(), m.logger.messages["error"]) == (False, b"poster", [])
 
 
 def test_a_symlinked_poster_whose_folder_is_renamed_leaves_no_old_link(tmp_path, monkeypatch):
