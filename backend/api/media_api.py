@@ -782,13 +782,19 @@ def _collection_fields(payload: dict) -> Tuple[Dict[str, Any], Optional[str]]:
     if "title" in payload:
         if not _is_text(payload["title"]):
             return {}, "Field 'title' must be a non-empty string"
-        fields.update(collection_title_fields(payload["title"].strip()))
+        titles = collection_title_fields(payload["title"].strip())
+        if not _is_text(titles["title"]):
+            return {}, "Field 'title' is blank once decoded to ASCII"
+        fields.update(titles)
     if "alternate_titles" in payload:
         alts = payload["alternate_titles"]
         if not isinstance(alts, list) or not all(_is_text(t) for t in alts):
             return {}, "Field 'alternate_titles' must be a list of non-empty strings"
         alts = [t.strip() for t in alts]
-        fields.update(alternate_titles=alts, normalized_alternate_titles=[normalize_titles(t) for t in alts])
+        normalized = [normalize_titles(t) for t in alts]
+        if not all(normalized):
+            return {}, "Field 'alternate_titles' has a title that is blank once normalized"
+        fields.update(alternate_titles=alts, normalized_alternate_titles=normalized)
     return fields, None
 
 
@@ -920,9 +926,8 @@ async def update_collection(
         payload = await read_request_json(request)
         if payload is BODY_TOO_LARGE:
             return body_too_large_error()
-        # An unusable body used to raise into the 500 handler; keep that
-        # response — falling through would write the record unchanged.
-        if not isinstance(payload, dict) or not payload:
+        # A non-object body used to raise into the 500 handler; keep that response.
+        if not isinstance(payload, dict):
             return error(
                 "Error updating collection",
                 code="COLLECTION_UPDATE_ERROR",

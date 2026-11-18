@@ -505,16 +505,32 @@ def test_create_collection_refuses_a_body_missing_a_key_field(db, body, code):
         {"alternate_titles": "Matrix"},
         {"alternate_titles": ["Matrix", 7]},
         {"alternate_titles": [" "]},
+        {"alternate_titles": ["Marvel", "&#32;"]},
         {"title": 7},
         {"title": "  "},
+        {"title": "&#32;"},
+        {"title": "\U0001F600"},
         {"library_name": ""},
         {"year": [2008]},
         {"year": True},
         {"tmdb_id": 2**63},
         {"imdb_id": 7},
     ],
-    ids=["string", "number-in-list", "blank", "numeric-title", "blank-title", "blank-library", "list-year",
-         "bool-year", "huge-id", "numeric-imdb"],
+    ids=[
+        "string",
+        "number-in-list",
+        "blank",
+        "entity-blank-alternate",
+        "numeric-title",
+        "blank-title",
+        "entity-blank",
+        "emoji-only",
+        "blank-library",
+        "list-year",
+        "bool-year",
+        "huge-id",
+        "numeric-imdb",
+    ],
 )
 def test_create_collection_refuses_fields_of_the_wrong_shape(db, body):
     resp = _post_collection(_client(db), **body)
@@ -571,9 +587,10 @@ class _ErrorLog(_StubLog):
         ({"title": ""}, 400, "INVALID_FIELDS"),
         ({"library_name": None}, 400, "INVALID_FIELDS"),
         ({"name": "Avengers"}, 400, "NO_FIELDS"),
+        ({}, 400, "NO_FIELDS"),
         ({"title": "Marvel"}, 409, "COLLECTION_EXISTS"),
     ],
-    ids=["blank-title", "null-library", "no-updatable-field", "taken-title"],
+    ids=["blank-title", "null-library", "no-updatable-field", "empty-object", "taken-title"],
 )
 def test_update_collection_refuses_a_change_it_cannot_store(tmp_path, body, status, code):
     log = _ErrorLog()
