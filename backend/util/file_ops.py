@@ -69,8 +69,15 @@ def _same_entry(src: str, dest: str) -> bool:
         return False
 
 
+def stale_link(path: str, action_type: str) -> bool:
+    """True when ``path`` is a symlink but ``action_type`` places a real file there."""
+    return action_type != "symlink" and os.path.islink(path)
+
+
 def already_in_place(src: str, dest: str, action_type: str) -> bool:
-    """True when ``dest`` holds ``src``'s bytes, unless a move onto a link to ``src`` still has ``src`` to remove."""
+    """True when ``dest`` holds ``src``'s bytes, unless it is a stale link or, for a move, another name for ``src``'s file."""
+    if stale_link(dest, action_type):
+        return False
     if action_type == "move" and not _same_entry(src, dest) and os.path.samefile(src, dest):
         return False
     return filecmp.cmp(src, dest, shallow=False)
@@ -78,9 +85,14 @@ def already_in_place(src: str, dest: str, action_type: str) -> bool:
 
 def move_into_place(src: str, dest: str) -> Optional[OSError]:
     """Move ``src`` to ``dest``; once it has landed, return why ``src`` could not be deleted, if it could not."""
-    if _same_entry(src, dest):
+    if os.path.islink(src):
+        # A link is never moved: dest gets the bytes it points at, which stay where they are.
+        _into_place(dest, lambda tmp: _copy(src, tmp, shutil.copystat))
+        if _same_entry(src, dest):
+            return None
+    elif _same_entry(src, dest):
         return None
-    if not _same_inode(src, dest):
+    elif not _same_inode(src, dest):
         try:
             os.replace(src, dest)
             return None

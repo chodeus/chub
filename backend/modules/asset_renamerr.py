@@ -21,6 +21,7 @@ from backend.util.file_ops import (
     copy_into_place,
     link_into_place,
     move_into_place,
+    stale_link,
     symlink_into_place,
 )
 from backend.util.writable import (
@@ -513,10 +514,13 @@ class AssetRenamerr(ChubModule):
         )
         if recorded is None:
             return False
-        # For the kometa path, the destination file must still exist and, when a run can place it, sit where it lands now.
+        # Kometa: the placed entry must still be there (a link need not resolve), be no link the File Action
+        # stopped placing, and, when a run can place it, sit where it lands now.
         if apply_method == "kometa":
             applied_path = prev.get("applied_path")
             if not applied_path or not os.path.lexists(applied_path):
+                return False
+            if stale_link(applied_path, self.config.action_type):
                 return False
             if media is not None and image_type and not self._at_current_target(media, image_type, applied_path):
                 return False
@@ -668,9 +672,8 @@ class AssetRenamerr(ChubModule):
         if new_path is None:
             return False, why
 
-        # Normalise the source too; it is a scanned asset path, never raw HTTP
-        # input, but realpath keeps the file op operating on a canonical path.
-        src = os.path.realpath(src)
+        # A move takes a link, never the file it points at; the other actions work on the final file.
+        src = resolve_folder(src) if self.config.action_type == "move" else os.path.realpath(src)
         if not self.config.dry_run:
             try:
                 os.makedirs(os.path.dirname(new_path), exist_ok=True)
@@ -1029,9 +1032,11 @@ class AssetRenamerr(ChubModule):
                         conn=poster_conn,
                     )
                 if not resolved and placed:
-                    if self._at_current_target(media, image_type, placed):
+                    if self._at_current_target(media, image_type, placed) and not stale_link(
+                        placed, self.config.action_type
+                    ):
                         continue
-                    # No source is left (as after a move) and the destination changed: place from the file last placed.
+                    # No source is left (as after a move) and the destination changed or is a stale link: place from the file last placed.
                     resolved = ("local", placed, None)
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a

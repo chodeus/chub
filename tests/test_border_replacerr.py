@@ -5,6 +5,7 @@ import os
 
 import pytest
 from PIL import Image
+from pathlib import Path
 from types import SimpleNamespace
 
 from backend.modules.border_replacerr import (
@@ -734,6 +735,50 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch, umask_
         src_bytes = f.read()
     assert dest.read_bytes() == src_bytes
     assert oct(dest.stat().st_mode & 0o777) == oct(0o644), "a new file's mode, not the source's"
+
+
+def test_excluded_asset_staged_as_a_link_becomes_a_file(tmp_path, monkeypatch):
+    br, dest_dir, by_id = _subset_harness(tmp_path, monkeypatch, exclusion_list=["inman"])
+    src = Path(by_id[1]["original_file"])
+    dest = dest_dir / "inman.jpg"
+    dest.symlink_to(src)
+    src_bytes = src.read_bytes()
+    br.run({"media_cache": [1], "collections_cache": []}, process_all=False)
+    assert (dest.is_symlink(), dest.read_bytes(), src.read_bytes()) == (
+        False,
+        src_bytes,
+        src_bytes,
+    )
+
+
+def test_a_bordered_poster_a_link_replaced_is_bordered_again(tmp_path, monkeypatch):
+    br, dest_dir, by_id = _subset_harness(tmp_path, monkeypatch)
+    manifest = {"media_cache": [1], "collections_cache": []}
+    br.run(manifest, process_all=False)
+    dest = dest_dir / "inman.jpg"
+    bordered = dest.read_bytes()
+    dest.unlink()
+    dest.symlink_to(by_id[1]["original_file"])
+    br.run(manifest, process_all=False)
+    assert (dest.is_symlink(), dest.read_bytes() == bordered) == (False, True)
+
+
+def test_a_link_to_the_bordered_bytes_is_replaced_by_a_file(tmp_path, monkeypatch):
+    br, dest_dir, by_id = _subset_harness(tmp_path, monkeypatch)
+    manifest = {"media_cache": [1], "collections_cache": []}
+    br.run(manifest, process_all=False)
+    dest = dest_dir / "inman.jpg"
+    twin = tmp_path / "twin.jpg"
+    bordered = dest.read_bytes()
+    twin.write_bytes(bordered)
+    dest.unlink()
+    dest.symlink_to(twin)
+    br.run(manifest, process_all=False)
+    assert (dest.is_symlink(), dest.read_bytes(), twin.read_bytes()) == (
+        False,
+        bordered,
+        bordered,
+    )
 
 
 def test_a_second_refresh_does_not_delete_the_first_runs_previews(

@@ -1489,6 +1489,7 @@ def _staging_module(destination_dir="/kometa/assets", asset_folders=True):
         asset_folders=asset_folders,
         dry_run=False,
         run_border_replacerr=False,
+        action_type="copy",
     )
     return m
 
@@ -1524,6 +1525,21 @@ def test_needs_staging_when_folder_renamed(tmp_path):
         "renamed_file": str(staged),  # still points at the old hyphen folder
     }
     assert m._needs_staging(row) is True
+
+
+@pytest.mark.parametrize("apply_method, restage", [("kometa", True), ("plex", False)])
+def test_a_staged_link_is_restaged_only_where_kometa_reads_it(tmp_path, apply_method, restage):
+    m = _staging_module(destination_dir=str(tmp_path))
+    m.config.apply_method = apply_method
+    folder = "Dune (2021) {tmdb-1}"
+    (tmp_path / folder).mkdir()
+    src = tmp_path / "Dune.jpg"
+    src.write_bytes(b"x")
+    staged = tmp_path / folder / "poster.jpg"
+    staged.symlink_to(src)
+    row = {"asset_type": "movie", "matched": 1, "folder": folder, "original_file": str(src), "season_number": None}
+    needs = m._needs_staging(dict(row, renamed_file=str(staged)))
+    assert needs is restage
 
 
 def test_needs_staging_false_when_path_current(tmp_path):
@@ -2435,6 +2451,38 @@ def test_a_moved_poster_whose_folder_is_renamed_leaves_no_old_folder(tmp_path, m
     m.run()
     landed = placed.parent.parent / "Dune (2021) [renamed]" / "poster.jpg"
     assert (landed.read_bytes(), placed.parent.exists()) == (b"poster", False)
+
+
+@pytest.mark.parametrize("action", ["copy", "hardlink", "move"])
+def test_a_symlinked_poster_becomes_a_file_once_the_action_is_not_symlink(tmp_path, monkeypatch, action):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    m.config.action_type = "symlink"
+    m.run()
+    placed = posters / "Dune (2021).jpg"
+    src = tmp_path / "src" / "Dune (2021) {tmdb-438631}.jpg"
+    assert placed.is_symlink()
+    m.config.action_type = action
+    m.run()
+    assert (placed.is_symlink(), placed.read_bytes(), src.exists()) == (False, b"poster", action != "move")
+    assert (src.exists() and os.path.samefile(placed, src)) == (action == "hardlink")
+    before = os.lstat(placed)
+    m.run()
+    after = os.lstat(placed)
+    assert (after.st_ino, after.st_ctime_ns) == (before.st_ino, before.st_ctime_ns)
+    assert (m.logger.messages["warning"], m.logger.messages["error"]) == ([], [])
+
+
+def test_a_poster_whose_source_is_a_link_is_moved_in_as_a_file(tmp_path, monkeypatch):
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    src = tmp_path / "src" / "Dune (2021) {tmdb-438631}.jpg"
+    target = tmp_path / "elsewhere.jpg"
+    os.replace(src, target)
+    os.symlink(target, src)
+    m.config.action_type = "move"
+    m.run()
+    placed = posters / "Dune (2021).jpg"
+    assert (placed.is_symlink(), placed.read_bytes()) == (False, b"poster")
+    assert (os.path.lexists(src), target.read_bytes(), m.logger.messages["error"]) == (False, b"poster", [])
 
 
 def test_a_symlinked_poster_whose_folder_is_renamed_leaves_no_old_link(tmp_path, monkeypatch):
