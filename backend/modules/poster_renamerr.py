@@ -497,21 +497,11 @@ class PosterRenamerr(ChubModule):
         is_collection: bool = False,
         conn=None,
     ) -> dict:
-        """Find the best poster_cache candidate for ``media``, scoped to
-        ``image_type``.
+        """Rank the poster_cache matches for ``media`` of ``image_type``; no writeback.
 
-        This is the shared candidate-finding core (ID lookup plus prefix/AKA
-        name lookup with season + identity checks, ranked by ``_match_rank``) used both by poster matching
-        (``image_type="poster"``) and by the asset pipeline (logo / squareart /
-        background / banner). It performs NO writeback — callers decide where to
-        record the result (media_cache for posters, media_asset_matches for
-        assets).
-
-        Returns a dict with: ``candidate`` (best row or None), ``matched``
-        (bool), ``win_reason`` (str), ``conflicting`` (title-only matches
-        disagree), ``matched_candidates`` (every fetched row accepted as a
-        match, best first), ``candidates`` (the considered set), and
-        ``reasons`` (human-readable trace).
+        Returns:
+            candidate (best row or None), matched, win_reason, conflicting,
+            matched_candidates (accepted matches, best first), candidates, reasons.
         """
         asset_type = media.get("asset_type")
         title = media.get("title")

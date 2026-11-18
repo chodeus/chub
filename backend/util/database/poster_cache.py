@@ -377,12 +377,7 @@ class PosterCache(DatabaseBase):
         conn=None,
         limit: Optional[int] = None,
     ) -> list:
-        """Get every poster cache record carrying an id, best first.
-
-        Ordering enforces the bottom-wins source_dir contract — see
-        CONTRACT block at top of file. ``image_type`` defaults to "poster";
-        pass a specific asset type (or None for all) from the asset pipeline.
-        """
+        """Every poster_cache row carrying the id, in bottom-wins order (CONTRACT, top of file)."""
         sql = f"SELECT * FROM poster_cache WHERE {id_field}=?"
         params = [id_val]
 
@@ -712,20 +707,7 @@ class PosterCache(DatabaseBase):
         conn=None,
         above_priority: Optional[int] = None,
     ) -> list:
-        """Get poster candidates by title prefix (only rows ranked above ``above_priority`` when set).
-
-        Ordering enforces the bottom-wins source_dir contract — see
-        CONTRACT block at top of file. The match phase re-ranks the rows that
-        pass is_match() (PosterRenamerr._match_rank); other callers rely on
-        this order.
-
-        The prefix is derived with normalize_titles() — the SAME function that
-        produced the stored `normalized_title` column — so they stay
-        consistent. (get_prefix() strips leading articles, so "The Lovers"
-        became prefix "lov" which never matched the stored "thelovers" — every
-        no-id, article-prefixed title, e.g. season posters, silently failed to
-        match.)
-        """
+        """Rows sharing ``title``'s title_prefix, in bottom-wins order; only above ``above_priority`` when set."""
         prefix = title_prefix(title, length)
         if not prefix:
             return []
