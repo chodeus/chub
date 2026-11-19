@@ -174,10 +174,10 @@ class BorderReplacerr(ChubModule):
         return color_code
 
     @staticmethod
-    def _safe_stat(path: str):
+    def _safe_stat(path: str, follow_symlinks: bool = True):
         """os.stat(path) or None if it can't be stat'd."""
         try:
-            return os.stat(path)
+            return os.stat(path, follow_symlinks=follow_symlinks)
         except OSError:
             return None
 
@@ -193,37 +193,38 @@ class BorderReplacerr(ChubModule):
             return ""
         return h.hexdigest()
 
-    def _unchanged_since(
-        self, prev: Optional[dict], sig: str, original_file: str, renamed_file: str
-    ) -> bool:
-        """True when the last pass wrote this output from this source with ``sig``, and neither changed."""
-        # A link (a symlink run's) or a file restaged over the output is bordered again.
-        if not prev or prev["variant_sig"] != sig or os.path.islink(renamed_file):
-            return False
-        src, out = self._safe_stat(original_file), self._safe_stat(renamed_file)
-        if src is None or out is None:
-            return False
-        recorded = (
-            prev["source_mtime"],
-            prev["source_size"],
-            prev["output_mtime"],
-            prev["output_size"],
-        )
-        return recorded == (src.st_mtime, src.st_size, out.st_mtime, out.st_size)
-
-    def _gate_state(
-        self, original_file: str, renamed_file: str, sig: str, now_iso: str
-    ) -> Optional[dict]:
-        """The border_state row that lets the next pass skip this poster, if both stat."""
-        src, out = self._safe_stat(original_file), self._safe_stat(renamed_file)
-        if src is None or out is None:
-            return None
+    @staticmethod
+    def _file_stats(src: os.stat_result, out: os.stat_result) -> dict:
+        """The source and output (mtime, size) a border_state row records."""
         return {
-            "renamed_file": renamed_file,
             "source_mtime": src.st_mtime,
             "source_size": src.st_size,
             "output_mtime": out.st_mtime,
             "output_size": out.st_size,
+        }
+
+    def _unchanged_since(
+        self, prev: Optional[dict], sig: str, src: os.stat_result, renamed_file: str
+    ) -> bool:
+        """True when neither file changed since the last pass bordered them with ``sig``."""
+        if not prev or prev["variant_sig"] != sig:
+            return False
+        # lstat: a link (a symlink run's) is compared as itself, not as its target.
+        out = self._safe_stat(renamed_file, follow_symlinks=False)
+        if out is None:
+            return False
+        return all(prev[k] == v for k, v in self._file_stats(src, out).items())
+
+    def _gate_state(
+        self, src: os.stat_result, renamed_file: str, sig: str, now_iso: str
+    ) -> Optional[dict]:
+        """The row that lets the next pass skip this poster; None if the output is gone."""
+        out = self._safe_stat(renamed_file, follow_symlinks=False)
+        if out is None:
+            return None
+        return {
+            "renamed_file": renamed_file,
+            **self._file_stats(src, out),
             "variant_sig": sig,
             "updated_at": now_iso,
         }
@@ -612,10 +613,10 @@ class BorderReplacerr(ChubModule):
             # and the list would just be every input.
             changes: List[Dict[str, str]] = []
 
-            # Skip-gate state: the (mtime, size, settings-signature) of each
-            # output we last wrote. A poster whose output file is unchanged and
-            # whose signature still matches would re-encode to byte-identical
-            # bytes, so it's skipped entirely (no decode/resize/encode).
+            # Skip-gate state: the source and output (mtime, size) and settings
+            # signature of each poster we last bordered. A poster whose files are
+            # unchanged and whose signature still matches would re-encode to
+            # byte-identical bytes, so it's skipped entirely (no decode/resize/encode).
             # Disabled on dry-run (we want to report what WOULD happen). Empty
             # on first run, so the first pass processes everything as before.
             gate_enabled = not dry_run
@@ -641,6 +642,9 @@ class BorderReplacerr(ChubModule):
             # means the worker holds no shared mutable index — the prerequisite
             # for concurrency.
             work: List[Tuple[dict, object, str]] = []
+            # Stat'd before the encode reads it: a source replaced mid-pass is
+            # bordered again next run.
+            source_stats: Dict[str, os.stat_result] = {}
             variant_index = 0
             for asset in assets:
                 if not asset.get("original_file") or not asset.get("renamed_file"):
@@ -649,7 +653,8 @@ class BorderReplacerr(ChubModule):
                     )
                     skipped += 1
                     continue
-                if not os.path.exists(asset["original_file"]):
+                src = self._safe_stat(asset["original_file"])
+                if src is None:
                     # Full-library sweeps re-encounter posters whose source was
                     # since removed (gdrive cleanup, one-time drops). Skip them
                     # quietly instead of letting the encoder fail and tallying a
@@ -670,14 +675,12 @@ class BorderReplacerr(ChubModule):
                 sig = _variant_sig(variant)
                 renamed_file = asset["renamed_file"]
                 if gate_enabled and self._unchanged_since(
-                    state_map.get(renamed_file),
-                    sig,
-                    asset["original_file"],
-                    renamed_file,
+                    state_map.get(renamed_file), sig, src, renamed_file
                 ):
                     gate_skipped += 1
                     processed += 1
                     continue
+                source_stats[renamed_file] = src
                 work.append((asset, variant, sig))
 
             attempted = len(work)
@@ -795,7 +798,7 @@ class BorderReplacerr(ChubModule):
                         title,
                         action,
                         detail,
-                        original_file,
+                        _original_file,
                         renamed_file,
                         sig,
                     ) in pool.map(_process_or_refuse, work):
@@ -817,7 +820,7 @@ class BorderReplacerr(ChubModule):
                             failed += 1
                         if gate_enabled and result is not None:
                             state = self._gate_state(
-                                original_file, renamed_file, sig, now_iso
+                                source_stats[renamed_file], renamed_file, sig, now_iso
                             )
                             if state:
                                 new_states.append(state)

@@ -1239,3 +1239,24 @@ def test_an_output_changed_since_is_bordered_again(tmp_path, monkeypatch, same_s
     os.utime(dest, ns=(old.st_atime_ns, mtime))
     br.run(process_all=True)
     assert (len(encodes), dest.read_bytes() == bordered) == (2, True)
+
+
+def test_a_source_replaced_during_the_pass_is_bordered_again(tmp_path, monkeypatch):
+    """A source synced in while its poster was being bordered is bordered next run."""
+    dest = tmp_path / "kometa" / "poster.jpg"
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [dest])
+    source = tmp_path / "src" / "0.jpg"
+    Image.new("RGB", (1000, 1500), (200, 0, 0)).save(source, "BMP")
+    encode = br.replace_borders
+
+    def _encode_then_sync(*a, **k):
+        result = encode(*a, **k)
+        Image.new("RGB", (900, 1350), (0, 0, 200)).save(source, "BMP")
+        return result
+
+    br.replace_borders = _encode_then_sync
+    br.run(process_all=True)
+    br.replace_borders = encode
+    br.run(process_all=True)
+    r, _g, b = _pixel(dest, (500, 750))
+    assert (len(encodes), b > 150 and r < 60) == (2, True)
