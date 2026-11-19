@@ -2568,7 +2568,7 @@ def _dune_in(db, instance, folder):
 
 
 def _logos(db, dest):
-    """What radarr1's and radarr2's Dune rows record, and the logo files in dest by name."""
+    """What radarr1's and radarr2's Dune rows record, and dest's logo files by name."""
     ids = [db.media.get_by_instance(name)[0]["id"] for name in ("radarr1", "radarr2")]
     rows = [db.media_asset_matches.get_one("media", i, "logo") for i in ids]
     files = {p.name: p.read_bytes() for p in sorted(dest.iterdir())}
@@ -2789,3 +2789,50 @@ def test_a_newer_logo_reaches_the_instances_a_run_missed(
         "Dune (2021) {tmdb-438631}_logo.png": b"new",
         "Dune 4K (2021)_logo.png": b"new",
     }
+
+
+def _placed_files(tmp_path, dest):
+    """Date the sources well before any run; returns dest's files as (inode, mtime)."""
+    for src in (tmp_path / "src").iterdir():
+        os.utime(src, (1_000_000_000, 1_000_000_000))
+    return lambda: {
+        p.name: (p.stat().st_ino, p.stat().st_mtime_ns) for p in sorted(dest.iterdir())
+    }
+
+
+def test_logos_one_instance_adopted_from_another_are_not_rewritten_by_later_runs(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    files = _placed_files(tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    _dune_in(db, "radarr3", "Dune 4K (2021)")
+    m.config.instances = ["radarr2", "radarr1", "radarr3"]
+    m.run()
+    placed = files()
+    for _ in range(3):
+        m.run()
+    assert (len(placed), files()) == (3, placed)
+
+
+def test_logos_copied_then_shared_under_move_are_not_rewritten_by_later_runs(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    files = _placed_files(tmp_path, dest)
+    m.run()
+    for src in (tmp_path / "src").iterdir():
+        src.unlink()
+    m.config.action_type = "move"
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    placed = files()
+    m.run()
+    assert (len(placed), files()) == (2, placed)

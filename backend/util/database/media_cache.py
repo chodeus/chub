@@ -37,6 +37,11 @@ class MediaCache(EditHistoryMixin, MetadataCompletenessMixin, StatsMixin, Databa
     Provides CRUD and sync operations for tracked media assets.
     """
 
+    @classmethod
+    def media_identity(cls, row: dict) -> str:
+        """A row's media identity across instances."""
+        return cls._identity_key(row, row.get("asset_type"), "")
+
     @staticmethod
     def _identity_key(item: dict, asset_type: str, instance_name: str) -> str:
         """Build a stable, non-NULL identity string for media items.

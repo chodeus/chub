@@ -466,7 +466,7 @@ class AssetRenamerr(ChubModule):
         conn,
         moves: Optional[AssetMoves] = None,
     ) -> Optional[str]:
-        """The best fetched local match still on disk, or where this run moved it; a missing root keeps its rows."""
+        """Best match on disk or moved this run; a gone root keeps its cached rows."""
         from backend.modules.poster_renamerr import PosterRenamerr
 
         found = PosterRenamerr.find_asset_candidate(
@@ -822,7 +822,7 @@ class AssetRenamerr(ChubModule):
 
     @staticmethod
     def _never_applies(media: dict, image_type: str, apply_method: str) -> bool:
-        """True for the art providers never publish (season and album logos), or Kometa never reads (season square art)."""
+        """True for art no provider has (season/album logos) or Kometa never reads."""
         show = media.get("asset_type") == "show"
         season = show and media.get("season_number") is not None
         if image_type == "logo":
@@ -1009,7 +1009,7 @@ class AssetRenamerr(ChubModule):
                 continue
 
             for image_type in applicable:
-                # Never recorded, so it cannot sit in Unmatched as permanently "missing".
+                # Never recorded, so it never sits in Unmatched as "missing".
                 if self._never_applies(media, image_type, apply_method):
                     continue
                 # Manual-pick lock: when the user chose a specific file in the
@@ -1039,7 +1039,8 @@ class AssetRenamerr(ChubModule):
                 elif picked and placed:
                     resolved = None  # Kometa still has the pick: never re-resolve over it
                 else:
-                    # No source of its own left (as after a move): the newest file placed for the same media elsewhere, when newer than its own.
+                    # No source of its own left (as after a move): the newest file
+                    # placed for this media elsewhere, when newer than its own.
                     resolved = self._resolve_source(
                         media,
                         db,
@@ -1093,12 +1094,11 @@ class AssetRenamerr(ChubModule):
                 # run_asset_renamerr) doesn't re-push every logo/art to Plex and
                 # re-fetch every TMDB URL on every pass. Local files compare by
                 # mtime; TMDB by URL.
-                src_mtime = None
-                if source == "local" and file:
-                    try:
-                        src_mtime = os.stat(file).st_mtime
-                    except OSError:
-                        src_mtime = None
+                src_mtime = (
+                    moves.source_mtime(file, placed)
+                    if source == "local" and file
+                    else None
+                )
                 prev = (
                     applied_map.get((target_kind, int(target_id), image_type))
                     if target_id is not None
@@ -1148,7 +1148,8 @@ class AssetRenamerr(ChubModule):
                     )
                 else:
                     attempted += 1
-                    # A carry under move copies while another item's row records the file; _drop_superseded keeps it then.
+                    # Copy, never move, a file another item placed (lent) or still
+                    # records (a carry under move); _drop_superseded keeps it then.
                     shared = moves.lent(file, placed) or (
                         carry
                         and self.config.action_type == "move"
