@@ -2714,6 +2714,30 @@ def test_an_adopted_logo_carried_to_a_renamed_folder_does_not_beat_a_newer_one(
     }
 
 
+def test_a_logo_one_of_two_instances_at_one_path_updates_reaches_a_third(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _placed_files(tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021)")
+    _dune_in(db, "radarr3", "Dune 4K (2021)")
+    m.config.instances = ["radarr1", "radarr2", "radarr3"]
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (1_500_000_000, 1_500_000_000))
+    m.config.instances = ["radarr1"]
+    m.run()
+    m.config.instances = ["radarr1", "radarr2", "radarr3"]
+    m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune (2021)_logo.png": b"new",
+        "Dune 4K (2021)_logo.png": b"new",
+    }
+
+
 def test_a_copied_logo_whose_source_was_deleted_is_not_spread_to_another_instance(
     db, monkeypatch, tmp_path
 ):
