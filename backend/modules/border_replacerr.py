@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import tempfile
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -423,23 +424,21 @@ class BorderReplacerr(ChubModule):
             return True
         return False
 
-    def _stage_unbordered(
-        self, asset: dict, refusals: List[PosterWriteRefused]
-    ) -> Optional[bool]:
-        """Copy an excluded asset's source: True copied, False skipped, None failed."""
+    def _stage_unbordered(self, asset: dict, refusals: List[PosterWriteRefused]) -> str:
+        """Copy an excluded asset's source; returns copied/in place/skipped/failed."""
         src = asset.get("original_file")
         dest = asset.get("renamed_file")
         if not src or not dest or self.config.dry_run or not os.path.exists(src):
-            return False
+            return "skipped"
         if self._in_place(src, dest):
-            return False
+            return "in place"
         try:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             copy_into_place(src, dest, keep_mode=False)
             self.logger.debug(f"[EXCLUDED_COPY] {dest} ← {src} (unbordered)")
         except OSError as e:
             if not os.path.exists(src):
-                return False  # gone mid-run, as a bordered poster's skips
+                return "skipped"  # gone mid-run, as a bordered poster's skips
             if destination_refused(e, dest):
                 refusals.append(PosterWriteRefused(dest, e))
                 self.logger.debug(str(refusals[-1]))
@@ -447,15 +446,16 @@ class BorderReplacerr(ChubModule):
                 self.logger.error(
                     f"Could not stage excluded asset '{asset.get('title')}': {e}"
                 )
-            return None
-        return True
+            return "failed"
+        return "copied"
 
     def _stage_excluded(
         self, excluded: List[dict], refusals: List[PosterWriteRefused]
-    ) -> Tuple[int, int]:
-        """Stage each excluded asset; returns (copies tried, copies failed)."""
-        staged = [self._stage_unbordered(a, refusals) for a in excluded]
-        return sum(r is not False for r in staged), staged.count(None)
+    ) -> Tuple[int, int, int]:
+        """Stage each excluded asset: (copies tried, failed, already in place)."""
+        staged = Counter(self._stage_unbordered(a, refusals) for a in excluded)
+        failed = staged["failed"]
+        return staged["copied"] + failed, failed, staged["in place"]
 
     @staticmethod
     def _in_place(src: str, dest: str) -> bool:
@@ -515,7 +515,7 @@ class BorderReplacerr(ChubModule):
     def _log_completion(
         self, tally: Dict[str, int], attempted: int, all_failed: bool
     ) -> None:
-        """The run's verdict line: INFO with no failures, ERROR when every poster failed and the gate skipped none, else WARNING."""
+        """The run's verdict line: INFO, WARNING on failures, ERROR when all_failed."""
         failed, skipped = tally["failed"], tally["skipped"]
         changed = [f"{tally[k]} {k}" for k in ("replaced", "removed") if tally[k]]
         if all_failed:
@@ -596,7 +596,9 @@ class BorderReplacerr(ChubModule):
             write_refusals: List[PosterWriteRefused] = []
             # Excluded from borders, not from posters: the raw source still
             # reaches its destination or the Plex uploader.
-            stage_tried, stage_failed = self._stage_excluded(excluded, write_refusals)
+            stage_tried, stage_failed, stage_unchanged = self._stage_excluded(
+                excluded, write_refusals
+            )
             if not assets and not stage_failed:
                 self.logger.info("No assets to process for border replacerr.")
                 db.holiday.set_status(active_holiday)
@@ -887,7 +889,8 @@ class BorderReplacerr(ChubModule):
 
             refused += len(write_refusals)
             refusal = refusal or next(iter(write_refusals), None)
-            all_failed = bool(failed) and failed == attempted and not gate_skipped
+            unchanged = gate_skipped or stage_unchanged
+            all_failed = bool(failed) and failed == attempted and not unchanged
             counts = {
                 "processed": processed,
                 "replaced": replaced,

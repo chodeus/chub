@@ -1413,6 +1413,31 @@ def test_an_excluded_poster_refused_beside_one_copied_keeps_the_job(
 
 
 @_SKIP_AS_ROOT
+def test_an_excluded_poster_refused_beside_one_already_in_place_keeps_the_job(
+    tmp_path, monkeypatch
+):
+    from backend.util.file_ops import copy_into_place
+
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman", "outman"]
+    )
+    locked = dest_dir / "locked"
+    locked.mkdir()
+    by_id[1]["renamed_file"] = str(locked / "inman.jpg")
+    copy_into_place(by_id[2]["original_file"], by_id[2]["renamed_file"])
+    locked.chmod(0o555)
+    try:
+        counts = br.run({"media_cache": [1, 2], "collections_cache": []})
+    finally:
+        locked.chmod(0o755)
+    assert br.logger.messages["warning"] == [
+        "Border replacerr finished with errors: 1 of 1 poster(s) it tried failed, "
+        "no borders changed, 0 skipped — see the ERROR lines above."
+    ]
+    assert counts["failed"] == 1
+
+
+@_SKIP_AS_ROOT
 def test_an_excluded_poster_replaces_a_file_chub_cannot_read(tmp_path, monkeypatch):
     br, dest_dir, by_id = _subset_harness(
         tmp_path, monkeypatch, exclusion_list=["inman"]
