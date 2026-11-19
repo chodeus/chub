@@ -829,6 +829,20 @@ class AssetRenamerr(ChubModule):
             return season or media.get("asset_type") == "album"
         return image_type == "squareart" and apply_method == "kometa" and season
 
+    def _lands_on_pick(
+        self,
+        db: ChubDB,
+        moves: AssetMoves,
+        media: dict,
+        image_type: str,
+        file: Optional[str],
+    ) -> bool:
+        """Under move, True when ``file`` would land on a path a picked row records."""
+        if not (moves.active and file):
+            return False
+        target, _why = self._kometa_path(media, image_type, file)
+        return target is not None and db.records_pick(target)
+
     def _at_current_target(self, media: dict, image_type: str, placed: str) -> bool:
         """True when ``placed`` is where a Kometa apply would land now, or there is nowhere to land it."""
         target, _why = self._kometa_path(media, image_type, placed)
@@ -1129,6 +1143,14 @@ class AssetRenamerr(ChubModule):
                 ):
                     self.logger.debug(
                         f"↳ {image_type} for {media.get('title')} was picked during this run, keeping the pick"
+                    )
+                    continue
+                if not picked and self._lands_on_pick(
+                    db, moves, media, image_type, file
+                ):
+                    self.logger.debug(
+                        f"↳ {image_type} for {media.get('title')} lands on a picked"
+                        " file, keeping the pick"
                     )
                     continue
 

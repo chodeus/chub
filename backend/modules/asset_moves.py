@@ -89,8 +89,14 @@ class AssetMoves:
             self._went[source] = path
 
     def went(self, source: str) -> Optional[str]:
-        """Where this run moved ``source``."""
-        return self._went.get(source)
+        """Where this run moved ``source``, unless a pick is there now."""
+        path = self._went.get(source)
+        if path is None or path in self._picks:
+            return None
+        if self._picked(path):  # picked in the UI since it was placed
+            self._picks.add(path)
+            return None
+        return path
 
     def sibling(
         self,

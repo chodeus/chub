@@ -2718,6 +2718,58 @@ def test_a_logo_picked_during_a_run_does_not_reach_another_instance(
     assert files == {"Dune (2021)_logo.png": b"my pick"}
 
 
+def test_a_logo_picked_once_its_source_is_moved_does_not_reach_another_instance(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    real_replace = os.replace
+
+    def _replace(src, dst, *a, **k):
+        real_replace(src, dst, *a, **k)
+        # The user picks radarr1's logo in the UI as soon as its source lands.
+        if os.path.basename(dst) == "Dune (2021)_logo.png" and pick.exists():
+            picker = make_module(destination_dir=str(dest), action_type="move")
+            picked = picker.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+            assert picked[0], picked[1]
+
+    monkeypatch.setattr(os, "replace", _replace)
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune (2021)_logo.png": b"my pick"}
+
+
+def test_a_newer_sibling_logo_is_not_placed_over_a_pick_two_instances_share(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021)")
+    _dune_in(db, "radarr3", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2", "radarr3"]
+    m.run()
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    os.utime(pick, (1_000_000_000, 1_000_000_000))  # older than the shared logo
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    applied, detail = m.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+    assert applied, detail
+    m.config.instances = ["radarr2", "radarr3", "radarr1"]
+    m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune (2021)_logo.png": b"my pick",
+        "Dune (2021) {tmdb-438631}_logo.png": b"png",
+    }
+
+
 @pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
 def test_a_picked_logo_carried_to_a_renamed_folder_does_not_reach_another_instance(
     db, monkeypatch, tmp_path, order
