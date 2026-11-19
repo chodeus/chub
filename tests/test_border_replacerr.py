@@ -1260,3 +1260,45 @@ def test_a_source_replaced_during_the_pass_is_bordered_again(tmp_path, monkeypat
     br.run(process_all=True)
     r, _g, b = _pixel(dest, (500, 750))
     assert (len(encodes), b > 150 and r < 60) == (2, True)
+
+
+class _RanAheadPool:
+    """A pool whose workers all finish before the loop reads the first result."""
+
+    def __init__(self, max_workers):
+        self.max_workers = max_workers
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def map(self, fn, items):
+        return [fn(item) for item in items]
+
+
+def test_an_output_replaced_before_its_result_is_read_is_bordered_again(
+    tmp_path, monkeypatch
+):
+    """A restage between a border write and the read of its result is caught next run."""
+    from backend.modules import border_replacerr as border_mod
+    from backend.util.file_ops import copy_into_place
+
+    first, second = tmp_path / "kometa" / "a.jpg", tmp_path / "kometa" / "b.jpg"
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [first, second])
+    monkeypatch.setattr(border_mod, "ThreadPoolExecutor", _RanAheadPool)
+    source = tmp_path / "src" / "0.jpg"
+    encode = br.replace_borders
+
+    def _encode_then_restage_first(*a, **k):
+        result = encode(*a, **k)
+        if a[1] == str(second):
+            copy_into_place(str(source), str(first))
+        return result
+
+    br.replace_borders = _encode_then_restage_first
+    br.run(process_all=True)
+    br.replace_borders = encode
+    br.run(process_all=True)
+    assert (len(encodes), first.read_bytes() == source.read_bytes()) == (3, False)

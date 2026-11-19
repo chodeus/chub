@@ -216,10 +216,14 @@ class BorderReplacerr(ChubModule):
         return all(prev[k] == v for k, v in self._file_stats(src, out).items())
 
     def _gate_state(
-        self, src: os.stat_result, renamed_file: str, sig: str, now_iso: str
+        self,
+        src: os.stat_result,
+        out: Optional[os.stat_result],
+        renamed_file: str,
+        sig: str,
+        now_iso: str,
     ) -> Optional[dict]:
-        """The row that lets the next pass skip this poster; None if the output is gone."""
-        out = self._safe_stat(renamed_file, follow_symlinks=False)
+        """The row that lets the next pass skip this poster; None without an output stat."""
         if out is None:
             return None
         return {
@@ -689,7 +693,7 @@ class BorderReplacerr(ChubModule):
 
             def _process(item: Tuple[dict, object, str]):
                 """Apply the active border op to one poster. Returns
-                (result, title, action, detail, original_file, renamed_file, sig);
+                (result, title, action, detail, output_stat, renamed_file, sig);
                 result is True (written), False (unchanged) or None (failed)."""
                 asset, variant, sig = item
                 original_file = asset["original_file"]
@@ -708,7 +712,7 @@ class BorderReplacerr(ChubModule):
                         self.logger.debug(
                             f"[DRY RUN] Would composite {detail} onto: {renamed_file}"
                         )
-                        return True, title, action, detail, original_file, renamed_file, sig
+                        return True, title, action, detail, None, renamed_file, sig
                     result = self.replace_borders_with_image(
                         original_file, renamed_file, variant, target_size
                     )
@@ -718,7 +722,7 @@ class BorderReplacerr(ChubModule):
                         self.logger.debug(
                             f"[DRY RUN] Would replace border for: {renamed_file}"
                         )
-                        return True, title, action, detail, original_file, renamed_file, sig
+                        return True, title, action, detail, None, renamed_file, sig
                     result = self.replace_borders(
                         original_file,
                         renamed_file,
@@ -732,14 +736,17 @@ class BorderReplacerr(ChubModule):
                         self.logger.debug(
                             f"[DRY RUN] Would remove border for: {renamed_file}"
                         )
-                        return True, title, action, detail, original_file, renamed_file, sig
+                        return True, title, action, detail, None, renamed_file, sig
                     result = self.remove_borders(
                         original_file,
                         renamed_file,
                         self.config.border_width,
                         target_size,
                     )
-                return result, title, action, detail, original_file, renamed_file, sig
+                # lstat now, not when the result is read: pool.map can hold a result
+                # behind slower posters while another writer replaces the output.
+                out = self._safe_stat(renamed_file, follow_symlinks=False)
+                return result, title, action, detail, out, renamed_file, sig
 
             write_refusals: List[PosterWriteRefused] = []
 
@@ -751,7 +758,7 @@ class BorderReplacerr(ChubModule):
                     self.logger.debug(str(e))
                     write_refusals.append(e)
                     asset, _variant, sig = item
-                    return None, asset["title"], "", "", asset["original_file"], asset["renamed_file"], sig
+                    return None, asset["title"], "", "", None, asset["renamed_file"], sig
 
             # PIL releases the GIL during decode/resize/composite/encode, so a
             # thread pool gives real parallelism on the CPU-bound encode without
@@ -794,7 +801,7 @@ class BorderReplacerr(ChubModule):
                         title,
                         action,
                         detail,
-                        _original_file,
+                        output_stat,
                         renamed_file,
                         sig,
                     ) in pool.map(_process_or_refuse, work):
@@ -816,7 +823,11 @@ class BorderReplacerr(ChubModule):
                             failed += 1
                         if gate_enabled and result is not None:
                             state = self._gate_state(
-                                source_stats[renamed_file], renamed_file, sig, now_iso
+                                source_stats[renamed_file],
+                                output_stat,
+                                renamed_file,
+                                sig,
+                                now_iso,
                             )
                             if state:
                                 new_states.append(state)
