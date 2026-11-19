@@ -3166,3 +3166,29 @@ def test_a_sibling_whose_row_lost_its_staged_path_keeps_its_poster(
     m.run()
     each = [*own, ("Dune 4K (2021).jpg", b"poster")]
     assert (_placed(posters), m.logger.messages["warning"]) == (each, [])
+
+
+def test_an_unmatched_poster_whose_source_is_on_disk_is_not_replaced(
+    tmp_path, monkeypatch
+):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, posters, _src = _added_later(tmp_path, monkeypatch)
+    own_source = tmp_path / "own.jpg"
+    own_source.write_bytes(b"own")
+    staged = posters / "Dune 4K (2021).jpg"
+    staged.write_bytes(b"own")
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.update(
+            asset_type="movie",
+            title="Dune",
+            year=2021,
+            instance_name="radarr2",
+            original_file=str(own_source),
+            renamed_file=str(staged),
+            id=db.media.get_by_instance("radarr2")[0]["id"],
+        )
+    m.run()
+    each = [("Dune (2021).jpg", b"poster"), ("Dune 4K (2021).jpg", b"own")]
+    assert _placed(posters) == each

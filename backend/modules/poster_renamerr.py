@@ -1093,8 +1093,13 @@ class PosterRenamerr(ChubModule):
         staged = row.get("renamed_file") or self._staged_dest(row)
         if not staged or not os.path.isfile(staged):
             return None
+        return None if self._has_source(row) else staged
+
+    @staticmethod
+    def _has_source(row: dict) -> bool:
+        """True while the row's recorded source is on disk."""
         src = row.get("original_file") or row.get("file")
-        return None if src and os.path.lexists(src) else staged
+        return bool(src) and os.path.lexists(src)
 
     def _rows_in_scope(self, db: ChubDB) -> list:
         """Configured instances' media rows, then plex_scope's collection rows."""
@@ -1137,7 +1142,7 @@ class PosterRenamerr(ChubModule):
         adopted, rest = [], []
         for row, carry in zip(rows, carried):
             hit = None
-            if siblings and not (row.get("matched") or carry):
+            if siblings and not (row.get("matched") or carry or self._has_source(row)):
                 hit = siblings.get(self._sibling_key(row))
             if not hit:
                 rest.append((row, carry))
