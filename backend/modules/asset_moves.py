@@ -63,7 +63,7 @@ class AssetMoves:
         mtime: Optional[float] = None,
         pick: bool = False,
     ) -> None:
-        """Record ``path`` placed from ``source``; a ``pick`` is never shared."""
+        """Record ``path`` placed from ``source``; sibling() never offers a pick."""
         if not self.active:
             return
         placement = (path, mtime)
