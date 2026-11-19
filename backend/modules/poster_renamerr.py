@@ -20,6 +20,7 @@ from backend.util.constants import (
     season_number_regex,
 )
 from backend.util.database import ChubDB
+from backend.util.database.media_cache import MediaCache
 from backend.util.gdrive_source import (
     build_drive_map,
     resolve_drive_for_path,
@@ -1095,6 +1096,58 @@ class PosterRenamerr(ChubModule):
         src = row.get("original_file") or row.get("file")
         return None if src and os.path.lexists(src) else staged
 
+    def _rows_in_scope(self, db: ChubDB) -> list:
+        """Configured instances' media rows, then plex_scope's collection rows."""
+        rows = [
+            row
+            for instance_name in self.config.instances
+            if isinstance(instance_name, str)
+            for row in db.media.get_by_instance(instance_name)
+        ]
+        for scope in self.config.plex_scope or []:
+            if not scope.match_collections:
+                continue
+            libs = list(
+                scope.library_names or []
+            ) or db.collection.get_library_names_for_instance(scope.instance)
+            for library_name in libs:
+                rows.extend(
+                    db.collection.get_by_instance_and_library(
+                        scope.instance, library_name
+                    )
+                )
+        return rows
+
+    @staticmethod
+    def _sibling_key(row: dict) -> str:
+        """The row's media identity across instances."""
+        return MediaCache._identity_key(row, row.get("asset_type"), "")
+
+    def _with_carried_files(self, rows: list) -> List[Tuple[dict, Optional[str]]]:
+        """Rows with their _moved_source if unmatched, or a sibling's to adopt."""
+        carried = [
+            None if row.get("matched") else self._moved_source(row) for row in rows
+        ]
+        siblings: Dict[str, Tuple[str, str]] = {}
+        for row, carry in zip(rows, carried):
+            # Only a file its row records: _carry_action copies it, never moves it away.
+            if carry and carry == row.get("renamed_file"):
+                source = row.get("original_file") or row.get("file")
+                siblings.setdefault(self._sibling_key(row), (carry, source))
+        adopted, rest = [], []
+        for row, carry in zip(rows, carried):
+            hit = None
+            if siblings and not (row.get("matched") or carry):
+                hit = siblings.get(self._sibling_key(row))
+            if not hit:
+                rest.append((row, carry))
+                continue
+            # As if staged at the sibling's file.
+            row["renamed_file"], row["original_file"] = hit
+            adopted.append((row, hit[0]))
+        # Adopters first: a sibling restaged later this run moves the file they copy.
+        return adopted + rest
+
     def _remove_superseded(self, previous: Optional[str], new_file_path: str, db: ChubDB) -> None:
         """Drop the file an asset was staged to before it moved (e.g. a folder rename): Kometa ignores it and the orphan pass spares its id."""
         config = self.config
@@ -1130,7 +1183,7 @@ class PosterRenamerr(ChubModule):
                 library_name=item.get("library_name"),
                 instance_name=item.get("instance_name"),
                 matched_value=None,
-                original_file=None,
+                original_file=item.get("original_file"),
                 renamed_file=new_file_path,
                 id=item.get("id"),
             )
@@ -1149,7 +1202,7 @@ class PosterRenamerr(ChubModule):
                 instance_name=item.get("instance_name"),
                 matched_value=None,
                 season_number=item.get("season_number"),
-                original_file=None,
+                original_file=item.get("original_file"),
                 renamed_file=new_file_path,
                 rename_history=history_json,
                 id=item.get("id"),
@@ -1279,32 +1332,14 @@ class PosterRenamerr(ChubModule):
         ):
             lib_indexes = self._build_upload_lib_indexes(db)
 
-        def _consider(row: dict) -> None:
-            nonlocal skipped_unchanged
+        for row, carry in self._with_carried_files(self._rows_in_scope(db)):
             # A moved poster's row goes unmatched once its source is gone, but its file still follows the destination.
-            if not ((row.get("matched") or self._moved_source(row)) and self._needs_staging(row)):
-                return
+            if not ((row.get("matched") or carry) and self._needs_staging(row)):
+                continue
             if self._is_unchanged_upload(row, lib_indexes):
                 skipped_unchanged += 1
-                return
+                continue
             matched_assets.append(row)
-
-        for instance_name in self.config.instances:
-            if not isinstance(instance_name, str):
-                continue
-            for row in db.media.get_by_instance(instance_name):
-                _consider(row)
-        for scope in self.config.plex_scope or []:
-            if not scope.match_collections:
-                continue
-            libs = list(
-                scope.library_names or []
-            ) or db.collection.get_library_names_for_instance(scope.instance)
-            for library_name in libs:
-                for row in db.collection.get_by_instance_and_library(
-                    scope.instance, library_name
-                ):
-                    _consider(row)
         if skipped_unchanged:
             self.logger.info(
                 f"Skipped {skipped_unchanged} unchanged poster(s) already applied "
