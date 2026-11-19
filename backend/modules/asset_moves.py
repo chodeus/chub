@@ -52,7 +52,7 @@ class AssetMoves:
                         mtime=row.get("source_mtime"),
                         pick=bool(row.get("user_confirmed")),
                     )
-        # Rows sharing a path: its file is the newest one, the one sibling() picks.
+        # Rows sharing a path: take its newest time, the placement sibling() picks.
         for placements in moves._by_media.values():
             for path, mtime in placements:
                 if _newer(mtime, moves._placed[path]):
