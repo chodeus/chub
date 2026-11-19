@@ -977,7 +977,9 @@ class AssetRenamerr(ChubModule):
         # whole loop. Read-only (query_only); closed after the loop — on an
         # exception it's reclaimed on GC, which is safe for a read connection.
         poster_conn = db.poster.open_read_connection()
-        moves = AssetMoves.load(self.config, all_media, applied_map, applicable)
+        moves = AssetMoves.load(
+            self.config, all_media, applied_map, applicable, db.records_pick
+        )
         refusals: List[WriteRefused] = []
         kept_sources: List[OSError] = []
         attempted = 0

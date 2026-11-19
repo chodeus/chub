@@ -422,6 +422,22 @@ class ChubDB:
             self.logger.get_adapter("DATABASE").warning(f"Keeping {path}: could not check whether a row records it: {e}")
             return True
 
+    def records_pick(self, path: str) -> bool:
+        """True when a picked asset row records ``path``; True on a database error."""
+        try:
+            self._ensure_initialized()
+            sql = (
+                "SELECT 1 FROM media_asset_matches"
+                " WHERE applied_path=? AND user_confirmed=1 LIMIT 1"
+            )
+            row = self.media_asset_matches.execute_query(sql, (path,), fetch_one=True)
+            return bool(row)
+        except sqlite3.Error as e:
+            self.logger.get_adapter("DATABASE").warning(
+                f"Not sharing {path}: could not check whether it was picked: {e}"
+            )
+            return True
+
     def close(self) -> None:
         """
         Manually close the database context.

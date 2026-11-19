@@ -1669,6 +1669,43 @@ def test_a_failed_placed_path_check_keeps_the_file(db, monkeypatch, stub_logger,
     )
 
 
+@pytest.mark.parametrize("confirmed", [True, False])
+def test_records_pick_reads_whether_the_row_at_a_path_is_picked(db, confirmed):
+    path = "/kometa/Dune (2021)_logo.png"
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=1,
+        image_type="logo",
+        source="local",
+        matched_file=path,
+        applied_method="kometa",
+        applied_path=path,
+        match_status="applied",
+    )
+    db.media_asset_matches.set_user_confirmed("media", 1, "logo", confirmed)
+    other = "/kometa/Arrival (2016)_logo.png"
+    assert (db.records_pick(path), db.records_pick(other)) == (confirmed, False)
+
+
+@pytest.mark.parametrize("step", ["query", "schema"])
+def test_a_failed_pick_check_shares_nothing(db, monkeypatch, stub_logger, step):
+    def locked(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+
+    if step == "query":
+        monkeypatch.setattr(db.media_asset_matches, "execute_query", locked)
+    else:
+        monkeypatch.setattr(db, "_ensure_initialized", locked)
+    picked = db.records_pick("/kometa/Dune (2021)_logo.png")
+    assert (picked, stub_logger.messages["warning"]) == (
+        True,
+        [
+            "Not sharing /kometa/Dune (2021)_logo.png: could not check whether it was"
+            " picked: database is locked"
+        ],
+    )
+
+
 def test_remove_superseded_keeps_the_poster_both_paths_name(tmp_path, db):
     real = tmp_path / "posters"
     real.mkdir()

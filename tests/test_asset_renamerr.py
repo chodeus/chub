@@ -2688,6 +2688,37 @@ def test_a_logo_picked_for_one_instance_does_not_reach_an_instance_with_none(
 
 
 @pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_logo_picked_during_a_run_does_not_reach_another_instance(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    two_dune = db.media.get_by_instance("radarr2")[0]
+    real_resolve = m._resolve_source
+
+    def _resolve(media, *a, **k):
+        # The user picks radarr1's logo in the UI just before the run looks at radarr2.
+        if media["id"] == two_dune["id"] and pick.exists():
+            picker = make_module(destination_dir=str(dest), action_type="move")
+            picked = picker.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+            assert picked[0], picked[1]
+        return real_resolve(media, *a, **k)
+
+    monkeypatch.setattr(m, "_resolve_source", _resolve)
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune (2021)_logo.png": b"my pick"}
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
 def test_a_picked_logo_carried_to_a_renamed_folder_does_not_reach_another_instance(
     db, monkeypatch, tmp_path, order
 ):
@@ -2788,8 +2819,8 @@ def test_only_a_move_to_kometa_shares_placed_logos(tmp_path, apply_method, actio
     applied_map = {("media", 1, "logo"): row}
     off = make_module(apply_method=apply_method, action_type=action_type).config
     on = make_module(apply_method="kometa", action_type="move").config
-    unused = AssetMoves.load(off, [dune], applied_map, ["logo"])
-    found = AssetMoves.load(on, [dune], applied_map, ["logo"])
+    unused = AssetMoves.load(off, [dune], applied_map, ["logo"], lambda _p: False)
+    found = AssetMoves.load(on, [dune], applied_map, ["logo"], lambda _p: False)
     assert (
         unused.sibling(dune, "logo", None, None),
         found.sibling(dune, "logo", None, None),
@@ -2809,7 +2840,8 @@ def _dune_moves(tmp_path, recorded):
         row["matched_at"] = written[0] if written else None
         applied_map[("media", dune["id"], "logo")] = row
     config = make_module(apply_method="kometa", action_type="move").config
-    return AssetMoves.load(config, dunes, applied_map, ["logo"]), dunes
+    moves = AssetMoves.load(config, dunes, applied_map, ["logo"], lambda _p: False)
+    return moves, dunes
 
 
 def test_a_path_placed_again_with_older_art_is_not_offered_as_newer(tmp_path):

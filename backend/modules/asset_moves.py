@@ -1,7 +1,7 @@
 """Under move to Kometa, where art was placed, for items whose source is gone."""
 
 import os
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from backend.util.database.media_cache import MediaCache
 
@@ -23,8 +23,9 @@ def _media_key(media: dict, image_type: str) -> Tuple[str, str]:
 class AssetMoves:
     """Placed files per media, and where this run moved each source."""
 
-    def __init__(self, active: bool) -> None:
+    def __init__(self, active: bool, picked: Callable[[str], bool]) -> None:
         self.active = active
+        self._picked = picked
         self._by_media: Dict[Tuple[str, str], List[str]] = {}
         self._went: Dict[str, str] = {}
         self._placed: Dict[str, Optional[float]] = {}
@@ -33,10 +34,16 @@ class AssetMoves:
 
     @classmethod
     def load(
-        cls, config, all_media: List[dict], applied_map: dict, image_types: List[str]
+        cls,
+        config,
+        all_media: List[dict],
+        applied_map: dict,
+        image_types: List[str],
+        picked: Callable[[str], bool],
     ) -> "AssetMoves":
         """Every applied_path the rows record; active only under move to Kometa."""
-        moves = cls(config.apply_method == "kometa" and config.action_type == "move")
+        active = config.apply_method == "kometa" and config.action_type == "move"
+        moves = cls(active, picked)
         if not moves.active:
             return moves
         for media in all_media:
@@ -106,6 +113,9 @@ class AssetMoves:
         own_mtime = self._placed.get(own, own_mtime) if own else own_mtime
         if own and not _newer(self._placed[path], own_mtime):
             return None
+        if self._picked(path):  # picked in the UI since load
+            self._picks.add(path)
+            return self.sibling(media, image_type, own, own_mtime)
         return ("local", path, None)
 
     def lent(self, path: str, own: Optional[str]) -> bool:
