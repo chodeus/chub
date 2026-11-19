@@ -1103,16 +1103,16 @@ class PosterRenamerr(ChubModule):
         remove_superseded(previous, new_file_path, config.destination_dir, self.logger, db.records_placed_path)
 
     def _carry_action(
-        self, file: str, dest: str, moved: Optional[str], db: ChubDB
+        self, source: str, dest: str, moved: Optional[str], db: ChubDB
     ) -> str:
-        """Under move, copy while another row still needs ``file``."""
+        """Copy, not move, while ``moved`` is recorded or this run needs ``source``."""
         if self.config.action_type != "move":
             return self.config.action_type
         if moved:
             # _record_staged has moved our row off ``moved`` already.
             shared = db.records_placed_path(moved)
         else:
-            shared = bool(self._dests_left(file) - {dest})
+            shared = bool(self._dests_left(source) - {dest})
         return "copy" if shared else "move"
 
     def _rename_failed(self, log: Callable[[str], None], message: str) -> None:
@@ -1158,7 +1158,8 @@ class PosterRenamerr(ChubModule):
     def rename_file(self, item: dict, db: ChubDB) -> Optional[dict]:
         asset_type = item.get("asset_type")
         moved = self._moved_source(item)
-        file = moved or item.get("original_file") or item.get("file")
+        source = item.get("original_file") or item.get("file")
+        file = moved or source
         folder = item.get("folder", item.get("media_folder", "")) or ""
         # Plex collections have no on-disk folder, so collections_cache.folder is
         # empty — which previously produced a nameless ".jpg" (flat) or a generic
@@ -1237,7 +1238,7 @@ class PosterRenamerr(ChubModule):
                 and not self.process_file(
                     file,
                     new_file_path,
-                    self._carry_action(file, new_file_path, moved, db),
+                    self._carry_action(source, new_file_path, moved, db),
                 )
             ):
                 self._rename_failed(
@@ -1250,7 +1251,7 @@ class PosterRenamerr(ChubModule):
                 table = db.collection if asset_type == "collection" else db.media
                 table.set_renamed_file(item.get("id"), moved)
                 return None
-        self._dests_left(file).discard(new_file_path)
+        self._dests_left(source).discard(new_file_path)
 
         # Now that the asset is staged at its current path, drop any copy left
         # behind at the previous path (folder-rename self-cleanup).
