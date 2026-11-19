@@ -1126,6 +1126,26 @@ def test_an_excluded_poster_its_destination_refuses_fails_the_job(
     assert list(dest_dir.iterdir()) == []
 
 
+def test_an_excluded_poster_with_a_file_where_its_folder_goes_fails_the_job(
+    tmp_path, monkeypatch
+):
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+    blocker = dest_dir / "Collections"
+    blocker.write_bytes(b"not a folder")
+    by_id[1]["renamed_file"] = str(blocker / "inman.jpg")
+    with pytest.raises(NoPosterWritten):
+        br.run({"media_cache": [1], "collections_cache": []}, process_all=False)
+    assert br.logger.messages["error"] == [
+        f"Cannot write {blocker / 'inman.jpg'}: File exists. Check the volume's host "
+        "path, and that its disk or mount is working. 1 poster(s) failed this way.",
+        "Border replacerr failed: all 1 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above.",
+    ]
+    assert blocker.read_bytes() == b"not a folder"
+
+
 @_SKIP_AS_ROOT
 @pytest.mark.parametrize("full", [False, True], ids=["manifest", "full-library"])
 def test_an_excluded_poster_refused_beside_a_bordered_one_is_counted(

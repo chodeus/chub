@@ -127,3 +127,20 @@ def test_a_parent_folder_it_cannot_create_is_the_destination(tmp_path):
     finally:
         root.chmod(0o755)
     assert (raised.value.filename, refused) == (str(root / "Collections"), True)
+
+
+@pytest.mark.parametrize(
+    "dest, code",
+    [
+        ("Collections/poster.jpg", errno.EEXIST),
+        ("Collections/Dune/poster.jpg", errno.ENOTDIR),
+    ],
+    ids=["the-folder", "a-folder-above"],
+)
+def test_a_file_where_the_folder_goes_is_the_destination(tmp_path, dest, code):
+    (tmp_path / "Collections").write_bytes(b"not a folder")
+    dest = tmp_path / dest
+    with pytest.raises(OSError) as raised:
+        os.makedirs(dest.parent, exist_ok=True)
+    refused = destination_refused(raised.value, str(dest))
+    assert (raised.value.errno, refused) == (code, True)
