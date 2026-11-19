@@ -3141,6 +3141,23 @@ def test_a_moved_first_choice_deleted_for_one_instance_is_restored_from_the_othe
     assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
 
 
+@pytest.mark.parametrize("kept", ["radarr1", "radarr2"])
+def test_a_moved_first_choice_stays_when_the_other_instance_is_deselected(
+    db, monkeypatch, tmp_path, kept
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    m.config.instances = [kept]
+    for _ in range(2):
+        m.run()
+    assert sorted(p.read_bytes() for p in dest.iterdir()) == [b"png", b"png"]
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
 def test_a_moved_first_choice_logo_follows_a_folder_rename_over_the_runner_up(
     db, monkeypatch, tmp_path
 ):

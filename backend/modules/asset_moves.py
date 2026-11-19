@@ -33,6 +33,7 @@ class AssetMoves:
         self._picks: Set[str] = set()
         self._rows: Dict[Tuple[str, str], List[dict]] = {}
         self._held: Dict[Tuple[str, str], bool] = {}
+        self._applied: Set[str] = set()  # every row's path, any instance's
 
     @classmethod
     def load(
@@ -48,6 +49,8 @@ class AssetMoves:
         moves = cls(active, picked)
         if not moves.active:
             return moves
+        rows = applied_map.values()
+        moves._applied = {r["applied_path"] for r in rows if r.get("applied_path")}
         for media in all_media:
             if media.get("id") is None:
                 continue
@@ -74,7 +77,9 @@ class AssetMoves:
     def _on_disk(self, row: dict) -> bool:
         """True when the row's recorded source is a file, not one placed for an item."""
         source = row.get("matched_file")
-        return bool(source) and source not in self._placed and os.path.isfile(source)
+        if not source or source in self._placed or source in self._applied:
+            return False
+        return os.path.isfile(source)
 
     def held(self, media: dict, image_type: str) -> bool:
         """True while auto-placed art stands and none of its recorded sources does."""
