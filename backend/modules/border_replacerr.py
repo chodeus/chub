@@ -426,7 +426,7 @@ class BorderReplacerr(ChubModule):
     def _stage_unbordered(
         self, asset: dict, refusals: List[PosterWriteRefused]
     ) -> Optional[bool]:
-        """Copy a border-excluded asset's raw source to renamed_file when that is missing, differs or is a link: True copied, False nothing to copy, None failed."""
+        """Copy an excluded asset's source: True copied, False skipped, None failed."""
         src = asset.get("original_file")
         dest = asset.get("renamed_file")
         if not src or not dest or self.config.dry_run or not os.path.exists(src):
@@ -465,7 +465,7 @@ class BorderReplacerr(ChubModule):
             return False  # a file CHUB cannot read is replaced, not compared
 
     def _collect_matched_assets(self, db) -> Tuple[list, list]:
-        """Every matched media and collection row, already-moved posters included, split into (to border, excluded)."""
+        """Matched media/collection rows, moved posters too: (to border, excluded)."""
         assets: list = []
         excluded: list = []
         # Use .get() defensively: db rows are trusted but may be partial in
@@ -594,7 +594,8 @@ class BorderReplacerr(ChubModule):
                     (excluded if self._asset_excluded(asset) else assets).append(asset)
 
             write_refusals: List[PosterWriteRefused] = []
-            # Excluded from borders, not from posters: the raw source still reaches its destination or the Plex uploader.
+            # Excluded from borders, not from posters: the raw source still
+            # reaches its destination or the Plex uploader.
             stage_tried, stage_failed = self._stage_excluded(excluded, write_refusals)
             if not assets and not stage_failed:
                 self.logger.info("No assets to process for border replacerr.")

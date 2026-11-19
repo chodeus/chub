@@ -1163,13 +1163,15 @@ def test_an_excluded_poster_whose_source_cannot_be_read_is_an_error_not_a_failed
         tmp_path, monkeypatch, exclusion_list=["inman"]
     )
     src = by_id[1]["original_file"]
+    mode = os.stat(src).st_mode
     os.chmod(src, 0)
     try:
         counts = br.run({"media_cache": [1], "collections_cache": []})
     finally:
-        os.chmod(src, 0o644)
+        os.chmod(src, mode)
     assert br.logger.messages["error"] == [
-        f"Could not stage excluded asset 'inman': [Errno 13] Permission denied: '{src}'",
+        "Could not stage excluded asset 'inman': "
+        f"[Errno 13] Permission denied: '{src}'",
         "Border replacerr failed: all 1 poster(s) it tried failed, 0 skipped — "
         "see the ERROR lines above.",
     ]
