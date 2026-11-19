@@ -2915,6 +2915,16 @@ def test_a_shared_path_rewritten_with_older_art_keeps_the_later_writes_time(
     assert got == (("local", str(tmp_path / "a.png"), None) if offered else None)
 
 
+def test_a_moved_source_whose_placed_file_is_gone_is_not_offered(tmp_path):
+    moves, (dune,) = _dune_moves(tmp_path, [("a.png", 100)])
+    placed, source = tmp_path / "b.png", str(tmp_path / "src.png")
+    placed.write_bytes(b"png")
+    moves.add(dune, "logo", str(placed), source=source, mtime=100)
+    assert moves.went(source) == str(placed)
+    placed.unlink()
+    assert moves.went(source) is None
+
+
 def test_an_own_path_another_row_updated_is_not_offered_back(tmp_path):
     moves, (_one, two) = _dune_moves(tmp_path, [("a.png", 200), ("a.png", 100)])
     assert moves.sibling(two, "logo", str(tmp_path / "a.png"), 100) is None

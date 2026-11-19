@@ -1669,12 +1669,21 @@ def test_a_failed_placed_path_check_keeps_the_file(db, monkeypatch, stub_logger,
     )
 
 
-@pytest.mark.parametrize("confirmed", [True, False])
-def test_records_pick_reads_whether_the_row_at_a_path_is_picked(db, confirmed):
+@pytest.mark.parametrize(
+    "confirmed, live, picked",
+    [(True, True, True), (False, True, False), (True, False, False)],
+    ids=["picked", "not-picked", "deleted-item"],
+)
+def test_records_pick_reads_only_a_live_items_pick(db, confirmed, live, picked):
     path = "/kometa/Dune (2021)_logo.png"
+    target_id = 99
+    if live:
+        dune = {"title": "Dune", "normalized_title": "dune", "year": 2021}
+        db.media.upsert({**dune, "folder": "Dune (2021)"}, "movie", "radarr", "radarr1")
+        target_id = db.media.get_by_instance("radarr1")[0]["id"]
     db.media_asset_matches.upsert(
         target_kind="media",
-        target_id=1,
+        target_id=target_id,
         image_type="logo",
         source="local",
         matched_file=path,
@@ -1682,9 +1691,9 @@ def test_records_pick_reads_whether_the_row_at_a_path_is_picked(db, confirmed):
         applied_path=path,
         match_status="applied",
     )
-    db.media_asset_matches.set_user_confirmed("media", 1, "logo", confirmed)
+    db.media_asset_matches.set_user_confirmed("media", target_id, "logo", confirmed)
     other = "/kometa/Arrival (2016)_logo.png"
-    assert (db.records_pick(path), db.records_pick(other)) == (confirmed, False)
+    assert (db.records_pick(path), db.records_pick(other)) == (picked, False)
 
 
 @pytest.mark.parametrize("step", ["query", "schema"])
@@ -1700,8 +1709,8 @@ def test_a_failed_pick_check_shares_nothing(db, monkeypatch, stub_logger, step):
     assert (picked, stub_logger.messages["warning"]) == (
         True,
         [
-            "Not sharing /kometa/Dune (2021)_logo.png: could not check whether it was"
-            " picked: database is locked"
+            "Treating /kometa/Dune (2021)_logo.png as picked: could not check whether"
+            " it was picked: database is locked"
         ],
     )
 
