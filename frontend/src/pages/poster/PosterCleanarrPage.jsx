@@ -1012,7 +1012,10 @@ const PosterCleanarrPage = () => {
     };
 
     const passesOn = Boolean(MODE_META[mode]?.passes);
-    const assetListsShown = hasScanned && !((scanning || loading) && bundles.length === 0);
+    const plexBusyEmpty = (scanning || loading) && bundles.length === 0;
+    // A Plex scan in hand: the stale items it matches show on their bundles instead.
+    const plexShown = hasScanned && !byMedia.error && !plexBusyEmpty;
+    const staleListed = plexShown ? unmatchedStale : staleItems;
     const overlaysNote = cleanOverlaysOnly ? ' (Kometa overlays only)' : '';
     const picked = selectedPaths.size;
     const removeTargets = [
@@ -1237,7 +1240,7 @@ const PosterCleanarrPage = () => {
                             </Link>
                         </div>
                     )}
-                    {unmatchedStale.length > 0 && (
+                    {plexShown && unmatchedStale.length > 0 && (
                         <div>
                             {unmatchedStale.length} stale not matched to a Plex item (see below)
                         </div>
@@ -1344,7 +1347,7 @@ const PosterCleanarrPage = () => {
                     Couldn&apos;t read Plex metadata:{' '}
                     {byMedia.error?.message || String(byMedia.error)}.
                 </div>
-            ) : (scanning || loading) && bundles.length === 0 ? (
+            ) : plexBusyEmpty ? (
                 <Spinner size="medium" text="Scanning Plex metadata..." center />
             ) : bundles.length === 0 ? (
                 <div className="text-center py-16 text-fg-subtle">
@@ -1650,87 +1653,89 @@ const PosterCleanarrPage = () => {
                 </>
             )}
 
-            {/* Kometa asset lists: read apart from the Plex scan, so they show without bundles. */}
-            {assetListsShown && (
-                <>
-                    {unmatchedStale.length > 0 && (
-                        <section className="rounded-lg border border-border bg-surface mt-4 p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                                <h2 className="text-sm font-semibold text-fg">
-                                    Stale duplicates without a Plex poster row
-                                </h2>
-                                <span style={typeBadge}>{unmatchedStale.length}</span>
-                                <span className="text-fg-subtle text-xs">
-                                    Renamed asset folders and files whose title isn&apos;t in the
-                                    Plex bundle scan — the Stale pass still moves or removes each
-                                    once its current copy is in place
+            {/* Kometa asset lists: read apart from the Plex scan, so they show without it. */}
+            {staleListed.length > 0 && (
+                <section className="rounded-lg border border-border bg-surface mt-4 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <h2 className="text-sm font-semibold text-fg">
+                            {plexShown
+                                ? 'Stale duplicates without a Plex poster row'
+                                : 'Stale duplicates'}
+                        </h2>
+                        <span style={typeBadge}>{staleListed.length}</span>
+                        <span className="text-fg-subtle text-xs">
+                            Renamed asset folders and files
+                            {plexShown ? " whose title isn't in the Plex bundle scan" : ''} — the
+                            Stale pass still moves or removes each once its current copy is in place
+                        </span>
+                    </div>
+                    <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                        {staleListed.map(s => (
+                            <div
+                                key={s.folder || s.name}
+                                className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
+                            >
+                                <span className="truncate text-fg-muted">
+                                    <span style={stalePill}>⧉</span> {s.name}
+                                    <span className="text-fg-subtle"> → {s.canonical}</span>
                                 </span>
-                            </div>
-                            <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
-                                {unmatchedStale.map(s => (
-                                    <div
-                                        key={s.folder || s.name}
-                                        className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
-                                    >
-                                        <span className="truncate text-fg-muted">
-                                            <span style={stalePill}>⧉</span> {s.name}
-                                            <span className="text-fg-subtle"> → {s.canonical}</span>
-                                        </span>
-                                        <span className="text-fg-subtle text-xs whitespace-nowrap">
-                                            {formatBytes(s.size)}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    )}
-
-                    {orphans.length > 0 && (
-                        <section className="rounded-lg border border-border bg-surface mt-4 p-4">
-                            <div className="flex flex-wrap items-center gap-2 mb-3">
-                                <h2 className="text-sm font-semibold text-fg">Orphaned assets</h2>
-                                <span style={typeBadge}>{orphans.length}</span>
-                                <span className="text-fg-subtle text-xs">
-                                    Kometa assets with no matching media in your library
-                                </span>
-                                <LoadingButton
-                                    className="ml-auto"
-                                    size="small"
-                                    variant="danger"
-                                    loading={isEnqueuing}
-                                    loadingText="Starting…"
-                                    disabled={orphanDeleteBusy}
-                                    onClick={() => setConfirmOrphanDelete({ all: true })}
+                                <span
+                                    className="text-fg-subtle text-xs whitespace-nowrap"
+                                    title="Space removing it frees"
                                 >
-                                    Delete all
-                                </LoadingButton>
+                                    {formatBytes(s.size)}
+                                </span>
                             </div>
-                            <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
-                                {orphans.map(o => (
-                                    <div
-                                        key={o.path}
-                                        className="flex items-center gap-2 py-1.5 border-b border-border text-sm"
-                                    >
-                                        <span className="truncate text-fg-muted mr-auto">
-                                            {o.path}
-                                        </span>
-                                        <span className="text-fg-subtle text-xs whitespace-nowrap">
-                                            {formatBytes(o.size)}
-                                        </span>
-                                        <IconButton
-                                            icon="delete"
-                                            size="small"
-                                            aria-label={`Delete ${o.path}`}
-                                            title="Delete this orphan"
-                                            disabled={orphanDeleteBusy}
-                                            onClick={() => setConfirmOrphanDelete({ path: o.path })}
-                                        />
-                                    </div>
-                                ))}
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {orphans.length > 0 && (
+                <section className="rounded-lg border border-border bg-surface mt-4 p-4">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <h2 className="text-sm font-semibold text-fg">Orphaned assets</h2>
+                        <span style={typeBadge}>{orphans.length}</span>
+                        <span className="text-fg-subtle text-xs">
+                            Kometa assets with no matching media in your library
+                        </span>
+                        <LoadingButton
+                            className="ml-auto"
+                            size="small"
+                            variant="danger"
+                            loading={isEnqueuing}
+                            loadingText="Starting…"
+                            disabled={orphanDeleteBusy}
+                            onClick={() => setConfirmOrphanDelete({ all: true })}
+                        >
+                            Delete all
+                        </LoadingButton>
+                    </div>
+                    <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                        {orphans.map(o => (
+                            <div
+                                key={o.path}
+                                className="flex items-center gap-2 py-1.5 border-b border-border text-sm"
+                            >
+                                <span className="truncate text-fg-muted mr-auto">{o.path}</span>
+                                <span
+                                    className="text-fg-subtle text-xs whitespace-nowrap"
+                                    title="Space deleting it frees"
+                                >
+                                    {formatBytes(o.size)}
+                                </span>
+                                <IconButton
+                                    icon="delete"
+                                    size="small"
+                                    aria-label={`Delete ${o.path}`}
+                                    title="Delete this orphan"
+                                    disabled={orphanDeleteBusy}
+                                    onClick={() => setConfirmOrphanDelete({ path: o.path })}
+                                />
                             </div>
-                        </section>
-                    )}
-                </>
+                        ))}
+                    </div>
+                </section>
             )}
 
             <VariantPreviewModal

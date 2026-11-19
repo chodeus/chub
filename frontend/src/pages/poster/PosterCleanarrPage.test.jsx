@@ -878,16 +878,11 @@ describe('Poster Cleanarr — Kometa asset lists without Plex bundles', () => {
     };
     const ORPHAN = { path: '/assets/Lost Movie (2017)/poster.jpg', parsed: 'x', size: 10 };
 
-    it.each([
-        [
-            'has no variants',
-            payload([]),
-            null,
-            'No poster variants found. Plex metadata looks clean.',
-        ],
-        ['cannot be read', null, new Error('Plex DB locked'), /Couldn.t read Plex metadata/],
-    ])('lists stale and orphaned assets when Plex metadata %s', async (_, data, err, state) => {
-        const user = userEvent.setup();
+    // Plex can still hold the old scan beside a failed re-read (useApiData keeps its data).
+    const GONE = { ...GHOST_A, rating_key: 7, title: 'Gone Movie', year: 2019 };
+    const UNMATCHED = 'Stale duplicates without a Plex poster row';
+
+    const showLists = (data, err) => {
         scanPayload = data;
         scanError = err;
         mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
@@ -896,12 +891,71 @@ describe('Poster Cleanarr — Kometa asset lists without Plex bundles', () => {
             data: { stale: [STALE], orphans: [ORPHAN] },
         });
         render(<PosterCleanarrPage />);
+    };
+    const expectLists = async heading => {
+        expect(await screen.findByText(ORPHAN.path)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
+        expect(screen.getByText(`→ ${STALE.canonical}`)).toBeInTheDocument();
+        const claimed = screen.queryByText(/stale not matched to a Plex item/);
+        expect(Boolean(claimed)).toBe(heading === UNMATCHED);
+    };
+
+    it.each([
+        [
+            'has no variants',
+            payload([]),
+            null,
+            'No poster variants found. Plex metadata looks clean.',
+            UNMATCHED,
+        ],
+        [
+            'cannot be read',
+            null,
+            new Error('Plex DB locked'),
+            /Couldn.t read Plex metadata/,
+            'Stale duplicates',
+        ],
+        [
+            'cannot be re-read',
+            payload([GONE]),
+            new Error('Plex DB locked'),
+            /Couldn.t read Plex metadata/,
+            'Stale duplicates',
+        ],
+        [
+            'cannot be re-read over a scan that matched none',
+            payload([GHOST_A]),
+            new Error('Plex DB locked'),
+            /Couldn.t read Plex metadata/,
+            'Stale duplicates',
+        ],
+    ])(
+        'lists stale and orphaned assets when Plex metadata %s',
+        async (_, data, err, state, heading) => {
+            const user = userEvent.setup();
+            showLists(data, err);
+            await user.click(screen.getByRole('button', { name: 'Run scan' }));
+
+            expect(await screen.findByText(state)).toBeInTheDocument();
+            await expectLists(heading);
+        }
+    );
+
+    it('lists them before any Plex scan', async () => {
+        showLists(null, null);
+
+        expect(screen.getByText('Ready to scan')).toBeInTheDocument();
+        await expectLists('Stale duplicates');
+    });
+
+    it('keeps listing them while a Plex scan runs', async () => {
+        const user = userEvent.setup();
+        showLists(payload([]), null);
+        await expectLists('Stale duplicates');
+        mockJobsAPI.tailJobLog.mockReturnValue(new Promise(() => {}));
         await user.click(screen.getByRole('button', { name: 'Run scan' }));
 
-        expect(await screen.findByText(state)).toBeInTheDocument();
-        expect(await screen.findByText(ORPHAN.path)).toBeInTheDocument();
-        expect(
-            screen.getByRole('heading', { name: 'Stale duplicates without a Plex poster row' })
-        ).toBeInTheDocument();
+        expect(await screen.findByText('Scanning Plex metadata...')).toBeInTheDocument();
+        await expectLists('Stale duplicates');
     });
 });
