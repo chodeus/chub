@@ -1012,6 +1012,7 @@ const PosterCleanarrPage = () => {
     };
 
     const passesOn = Boolean(MODE_META[mode]?.passes);
+    const assetListsShown = hasScanned && !((scanning || loading) && bundles.length === 0);
     const overlaysNote = cleanOverlaysOnly ? ' (Kometa overlays only)' : '';
     const picked = selectedPaths.size;
     const removeTargets = [
@@ -1646,7 +1647,12 @@ const PosterCleanarrPage = () => {
                             )}
                         </div>
                     </section>
+                </>
+            )}
 
+            {/* Kometa asset lists: read apart from the Plex scan, so they show without bundles. */}
+            {assetListsShown && (
+                <>
                     {unmatchedStale.length > 0 && (
                         <section className="rounded-lg border border-border bg-surface mt-4 p-4">
                             <div className="flex items-center gap-2 mb-3">

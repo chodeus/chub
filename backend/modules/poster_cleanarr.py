@@ -1664,17 +1664,13 @@ class PosterCleanarr(ChubModule):
                     if key in library_titles or folder_key in library_titles:
                         continue
 
-                    try:
-                        size = os.path.getsize(fpath)
-                    except OSError:
-                        size = 0
                     orphans.append(
                         {
                             "path": fpath,
                             "asset_dir": asset_dir,
                             "parsed": parsed,
                             "key": key,
-                            "size": size,
+                            "size": _disk_size(fpath),
                         }
                     )
 

@@ -592,6 +592,27 @@ def _write(tmp_path, name):
     return f
 
 
+def test_an_orphan_counts_only_the_bytes_removing_it_frees(tmp_path):
+    m = _make()
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    source = tmp_path / "Source.png"
+    source.write_bytes(b"12345")
+    os.link(source, assets / "Hard (2021).png")
+    os.symlink(source, assets / "Soft (2022).png")
+    (assets / "Plain (2020).png").write_bytes(b"abc")
+
+    orphans = m._scan_orphan_assets(
+        [str(assets)], library_titles=set(), tmdb_ids=set(), tvdb_ids=set()
+    )
+
+    assert sorted((os.path.basename(o["path"]), o["size"]) for o in orphans) == [
+        ("Hard (2021).png", 0),
+        ("Plain (2020).png", 3),
+        ("Soft (2022).png", 0),
+    ]
+
+
 def test_scan_tmdb_id_match_spares_title_mismatch(tmp_path):
     """A {tmdb-N} tag whose id IS in the library spares the file even when its
     title doesn't match anything in the title set."""

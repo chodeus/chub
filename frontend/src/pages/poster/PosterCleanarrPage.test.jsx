@@ -28,9 +28,15 @@ const toast = { success: vi.fn(), error: vi.fn(), warning: vi.fn() };
 vi.mock('../../contexts/ToastContext.jsx', () => ({ useToast: () => toast }));
 
 let scanPayload = null;
+let scanError = null;
 const refresh = vi.fn();
 vi.mock('../../hooks/useApiData.js', () => ({
-    useApiData: () => ({ data: { data: scanPayload }, isLoading: false, error: null, refresh }),
+    useApiData: () => ({
+        data: { data: scanPayload },
+        isLoading: false,
+        error: scanError,
+        refresh,
+    }),
 }));
 
 const PosterCleanarrPage = (await import('./PosterCleanarrPage.jsx')).default;
@@ -87,6 +93,7 @@ const payload = bundles => ({
 
 beforeEach(() => {
     scanPayload = null;
+    scanError = null;
     localStorage.clear();
     // Must be set here, not at the mock literal: `mockReset` wipes a
     // module-scope mockResolvedValue before every test. A bare vi.fn() returns
@@ -855,5 +862,46 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
                 .getAllByRole('listitem')
                 .map(li => li.textContent)
         ).toEqual(items);
+    });
+});
+
+describe('Poster Cleanarr — Kometa asset lists without Plex bundles', () => {
+    const STALE = {
+        rating_key: null,
+        plex_title: '',
+        plex_year: null,
+        name: 'Gone Movie (2019) {tmdb-1}',
+        canonical: 'Gone Movie (2019) {tmdb-2}',
+        canonical_present: true,
+        size: 10,
+        folder: '/assets/Gone Movie (2019) {tmdb-1}',
+    };
+    const ORPHAN = { path: '/assets/Lost Movie (2017)/poster.jpg', parsed: 'x', size: 10 };
+
+    it.each([
+        [
+            'has no variants',
+            payload([]),
+            null,
+            'No poster variants found. Plex metadata looks clean.',
+        ],
+        ['cannot be read', null, new Error('Plex DB locked'), /Couldn.t read Plex metadata/],
+    ])('lists stale and orphaned assets when Plex metadata %s', async (_, data, err, state) => {
+        const user = userEvent.setup();
+        scanPayload = data;
+        scanError = err;
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        mockPostersAPI.enqueueKometaAssetsScan.mockResolvedValue({ data: { job_id: 2 } });
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: { stale: [STALE], orphans: [ORPHAN] },
+        });
+        render(<PosterCleanarrPage />);
+        await user.click(screen.getByRole('button', { name: 'Run scan' }));
+
+        expect(await screen.findByText(state)).toBeInTheDocument();
+        expect(await screen.findByText(ORPHAN.path)).toBeInTheDocument();
+        expect(
+            screen.getByRole('heading', { name: 'Stale duplicates without a Plex poster row' })
+        ).toBeInTheDocument();
     });
 });
