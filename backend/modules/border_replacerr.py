@@ -613,12 +613,8 @@ class BorderReplacerr(ChubModule):
             # and the list would just be every input.
             changes: List[Dict[str, str]] = []
 
-            # Skip-gate state: the source and output (mtime, size) and settings
-            # signature of each poster we last bordered. A poster whose files are
-            # unchanged and whose signature still matches would re-encode to
-            # byte-identical bytes, so it's skipped entirely (no decode/resize/encode).
-            # Disabled on dry-run (we want to report what WOULD happen). Empty
-            # on first run, so the first pass processes everything as before.
+            # Skip-gate (see _unchanged_since); off on dry run, which reports what
+            # WOULD happen.
             gate_enabled = not dry_run
             state_map = db.border.get_all_map() if gate_enabled else {}
 

@@ -2,18 +2,7 @@ from .db_base import DatabaseBase
 
 
 class BorderState(DatabaseBase):
-    """Interface for the border_state table.
-
-    Tracks, per output poster, the (mtime, size) of its source and of the file
-    border_replacerr last wrote, and a signature of the border settings used.
-    On the next run a poster is skipped entirely (no decode/resize/encode) when
-    both files are unchanged AND the signature it would be processed with
-    matches — i.e. the result would be byte-identical to what's already on disk.
-
-    Keying on the OUTPUT file (not the source) makes this robust whether the
-    border is applied in place or to a separate path: any upstream re-upload
-    that replaces the poster bumps its mtime/size and invalidates the gate.
-    """
+    """Per output poster: its source's and its own (mtime, size) and the border settings at its last pass."""
 
     def get_all_map(self) -> dict:
         """Return {renamed_file: {source/output mtime and size, variant_sig}}."""
@@ -37,11 +26,7 @@ class BorderState(DatabaseBase):
         }
 
     def bulk_record(self, records: list, chunk_size: int = 500) -> int:
-        """Upsert many border-state rows, one transaction per chunk.
-
-        records: dicts with renamed_file, source_mtime, source_size,
-        output_mtime, output_size, variant_sig, updated_at.
-        """
+        """Upsert border_state rows (dicts keyed by its columns), one transaction per chunk."""
         sql = """
             INSERT INTO border_state
                 (renamed_file, source_mtime, source_size, output_mtime,
