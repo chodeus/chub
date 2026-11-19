@@ -462,7 +462,7 @@ class BorderReplacerr(ChubModule):
         try:
             return os.path.exists(dest) and already_in_place(src, dest, "copy")
         except OSError:
-            return False  # a file CHUB cannot read is replaced, not compared
+            return False  # copy: unreadable dest is replaced, unreadable src fails
 
     def _collect_matched_assets(self, db) -> Tuple[list, list]:
         """Matched media/collection rows, moved posters too: (to border, excluded)."""
