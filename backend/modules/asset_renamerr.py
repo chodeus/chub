@@ -1192,7 +1192,7 @@ class AssetRenamerr(ChubModule):
                             detail,
                             source=file,
                             mtime=src_mtime,
-                            pick=file == picked,
+                            pick=file == picked or (carry and picked is not None),
                         )
 
                 output[image_type].append(

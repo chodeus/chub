@@ -2688,6 +2688,28 @@ def test_a_logo_picked_for_one_instance_does_not_reach_an_instance_with_none(
 
 
 @pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_picked_logo_carried_to_a_renamed_folder_does_not_reach_another_instance(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    applied, detail = m.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+    assert applied, detail
+    _dune_in(db, "radarr1", "Dune HD (2021)")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune HD (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune HD (2021)_logo.png": b"my pick"}
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
 def test_an_adopted_logo_carried_to_a_renamed_folder_does_not_beat_a_newer_one(
     db, monkeypatch, tmp_path, order
 ):
@@ -2781,9 +2803,10 @@ def _dune_moves(tmp_path, recorded):
         for i in range(1, len(recorded) + 1)
     ]
     applied_map = {}
-    for dune, (name, mtime) in zip(dunes, recorded):
+    for dune, (name, mtime, *written) in zip(dunes, recorded):
         (tmp_path / name).write_bytes(b"png")
         row = {"applied_path": str(tmp_path / name), "source_mtime": mtime}
+        row["matched_at"] = written[0] if written else None
         applied_map[("media", dune["id"], "logo")] = row
     config = make_module(apply_method="kometa", action_type="move").config
     return AssetMoves.load(config, dunes, applied_map, ["logo"]), dunes
@@ -2793,6 +2816,19 @@ def test_a_path_placed_again_with_older_art_is_not_offered_as_newer(tmp_path):
     moves, (one, two) = _dune_moves(tmp_path, [("a.png", 200), ("b.png", 150)])
     moves.add(one, "logo", str(tmp_path / "a.png"), mtime=100)
     assert moves.sibling(two, "logo", str(tmp_path / "b.png"), 150) is None
+
+
+@pytest.mark.parametrize("later_row_first", [False, True])
+@pytest.mark.parametrize("own_mtime, offered", [(150, False), (50, True)])
+def test_a_shared_path_rewritten_with_older_art_keeps_the_later_writes_time(
+    tmp_path, later_row_first, own_mtime, offered
+):
+    first = ("a.png", 200, "2026-11-19T10:00:00+00:00")
+    later = ("a.png", 100, "2026-11-19T11:00:00.500000+00:00")
+    rows = [later, first] if later_row_first else [first, later]
+    moves, (*_, three) = _dune_moves(tmp_path, [*rows, ("c.png", own_mtime)])
+    got = moves.sibling(three, "logo", str(tmp_path / "c.png"), own_mtime)
+    assert got == (("local", str(tmp_path / "a.png"), None) if offered else None)
 
 
 def test_an_own_path_another_row_updated_is_not_offered_back(tmp_path):

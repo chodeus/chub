@@ -28,6 +28,7 @@ class AssetMoves:
         self._by_media: Dict[Tuple[str, str], List[str]] = {}
         self._went: Dict[str, str] = {}
         self._placed: Dict[str, Optional[float]] = {}
+        self._written: Dict[str, Tuple[str, float]] = {}
         self._picks: Set[str] = set()
 
     @classmethod
@@ -49,10 +50,13 @@ class AssetMoves:
         return moves
 
     def _record(self, media: dict, image_type: str, row: dict) -> None:
-        """One row's placement; rows sharing a path give it their newest time."""
+        """One row's placement; a shared path takes the time of the row written last."""
         path, mtime = row["applied_path"], row.get("source_mtime")
-        if path in self._placed and not _newer(mtime, self._placed[path]):
+        rank = (row.get("matched_at") or "", _recency(mtime))
+        if path in self._written and self._written[path] >= rank:
             mtime = self._placed[path]
+        else:
+            self._written[path] = rank
         pick = bool(row.get("user_confirmed"))
         self.add(media, image_type, path, mtime=mtime, pick=pick)
 
@@ -71,7 +75,7 @@ class AssetMoves:
         paths = self._by_media.setdefault(_media_key(media, image_type), [])
         if path not in paths:
             paths.append(path)
-        self._placed[path] = mtime  # on load, _record passes the newest of its rows
+        self._placed[path] = mtime  # on load, _record passes its last-written row's
         if pick:
             self._picks.add(path)
         if source:
