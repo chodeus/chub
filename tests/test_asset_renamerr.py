@@ -2914,7 +2914,8 @@ def test_a_copy_of_a_deselected_items_logo_traces_back_to_its_source(
     dune = {"id": 2, "asset_type": "movie", "tmdb_id": 438631, "title": "Dune"}
     config = make_module(apply_method="kometa", action_type="move").config
     moves = AssetMoves.load(config, [dune], applied_map, ["logo"], lambda _p: False)
-    assert moves.held(dune, "logo") is held
+    got = moves.held(dune, "logo")
+    assert got is held
 
 
 def test_a_path_placed_again_with_older_art_is_not_offered_as_newer(tmp_path):
@@ -3215,5 +3216,25 @@ def test_a_moved_first_choice_logo_follows_a_folder_rename_over_the_runner_up(
         m.run()
     assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
         "Dune HD (2021)_logo.png": b"png"
+    }
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+def test_a_source_saved_again_replaces_a_logo_that_followed_a_folder_rename(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    m.run()
+    _dune_in(db, "radarr1", "Dune HD (2021)")
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (2_000_000_000, 2_000_000_000))
+    for _ in range(2):
+        m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune HD (2021)_logo.png": b"new"
     }
     assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]

@@ -1162,6 +1162,9 @@ class AssetRenamerr(ChubModule):
 
                 applied_libs: Optional[List[str]] = None
                 carry = placed is not None and file == placed
+                # A carry records the row's source file, not the placed copy it carries,
+                # so a file saved there again still replaces it.
+                origin = (prev or {}).get("matched_file") if carry else file
                 if apply_method == "plex":
                     applied, detail, applied_libs = self._apply_direct_remaining(
                         db,
@@ -1200,7 +1203,7 @@ class AssetRenamerr(ChubModule):
                         target_id=target_id,
                         image_type=image_type,
                         source=source,
-                        matched_file=file,
+                        matched_file=origin,
                         matched_url=url,
                         source_mtime=src_mtime,
                         applied_method=apply_method,
