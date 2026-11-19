@@ -33,7 +33,7 @@ class AssetMoves:
         self._picks: Set[str] = set()
         self._rows: Dict[Tuple[str, str], List[dict]] = {}
         self._held: Dict[Tuple[str, str], bool] = {}
-        self._applied: Set[str] = set()  # every row's path, any instance's
+        self._came_from: Dict[str, Set[str]] = {}  # any instance's row: path -> sources
 
     @classmethod
     def load(
@@ -49,8 +49,10 @@ class AssetMoves:
         moves = cls(active, picked)
         if not moves.active:
             return moves
-        rows = applied_map.values()
-        moves._applied = {r["applied_path"] for r in rows if r.get("applied_path")}
+        for r in applied_map.values():
+            path, source = r.get("applied_path"), r.get("matched_file")
+            if path:
+                moves._came_from.setdefault(path, set()).update(filter(None, [source]))
         for media in all_media:
             if media.get("id") is None:
                 continue
@@ -75,11 +77,19 @@ class AssetMoves:
             self._rows.setdefault(_media_key(media, image_type), []).append(row)
 
     def _on_disk(self, row: dict) -> bool:
-        """True when the row's recorded source is a file, not one placed for an item."""
-        source = row.get("matched_file")
-        if not source or source in self._placed or source in self._applied:
-            return False
-        return os.path.isfile(source)
+        """True when the row's art traces back to a source file still on disk."""
+        seen: Set[str] = set()
+        todo = [row.get("matched_file")]
+        while todo:
+            source = todo.pop()
+            if not source or source in seen:
+                continue
+            seen.add(source)
+            if source in self._came_from:  # another row's copy: follow it to its source
+                todo.extend(self._came_from[source])
+            elif source not in self._placed and os.path.isfile(source):
+                return True
+        return False
 
     def held(self, media: dict, image_type: str) -> bool:
         """True while auto-placed art stands and none of its recorded sources does."""
