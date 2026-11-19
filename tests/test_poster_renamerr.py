@@ -3119,6 +3119,41 @@ def test_an_adopted_poster_follows_its_folder_rename(tmp_path, monkeypatch):
     assert (_placed(posters), m.logger.messages["error"]) == (each, [])
 
 
+def test_a_poster_adopted_at_its_siblings_path_stays_when_the_sibling_renames(
+    tmp_path, monkeypatch
+):
+    m, posters, _src = _added_later(tmp_path, monkeypatch, folder="Dune (2021)")
+    m.run()
+    _add_dune(tmp_path, "radarr1", "Dune HD (2021)")
+    m.run()
+    each = [("Dune (2021).jpg", b"poster"), ("Dune HD (2021).jpg", b"poster")]
+    assert (_placed(posters), m.logger.messages["error"]) == (each, [])
+
+
+def test_a_poster_adopted_at_its_siblings_path_follows_its_folder_alone(
+    tmp_path, monkeypatch
+):
+    m, posters, _src = _added_later(tmp_path, monkeypatch, folder="Dune (2021)")
+    m.run()
+    m.config.instances = ["radarr2"]
+    _add_dune(tmp_path, "radarr2", "Dune UHD (2021)")
+    m.run()
+    each = [("Dune (2021).jpg", b"poster"), ("Dune UHD (2021).jpg", b"poster")]
+    assert (_placed(posters), m.logger.messages["error"]) == (each, [])
+
+
+def test_a_dry_run_records_no_adoption_at_its_siblings_path(tmp_path, monkeypatch):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _posters, _src = _added_later(tmp_path, monkeypatch, folder="Dune (2021)")
+    m.config.dry_run = True
+    m.run()
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        row = db.media.get_by_instance("radarr2")[0]
+    assert (row["renamed_file"], row["original_file"]) == (None, None)
+
+
 def test_a_picked_poster_is_not_replaced_by_a_siblings(tmp_path, monkeypatch):
     from backend.util.database import ChubDB
     from tests.conftest import StubLogger

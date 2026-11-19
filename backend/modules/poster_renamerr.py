@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import threading
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
@@ -1131,13 +1131,15 @@ class PosterRenamerr(ChubModule):
         """The row's media identity across instances."""
         return MediaCache._identity_key(row, row.get("asset_type"), "")
 
-    def _with_carried_files(self, rows: list) -> List[Tuple[dict, Optional[str]]]:
-        """Rows with their _moved_source if unmatched, or a sibling's to adopt."""
+    def _with_carried_files(
+        self, rows: list
+    ) -> List[Tuple[dict, Optional[str], bool]]:
+        """Rows with their _moved_source if unmatched, or a sibling's to adopt, and whether they adopt it."""
         carried = [
             None if row.get("matched") else self._moved_source(row) for row in rows
         ]
         if not self._carries_moves():
-            return list(zip(rows, carried))
+            return [(row, carry, False) for row, carry in zip(rows, carried)]
         wanting = {
             i: self._sibling_key(row)
             for i, (row, carry) in enumerate(zip(rows, carried))
@@ -1148,11 +1150,11 @@ class PosterRenamerr(ChubModule):
         for i, (row, carry) in enumerate(zip(rows, carried)):
             hit = siblings.get(wanting.get(i, ""))
             if not hit:
-                rest.append((row, carry))
+                rest.append((row, carry, False))
                 continue
             # As if staged at the sibling's file.
             row["renamed_file"], row["original_file"] = hit
-            adopted.append((row, hit[0]))
+            adopted.append((row, hit[0], True))
         # Adopters first: a sibling restaged later this run moves the file they copy.
         return adopted + rest
 
@@ -1358,10 +1360,7 @@ class PosterRenamerr(ChubModule):
         ):
             lib_indexes = self._build_upload_lib_indexes(db)
 
-        for row, carry in self._with_carried_files(self._rows_in_scope(db)):
-            # A moved poster's row goes unmatched once its source is gone, but its file still follows the destination.
-            if not ((row.get("matched") or carry) and self._needs_staging(row)):
-                continue
+        for row in self._to_stage(db):
             if self._is_unchanged_upload(row, lib_indexes):
                 skipped_unchanged += 1
                 continue
@@ -1372,6 +1371,15 @@ class PosterRenamerr(ChubModule):
                 "to Plex (source unchanged since last upload)"
             )
         return matched_assets
+
+    def _to_stage(self, db: ChubDB) -> Iterator[dict]:
+        """Rows to stage this run; an adoption already at its destination is recorded instead, on a real run."""
+        for row, carry, adopted in self._with_carried_files(self._rows_in_scope(db)):
+            # A moved poster's row goes unmatched once its source is gone, but its file still follows the destination.
+            if (row.get("matched") or carry) and self._needs_staging(row):
+                yield row
+            elif adopted and not self.config.dry_run:
+                self._record_staged(row, db, row["renamed_file"])
 
     def _run_match_quality_pass(self, db: ChubDB) -> None:
         """Automatic refinement after matching: fuzzy near-miss flagging
