@@ -71,7 +71,7 @@ class AssetMoves:
         paths = self._by_media.setdefault(_media_key(media, image_type), [])
         if path not in paths:
             paths.append(path)
-        self._placed[path] = mtime  # the time of the file now at path
+        self._placed[path] = mtime  # on load, _record passes the newest of its rows
         if pick:
             self._picks.add(path)
         if source:
