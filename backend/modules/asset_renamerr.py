@@ -459,7 +459,12 @@ class AssetRenamerr(ChubModule):
 
     @staticmethod
     def _local_file(
-        media: dict, db: ChubDB, image_type: str, is_collection: bool, conn, moves=None
+        media: dict,
+        db: ChubDB,
+        image_type: str,
+        is_collection: bool,
+        conn,
+        moves: Optional[AssetMoves] = None,
     ) -> Optional[str]:
         """The best fetched local match still on disk, or where this run moved it; a missing root keeps its rows."""
         from backend.modules.poster_renamerr import PosterRenamerr
@@ -1034,6 +1039,7 @@ class AssetRenamerr(ChubModule):
                 elif picked and placed:
                     resolved = None  # Kometa still has the pick: never re-resolve over it
                 else:
+                    # No source of its own left (as after a move): the newest file placed for the same media elsewhere, when newer than its own.
                     resolved = self._resolve_source(
                         media,
                         db,
@@ -1042,6 +1048,8 @@ class AssetRenamerr(ChubModule):
                         fanart_client,
                         conn=poster_conn,
                         moves=moves,
+                    ) or moves.sibling(
+                        media, image_type, placed, (locked or {}).get("source_mtime")
                     )
                 if not resolved and placed:
                     if self._at_current_target(media, image_type, placed) and not stale_link(
@@ -1050,8 +1058,6 @@ class AssetRenamerr(ChubModule):
                         continue
                     # No source is left (as after a move) and the destination changed or is a stale link: place from the file last placed.
                     resolved = ("local", placed, None)
-                # Nothing of its own left under move: copy what was placed for the same media in another instance.
-                resolved = resolved or moves.sibling(media, image_type)
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a
                     # "missing" row so the Unmatched view can derive coverage
@@ -1181,7 +1187,8 @@ class AssetRenamerr(ChubModule):
                     )
                     if applied:
                         self._drop_superseded(db, prev, detail)
-                        moves.add(media, image_type, detail, source=file)
+                        mtime = None if file == picked else src_mtime
+                        moves.add(media, image_type, detail, source=file, mtime=mtime)
 
                 output[image_type].append(
                     {

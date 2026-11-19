@@ -2641,8 +2641,9 @@ def test_a_moved_logo_follows_its_folder_rename_and_reaches_an_instance_added_wi
     assert files == {two: b"png", "Dune HD (2021)_logo.png": b"png"}
 
 
+@pytest.mark.parametrize("restored", [False, True], ids=["pick-moved", "pick-restored"])
 def test_a_logo_picked_for_one_instance_is_kept_beside_the_others(
-    db, monkeypatch, tmp_path
+    db, monkeypatch, tmp_path, restored
 ):
     dest = tmp_path / "kometa"
     dest.mkdir()
@@ -2654,7 +2655,10 @@ def test_a_logo_picked_for_one_instance_is_kept_beside_the_others(
     two_dune = db.media.get_by_instance("radarr2")[0]
     applied, detail = m.apply_chosen_asset(db, "media", two_dune, "logo", str(pick))
     assert (applied, pick.exists()) == (True, False), detail
-    m.config.instances = ["radarr1", "radarr2"]
+    if restored:
+        # As a sync brings it back: placed again, first, this run.
+        pick.write_bytes(b"my pick")
+    m.config.instances = ["radarr2", "radarr1"] if restored else ["radarr1", "radarr2"]
     m.run()
     rows, files = _logos(db, dest)
     two = "Dune (2021) {tmdb-438631}_logo.png"
@@ -2690,9 +2694,12 @@ def test_only_a_move_to_kometa_shares_placed_logos(tmp_path, apply_method, actio
     applied_map = {("media", 1, "logo"): row}
     off = make_module(apply_method=apply_method, action_type=action_type).config
     on = make_module(apply_method="kometa", action_type="move").config
-    unused = AssetMoves.load(off, [dune], applied_map, ["logo"]).sibling(dune, "logo")
-    found = AssetMoves.load(on, [dune], applied_map, ["logo"]).sibling(dune, "logo")
-    assert (unused, found) == (None, ("local", str(placed), None))
+    unused = AssetMoves.load(off, [dune], applied_map, ["logo"])
+    found = AssetMoves.load(on, [dune], applied_map, ["logo"])
+    assert (
+        unused.sibling(dune, "logo", None, None),
+        found.sibling(dune, "logo", None, None),
+    ) == (None, ("local", str(placed), None))
 
 
 @pytest.mark.parametrize(
@@ -2755,3 +2762,30 @@ def test_each_instance_gets_the_first_choice_logo_and_the_next_stays(
     assert rows == [("applied", "Dune (2021)_logo.png"), ("applied", two)]
     assert files == {two: b"png", "Dune (2021)_logo.png": b"png"}
     assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+@pytest.mark.parametrize(
+    "order", [["radarr1", "radarr2", "radarr3"], ["radarr3", "radarr2", "radarr1"]]
+)
+def test_a_newer_logo_reaches_the_instances_a_run_missed(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (2_000_000_000, 2_000_000_000))
+    m.config.instances = ["radarr1"]
+    m.run()
+    _dune_in(db, "radarr3", "Dune 4K (2021)")
+    m.config.instances = order
+    m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune (2021)_logo.png": b"new",
+        "Dune (2021) {tmdb-438631}_logo.png": b"new",
+        "Dune 4K (2021)_logo.png": b"new",
+    }
