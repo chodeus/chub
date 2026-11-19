@@ -3192,3 +3192,50 @@ def test_an_unmatched_poster_whose_source_is_on_disk_is_not_replaced(
     m.run()
     each = [("Dune (2021).jpg", b"poster"), ("Dune 4K (2021).jpg", b"own")]
     assert _placed(posters) == each
+
+
+def _pick_dune(tmp_path, instance):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    picked = tmp_path / "picked.jpg"
+    picked.write_bytes(b"picked")
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        row_id = db.media.get_by_instance(instance)[0]["id"]
+        db.media.update(
+            asset_type="movie",
+            title="Dune",
+            year=2021,
+            instance_name=instance,
+            matched_value=True,
+            original_file=str(picked),
+            id=row_id,
+        )
+        db.media.set_user_confirmed(row_id, True)
+    return picked
+
+
+def test_an_approved_poster_is_adopted_by_an_instance_added_later(
+    tmp_path, monkeypatch
+):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, posters, src = _shared_by_instances(tmp_path, monkeypatch)
+    m.run()
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        db.media.approve_match(db.media.get_by_instance("radarr1")[0]["id"])
+    _add_dune(tmp_path, "radarr2", "Dune 4K (2021)")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    each = [("Dune (2021).jpg", b"poster"), ("Dune 4K (2021).jpg", b"poster")]
+    assert (_placed(posters), src.exists()) == (each, False)
+
+
+def test_a_moved_pick_keeps_its_poster_beside_a_sibling(tmp_path, monkeypatch):
+    m, posters, _src = _added_later(tmp_path, monkeypatch)
+    picked = _pick_dune(tmp_path, "radarr2")
+    m.run()
+    m.run()
+    each = [("Dune (2021).jpg", b"poster"), ("Dune 4K (2021).jpg", b"picked")]
+    assert (_placed(posters), picked.exists()) == (each, False)

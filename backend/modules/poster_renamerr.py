@@ -1084,16 +1084,19 @@ class PosterRenamerr(ChubModule):
 
     def _moved_source(self, row: dict) -> Optional[str]:
         """Under move, the file staged last time once its source is gone: the only copy left to stage from."""
-        config = self.config
-        # Only move carries one, dry runs included; under border_replacerr the border step places posters.
-        if config.action_type != "move" or config.run_border_replacerr:
+        if not self._carries_moves():
             return None
         # No staged path: a failed op on a stale row clears it after another writer's move landed, so adopt
-        # the file at the staged path. _staged_dest is None without a recorded source: such a row is never adopted.
+        # the file at the staged path. _staged_dest is None without a recorded source: nothing of its own to carry.
         staged = row.get("renamed_file") or self._staged_dest(row)
         if not staged or not os.path.isfile(staged):
             return None
         return None if self._has_source(row) else staged
+
+    def _carries_moves(self) -> bool:
+        """Under move, dry runs too; border_replacerr places its own posters."""
+        config = self.config
+        return config.action_type == "move" and not config.run_border_replacerr
 
     @staticmethod
     def _has_source(row: dict) -> bool:
@@ -1133,17 +1136,17 @@ class PosterRenamerr(ChubModule):
         carried = [
             None if row.get("matched") else self._moved_source(row) for row in rows
         ]
-        siblings: Dict[str, Tuple[str, str]] = {}
-        for row, carry in zip(rows, carried):
-            # Only a file its row records: _carry_action copies it, never moves it away.
-            if carry and carry == row.get("renamed_file"):
-                source = row.get("original_file") or row.get("file")
-                siblings.setdefault(self._sibling_key(row), (carry, source))
+        if not self._carries_moves():
+            return list(zip(rows, carried))
+        wanting = {
+            i: self._sibling_key(row)
+            for i, (row, carry) in enumerate(zip(rows, carried))
+            if not (row.get("matched") or carry or self._has_source(row))
+        }
+        siblings = self._placed_siblings(rows, carried, set(wanting.values()))
         adopted, rest = [], []
-        for row, carry in zip(rows, carried):
-            hit = None
-            if siblings and not (row.get("matched") or carry or self._has_source(row)):
-                hit = siblings.get(self._sibling_key(row))
+        for i, (row, carry) in enumerate(zip(rows, carried)):
+            hit = siblings.get(wanting.get(i, ""))
             if not hit:
                 rest.append((row, carry))
                 continue
@@ -1152,6 +1155,24 @@ class PosterRenamerr(ChubModule):
             adopted.append((row, hit[0]))
         # Adopters first: a sibling restaged later this run moves the file they copy.
         return adopted + rest
+
+    def _placed_siblings(
+        self, rows: list, carried: list, keys: Set[str]
+    ) -> Dict[str, Tuple[str, str]]:
+        """Per identity in keys, a moved file its row records and that row's source."""
+        siblings: Dict[str, Tuple[str, str]] = {}
+        if not keys:
+            return siblings
+        for row, carry in zip(rows, carried):
+            if (key := self._sibling_key(row)) not in keys:
+                continue
+            # A user-confirmed row keeps matched=1 after its source is moved.
+            own = self._moved_source(row) if row.get("matched") else carry
+            # Only a file its row records: _carry_action copies it, never moves it away.
+            if own and own == row.get("renamed_file"):
+                source = row.get("original_file") or row.get("file")
+                siblings.setdefault(key, (own, source))
+        return siblings
 
     def _remove_superseded(self, previous: Optional[str], new_file_path: str, db: ChubDB) -> None:
         """Drop the file an asset was staged to before it moved (e.g. a folder rename): Kometa ignores it and the orphan pass spares its id."""
