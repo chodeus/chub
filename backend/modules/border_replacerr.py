@@ -24,6 +24,7 @@ from backend.util.public_error import PublicError
 from backend.util.scheduler import md_range_contains
 from backend.util.writable import (
     WriteRefused,
+    destination_refused,
     log_refusals,
     nearest_existing_dir,
     writable_error,
@@ -422,28 +423,36 @@ class BorderReplacerr(ChubModule):
             return True
         return False
 
-    def _stage_unbordered(self, asset: dict) -> None:
-        """Copy a border-excluded asset's raw source to renamed_file when that is missing, differs or is a link; a failure only warns."""
+    def _stage_unbordered(
+        self, asset: dict, refusals: List[PosterWriteRefused]
+    ) -> bool:
+        """Copy a border-excluded asset's raw source to renamed_file when that is missing, differs or is a link; False if it could not."""
         src = asset.get("original_file")
         dest = asset.get("renamed_file")
         if not src or not dest or self.config.dry_run:
-            return
+            return True
         try:
             if not os.path.exists(src):
-                return
+                return True
             if os.path.exists(dest) and already_in_place(src, dest, "copy"):
-                return
+                return True
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             copy_into_place(src, dest, keep_mode=False)
             self.logger.debug(f"[EXCLUDED_COPY] {dest} ← {src} (unbordered)")
         except OSError as e:
-            self.logger.warning(
-                f"Could not stage excluded asset '{asset.get('title')}': {e}"
-            )
+            if destination_refused(e, dest):
+                refusals.append(PosterWriteRefused(dest, e))
+                self.logger.debug(str(refusals[-1]))
+            else:
+                self.logger.error(
+                    f"Could not stage excluded asset '{asset.get('title')}': {e}"
+                )
+            return False
+        return True
 
-    def _collect_matched_assets(self, db) -> list:
-        """Return every matched media row + matched collection row, with
-        exclusion_list / ignore_folders applied.
+    def _collect_matched_assets(self, db) -> Tuple[list, list]:
+        """Return every matched media row + matched collection row, split into
+        those to border and those exclusion_list / ignore_folders exclude.
 
         Unlike poster_renamerr.get_matched_assets(), this does NOT drop
         already-moved posters (those whose renamed_file exists on disk), so
@@ -451,24 +460,19 @@ class BorderReplacerr(ChubModule):
         the not-yet-moved subset carried in a manifest. Collections are
         included here (the old reset_all branch processed media only)."""
         assets: list = []
+        excluded: list = []
         # Use .get() defensively: db rows are trusted but may be partial in
         # edge cases (e.g. a row mid-write); a missing key skips the row rather
         # than crashing the whole library pass.
         for row in db.media.get_all():
             if row.get("matched") != 1:
                 continue
-            if self._asset_excluded(row):
-                self._stage_unbordered(row)
-                continue
-            assets.append(row)
+            (excluded if self._asset_excluded(row) else assets).append(row)
         for row in db.collection.get_all():
             if row.get("matched") != 1:
                 continue
-            if self._asset_excluded(row):
-                self._stage_unbordered(row)
-                continue
-            assets.append(row)
-        return assets
+            (excluded if self._asset_excluded(row) else assets).append(row)
+        return assets, excluded
 
     @staticmethod
     def _should_process_all(manifest, process_all: bool, reset_all: bool) -> bool:
@@ -551,6 +555,7 @@ class BorderReplacerr(ChubModule):
             active_holiday = results["active_holiday"]
 
             assets = []
+            excluded: List[dict] = []
             processed = 0
             replaced = 0
             removed = 0
@@ -564,7 +569,7 @@ class BorderReplacerr(ChubModule):
                     "Full-library border pass: reprocessing all matched media "
                     "and collections (includes already-moved posters)."
                 )
-                assets = self._collect_matched_assets(db)
+                assets, excluded = self._collect_matched_assets(db)
             else:
                 all_ids = [("media_cache", i) for i in manifest["media_cache"]] + [
                     ("collections_cache", i) for i in manifest["collections_cache"]
@@ -579,15 +584,14 @@ class BorderReplacerr(ChubModule):
                             f"Asset ID {asset_id} not found in {source}. Skipping."
                         )
                         continue
-                    if self._asset_excluded(asset):
-                        # Excluded from borders, not from posters: stage the
-                        # raw source so the asset still reaches its
-                        # destination / the Plex uploader without a border.
-                        self._stage_unbordered(asset)
-                        continue
-                    assets.append(asset)
+                    (excluded if self._asset_excluded(asset) else assets).append(asset)
 
-            if not assets:
+            write_refusals: List[PosterWriteRefused] = []
+            # Excluded from borders, not from posters: the raw source still reaches its destination or the Plex uploader.
+            stage_failed = sum(
+                not self._stage_unbordered(asset, write_refusals) for asset in excluded
+            )
+            if not assets and not stage_failed:
                 self.logger.info("No assets to process for border replacerr.")
                 db.holiday.set_status(active_holiday)
                 return None
@@ -610,7 +614,8 @@ class BorderReplacerr(ChubModule):
             else:
                 self.logger.debug("Border mode: removing borders")
 
-            self.logger.info(f"Processing {len(assets)} posters, please wait...")
+            if assets:
+                self.logger.info(f"Processing {len(assets)} posters, please wait...")
             # Collect each poster whose border actually changed so the user
             # can see exactly which titles were touched without flipping to
             # DEBUG. Skips dry-run because `result=True` there is unconditional
@@ -683,13 +688,13 @@ class BorderReplacerr(ChubModule):
                 source_stats[renamed_file] = src
                 work.append((asset, variant, sig))
 
-            attempted = len(work)
+            attempted = len(work) + stage_failed
             refused, refusal = 0, None
             # Dry run writes nothing, so a read-only destination is fine there.
             if not dry_run:
                 work, refused, refusal = self._split_unwritable(work)
-            failed += refused
-            processed += refused
+            failed += refused + stage_failed
+            processed += refused + stage_failed
 
             def _process(item: Tuple[dict, object, str]):
                 """Apply the active border op to one poster. Returns
@@ -747,8 +752,6 @@ class BorderReplacerr(ChubModule):
                 # behind slower posters while another writer replaces the output.
                 out = self._safe_stat(renamed_file, follow_symlinks=False)
                 return result, title, action, detail, out, renamed_file, sig
-
-            write_refusals: List[PosterWriteRefused] = []
 
             def _process_or_refuse(item: Tuple[dict, object, str]):
                 """_process, with a refused write kept for the verdict and returned as a failure."""

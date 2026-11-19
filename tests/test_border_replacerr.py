@@ -312,13 +312,14 @@ def test_collect_matched_assets_includes_moved_and_collections(tmp_path):
     ]
 
     br = _make_br_with_config()
-    assets = br._collect_matched_assets(_StubDB(media, collections))
+    assets, excluded = br._collect_matched_assets(_StubDB(media, collections))
 
     titles = {a["title"] for a in assets}
     assert titles == {
         "Moved Movie",
         "My Collection",
     }  # moved + collection in; unmatched out
+    assert excluded == []
 
 
 def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
@@ -328,8 +329,9 @@ def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
         {"title": "ByFolder", "folder": "skipdir", "matched": 1},
     ]
     br = _make_br_with_config(exclusion_list=["ByTitle"], ignore_folders=["skipdir"])
-    assets = br._collect_matched_assets(_StubDB(media, []))
-    assert {a["title"] for a in assets} == {"Keep"}
+    assets, excluded = br._collect_matched_assets(_StubDB(media, []))
+    assert [a["title"] for a in assets] == ["Keep"]
+    assert [a["title"] for a in excluded] == ["ByTitle", "ByFolder"]
 
 
 # ---- selection rule: full-library vs manifest subset -----------------------
@@ -1096,6 +1098,85 @@ def test_a_destination_refusing_every_write_fails_the_job(tmp_path, monkeypatch)
     )
     assert holiday_saves == [], "a run that wrote nothing recorded the holiday"
     assert [p for p in dest.rglob("*") if p.is_file()] == [], "a temp file was left"
+
+
+_OWNER = "Check the volume's host path, and that the folder's owner matches PUID/PGID."
+
+
+@_SKIP_AS_ROOT
+def test_an_excluded_poster_its_destination_refuses_fails_the_job(
+    tmp_path, monkeypatch
+):
+    br, dest_dir, _ = _subset_harness(tmp_path, monkeypatch, exclusion_list=["inman"])
+    dest_dir.chmod(0o555)
+    try:
+        with pytest.raises(NoPosterWritten) as raised:
+            br.run({"media_cache": [1], "collections_cache": []}, process_all=False)
+    finally:
+        dest_dir.chmod(0o755)
+    assert br.logger.messages["error"] == [
+        f"Cannot write {dest_dir / 'inman.jpg'}: Permission denied. {_OWNER} "
+        "1 poster(s) failed this way.",
+        "Border replacerr failed: all 1 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above.",
+    ]
+    assert failure_text("Module border_replacerr", raised.value) == (
+        "Module border_replacerr failed: permission denied — see the server log"
+    )
+    assert list(dest_dir.iterdir()) == []
+
+
+@_SKIP_AS_ROOT
+def test_an_excluded_poster_refused_beside_a_bordered_one_is_counted(
+    tmp_path, monkeypatch
+):
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+    locked = dest_dir / "locked"
+    locked.mkdir()
+    by_id[1]["renamed_file"] = str(locked / "inman.jpg")
+    manifest = {"media_cache": [1, 2], "collections_cache": []}
+    locked.chmod(0o555)
+    try:
+        counts = br.run(manifest, process_all=False)
+    finally:
+        locked.chmod(0o755)
+    assert br.logger.messages["error"] == [
+        f"Cannot write {locked / 'inman.jpg'}: Permission denied. {_OWNER} "
+        "1 poster(s) failed this way."
+    ]
+    assert br.logger.messages["warning"] == [
+        "Border replacerr finished with errors: 1 of 2 poster(s) it tried failed, "
+        "1 replaced, 0 skipped — see the ERROR lines above."
+    ]
+    assert (counts["failed"], counts["replaced"]) == (1, 1)
+    assert [p.name for p in dest_dir.rglob("*.jpg")] == ["outman.jpg"]
+
+
+@_SKIP_AS_ROOT
+def test_an_excluded_poster_whose_source_cannot_be_read_is_an_error_not_a_failed_job(
+    tmp_path, monkeypatch
+):
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+    src = by_id[1]["original_file"]
+    os.chmod(src, 0)
+    try:
+        counts = br.run({"media_cache": [1], "collections_cache": []})
+    finally:
+        os.chmod(src, 0o644)
+    assert br.logger.messages["error"] == [
+        f"Could not stage excluded asset 'inman': [Errno 13] Permission denied: '{src}'",
+        "Border replacerr failed: all 1 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above.",
+    ]
+    assert counts["failed"] == 1
+    info = br.logger.messages["info"]
+    assert "   → 1 processed, 0 replaced, 0 removed, 0 skipped, 1 failed" in info
+    assert [m for m in info if m.startswith("Processing")] == []
+    assert list(dest_dir.iterdir()) == []
 
 
 @pytest.mark.parametrize(
