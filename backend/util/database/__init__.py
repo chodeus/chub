@@ -37,6 +37,13 @@ from .upgradinatorr_progress import UpgradinatorrProgress
 from .webhook_cache import WebhookCache
 from .worker import DBWorker
 
+# An asset row of an item still in the cache: a deleted item's rows linger.
+_LIVE_ASSET_ROW = (
+    "((m.target_kind='media' AND m.target_id IN (SELECT id FROM media_cache))"
+    " OR (m.target_kind='collection'"
+    " AND m.target_id IN (SELECT id FROM collections_cache)))"
+)
+
 
 class ChubDB:
     """
@@ -406,9 +413,8 @@ class ChubDB:
         try:
             self._ensure_initialized()
             assets = (
-                "SELECT 1 FROM media_asset_matches m WHERE m.applied_path=? AND ("
-                "(m.target_kind='media' AND m.target_id IN (SELECT id FROM media_cache)) OR "
-                "(m.target_kind='collection' AND m.target_id IN (SELECT id FROM collections_cache)))"
+                "SELECT 1 FROM media_asset_matches m"
+                f" WHERE m.applied_path=? AND {_LIVE_ASSET_ROW}"
             )
             if own:
                 assets += " AND NOT (m.target_kind=? AND m.target_id=? AND m.image_type=?)"
@@ -420,6 +426,22 @@ class ChubDB:
             return any(table.execute_query(sql, args, fetch_one=True) for table, sql, args in checks)
         except sqlite3.Error as e:
             self.logger.get_adapter("DATABASE").warning(f"Keeping {path}: could not check whether a row records it: {e}")
+            return True
+
+    def records_pick(self, path: str) -> bool:
+        """True when a live item's pick records ``path``; True on a database error."""
+        try:
+            self._ensure_initialized()
+            sql = (
+                "SELECT 1 FROM media_asset_matches m WHERE m.applied_path=?"
+                f" AND m.user_confirmed=1 AND {_LIVE_ASSET_ROW} LIMIT 1"
+            )
+            row = self.media_asset_matches.execute_query(sql, (path,), fetch_one=True)
+            return bool(row)
+        except sqlite3.Error as e:
+            self.logger.get_adapter("DATABASE").warning(
+                f"Treating {path} as picked: could not check whether it was picked: {e}"
+            )
             return True
 
     def close(self) -> None:

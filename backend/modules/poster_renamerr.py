@@ -1126,11 +1126,6 @@ class PosterRenamerr(ChubModule):
                 )
         return rows
 
-    @staticmethod
-    def _sibling_key(row: dict) -> str:
-        """The row's media identity across instances."""
-        return MediaCache._identity_key(row, row.get("asset_type"), "")
-
     def _with_carried_files(
         self, rows: list
     ) -> List[Tuple[dict, Optional[str], bool]]:
@@ -1141,7 +1136,7 @@ class PosterRenamerr(ChubModule):
         if not self._carries_moves():
             return [(row, carry, False) for row, carry in zip(rows, carried)]
         wanting = {
-            i: self._sibling_key(row)
+            i: MediaCache.media_identity(row)
             for i, (row, carry) in enumerate(zip(rows, carried))
             if not (row.get("matched") or carry or self._has_source(row))
         }
@@ -1167,7 +1162,7 @@ class PosterRenamerr(ChubModule):
         if not keys:
             return siblings
         for row, carry in zip(rows, carried):
-            if (key := self._sibling_key(row)) not in keys:
+            if (key := MediaCache.media_identity(row)) not in keys:
                 continue
             # A user-confirmed row keeps matched=1 after its source is moved.
             own = self._moved_source(row) if row.get("matched") else carry

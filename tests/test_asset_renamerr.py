@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.modules.asset_moves import AssetMoves
 from backend.modules.asset_renamerr import (
     AssetRenamerr,
     apply_capability,
@@ -2545,3 +2546,521 @@ def test_a_plex_run_does_not_count_a_kometa_copy_as_the_pick(tmp_path):
     locked = {"user_confirmed": 1, "applied_path": str(placed)}
     assert make_module(apply_method="plex")._placed_file(locked) is None
     assert make_module(apply_method="kometa")._placed_file(locked) == str(placed)
+
+
+def _dune_in(db, instance, folder):
+    """Dune as a second *arr instance lists it, in its own folder."""
+    db.media.upsert(
+        {
+            "title": "Dune",
+            "normalized_title": "dune",
+            "alternate_titles": "[]",
+            "year": 2021,
+            "tmdb_id": 438631,
+            "folder": folder,
+            "status": "released",
+            "has_content": 1,
+        },
+        "movie",
+        "radarr",
+        instance,
+    )
+
+
+def _logos(db, dest):
+    """What radarr1's and radarr2's Dune rows record, and dest's logo files by name."""
+    ids = [db.media.get_by_instance(name)[0]["id"] for name in ("radarr1", "radarr2")]
+    rows = [db.media_asset_matches.get_one("media", i, "logo") for i in ids]
+    files = {p.name: p.read_bytes() for p in sorted(dest.iterdir())}
+    names = [os.path.basename(r["applied_path"] or "") for r in rows]
+    return [(r["match_status"], n) for r, n in zip(rows, names)], files
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_moved_logo_reaches_the_same_movie_in_another_instance(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    two = "Dune (2021) {tmdb-438631}_logo.png"
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("applied", two)]
+    assert files == {two: b"png", "Dune (2021)_logo.png": b"png"}
+    assert list((tmp_path / "src").iterdir()) == []
+
+
+def test_a_moved_logo_two_instances_place_at_one_path_is_applied_for_both(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021)")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune (2021)_logo.png")] * 2
+    assert files == {"Dune (2021)_logo.png": b"png"}
+
+
+def test_an_instance_that_adds_the_movie_after_a_move_gets_its_logo(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    rows, files = _logos(db, dest)
+    two = "Dune (2021) {tmdb-438631}_logo.png"
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("applied", two)]
+    assert files == {two: b"png", "Dune (2021)_logo.png": b"png"}
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_moved_logo_follows_its_folder_rename_and_reaches_an_instance_added_with_it(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    _dune_in(db, "radarr1", "Dune HD (2021)")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    two = "Dune (2021) {tmdb-438631}_logo.png"
+    assert rows == [("applied", "Dune HD (2021)_logo.png"), ("applied", two)]
+    assert files == {two: b"png", "Dune HD (2021)_logo.png": b"png"}
+
+
+@pytest.mark.parametrize("restored", [False, True], ids=["pick-moved", "pick-restored"])
+def test_a_logo_picked_for_one_instance_is_kept_beside_the_others(
+    db, monkeypatch, tmp_path, restored
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    two_dune = db.media.get_by_instance("radarr2")[0]
+    applied, detail = m.apply_chosen_asset(db, "media", two_dune, "logo", str(pick))
+    assert (applied, pick.exists()) == (True, False), detail
+    if restored:
+        # As a sync brings it back: placed again, first, this run.
+        pick.write_bytes(b"my pick")
+    m.config.instances = ["radarr2", "radarr1"] if restored else ["radarr1", "radarr2"]
+    m.run()
+    rows, files = _logos(db, dest)
+    two = "Dune (2021) {tmdb-438631}_logo.png"
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("applied", two)]
+    assert files == {two: b"my pick", "Dune (2021)_logo.png": b"png"}
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_logo_picked_for_one_instance_does_not_reach_an_instance_with_none(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    applied, detail = m.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+    assert applied, detail
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune (2021)_logo.png": b"my pick"}
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_logo_picked_during_a_run_does_not_reach_another_instance(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    two_dune = db.media.get_by_instance("radarr2")[0]
+    real_sibling = AssetMoves.sibling
+
+    def _sibling(moves, media, *a, **k):
+        # The user picks radarr1's logo in the UI just before radarr2 is offered one.
+        if media["id"] == two_dune["id"] and pick.exists():
+            picker = make_module(destination_dir=str(dest), action_type="move")
+            picked = picker.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+            assert picked[0], picked[1]
+        return real_sibling(moves, media, *a, **k)
+
+    monkeypatch.setattr(AssetMoves, "sibling", _sibling)
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune (2021)_logo.png": b"my pick"}
+
+
+def test_a_logo_picked_once_its_source_is_moved_does_not_reach_another_instance(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    real_replace = os.replace
+
+    def _replace(src, dst, *a, **k):
+        real_replace(src, dst, *a, **k)
+        # The user picks radarr1's logo in the UI as soon as its source lands.
+        if os.path.basename(dst) == "Dune (2021)_logo.png" and pick.exists():
+            picker = make_module(destination_dir=str(dest), action_type="move")
+            picked = picker.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+            assert picked[0], picked[1]
+
+    monkeypatch.setattr(os, "replace", _replace)
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune (2021)_logo.png": b"my pick"}
+
+
+def test_a_newer_sibling_logo_is_not_placed_over_a_pick_two_instances_share(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021)")
+    _dune_in(db, "radarr3", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2", "radarr3"]
+    m.run()
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    os.utime(pick, (1_000_000_000, 1_000_000_000))  # older than the shared logo
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    applied, detail = m.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+    assert applied, detail
+    m.config.instances = ["radarr2", "radarr3", "radarr1"]
+    m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune (2021)_logo.png": b"my pick",
+        "Dune (2021) {tmdb-438631}_logo.png": b"png",
+    }
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_picked_logo_carried_to_a_renamed_folder_does_not_reach_another_instance(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    applied, detail = m.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+    assert applied, detail
+    _dune_in(db, "radarr1", "Dune HD (2021)")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune HD (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune HD (2021)_logo.png": b"my pick"}
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_an_adopted_logo_carried_to_a_renamed_folder_does_not_beat_a_newer_one(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _placed_files(tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    _dune_in(db, "radarr2", "Dune UHD (2021)")
+    m.config.instances = ["radarr2"]
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (1_500_000_000, 1_500_000_000))  # after the source, before the copy
+    m.config.instances = ["radarr1"]
+    m.run()
+    m.config.instances = order
+    m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune (2021)_logo.png": b"new",
+        "Dune UHD (2021)_logo.png": b"new",
+    }
+
+
+def test_a_logo_one_of_two_instances_at_one_path_updates_reaches_a_third(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _placed_files(tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021)")
+    _dune_in(db, "radarr3", "Dune 4K (2021)")
+    m.config.instances = ["radarr1", "radarr2", "radarr3"]
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (1_500_000_000, 1_500_000_000))
+    m.config.instances = ["radarr1"]
+    m.run()
+    m.config.instances = ["radarr1", "radarr2", "radarr3"]
+    m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune (2021)_logo.png": b"new",
+        "Dune 4K (2021)_logo.png": b"new",
+    }
+
+
+def test_a_copied_logo_whose_source_was_deleted_is_not_spread_to_another_instance(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    m.run()
+    for src in (tmp_path / "src").iterdir():
+        src.unlink()
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune (2021)_logo.png": b"png"}
+
+
+@pytest.mark.parametrize(
+    "apply_method, action_type", [("plex", "move"), ("kometa", "copy")]
+)
+def test_only_a_move_to_kometa_shares_placed_logos(tmp_path, apply_method, action_type):
+    placed = tmp_path / "Dune (2021)_logo.png"
+    placed.write_bytes(b"png")
+    dune = {"id": 1, "asset_type": "movie", "tmdb_id": 438631, "title": "Dune"}
+    row = {"applied_method": "kometa", "applied_path": str(placed)}
+    applied_map = {("media", 1, "logo"): row}
+    off = make_module(apply_method=apply_method, action_type=action_type).config
+    on = make_module(apply_method="kometa", action_type="move").config
+    unused = AssetMoves.load(off, [dune], applied_map, ["logo"], lambda _p: False)
+    found = AssetMoves.load(on, [dune], applied_map, ["logo"], lambda _p: False)
+    assert (
+        unused.sibling(dune, "logo", None, None),
+        found.sibling(dune, "logo", None, None),
+    ) == (None, ("local", str(placed), None))
+
+
+def _dune_moves(tmp_path, recorded):
+    """AssetMoves under move, loaded from Dune rows placed at (name, source_mtime)."""
+    dunes = [
+        {"id": i, "asset_type": "movie", "tmdb_id": 438631, "title": "Dune"}
+        for i in range(1, len(recorded) + 1)
+    ]
+    applied_map = {}
+    for dune, (name, mtime, *written) in zip(dunes, recorded):
+        (tmp_path / name).write_bytes(b"png")
+        row = {"applied_path": str(tmp_path / name), "source_mtime": mtime}
+        row["matched_at"] = written[0] if written else None
+        applied_map[("media", dune["id"], "logo")] = row
+    config = make_module(apply_method="kometa", action_type="move").config
+    moves = AssetMoves.load(config, dunes, applied_map, ["logo"], lambda _p: False)
+    return moves, dunes
+
+
+def test_a_path_placed_again_with_older_art_is_not_offered_as_newer(tmp_path):
+    moves, (one, two) = _dune_moves(tmp_path, [("a.png", 200), ("b.png", 150)])
+    moves.add(one, "logo", str(tmp_path / "a.png"), mtime=100)
+    assert moves.sibling(two, "logo", str(tmp_path / "b.png"), 150) is None
+
+
+@pytest.mark.parametrize("later_row_first", [False, True])
+@pytest.mark.parametrize("own_mtime, offered", [(150, False), (50, True)])
+def test_a_shared_path_rewritten_with_older_art_keeps_the_later_writes_time(
+    tmp_path, later_row_first, own_mtime, offered
+):
+    first = ("a.png", 200, "2026-11-19T10:00:00+00:00")
+    later = ("a.png", 100, "2026-11-19T11:00:00.500000+00:00")
+    rows = [later, first] if later_row_first else [first, later]
+    moves, (*_, three) = _dune_moves(tmp_path, [*rows, ("c.png", own_mtime)])
+    got = moves.sibling(three, "logo", str(tmp_path / "c.png"), own_mtime)
+    assert got == (("local", str(tmp_path / "a.png"), None) if offered else None)
+
+
+def test_a_moved_source_whose_placed_file_is_gone_is_not_offered(tmp_path):
+    moves, (dune,) = _dune_moves(tmp_path, [("a.png", 100)])
+    placed, source = tmp_path / "b.png", str(tmp_path / "src.png")
+    placed.write_bytes(b"png")
+    moves.add(dune, "logo", str(placed), source=source, mtime=100)
+    assert moves.went(source) == str(placed)
+    placed.unlink()
+    assert moves.went(source) is None
+
+
+def test_an_own_path_another_row_updated_is_not_offered_back(tmp_path):
+    moves, (_one, two) = _dune_moves(tmp_path, [("a.png", 200), ("a.png", 100)])
+    assert moves.sibling(two, "logo", str(tmp_path / "a.png"), 100) is None
+
+
+@pytest.mark.parametrize(
+    "asset_type, season, image_type, method, skipped",
+    [
+        ("show", 1, "logo", "kometa", True),
+        ("show", 0, "logo", "plex", True),
+        ("show", None, "logo", "kometa", False),
+        ("album", None, "logo", "plex", True),
+        ("artist", None, "logo", "plex", False),
+        ("show", 1, "squareart", "kometa", True),
+        ("show", 0, "squareart", "kometa", True),
+        ("show", 1, "squareart", "plex", False),
+        ("show", None, "squareart", "kometa", False),
+        ("show", 1, "background", "kometa", False),
+    ],
+)
+def test_art_no_provider_publishes_or_kometa_reads_is_skipped(
+    asset_type, season, image_type, method, skipped
+):
+    media = {"asset_type": asset_type, "season_number": season}
+    assert AssetRenamerr._never_applies(media, image_type, method) is skipped
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_new_logo_for_a_movie_two_instances_share_reaches_both(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = order
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (2_000_000_000, 2_000_000_000))
+    m.run()
+    rows, files = _logos(db, dest)
+    two = "Dune (2021) {tmdb-438631}_logo.png"
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("applied", two)]
+    assert files == {two: b"new", "Dune (2021)_logo.png": b"new"}
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_each_instance_gets_the_first_choice_logo_and_the_next_stays(
+    db, monkeypatch, tmp_path, order
+):
+    dest, src2 = tmp_path / "kometa", tmp_path / "src2"
+    dest.mkdir()
+    src2.mkdir()
+    (src2 / "Dune (2021) {tmdb-438631} - Logo.png").write_bytes(b"runner-up")
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.config.source_dirs.insert(0, str(src2))  # bottom-wins: src2 ranks below src
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    two = "Dune (2021) {tmdb-438631}_logo.png"
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("applied", two)]
+    assert files == {two: b"png", "Dune (2021)_logo.png": b"png"}
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+@pytest.mark.parametrize(
+    "order", [["radarr1", "radarr2", "radarr3"], ["radarr3", "radarr2", "radarr1"]]
+)
+def test_a_newer_logo_reaches_the_instances_a_run_missed(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (2_000_000_000, 2_000_000_000))
+    m.config.instances = ["radarr1"]
+    m.run()
+    _dune_in(db, "radarr3", "Dune 4K (2021)")
+    m.config.instances = order
+    m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune (2021)_logo.png": b"new",
+        "Dune (2021) {tmdb-438631}_logo.png": b"new",
+        "Dune 4K (2021)_logo.png": b"new",
+    }
+
+
+def _placed_files(tmp_path, dest):
+    """Date the sources well before any run; returns dest's files as (inode, mtime)."""
+    for src in (tmp_path / "src").iterdir():
+        os.utime(src, (1_000_000_000, 1_000_000_000))
+    return lambda: {
+        p.name: (p.stat().st_ino, p.stat().st_mtime_ns) for p in sorted(dest.iterdir())
+    }
+
+
+def test_logos_one_instance_adopted_from_another_are_not_rewritten_by_later_runs(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    files = _placed_files(tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    _dune_in(db, "radarr3", "Dune 4K (2021)")
+    m.config.instances = ["radarr2", "radarr1", "radarr3"]
+    m.run()
+    placed = files()
+    for _ in range(3):
+        m.run()
+    assert (len(placed), files()) == (3, placed)
+
+
+def test_logos_copied_then_shared_under_move_are_not_rewritten_by_later_runs(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest)
+    files = _placed_files(tmp_path, dest)
+    m.run()
+    for src in (tmp_path / "src").iterdir():
+        src.unlink()
+    m.config.action_type = "move"
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    placed = files()
+    m.run()
+    assert (len(placed), files()) == (2, placed)
