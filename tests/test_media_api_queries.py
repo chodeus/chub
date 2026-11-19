@@ -441,9 +441,196 @@ def test_create_collection_route_reads_back_the_created_row(db):
     """POST /collections returns the row it just upserted."""
     resp = _client(db).post(
         "/api/media/collections",
-        json={"title": "Marvel", "instance_name": "plex1", "year": 2012},
+        json={"title": "Marvel", "instance_name": "plex1", "library_name": "Movies", "year": 2012},
     )
     assert resp.status_code == 200
     collection = resp.json()["data"]["collection"]
     assert collection["title"] == "Marvel"
     assert collection["instance_name"] == "plex1"
+
+
+def _collection_rows(db):
+    rows = db.collection.execute_query(
+        "SELECT title, normalized_title, alternate_titles, normalized_alternate_titles FROM collections_cache ORDER BY id",
+        fetch_all=True,
+    )
+    return [(r["title"], r["normalized_title"], r["alternate_titles"], r["normalized_alternate_titles"]) for r in rows]
+
+
+def _plex_sync(db, titles, library="Movies", instance="plex1"):
+    """The real PlexClient.get_collections + sync_collections_cache over fake plexapi collections."""
+    from types import SimpleNamespace
+
+    from backend.util.plex import PlexClient
+
+    found = [SimpleNamespace(title=t, smart=False, minYear=None) for t in titles]
+    section = SimpleNamespace(search=lambda libtype: found, type="movie")
+    client = PlexClient.__new__(PlexClient)
+    client.logger = _StubLog()
+    client.plex = SimpleNamespace(library=SimpleNamespace(section=lambda name: section))
+    db.collection.sync_collections_cache(instance, library, client.get_collections(library, include_smart=True))
+
+
+def _post_collection(client, **fields):
+    body = {"title": "Marvel", "instance_name": "plex1", "library_name": "Movies", **fields}
+    return client.post("/api/media/collections", json=body)
+
+
+@pytest.mark.parametrize("title", ["The Matrix Collection", "Amélie Collection", "Fast &amp; Furious Collection"])
+def test_create_collection_stores_the_title_columns_a_sync_stores(tmp_path, title):
+    with ChubDB(_StubLog(), db_path=str(tmp_path / "api.db")) as api_db, ChubDB(
+        _StubLog(), db_path=str(tmp_path / "sync.db")
+    ) as sync_db:
+        resp = _post_collection(_client(api_db), title=f" {title} ")
+        _plex_sync(sync_db, [title])
+        assert (resp.status_code, _collection_rows(api_db)) == (200, _collection_rows(sync_db))
+
+
+@pytest.mark.parametrize(
+    "body, code",
+    [
+        ({"instance_name": "plex1", "library_name": "Movies"}, "MISSING_TITLE"),
+        ({"title": "Marvel", "instance_name": "plex1"}, "MISSING_LIBRARY"),
+        ({"title": "Marvel", "library_name": "Movies"}, "MISSING_INSTANCE"),
+    ],
+    ids=["no-title", "no-library", "no-instance"],
+)
+def test_create_collection_refuses_a_body_missing_a_key_field(db, body, code):
+    resp = _client(db).post("/api/media/collections", json=body)
+    assert (resp.status_code, resp.json()["error_code"], _collection_rows(db)) == (400, code, [])
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"alternate_titles": "Matrix"},
+        {"alternate_titles": ["Matrix", 7]},
+        {"alternate_titles": [" "]},
+        {"alternate_titles": ["Marvel", "&#32;"]},
+        {"title": 7},
+        {"title": "  "},
+        {"title": "&#32;"},
+        {"title": "\U0001F600"},
+        {"library_name": ""},
+        {"instance_name": {"name": "plex1"}},
+        {"instance_name": " "},
+        {"year": [2008]},
+        {"year": True},
+        {"tmdb_id": 2**63},
+        {"imdb_id": 7},
+    ],
+    ids=[
+        "string",
+        "number-in-list",
+        "blank",
+        "entity-blank-alternate",
+        "numeric-title",
+        "blank-title",
+        "entity-blank",
+        "emoji-only",
+        "blank-library",
+        "object-instance",
+        "blank-instance",
+        "list-year",
+        "bool-year",
+        "huge-id",
+        "numeric-imdb",
+    ],
+)
+def test_create_collection_refuses_fields_of_the_wrong_shape(db, body):
+    resp = _post_collection(_client(db), **body)
+    assert (resp.status_code, resp.json()["error_code"], _collection_rows(db)) == (400, "INVALID_FIELDS", [])
+
+
+@pytest.mark.parametrize(
+    "body, row",
+    [
+        (
+            {"title": "Star Wars Collection"},
+            (
+                "Star Wars Collection",
+                "starwarscollection",
+                '["Star Wars Collection", "Star Wars"]',
+                '["starwarscollection", "starwars"]',
+            ),
+        ),
+        (
+            {"title": "Star Wars Collection", "alternate_titles": [" Star Wars "]},
+            ("Star Wars Collection", "starwarscollection", '["Star Wars"]', '["starwars"]'),
+        ),
+    ],
+    ids=["variants-regenerated", "variants-given"],
+)
+def test_update_collection_renames_in_place_and_rederives_its_titles(db, body, row):
+    _plex_sync(db, ["The Matrix Collection"])
+    cid = db.collection.get_by_title_and_instance("The Matrix Collection", "plex1", "Movies")["id"]
+    resp = _client(db).put(f"/api/media/collections/{cid}", json=body)
+    assert (resp.status_code, resp.json()["data"]["collection"]["id"], _collection_rows(db)) == (200, cid, [row])
+
+
+def test_update_collection_clears_the_fields_it_is_sent_as_null(db):
+    created = _post_collection(_client(db), year=2012, tmdb_id=86311, folder="Marvel")
+    cid = created.json()["data"]["collection"]["id"]
+    resp = _client(db).put(f"/api/media/collections/{cid}", json={"year": None, "tmdb_id": None, "folder": None})
+    row = db.collection.get_by_id(cid)
+    assert (resp.status_code, row["year"], row["tmdb_id"], row["folder"]) == (200, None, None, None)
+
+
+class _ErrorLog(_StubLog):
+    """Keeps error() lines; every other log call is a no-op."""
+
+    def __init__(self):
+        self.errors = []
+
+    def error(self, msg, *_a, **_kw):
+        self.errors.append(str(msg))
+
+
+@pytest.mark.parametrize(
+    "body, status, code",
+    [
+        ({"title": ""}, 400, "INVALID_FIELDS"),
+        ({"library_name": None}, 400, "INVALID_FIELDS"),
+        ({"name": "Avengers"}, 400, "NO_FIELDS"),
+        ({}, 400, "NO_FIELDS"),
+        ({"title": "Marvel"}, 409, "COLLECTION_EXISTS"),
+    ],
+    ids=["blank-title", "null-library", "no-updatable-field", "empty-object", "taken-title"],
+)
+def test_update_collection_refuses_a_change_it_cannot_store(tmp_path, body, status, code):
+    log = _ErrorLog()
+    with ChubDB(log, db_path=str(tmp_path / "chub.db")) as db:
+        _plex_sync(db, ["Marvel", "Matrix"])
+        cid = db.collection.get_by_title_and_instance("Matrix", "plex1", "Movies")["id"]
+        resp = _client(db).put(f"/api/media/collections/{cid}", json=body)
+        titles = [title for title, *_ in _collection_rows(db)]
+        assert (resp.status_code, resp.json()["error_code"], titles, log.errors) == (
+            status,
+            code,
+            ["Marvel", "Matrix"],
+            [],
+        )
+
+
+def test_update_collection_refuses_a_taken_title_in_no_library(db):
+    for title in ("Marvel", "Matrix"):
+        db.collection.upsert({"title": title, "normalized_title": title.lower(), "library_name": None}, "plex1")
+    cid = db.collection.get_by_title_and_instance("Matrix", "plex1", None)["id"]
+    resp = _client(db).put(f"/api/media/collections/{cid}", json={"title": "Marvel"})
+    titles = [title for title, *_ in _collection_rows(db)]
+    assert (resp.status_code, resp.json()["error_code"], titles) == (409, "COLLECTION_EXISTS", ["Marvel", "Matrix"])
+
+
+def test_update_collection_answers_404_when_a_sync_removed_the_row_first(db, monkeypatch):
+    _plex_sync(db, ["Marvel"])
+    cid = db.collection.get_by_title_and_instance("Marvel", "plex1", "Movies")["id"]
+    write = db.collection.update_row
+
+    def sync_lands_first(id, record):
+        _plex_sync(db, ["Avengers"])
+        return write(id, record)
+
+    monkeypatch.setattr(db.collection, "update_row", sync_lands_first)
+    resp = _client(db).put(f"/api/media/collections/{cid}", json={"year": 2012})
+    titles = [title for title, *_ in _collection_rows(db)]
+    assert (resp.status_code, resp.json()["error_code"], titles) == (404, "COLLECTION_NOT_FOUND", ["Avengers"])

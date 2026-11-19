@@ -23,6 +23,7 @@ import requests
 
 from backend.util.config import TMDBConfig
 from backend.util.database import ChubDB
+from backend.util.helper import json_list
 from backend.util.normalization import normalize_titles
 
 
@@ -638,18 +639,6 @@ def _norm_set(values: Iterable[Optional[str]]) -> Set[str]:
     return out
 
 
-def _json_list(value) -> List:
-    if isinstance(value, list):
-        return value
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-            return parsed if isinstance(parsed, list) else []
-        except (ValueError, TypeError):
-            return []
-    return []
-
-
 def run_match_quality(
     db: ChubDB,
     cfg: TMDBConfig,
@@ -734,7 +723,7 @@ def _verify_and_hydrate(
             )
             row_titles = _norm_set(
                 [row.get("title"), row.get("normalized_title")]
-                + _json_list(row.get("alternate_titles"))
+                + json_list(row.get("alternate_titles"))
             )
             # row's normalized_title is already normalized; include raw too
             row_titles |= {n for n in [row.get("normalized_title")] if n}
@@ -778,8 +767,8 @@ def _flag_review(db: ChubDB, media_id: int, reason: str) -> None:
 def _merge_akas(db: ChubDB, row: dict, tmdb_akas: List[str]) -> bool:
     """Union TMDB AKAs into a row's alternate_titles / normalized_alternate_titles.
     Returns True if anything new was added."""
-    existing = _json_list(row.get("alternate_titles"))
-    existing_norm = set(_json_list(row.get("normalized_alternate_titles")))
+    existing = json_list(row.get("alternate_titles"))
+    existing_norm = set(json_list(row.get("normalized_alternate_titles")))
     added = False
     for aka in tmdb_akas:
         n = normalize_titles(aka)

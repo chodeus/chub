@@ -6,10 +6,9 @@ Returns scored rows only; each caller owns the JSON shape it renders.
 """
 
 import difflib
-import json
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.util.helper import is_match
+from backend.util.helper import is_match, parse_alternate_titles
 from backend.util.normalization import normalize_titles
 
 
@@ -22,11 +21,7 @@ def rank_candidates(
 ) -> List[Tuple[Dict[str, Any], bool, float, str]]:
     """Best-first (row, would_match, similarity, reason) tuples for a media row."""
     season_number = row.get("season_number")
-    try:
-        alts = json.loads(row.get("alternate_titles") or "[]")
-    except (ValueError, TypeError):
-        alts = []
-    search_titles = [row.get("title")] + [a for a in alts if a]
+    search_titles = [row.get("title")] + parse_alternate_titles(row.get("alternate_titles"))
     row_norm = row.get("normalized_title") or normalize_titles(row.get("title") or "")
 
     seen = set()

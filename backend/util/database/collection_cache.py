@@ -10,17 +10,50 @@ class CollectionCache(DatabaseBase):
     Provides CRUD and sync operations.
     """
 
-    def upsert(self, record: dict, instance_name: str) -> None:
-        """Insert or update a collection record for a given instance."""
-        record["instance_name"] = instance_name
-        record["asset_type"] = "collection"
-
-        # Serialize list/dict fields to JSON
+    @staticmethod
+    def _store_json(record: dict) -> None:
+        """Serialize ``record``'s title lists to JSON in place; a missing list is stored empty."""
         for key in ("alternate_titles", "normalized_alternate_titles"):
             if isinstance(record.get(key), (list, dict)):
                 record[key] = json.dumps(record[key])
             elif record.get(key) is None:
                 record[key] = json.dumps([])
+
+    def update_row(self, id: int, record: dict) -> bool:
+        """Write ``record``'s fields onto row ``id`` in place; False when that row is gone or another holds its key."""
+        self._store_json(record)
+        columns = (
+            "title",
+            "normalized_title",
+            "alternate_titles",
+            "normalized_alternate_titles",
+            "year",
+            "tmdb_id",
+            "tvdb_id",
+            "imdb_id",
+            "folder",
+            "library_name",
+        )
+        # `IS`: the UNIQUE key treats NULL libraries as distinct, so it never refuses a clash there.
+        written = self.execute_query(
+            f"UPDATE collections_cache SET {', '.join(c + '=?' for c in columns)} WHERE id=? AND NOT EXISTS "
+            "(SELECT 1 FROM collections_cache WHERE title IS ? AND library_name IS ? AND instance_name IS ? AND id<>?)",
+            (
+                *(record.get(c) for c in columns),
+                id,
+                record.get("title"),
+                record.get("library_name"),
+                record.get("instance_name"),
+                id,
+            ),
+        )
+        return bool(written)
+
+    def upsert(self, record: dict, instance_name: str) -> None:
+        """Insert or update a collection record for a given instance."""
+        record["instance_name"] = instance_name
+        record["asset_type"] = "collection"
+        self._store_json(record)
 
         self.execute_query(
             """

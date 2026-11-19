@@ -934,3 +934,16 @@ def test_optimize_keeps_the_original_when_the_cache_update_fails(
         "SELECT file FROM poster_cache", fetch_one=True
     )["file"]
     assert stored == str(poster)  # row still points at the surviving file
+
+
+@pytest.mark.parametrize("stored", ['{"Duna": 1}', '[1, "Duna"]', "not json"])
+def test_rank_candidates_ranks_a_row_with_odd_alternate_titles(db, stored):
+    """A row whose stored alternate titles are not a list of strings still ranks instead of raising."""
+    from backend.util.asset_candidates import rank_candidates
+
+    _seed_poster(db, "Dune", file="/src/Dune (2021).jpg")
+    row = {**db.media.get_by_id(_seed_media(db, "Dune")), "alternate_titles": stored}
+
+    ranked = rank_candidates(db, row, "movie")
+
+    assert [c["title"] for c, *_ in ranked] == ["Dune"]

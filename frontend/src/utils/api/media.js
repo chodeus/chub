@@ -117,21 +117,6 @@ export const mediaAPI = {
         });
     },
 
-    /** Create a collection from { name, description, mediaIds }. */
-    createCollection: collectionData => {
-        return apiCore.post('/media/collections', collectionData);
-    },
-
-    /** Update a collection. */
-    updateCollection: (collectionId, collectionData) => {
-        return apiCore.put(`/media/collections/${collectionId}`, collectionData);
-    },
-
-    /** Delete a collection. */
-    deleteCollection: collectionId => {
-        return apiCore.delete(`/media/collections/${collectionId}`);
-    },
-
     /** Duplicate groups and folder collisions. */
     fetchDuplicates: (options = {}) => {
         const params = new URLSearchParams(options);

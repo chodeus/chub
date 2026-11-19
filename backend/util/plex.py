@@ -1,4 +1,3 @@
-import html
 import itertools
 import os
 import re
@@ -12,12 +11,11 @@ import plexapi.utils as plexutils
 from plexapi.exceptions import NotFound
 from pathvalidate import sanitize_filename
 from plexapi.server import PlexServer
-from unidecode import unidecode
 
 from backend.util.config import get_config_path
 from backend.util.helper import (
     YEAR_MATCH_TOLERANCE,
-    generate_title_variants,
+    collection_title_fields,
     progress,
 )
 from backend.util.normalization import normalize_titles
@@ -250,9 +248,8 @@ class PlexClient:
             leave=False,
         ) as inner:
             for collection in inner:
-                title_unescaped = unidecode(html.unescape(collection.title))
-                normalized_title = normalize_titles(title_unescaped)
-                alternate_titles = generate_title_variants(title_unescaped)
+                titles = collection_title_fields(collection.title)
+                title_unescaped = titles["title"]
                 # Use pathvalidate rather than the bare regex so the folder name
                 # is safe across Linux + Windows + Samba shares (handles
                 # reserved names like CON/AUX, max-length truncation, and
@@ -271,15 +268,10 @@ class PlexClient:
                 imdb_id = None
                 tvdb_id = None
                 media_item = {
-                    "title": title_unescaped,
-                    "normalized_title": normalized_title,
+                    **titles,
                     "location": library_name,
                     "year": year,
                     "folder": folder,
-                    "alternate_titles": alternate_titles["alternate_titles"],
-                    "normalized_alternate_titles": alternate_titles[
-                        "normalized_alternate_titles"
-                    ],
                     "library_name": library_name,
                     "asset_type": "collection",
                     "tmdb_id": tmdb_id,

@@ -2987,3 +2987,8 @@ def test_a_fault_in_the_summary_never_replaces_the_runs_own_error(tmp_path, monk
         m.run()
     assert m.logger.messages["warning"][-1] == "Could not log the run summary: summary bug"
 
+
+def test_title_match_reason_skips_a_poster_with_unreadable_alternate_titles():
+    poster = {"season_number": None, "normalized_title": "other", "normalized_alternate_titles": "matrix"}
+    reason = PosterRenamerr._title_match_reason(poster, {"season_number": None}, {"matrix"}, [])
+    assert reason == ""
