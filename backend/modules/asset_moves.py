@@ -12,8 +12,8 @@ def _newer(mtime: Optional[float], than: Optional[float]) -> bool:
     return mtime is not None and (than is None or float(mtime) > float(than))
 
 
-def _recency(placement: Tuple[str, Optional[float]]) -> float:
-    return float("-inf") if placement[1] is None else float(placement[1])
+def _recency(mtime: Optional[float]) -> float:
+    return float("-inf") if mtime is None else float(mtime)
 
 
 def _media_key(media: dict, image_type: str) -> Tuple[str, str]:
@@ -25,7 +25,7 @@ class AssetMoves:
 
     def __init__(self, active: bool) -> None:
         self.active = active
-        self._by_media: Dict[Tuple[str, str], List[Tuple[str, Optional[float]]]] = {}
+        self._by_media: Dict[Tuple[str, str], List[str]] = {}
         self._went: Dict[str, str] = {}
         self._placed: Dict[str, Optional[float]] = {}
         self._picks: Set[str] = set()
@@ -45,19 +45,16 @@ class AssetMoves:
             for image_type in image_types:
                 row = applied_map.get((kind, int(media["id"]), image_type)) or {}
                 if row.get("applied_path"):
-                    moves.add(
-                        media,
-                        image_type,
-                        row["applied_path"],
-                        mtime=row.get("source_mtime"),
-                        pick=bool(row.get("user_confirmed")),
-                    )
-        # Rows sharing a path: take its newest time, the placement sibling() picks.
-        for placements in moves._by_media.values():
-            for path, mtime in placements:
-                if _newer(mtime, moves._placed[path]):
-                    moves._placed[path] = mtime
+                    moves._record(media, image_type, row)
         return moves
+
+    def _record(self, media: dict, image_type: str, row: dict) -> None:
+        """One row's placement; rows sharing a path give it their newest time."""
+        path, mtime = row["applied_path"], row.get("source_mtime")
+        if path in self._placed and not _newer(mtime, self._placed[path]):
+            mtime = self._placed[path]
+        pick = bool(row.get("user_confirmed"))
+        self.add(media, image_type, path, mtime=mtime, pick=pick)
 
     def add(
         self,
@@ -71,9 +68,10 @@ class AssetMoves:
         """Record ``path`` placed from ``source``; sibling() never offers a pick."""
         if not self.active:
             return
-        placement = (path, mtime)
-        self._by_media.setdefault(_media_key(media, image_type), []).append(placement)
-        self._placed[path] = mtime
+        paths = self._by_media.setdefault(_media_key(media, image_type), [])
+        if path not in paths:
+            paths.append(path)
+        self._placed[path] = mtime  # the time of the file now at path
         if pick:
             self._picks.add(path)
         if source:
@@ -92,15 +90,17 @@ class AssetMoves:
     ) -> Optional[Resolved]:
         """The newest non-pick file placed for this media, unless own's is as new."""
         placed = [
-            (p, m)
-            for p, m in self._by_media.get(_media_key(media, image_type), ())
+            p
+            for p in self._by_media.get(_media_key(media, image_type), ())
             # isfile also drops a Plex row's library names.
             if p not in self._picks and os.path.isfile(p)
         ]
         if not placed:
             return None
-        path, mtime = max(placed, key=_recency)
-        if own and not _newer(mtime, own_mtime):
+        path = max(placed, key=lambda p: _recency(self._placed[p]))
+        # Another row's write may have changed the file at own's path.
+        own_mtime = self._placed.get(own, own_mtime) if own else own_mtime
+        if own and not _newer(self._placed[path], own_mtime):
             return None
         return ("local", path, None)
 

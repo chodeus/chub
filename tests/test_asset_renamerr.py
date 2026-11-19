@@ -2774,6 +2774,32 @@ def test_only_a_move_to_kometa_shares_placed_logos(tmp_path, apply_method, actio
     ) == (None, ("local", str(placed), None))
 
 
+def _dune_moves(tmp_path, recorded):
+    """AssetMoves under move, loaded from Dune rows placed at (name, source_mtime)."""
+    dunes = [
+        {"id": i, "asset_type": "movie", "tmdb_id": 438631, "title": "Dune"}
+        for i in range(1, len(recorded) + 1)
+    ]
+    applied_map = {}
+    for dune, (name, mtime) in zip(dunes, recorded):
+        (tmp_path / name).write_bytes(b"png")
+        row = {"applied_path": str(tmp_path / name), "source_mtime": mtime}
+        applied_map[("media", dune["id"], "logo")] = row
+    config = make_module(apply_method="kometa", action_type="move").config
+    return AssetMoves.load(config, dunes, applied_map, ["logo"]), dunes
+
+
+def test_a_path_placed_again_with_older_art_is_not_offered_as_newer(tmp_path):
+    moves, (one, two) = _dune_moves(tmp_path, [("a.png", 200), ("b.png", 150)])
+    moves.add(one, "logo", str(tmp_path / "a.png"), mtime=100)
+    assert moves.sibling(two, "logo", str(tmp_path / "b.png"), 150) is None
+
+
+def test_an_own_path_another_row_updated_is_not_offered_back(tmp_path):
+    moves, (_one, two) = _dune_moves(tmp_path, [("a.png", 200), ("a.png", 100)])
+    assert moves.sibling(two, "logo", str(tmp_path / "a.png"), 100) is None
+
+
 @pytest.mark.parametrize(
     "asset_type, season, image_type, method, skipped",
     [
