@@ -1,7 +1,10 @@
 """Unit tests for BorderReplacerr's image-border helpers."""
 
 import errno
+import json
 import os
+import subprocess
+import sys
 
 import pytest
 from PIL import Image
@@ -12,6 +15,7 @@ from backend.modules.border_replacerr import (
     _BUNDLED_BORDERS_DIR,
     BorderReplacerr,
     NoPosterWritten,
+    pick_variant,
 )
 from backend.util.public_error import failure_text
 
@@ -144,6 +148,52 @@ def test_remove_borders_square_target(tmp_path):
     assert br.remove_borders(str(src), str(out_path), 25, (1000, 1000))
     with Image.open(out_path) as result:
         assert result.size == (1000, 1000)
+
+
+def _edged_poster(path) -> None:
+    """A dark 1000x1500 poster inside a 26 px white edge."""
+    image = Image.new("RGB", (1000, 1500), (255, 255, 255))
+    image.paste((10, 20, 30), (26, 26, 974, 1474))
+    image.save(path, "PNG")
+
+
+def _shade(rgb) -> str:
+    r, g, b = rgb
+    if min(rgb) > 200:
+        return "white"
+    if r > 200 and max(g, b) < 80:
+        return "red"
+    if g > 200 and max(r, b) < 80:
+        return "green"
+    return "poster" if max(rgb) < 80 else "blend"
+
+
+@pytest.mark.parametrize(
+    "width, shades",
+    [
+        (10, ["red", "poster", "poster"]),
+        (26, ["red", "red", "poster"]),
+        (0, ["white", "white", "poster"]),
+    ],
+    ids=["thin", "edge-wide", "zero"],
+)
+def test_a_colour_border_replaces_the_whole_white_edge(tmp_path, width, shades):
+    src, out = tmp_path / "src.png", tmp_path / "out.png"
+    _edged_poster(src)
+    assert _make_br().replace_borders(str(src), str(out), (255, 0, 0), width)
+    assert [_shade(_pixel(out, (x, 750))) for x in (4, 18, 40)] == shades
+
+
+@pytest.mark.parametrize(
+    "width, shades",
+    [(10, ["poster", "poster"]), (0, ["white", "poster"])],
+    ids=["thin", "zero"],
+)
+def test_removing_a_border_crops_the_whole_white_edge(tmp_path, width, shades):
+    src, out = tmp_path / "src.png", tmp_path / "out.png"
+    _edged_poster(src)
+    assert _make_br().remove_borders(str(src), str(out), width)
+    assert [_shade(_pixel(out, (x, 750))) for x in (4, 40)] == shades
 
 
 def test_bundled_borders_dir_exists():
@@ -1307,6 +1357,131 @@ def test_a_border_colour_change_borders_the_poster_again(tmp_path, monkeypatch):
     br.run(process_all=True)
     r, g, _b = _pixel(dest, (5, 750))
     assert (len(encodes), g > 200 and r < 60) == (2, True)
+
+
+def _band(paths) -> dict:
+    return {str(p): _shade(_pixel(p, (5, 750))) for p in paths}
+
+
+def test_a_new_poster_leaves_the_other_posters_colours_alone(tmp_path, monkeypatch):
+    renamed = [tmp_path / "kometa" / t / "poster.jpg" for t in ("a", "b", "c")]
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, renamed)
+    br.config.border_colors = ["#FF0000", "#00FF00"]
+    new_source, held = tmp_path / "src" / "0.jpg", tmp_path / "held.jpg"
+    new_source.rename(held)
+    br.run(process_all=True)
+    before = _band(renamed[1:])
+    held.rename(new_source)
+    encodes.clear()
+    br.run(process_all=True)
+    assert ([a[1] for a in encodes], _band(renamed[1:])) == ([str(renamed[0])], before)
+
+
+def test_a_poster_a_manifest_run_bordered_keeps_its_colour_in_a_full_pass(
+    tmp_path, monkeypatch
+):
+    renamed = [tmp_path / "kometa" / t / "poster.jpg" for t in ("a", "b")]
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, renamed)
+    br.config.border_colors = ["#FF0000", "#00FF00"]
+    br.run({"media_cache": [2], "collections_cache": []}, process_all=False)
+    before = _band(renamed[1:])
+    encodes.clear()
+    br.run(process_all=True)
+    assert ([a[1] for a in encodes], _band(renamed[1:])) == ([str(renamed[0])], before)
+
+
+@pytest.mark.parametrize(
+    "colours, width, recorded, redone",
+    [
+        (["#FF0000"], 26, "color:26:(255, 0, 0)", 0),
+        ([], 26, "remove:26", 0),
+        (["#FF0000"], 10, "color:10:(255, 0, 0)", 1),
+        ([], 10, "remove:10", 1),
+    ],
+    ids=["colour-26", "remove-26", "colour-10", "remove-10"],
+)
+def test_only_a_border_thinner_than_the_edge_is_redone_after_the_crop_change(
+    tmp_path, monkeypatch, colours, width, recorded, redone
+):
+    """A poster bordered before the 26 px crop is encoded again only below 26."""
+    import sqlite3
+
+    dest = tmp_path / "kometa" / "poster.jpg"
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [dest])
+    real_remove = BorderReplacerr.remove_borders.__get__(br, BorderReplacerr)
+    br.remove_borders = lambda *a, **k: encodes.append(a) or real_remove(*a, **k)
+    br.config.border_colors, br.config.border_width = colours, width
+    br.run(process_all=True)
+    with sqlite3.connect(tmp_path / "b.db") as conn:
+        conn.execute("UPDATE border_state SET variant_sig = ?", (recorded,))
+    conn.close()
+    encodes.clear()
+    br.run(process_all=True)
+    assert len(encodes) == redone
+
+
+def test_the_preview_shows_each_poster_in_the_colour_a_run_gives_it(
+    tmp_path, monkeypatch
+):
+    from backend.api import border_replacerr as api
+    from backend.util.config import load_config
+
+    renamed = [tmp_path / "kometa" / f"t{i}" / "poster.jpg" for i in range(6)]
+    br, _encodes, _ = _colour_run(tmp_path, monkeypatch, renamed)
+    br.config.border_colors = ["#FF0000", "#00FF00"]
+    br.run(process_all=True)
+    config = load_config()
+    config.border_replacerr.border_colors = ["#FF0000", "#00FF00"]
+    monkeypatch.setattr(api, "load_config", lambda: config)
+    monkeypatch.setattr(api, "PREVIEW_DIR", tmp_path / "previews")
+    rows = [
+        {
+            "title": f"t{i}",
+            "original_file": str(tmp_path / "src" / f"{i}.jpg"),
+            "renamed_file": str(p),
+        }
+        for i, p in enumerate(renamed)
+    ]
+    sampled = {"movie": rows}
+    db = SimpleNamespace(
+        media=SimpleNamespace(
+            get_matched_with_files=lambda limit, asset_type=None, invert_type=False: (
+                [] if invert_type else sampled[asset_type]
+            )
+        ),
+        collection=SimpleNamespace(get_matched_with_files=lambda limit: []),
+    )
+
+    response = api.generate_preview(6, "default", db, StubLogger())
+
+    previews = json.loads(response.body)["data"]["previews"]
+    names = {"#ff0000": "red", "#00ff00": "green"}
+    shown = {str(renamed[int(p["title"][1:])]): names[p["color"]] for p in previews}
+    assert shown == _band(renamed)
+
+
+def test_a_poster_gets_the_same_variant_in_every_process():
+    """The pick survives a restart: no per-process string hash."""
+    keys = [f"/kometa/Movie {i} (2020)/poster.jpg" for i in range(12)]
+    variants = ["red", "green", "blue"]
+    code = (
+        "import sys\n"
+        "from backend.modules.border_replacerr import pick_variant\n"
+        f"print([pick_variant(k, {variants!r}) for k in sys.argv[1:]])"
+    )
+    printed = {
+        subprocess.run(
+            [sys.executable, "-c", code, *keys],
+            env={**os.environ, "PYTHONHASHSEED": seed},
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        for seed in ("1", "2")
+    }
+    here = [pick_variant(k, variants) for k in keys]
+    assert (printed, set(here)) == ({f"{here}\n"}, set(variants))
 
 
 @pytest.mark.parametrize(

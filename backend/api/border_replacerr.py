@@ -39,7 +39,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image
 
 from backend.api.utils import error, get_database, get_logger, ok
-from backend.modules.border_replacerr import BorderReplacerr
+from backend.modules.border_replacerr import BorderReplacerr, pick_variant
 from backend.util.config import ChubConfig, load_config
 from backend.util.database import ChubDB
 from backend.util.paths import get_config_dir
@@ -386,7 +386,7 @@ def generate_preview(
             code="BORDER_CONFIG_INVALID",
             status_code=400,
         )
-    border_width = int(cfg.border_width or 26)
+    border_width = cfg.border_width
 
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     # Bounds /tmp without touching a concurrent refresh's freshly-written files.
@@ -417,17 +417,15 @@ def generate_preview(
 
     previews = []
     mode = "image" if border_paths else ("color" if palette else "remove")
-    for index, asset in enumerate(assets):
+    for asset in assets:
         token = uuid.uuid4().hex
         output_path = PREVIEW_DIR / f"{token}.jpg"
 
-        # Image-mode cycles through resolved PNG paths; color-mode cycles
-        # through the palette; otherwise we preview the "remove" path.
-        border_image: Optional[str] = (
-            border_paths[index % len(border_paths)] if border_paths else None
-        )
+        # What a run gives this poster: its image, else its colour, else no border.
+        key = asset.get("renamed_file") or asset["original_file"]
+        border_image: Optional[str] = pick_variant(key, border_paths)
         color: Optional[tuple[int, int, int]] = (
-            palette[index % len(palette)] if (palette and not border_paths) else None
+            None if border_paths else pick_variant(key, palette)
         )
 
         try:

@@ -6,11 +6,12 @@ import logging
 import os
 import re
 import tempfile
+import zlib
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, TypeVar
 
 from PIL import Image
 
@@ -56,6 +57,22 @@ _HOLIDAY_FOLDER_OVERRIDES = {
 }
 
 logging.getLogger("PIL").setLevel(logging.WARNING)
+
+# Many poster sets carry a white edge this wide; a thinner border still crops it.
+_MIN_CROP = 26
+_V = TypeVar("_V")
+
+
+def crop_width(border_width: int) -> int:
+    """Pixels cropped from each edge: at least _MIN_CROP, none for width 0."""
+    return max(border_width, _MIN_CROP) if border_width else 0
+
+
+def pick_variant(key: str, variants: Sequence[_V]) -> Optional[_V]:
+    """The border colour or image for the poster at ``key``, the same on every run."""
+    if not variants:
+        return None
+    return variants[zlib.crc32(os.fsencode(key)) % len(variants)]
 
 
 class NoPosterWritten(PublicError):
@@ -333,14 +350,8 @@ class BorderReplacerr(ChubModule):
         try:
             with Image.open(original_file) as image:
                 width, height = image.size
-                cropped = image.crop(
-                    (
-                        border_width,
-                        border_width,
-                        width - border_width,
-                        height - border_width,
-                    )
-                )
+                crop = crop_width(border_width)
+                cropped = image.crop((crop, crop, width - crop, height - crop))
                 new_width = cropped.width + 2 * border_width
                 new_height = cropped.height + 2 * border_width
                 out_img = Image.new("RGB", (new_width, new_height), border_color)
@@ -378,14 +389,8 @@ class BorderReplacerr(ChubModule):
         try:
             with Image.open(original_file) as image:
                 width, height = image.size
-                cropped = image.crop(
-                    (
-                        border_width,
-                        border_width,
-                        width - border_width,
-                        height - border_width,
-                    )
-                )
+                crop = crop_width(border_width)
+                cropped = image.crop((crop, crop, width - crop, height - crop))
                 if cropped.size != target_size:
                     cropped = cropped.resize(target_size)
                 cropped = cropped.convert("RGB")
@@ -641,24 +646,25 @@ class BorderReplacerr(ChubModule):
                 {p: self._file_digest(p) for p in border_paths} if border_paths else {}
             )
 
+            width = self.config.border_width
+            crop = crop_width(width)
+            # Only a crop wider than the band changes the signature (widths 1-25).
+            size = f"{width}" if crop == width else f"{width}/{crop}"
+
             def _variant_sig(variant) -> str:
                 if border_paths:
                     return f"image:{png_hash.get(variant, '')}"
                 if border_colors:
-                    return f"color:{self.config.border_width}:{variant}"
-                return f"remove:{self.config.border_width}"
+                    return f"color:{size}:{variant}"
+                return f"remove:{size}"
 
-            # Pre-filter: drop assets missing file info (tally skipped), assign
-            # each survivor its round-robin variant (positional over ALL valid
-            # assets, so the assignment is stable regardless of which get
-            # gate-skipped), then apply the skip-gate. Pre-assigning the variant
-            # means the worker holds no shared mutable index — the prerequisite
-            # for concurrency.
+            # Pre-filter: drop assets missing file info (tally skipped), give each
+            # survivor its variant, then apply the skip-gate.
+            variants = border_paths or border_colors
             work: List[Tuple[dict, object, str]] = []
             # Stat'd before the encode reads it: a source replaced mid-pass is
             # bordered again next run.
             source_stats: Dict[str, os.stat_result] = {}
-            variant_index = 0
             for asset in assets:
                 if not asset.get("original_file") or not asset.get("renamed_file"):
                     self.logger.warning(
@@ -678,13 +684,7 @@ class BorderReplacerr(ChubModule):
                     )
                     skipped += 1
                     continue
-                if border_paths:
-                    variant = border_paths[variant_index % len(border_paths)]
-                elif border_colors:
-                    variant = border_colors[variant_index % len(border_colors)]
-                else:
-                    variant = None
-                variant_index += 1
+                variant = pick_variant(asset["renamed_file"], variants)
                 sig = _variant_sig(variant)
                 renamed_file = asset["renamed_file"]
                 if gate_enabled and self._unchanged_since(
