@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import threading
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
@@ -303,6 +303,24 @@ class PosterRenamerr(ChubModule):
         finally:
             kept, self._kept_sources = self._kept_sources, None
             log_kept_sources(self.logger, kept, "poster")
+
+    @contextlib.contextmanager
+    def _sources_in_use(self, items: list):
+        """Map each source to the destinations it stages to this run."""
+        pending: Dict[str, Set[str]] = {}
+        for item in items:
+            if dest := self._staged_dest(item):
+                src = item.get("original_file") or item.get("file")
+                pending.setdefault(src, set()).add(dest)
+        self._pending_dests = pending
+        try:
+            yield
+        finally:
+            self._pending_dests = None
+
+    def _dests_left(self, file: str) -> Set[str]:
+        """The destinations ``file`` has yet to reach this run."""
+        return (self._pending_dests or {}).get(file, set())
 
     @contextlib.contextmanager
     def apply_staging(self):
@@ -1084,9 +1102,18 @@ class PosterRenamerr(ChubModule):
             return
         remove_superseded(previous, new_file_path, config.destination_dir, self.logger, db.records_placed_path)
 
-    def _carry_action(self, moved: Optional[str], db: ChubDB) -> str:
-        """The file action, once _record_staged moved our row off ``moved``: a carry copies while another row records it."""
-        return "copy" if moved and db.records_placed_path(moved) else self.config.action_type
+    def _carry_action(
+        self, file: str, dest: str, moved: Optional[str], db: ChubDB
+    ) -> str:
+        """Under move, copy while another row still needs ``file``."""
+        if self.config.action_type != "move":
+            return self.config.action_type
+        if moved:
+            # _record_staged has moved our row off ``moved`` already.
+            shared = db.records_placed_path(moved)
+        else:
+            shared = bool(self._dests_left(file) - {dest})
+        return "copy" if shared else "move"
 
     def _rename_failed(self, log: Callable[[str], None], message: str) -> None:
         """Log why one poster was not staged, and count it for the Run Summary."""
@@ -1207,7 +1234,11 @@ class PosterRenamerr(ChubModule):
             if (
                 file_ops_enabled
                 and not config.dry_run
-                and not self.process_file(file, new_file_path, self._carry_action(moved, db))
+                and not self.process_file(
+                    file,
+                    new_file_path,
+                    self._carry_action(file, new_file_path, moved, db),
+                )
             ):
                 self._rename_failed(
                     self.logger.warning,
@@ -1219,6 +1250,7 @@ class PosterRenamerr(ChubModule):
                 table = db.collection if asset_type == "collection" else db.media
                 table.set_renamed_file(item.get("id"), moved)
                 return None
+        self._dests_left(file).discard(new_file_path)
 
         # Now that the asset is staged at its current path, drop any copy left
         # behind at the previous path (folder-rename self-cleanup).
@@ -1307,6 +1339,8 @@ class PosterRenamerr(ChubModule):
     _RENAME_PROGRESS_EVERY = 100
     # Posters rename_files could not stage this run; read by the Run Summary.
     _rename_failures = 0
+    # Per source, the destinations it has yet to reach; None outside _sources_in_use.
+    _pending_dests: Optional[Dict[str, Set[str]]] = None
 
     def rename_files(self, db: ChubDB, progress_ceiling: int = 100) -> tuple:
         output: Dict[str, List[Dict[str, Any]]] = {
@@ -1324,13 +1358,17 @@ class PosterRenamerr(ChubModule):
             self.logger.info("Renaming assets please wait...")
             total = len(matched_assets)
             rename_span = progress_ceiling - self._MATCH_PROGRESS_CEILING_PCT
-            with self._kept_sources_batch(), progress(
-                matched_assets,
-                desc="Renaming assets",
-                total=total,
-                unit="assets",
-                logger=self.logger,
-            ) as bar:
+            with (
+                self._kept_sources_batch(),
+                self._sources_in_use(matched_assets),
+                progress(
+                    matched_assets,
+                    desc="Renaming assets",
+                    total=total,
+                    unit="assets",
+                    logger=self.logger,
+                ) as bar,
+            ):
                 for idx, item in enumerate(bar, 1):
                     if self.is_cancelled():
                         break
