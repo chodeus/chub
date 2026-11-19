@@ -761,7 +761,7 @@ const CORE_SETTINGS_SCHEMA = [
                 required: true,
                 placeholder: '26',
                 description:
-                    'Pixels cropped from each edge before re-bordering. Posters that follow the TPDB standard ship with a 26px white border, so 26 is the right value for almost every library. Posters without a matching border will lose this much real artwork.',
+                    'Width of the new border in pixels. Each edge is first cropped by 26px, the white border TPDB-standard posters ship with, or by this width if wider; 0 crops nothing and adds no border. Posters without that white border lose this much real artwork.',
             },
             {
                 key: 'border_colors',
@@ -769,7 +769,7 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'color_list',
                 section: 'Border',
                 description:
-                    'Default border colors used when no holiday window is active. Rotates through the list as posters are processed. Pick richer per-holiday palettes and themed border art on the Border Replacerr page.',
+                    'Default border colors used when no holiday window is active. The color of a poster depends only on its source file and this list, so it stays the same from run to run. Pick richer per-holiday palettes and themed border art on the Border Replacerr page.',
             },
             // ─── Holidays ──────────────────────────────────────────────
             {

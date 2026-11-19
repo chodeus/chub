@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, TypeVar
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
@@ -69,7 +69,7 @@ def crop_width(border_width: int) -> int:
 
 
 def pick_variant(key: str, variants: Sequence[_V]) -> Optional[_V]:
-    """The border colour or image for the poster at ``key``, the same on every run."""
+    """The variant for the poster made from source ``key``, the same on every run."""
     if not variants:
         return None
     return variants[zlib.crc32(os.fsencode(key)) % len(variants)]
@@ -352,9 +352,11 @@ class BorderReplacerr(ChubModule):
                 width, height = image.size
                 crop = crop_width(border_width)
                 cropped = image.crop((crop, crop, width - crop, height - crop))
-                new_width = cropped.width + 2 * border_width
-                new_height = cropped.height + 2 * border_width
-                out_img = Image.new("RGB", (new_width, new_height), border_color)
+                inner = (width - 2 * border_width, height - 2 * border_width)
+                if cropped.size != inner:
+                    # A crop wider than the band: fill its inside without stretching.
+                    cropped = ImageOps.fit(cropped, inner)
+                out_img = Image.new("RGB", (width, height), border_color)
                 out_img.paste(cropped, (border_width, border_width))
                 if out_img.size != target_size:
                     out_img = out_img.resize(target_size)
@@ -684,7 +686,7 @@ class BorderReplacerr(ChubModule):
                     )
                     skipped += 1
                     continue
-                variant = pick_variant(asset["renamed_file"], variants)
+                variant = pick_variant(asset["original_file"], variants)
                 sig = _variant_sig(variant)
                 renamed_file = asset["renamed_file"]
                 if gate_enabled and self._unchanged_since(

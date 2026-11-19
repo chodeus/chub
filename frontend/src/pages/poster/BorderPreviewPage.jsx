@@ -467,7 +467,8 @@ const BordersPicker = ({ holidayName, selected, onChange, disabled }) => {
             <div className="flex items-baseline justify-between mb-2">
                 <h3 className="text-sm font-medium text-fg">Themed border art</h3>
                 <span className="text-xs text-fg-subtle">
-                    Click thumbnails to add/remove. Order = rotation order per poster.
+                    Click thumbnails to add/remove. The pick for a poster depends only on its source
+                    file and this list.
                 </span>
             </div>
 

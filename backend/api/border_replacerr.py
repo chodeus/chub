@@ -422,7 +422,7 @@ def generate_preview(
         output_path = PREVIEW_DIR / f"{token}.jpg"
 
         # What a run gives this poster: its image, else its colour, else no border.
-        key = asset.get("renamed_file") or asset["original_file"]
+        key = asset["original_file"]
         border_image: Optional[str] = pick_variant(key, border_paths)
         color: Optional[tuple[int, int, int]] = (
             None if border_paths else pick_variant(key, palette)

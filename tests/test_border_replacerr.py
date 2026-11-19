@@ -196,6 +196,20 @@ def test_removing_a_border_crops_the_whole_white_edge(tmp_path, width, shades):
     assert [_shade(_pixel(out, (x, 750))) for x in (4, 40)] == shades
 
 
+def test_a_thin_colour_border_keeps_the_artwork_in_proportion(tmp_path):
+    src, out = tmp_path / "src.png", tmp_path / "out.png"
+    _edged_poster(src)
+    with Image.open(src) as img:
+        img.paste((250, 250, 250), (200, 450, 800, 1050))
+        img.save(src)
+    assert _make_br().replace_borders(str(src), str(out), (255, 0, 0), 10)
+    with Image.open(out) as img:
+        rgb = img.convert("RGB")
+        across = sum(min(rgb.getpixel((x, 750))) > 200 for x in range(rgb.width))
+        down = sum(min(rgb.getpixel((500, y))) > 200 for y in range(rgb.height))
+    assert abs(across - down) <= 1, (across, down)
+
+
 def test_bundled_borders_dir_exists():
     """Sanity-check that the bundled asset tree shipped with the module."""
     assert _BUNDLED_BORDERS_DIR.is_dir()
@@ -1388,6 +1402,22 @@ def test_a_poster_a_manifest_run_bordered_keeps_its_colour_in_a_full_pass(
     encodes.clear()
     br.run(process_all=True)
     assert ([a[1] for a in encodes], _band(renamed[1:])) == ([str(renamed[0])], before)
+
+
+def test_a_poster_staged_to_a_new_folder_keeps_its_colour(tmp_path, monkeypatch):
+    """Plex mode stages each run's posters into a new temp folder."""
+    from backend.modules import border_replacerr as border_mod
+
+    first = [tmp_path / "stage1" / f"{t}.jpg" for t in "abcdef"]
+    br, _encodes, _ = _colour_run(tmp_path, monkeypatch, first)
+    br.config.border_colors = ["#FF0000", "#00FF00"]
+    manifest = {"media_cache": list(range(1, 7)), "collections_cache": []}
+    br.run(manifest, process_all=False, manifest_only=True)
+    second = [tmp_path / "stage2" / p.name for p in first]
+    for row, path in zip(border_mod.ChubDB().media.get_all(), second):
+        row["renamed_file"] = str(path)
+    br.run(manifest, process_all=False, manifest_only=True)
+    assert list(_band(second).values()) == list(_band(first).values())
 
 
 @pytest.mark.parametrize(
