@@ -1152,7 +1152,8 @@ class PosterRenamerr(ChubModule):
             if not hit:
                 rest.append((row, carry, False))
                 continue
-            # As if staged at the sibling's file.
+            # As if staged at the sibling's file; _adopted_source records it.
+            row["_adopted_over"] = row.get("original_file")
             row["renamed_file"], row["original_file"] = hit
             adopted.append((row, hit[0], True))
         # Adopters first: a sibling restaged later this run moves the file they copy.
@@ -1201,9 +1202,19 @@ class PosterRenamerr(ChubModule):
         log(message)
         self._rename_failures += 1
 
+    @staticmethod
+    def _adopted_source(item: dict, db: ChubDB) -> Optional[str]:
+        """An adopter's new source, unless a poster pick replaced it this run."""
+        if "_adopted_over" not in item:
+            return None  # update() leaves the row's own source as it is
+        rows = db.collection if item.get("asset_type") == "collection" else db.media
+        now = (rows.get_by_id(item.get("id")) or {}).get("original_file")
+        return item.get("original_file") if now == item["_adopted_over"] else None
+
     def _record_staged(self, item: dict, db: ChubDB, new_file_path: str) -> None:
         """Write where ``item`` is now staged to its cache row; a media row also gets its rename history on a real run."""
         asset_type = item.get("asset_type")
+        original_file = self._adopted_source(item, db)
         if asset_type == "collection":
             db.collection.update(
                 title=item.get("title"),
@@ -1211,7 +1222,7 @@ class PosterRenamerr(ChubModule):
                 library_name=item.get("library_name"),
                 instance_name=item.get("instance_name"),
                 matched_value=None,
-                original_file=item.get("original_file"),
+                original_file=original_file,
                 renamed_file=new_file_path,
                 id=item.get("id"),
             )
@@ -1230,7 +1241,7 @@ class PosterRenamerr(ChubModule):
                 instance_name=item.get("instance_name"),
                 matched_value=None,
                 season_number=item.get("season_number"),
-                original_file=item.get("original_file"),
+                original_file=original_file,
                 renamed_file=new_file_path,
                 rename_history=history_json,
                 id=item.get("id"),

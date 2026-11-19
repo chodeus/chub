@@ -3154,6 +3154,48 @@ def test_a_dry_run_records_no_adoption_at_its_siblings_path(tmp_path, monkeypatc
     assert (row["renamed_file"], row["original_file"]) == (None, None)
 
 
+def _pick_lands_before_the_write(m, monkeypatch, tmp_path, instance):
+    """A pick reaches ``instance``'s row after the run read it, before its write."""
+    picked = str(tmp_path / "picked.jpg")
+    real = m._record_staged
+
+    def record(item, db, new_file_path):
+        if item.get("instance_name") == instance:
+            db.media.update(
+                asset_type=item["asset_type"],
+                title=item["title"],
+                year=item["year"],
+                instance_name=instance,
+                matched_value=True,
+                original_file=picked,
+                id=item["id"],
+            )
+        real(item, db, new_file_path)
+
+    monkeypatch.setattr(m, "_record_staged", record)
+    return picked
+
+
+@pytest.mark.parametrize(
+    "instance, folder",
+    [("radarr1", None), ("radarr2", "Dune 4K (2021)"), ("radarr2", "Dune (2021)")],
+    ids=["own-source", "adopter", "adopter-at-its-siblings-path"],
+)
+def test_a_pick_made_during_a_run_is_kept(tmp_path, monkeypatch, instance, folder):
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    if folder:
+        m, _posters, _src = _added_later(tmp_path, monkeypatch, folder=folder)
+    else:
+        m, _posters, _src = _shared_by_instances(tmp_path, monkeypatch)
+    picked = _pick_lands_before_the_write(m, monkeypatch, tmp_path, instance)
+    m.run()
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        row = db.media.get_by_instance(instance)[0]
+    assert row["original_file"] == picked
+
+
 def test_a_picked_poster_is_not_replaced_by_a_siblings(tmp_path, monkeypatch):
     from backend.util.database import ChubDB
     from tests.conftest import StubLogger
