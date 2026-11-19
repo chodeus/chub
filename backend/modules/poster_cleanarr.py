@@ -29,6 +29,7 @@ from backend.util.helper import create_table
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.normalization import normalize_titles, parse_asset_filename
+from backend.util.poster_cleanarr_settings import VALID_MODES
 from backend.util.path_safety import containing_root, resolve_confined
 from backend.util.paths import get_config_dir
 
@@ -91,7 +92,6 @@ def _bundle_root(path: str) -> Optional[str]:
     return cur or None
 
 
-VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
 VALID_ORPHAN_MODES = {"report", "move", "remove"}
 VALID_STALE_MODES = {"report", "move", "remove"}
 ASSET_IMAGE_EXTS = ASSET_IMAGE_EXTENSIONS

@@ -10,6 +10,8 @@ from typing import Any, List, Optional
 from backend.util.config import ChubConfig, ConfigError
 from backend.util.path_safety import resolve_confined
 
+VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
+
 
 def get_plex_path() -> Optional[str]:
     """
@@ -83,7 +85,7 @@ def _parse_mode(raw_mode: Any) -> str:
     if not isinstance(raw_mode, str):
         raise ValueError(f"Invalid mode type: {type(raw_mode).__name__}")
     mode = raw_mode.lower() or "report"
-    if mode not in ("report", "move", "remove", "restore", "clear", "nothing"):
+    if mode not in VALID_MODES:
         raise ValueError(f"Invalid mode '{mode}'")
     return mode
 

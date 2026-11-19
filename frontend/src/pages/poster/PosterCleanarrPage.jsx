@@ -932,15 +932,17 @@ const PosterCleanarrPage = () => {
         [toast, watchCleanupJob]
     );
 
+    // Restore and Clear: the restore directory alone, no passes.
+    const runRestoreDir = useCallback(async () => {
+        // Only a fresh scan knows which files came back; deleted ones stay hidden.
+        const rescan = mode === 'restore' && hasScanned ? refreshScan : null;
+        await startCleanupJob({ mode }, MODE_META[mode].label, rescan);
+    }, [mode, hasScanned, refreshScan, startCleanupJob]);
+
     const executeCleanup = useCallback(async () => {
         const meta = MODE_META[mode];
         if (!meta || !meta.action) return;
-        if (!meta.passes) {
-            // Only a fresh scan knows which files came back; deleted ones stay hidden.
-            const rescan = mode === 'restore' && hasScanned ? refreshScan : null;
-            await startCleanupJob({ mode }, meta.label, rescan);
-            return;
-        }
+        if (!meta.passes) return runRestoreDir();
         const body = { mode };
         if (selectedPaths.size > 0) body.target_paths = Array.from(selectedPaths);
         // Bloat: when unchecked, force the harmless "nothing" mode so the
@@ -969,8 +971,7 @@ const PosterCleanarrPage = () => {
         cleanOverlaysOnly,
         selectedPaths,
         startCleanupJob,
-        hasScanned,
-        refreshScan,
+        runRestoreDir,
     ]);
 
     // The orphan pass alone, in remove mode: the job re-checks every asset
@@ -1028,7 +1029,7 @@ const PosterCleanarrPage = () => {
             (picked > 0
                 ? `${picked} selected variant${picked === 1 ? '' : 's'}${overlaysNote}`
                 : `every bloat variant across your entire library${overlaysNote}`),
-        cleanStale && 'every stale duplicate',
+        cleanStale && 'every stale duplicate whose current copy is on disk',
         cleanOrphan && 'every orphaned asset',
     ].filter(Boolean);
 

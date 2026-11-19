@@ -810,7 +810,27 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
         await chooseMode(user, mode);
 
         expect(PASSES.map(name => pass(name).textContent)).toEqual(PASSES);
-        expect(screen.getByRole('button', { name: action })).toBeEnabled();
+        await user.click(screen.getByRole('button', { name: action }));
+        if (mode === 'clear') {
+            const confirm = await screen.findByRole('dialog');
+            await user.click(within(confirm).getByRole('button', { name: action }));
+        }
+        await waitFor(() =>
+            expect(mockPostersAPI.runPlexMetadataCleanup.mock.calls).toEqual([[{ mode }]])
+        );
+    });
+
+    it.each([
+        ['move', 'Move bloat to restore'],
+        ['remove', 'Delete bloat permanently'],
+    ])('%s cannot run before any Plex scan', async (mode, action) => {
+        const user = userEvent.setup();
+        scanPayload = null;
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, mode);
+
+        expect(pass('Bloat').textContent).toBe('checkBloat');
+        expect(screen.getByRole('button', { name: action })).toBeDisabled();
     });
 
     it('after a Restore a fresh scan sets the tiles: a deleted variant stays gone', async () => {
@@ -866,7 +886,7 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
         [
             'stale and orphan',
             ['Bloat', 'Stale', 'Orphan'],
-            ['every stale duplicate', 'every orphaned asset'],
+            ['every stale duplicate whose current copy is on disk', 'every orphaned asset'],
         ],
         [
             'overlay bloat',
