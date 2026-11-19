@@ -2992,3 +2992,87 @@ def test_title_match_reason_skips_a_poster_with_unreadable_alternate_titles():
     poster = {"season_number": None, "normalized_title": "other", "normalized_alternate_titles": "matrix"}
     reason = PosterRenamerr._title_match_reason(poster, {"season_number": None}, {"matrix"}, [])
     assert reason == ""
+
+
+def _shared_by_instances(tmp_path, monkeypatch, *folders):
+    """Move run: radarr1's Dune plus one per ``folders``, all matching one poster."""
+    from backend.util.database import ChubDB
+    from tests.conftest import StubLogger
+
+    m, _sent, posters, _logos = _poster_run_with_chained_assets(tmp_path, monkeypatch)
+    with ChubDB(StubLogger(), db_path=str(tmp_path / "chub.db")) as db:
+        for n, folder in enumerate(folders, 2):
+            db.media.upsert(
+                {
+                    "title": "Dune",
+                    "normalized_title": "dune",
+                    "alternate_titles": "[]",
+                    "year": 2021,
+                    "tmdb_id": 438631,
+                    "folder": folder,
+                    "status": "released",
+                    "has_content": 1,
+                },
+                "movie",
+                "radarr",
+                f"radarr{n}",
+            )
+    m.config.instances = [f"radarr{n}" for n in range(1, len(folders) + 2)]
+    m.config.action_type = "move"
+    return m, posters, tmp_path / "src" / "Dune (2021) {tmdb-438631}.jpg"
+
+
+def _placed(posters):
+    return sorted(
+        (str(p.relative_to(posters)), p.read_bytes())
+        for p in posters.rglob("*")
+        if p.is_file()
+    )
+
+
+@pytest.mark.parametrize(
+    "folders, names",
+    [
+        (["Dune 4K (2021)"], ["Dune (2021).jpg", "Dune 4K (2021).jpg"]),
+        (["Dune (2021)"], ["Dune (2021).jpg"]),
+        (["Dune 4K (2021)", "Dune (2021)"], ["Dune (2021).jpg", "Dune 4K (2021).jpg"]),
+    ],
+    ids=["two-folders", "one-folder", "three-rows-two-folders"],
+)
+def test_a_moved_poster_instances_share_reaches_each_folder(
+    tmp_path, monkeypatch, folders, names
+):
+    m, posters, src = _shared_by_instances(tmp_path, monkeypatch, *folders)
+    m.run()
+    each = [(name, b"poster") for name in names]
+    assert (_placed(posters), src.exists(), m.logger.messages["warning"]) == (
+        each,
+        False,
+        [],
+    )
+    m.run()
+    assert (
+        _placed(posters),
+        m.logger.messages["warning"],
+        m.logger.messages["error"],
+    ) == (each, [], [])
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_shared_poster_that_cannot_reach_one_instance_keeps_its_source(
+    tmp_path, monkeypatch
+):
+    m, posters, src = _shared_by_instances(tmp_path, monkeypatch, "Dune 4K (2021)")
+    m.config.asset_folders = True
+    blocked = posters / "Dune (2021)"
+    blocked.mkdir()
+    blocked.chmod(0o555)
+    try:
+        m.run()
+    finally:
+        blocked.chmod(0o755)
+    other = ("Dune 4K (2021)/poster.jpg", b"poster")
+    assert (_placed(posters), src.exists()) == ([other], True)
+    m.run()
+    both = [("Dune (2021)/poster.jpg", b"poster"), other]
+    assert (_placed(posters), src.exists()) == (both, False)
