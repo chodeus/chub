@@ -90,12 +90,19 @@ def log_kept_sources(logger: Logger, errors: Sequence[OSError], noun: str) -> No
         )
 
 
+def _creating(path: str, folder: str) -> bool:
+    # Only a makedirs of the folder names it or a folder above it.
+    return path == folder or folder.startswith(path + os.sep)
+
+
 def destination_refused(err: OSError, dest: str) -> bool:
     """True when ``err`` came from ``dest`` or its folder refusing the write, not from the source."""
     folder = os.path.dirname(dest)
     named = [p for p in (err.filename, err.filename2) if p]
+    if any(_creating(p, folder) for p in named):
+        return True  # e.g. a file where the folder goes
     # e.g. a source file CHUB cannot read.
-    if named and not any(p == folder or p.startswith(folder + os.sep) for p in named):
+    if named and not any(p.startswith(folder + os.sep) for p in named):
         return False
     if err.errno in _DESTINATION_ONLY:
         return True

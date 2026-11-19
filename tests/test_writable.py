@@ -112,3 +112,35 @@ def test_a_folder_it_creates_that_refuses_files_is_refused(tmp_path):
         "dr-xr-xr-x). Check the volume's host path, and that the folder's owner "
         "matches PUID/PGID."
     )
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="root writes to a 0o555 folder")
+def test_a_parent_folder_it_cannot_create_is_the_destination(tmp_path):
+    root = tmp_path / "kometa"
+    root.mkdir()
+    dest = root / "Collections" / "Dune" / "poster.jpg"
+    root.chmod(0o555)
+    try:
+        with pytest.raises(OSError) as raised:
+            os.makedirs(dest.parent)
+        refused = destination_refused(raised.value, str(dest))
+    finally:
+        root.chmod(0o755)
+    assert (raised.value.filename, refused) == (str(root / "Collections"), True)
+
+
+@pytest.mark.parametrize(
+    "dest, code",
+    [
+        ("Collections/poster.jpg", errno.EEXIST),
+        ("Collections/Dune/poster.jpg", errno.ENOTDIR),
+    ],
+    ids=["the-folder", "a-folder-above"],
+)
+def test_a_file_where_the_folder_goes_is_the_destination(tmp_path, dest, code):
+    (tmp_path / "Collections").write_bytes(b"not a folder")
+    dest = tmp_path / dest
+    with pytest.raises(OSError) as raised:
+        os.makedirs(dest.parent, exist_ok=True)
+    refused = destination_refused(raised.value, str(dest))
+    assert (raised.value.errno, refused) == (code, True)

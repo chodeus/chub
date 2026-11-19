@@ -312,13 +312,14 @@ def test_collect_matched_assets_includes_moved_and_collections(tmp_path):
     ]
 
     br = _make_br_with_config()
-    assets = br._collect_matched_assets(_StubDB(media, collections))
+    assets, excluded = br._collect_matched_assets(_StubDB(media, collections))
 
     titles = {a["title"] for a in assets}
     assert titles == {
         "Moved Movie",
         "My Collection",
     }  # moved + collection in; unmatched out
+    assert excluded == []
 
 
 def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
@@ -328,8 +329,9 @@ def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
         {"title": "ByFolder", "folder": "skipdir", "matched": 1},
     ]
     br = _make_br_with_config(exclusion_list=["ByTitle"], ignore_folders=["skipdir"])
-    assets = br._collect_matched_assets(_StubDB(media, []))
-    assert {a["title"] for a in assets} == {"Keep"}
+    assets, excluded = br._collect_matched_assets(_StubDB(media, []))
+    assert [a["title"] for a in assets] == ["Keep"]
+    assert [a["title"] for a in excluded] == ["ByTitle", "ByFolder"]
 
 
 # ---- selection rule: full-library vs manifest subset -----------------------
@@ -1098,6 +1100,108 @@ def test_a_destination_refusing_every_write_fails_the_job(tmp_path, monkeypatch)
     assert [p for p in dest.rglob("*") if p.is_file()] == [], "a temp file was left"
 
 
+_OWNER = "Check the volume's host path, and that the folder's owner matches PUID/PGID."
+
+
+@_SKIP_AS_ROOT
+def test_an_excluded_poster_its_destination_refuses_fails_the_job(
+    tmp_path, monkeypatch
+):
+    br, dest_dir, _ = _subset_harness(tmp_path, monkeypatch, exclusion_list=["inman"])
+    dest_dir.chmod(0o555)
+    try:
+        with pytest.raises(NoPosterWritten) as raised:
+            br.run({"media_cache": [1], "collections_cache": []}, process_all=False)
+    finally:
+        dest_dir.chmod(0o755)
+    assert br.logger.messages["error"] == [
+        f"Cannot write {dest_dir / 'inman.jpg'}: Permission denied. {_OWNER} "
+        "1 poster(s) failed this way.",
+        "Border replacerr failed: all 1 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above.",
+    ]
+    assert failure_text("Module border_replacerr", raised.value) == (
+        "Module border_replacerr failed: permission denied — see the server log"
+    )
+    assert list(dest_dir.iterdir()) == []
+
+
+def test_an_excluded_poster_with_a_file_where_its_folder_goes_fails_the_job(
+    tmp_path, monkeypatch
+):
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+    blocker = dest_dir / "Collections"
+    blocker.write_bytes(b"not a folder")
+    by_id[1]["renamed_file"] = str(blocker / "inman.jpg")
+    with pytest.raises(NoPosterWritten):
+        br.run({"media_cache": [1], "collections_cache": []}, process_all=False)
+    assert br.logger.messages["error"] == [
+        f"Cannot write {blocker / 'inman.jpg'}: File exists. Check the volume's host "
+        "path, and that its disk or mount is working. 1 poster(s) failed this way.",
+        "Border replacerr failed: all 1 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above.",
+    ]
+    assert blocker.read_bytes() == b"not a folder"
+
+
+@_SKIP_AS_ROOT
+@pytest.mark.parametrize("full", [False, True], ids=["manifest", "full-library"])
+def test_an_excluded_poster_refused_beside_a_bordered_one_is_counted(
+    tmp_path, monkeypatch, full
+):
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+    locked = dest_dir / "locked"
+    locked.mkdir()
+    by_id[1]["renamed_file"] = str(locked / "inman.jpg")
+    manifest = {"media_cache": [1, 2], "collections_cache": []}
+    locked.chmod(0o555)
+    try:
+        counts = br.run(None if full else manifest, process_all=full)
+    finally:
+        locked.chmod(0o755)
+    assert br.logger.messages["error"] == [
+        f"Cannot write {locked / 'inman.jpg'}: Permission denied. {_OWNER} "
+        "1 poster(s) failed this way."
+    ]
+    assert br.logger.messages["warning"] == [
+        "Border replacerr finished with errors: 1 of 2 poster(s) it tried failed, "
+        "1 replaced, 0 skipped — see the ERROR lines above."
+    ]
+    assert (counts["failed"], counts["replaced"]) == (1, 1)
+    assert [p.name for p in dest_dir.rglob("*.jpg")] == ["outman.jpg"]
+
+
+@_SKIP_AS_ROOT
+def test_an_excluded_poster_whose_source_cannot_be_read_is_an_error_not_a_failed_job(
+    tmp_path, monkeypatch
+):
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+    src = by_id[1]["original_file"]
+    mode = os.stat(src).st_mode
+    os.chmod(src, 0)
+    try:
+        counts = br.run({"media_cache": [1], "collections_cache": []})
+    finally:
+        os.chmod(src, mode)
+    assert br.logger.messages["error"] == [
+        "Could not stage excluded asset 'inman': "
+        f"[Errno 13] Permission denied: '{src}'",
+        "Border replacerr failed: all 1 poster(s) it tried failed, 0 skipped — "
+        "see the ERROR lines above.",
+    ]
+    assert counts["failed"] == 1
+    info = br.logger.messages["info"]
+    assert "   → 1 processed, 0 replaced, 0 removed, 0 skipped, 1 failed" in info
+    assert [m for m in info if m.startswith("Processing")] == []
+    assert list(dest_dir.iterdir()) == []
+
+
 @pytest.mark.parametrize(
     "breakage",
     ["corrupt source", pytest.param("locked folder", marks=_SKIP_AS_ROOT)],
@@ -1302,3 +1406,91 @@ def test_an_output_replaced_before_its_result_is_read_is_bordered_again(
     br.replace_borders = encode
     br.run(process_all=True)
     assert (len(encodes), first.read_bytes() == source.read_bytes()) == (3, False)
+
+
+@_SKIP_AS_ROOT
+def test_an_excluded_poster_refused_beside_one_copied_keeps_the_job(
+    tmp_path, monkeypatch
+):
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman", "outman"]
+    )
+    locked = dest_dir / "locked"
+    locked.mkdir()
+    by_id[1]["renamed_file"] = str(locked / "inman.jpg")
+    manifest = {"media_cache": [1, 2], "collections_cache": []}
+    locked.chmod(0o555)
+    try:
+        counts = br.run(manifest)
+    finally:
+        locked.chmod(0o755)
+    assert br.logger.messages["warning"] == [
+        "Border replacerr finished with errors: 1 of 2 poster(s) it tried failed, "
+        "no borders changed, 0 skipped — see the ERROR lines above."
+    ]
+    assert (counts["processed"], counts["failed"]) == (2, 1)
+    assert [p.name for p in dest_dir.rglob("*.jpg")] == ["outman.jpg"]
+
+
+@_SKIP_AS_ROOT
+def test_an_excluded_poster_refused_beside_one_already_in_place_keeps_the_job(
+    tmp_path, monkeypatch
+):
+    from backend.util.file_ops import copy_into_place
+
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman", "outman"]
+    )
+    locked = dest_dir / "locked"
+    locked.mkdir()
+    by_id[1]["renamed_file"] = str(locked / "inman.jpg")
+    copy_into_place(by_id[2]["original_file"], by_id[2]["renamed_file"])
+    locked.chmod(0o555)
+    try:
+        counts = br.run({"media_cache": [1, 2], "collections_cache": []})
+    finally:
+        locked.chmod(0o755)
+    assert br.logger.messages["warning"] == [
+        "Border replacerr finished with errors: 1 of 1 poster(s) it tried failed, "
+        "no borders changed, 0 skipped — see the ERROR lines above."
+    ]
+    assert counts["failed"] == 1
+
+
+@_SKIP_AS_ROOT
+def test_an_excluded_poster_replaces_a_file_chub_cannot_read(tmp_path, monkeypatch):
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+    src = Path(by_id[1]["original_file"])
+    dest = dest_dir / "inman.jpg"
+    dest.write_bytes(b"x" * src.stat().st_size)
+    dest.chmod(0)
+    br.run({"media_cache": [1], "collections_cache": []})
+    assert (br.logger.messages["error"], dest.read_bytes() == src.read_bytes()) == (
+        [],
+        True,
+    )
+
+
+def test_an_excluded_poster_whose_source_goes_mid_copy_is_skipped(
+    tmp_path, monkeypatch
+):
+    from backend.modules import border_replacerr as border_mod
+
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+    real_copy = border_mod.copy_into_place
+
+    def _source_synced_away(src, dest, **kw):
+        os.remove(src)
+        return real_copy(src, dest, **kw)
+
+    monkeypatch.setattr(border_mod, "copy_into_place", _source_synced_away)
+    counts = br.run({"media_cache": [1], "collections_cache": []})
+    assert (br.logger.messages["error"], counts, list(dest_dir.iterdir())) == (
+        [],
+        None,
+        [],
+    )
