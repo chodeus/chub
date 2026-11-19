@@ -15,16 +15,14 @@ const PAGE_SIZE = 500; // master-detail needs the full bundle list client-side
 
 // Mode metadata — one row per cleanup mode. `action` drives the Run button's
 // label + colour. `confirm` means the Run button fires a confirmation modal
-// (destructive / permanent operations only). `scope` toggles which modes are
-// allowed to send `target_paths`; restore/clear/nothing ignore selection.
-// `passes`: the Bloat/Stale/Orphan ticks apply; other modes leave them out.
+// (destructive / permanent operations only). `passes`: the mode runs the
+// Bloat/Stale/Orphan passes, and a selection scopes its Bloat pass.
 const MODE_META = {
     report: {
         label: 'Report',
         action: 'Run scan',
         variant: 'primary',
         confirm: false,
-        scopeable: false,
         description: 'List bloat images in the UI. Nothing is deleted.',
     },
     move: {
@@ -32,7 +30,6 @@ const MODE_META = {
         action: 'Move bloat to restore',
         variant: 'warning',
         confirm: false,
-        scopeable: true,
         passes: true,
         description: 'Relocate bloat to <plex_path>/Poster Cleanarr Restore/ — recoverable.',
     },
@@ -41,7 +38,6 @@ const MODE_META = {
         action: 'Restore files',
         variant: 'success',
         confirm: false,
-        scopeable: false,
         description: 'Move everything in the Restore directory back to Metadata/.',
     },
     clear: {
@@ -49,7 +45,6 @@ const MODE_META = {
         action: 'Clear restore dir',
         variant: 'danger',
         confirm: true,
-        scopeable: false,
         description: 'Permanently delete everything in the Restore directory. Cannot be undone.',
     },
     remove: {
@@ -57,7 +52,6 @@ const MODE_META = {
         action: 'Delete bloat permanently',
         variant: 'danger',
         confirm: true,
-        scopeable: true,
         passes: true,
         description: 'Delete bloat from disk directly. Cannot be undone.',
     },
@@ -66,7 +60,6 @@ const MODE_META = {
         action: null,
         variant: 'secondary',
         confirm: false,
-        scopeable: false,
         description:
             'Skip image processing entirely. Useful for scheduling an orphan-cleanup-only run.',
     },
@@ -627,22 +620,17 @@ const PosterCleanarrPage = () => {
     // refreshScan — a real scan is the source of truth.
     const [deletedPaths, setDeletedPaths] = useState(new Set());
 
-    // Watched here, not by the log modal: hiding it stops its polling. `targets` go to
-    // deletedPaths on `success`, so bloat tiles update without a 30s+ rescan.
+    // Watched here, not by the log modal: hiding it stops its polling. `onSuccess`
+    // updates the bloat tiles on `success`, without a 30s+ rescan.
     const watchCleanupJob = useCallback(
-        (jobId, targets) =>
+        (jobId, onSuccess) =>
             pollJobUntilDone(jobId, pageAliveRef.current).then(status => {
                 // No end state (cancelled, or polling gave up): the run may still be going
                 if (!TERMINAL_STATUSES.includes(status)) return;
                 // Any terminal status: a run that failed part-way may still
                 // have moved or removed stale and orphaned assets.
                 loadKometaAssets(true);
-                if (status !== 'success' || !targets?.length) return;
-                setDeletedPaths(prev => {
-                    const next = new Set(prev);
-                    for (const p of targets) next.add(p);
-                    return next;
-                });
+                if (status === 'success') onSuccess?.();
             }),
         [loadKometaAssets]
     );
@@ -910,7 +898,7 @@ const PosterCleanarrPage = () => {
 
     // Enqueue a cleanup job, tail it in the live log modal and watch it; true once started.
     const startCleanupJob = useCallback(
-        async (body, label, targets) => {
+        async (body, label, onSuccess) => {
             setIsEnqueuing(true);
             try {
                 const res = await postersAPI.runPlexMetadataCleanup(body);
@@ -929,7 +917,7 @@ const PosterCleanarrPage = () => {
                     return false;
                 }
                 toast.success(`${label} started (job #${jobId})`);
-                watchCleanupJob(jobId, targets);
+                watchCleanupJob(jobId, onSuccess);
                 return true;
             } catch {
                 toast.error('Failed to start cleanup');
@@ -945,12 +933,13 @@ const PosterCleanarrPage = () => {
         const meta = MODE_META[mode];
         if (!meta || !meta.action) return;
         if (!meta.passes) {
-            const body = { mode, stale_duplicates_enabled: false, orphan_assets_enabled: false };
-            await startCleanupJob(body, meta.label, null);
+            // A Restore brings back every variant a Move hid.
+            const unhide = mode === 'restore' ? () => setDeletedPaths(new Set()) : null;
+            await startCleanupJob({ mode }, meta.label, unhide);
             return;
         }
         const body = { mode };
-        if (meta.scopeable && selectedPaths.size > 0) body.target_paths = Array.from(selectedPaths);
+        if (selectedPaths.size > 0) body.target_paths = Array.from(selectedPaths);
         // Bloat: when unchecked, force the harmless "nothing" mode so the
         // job skips Plex-variant deletion but can still run stale/orphan.
         body.mode = cleanBloat ? mode : 'nothing';
@@ -961,14 +950,14 @@ const PosterCleanarrPage = () => {
         // Overlays-only narrows the bloat pass to Kometa overlay images;
         // only meaningful when bloat is actually running.
         body.overlays_only = cleanBloat && cleanOverlaysOnly;
-        // Stash the targeted paths so the job watcher can optimistically
-        // remove them from the UI when the job succeeds.
+        // The targeted paths leave the UI once the job succeeds.
         // Null = full-library run; we don't know what got deleted, so we
         // leave deletedPaths alone (user re-scans for a fresh count).
         // Only the bloat pass touches the selected variants; with bloat off the
         // mode is 'nothing', so nothing was deleted and nothing may be hidden.
         const targets = cleanBloat ? body.target_paths || null : null;
-        if (await startCleanupJob(body, meta.label, targets)) setSelectedPaths(new Set());
+        const hide = targets ? () => setDeletedPaths(prev => new Set([...prev, ...targets])) : null;
+        if (await startCleanupJob(body, meta.label, hide)) setSelectedPaths(new Set());
     }, [
         mode,
         cleanBloat,
@@ -1283,39 +1272,39 @@ const PosterCleanarrPage = () => {
                 <div className="flex flex-wrap items-center gap-4">
                     <ModeCheck
                         label="Bloat"
-                        checked={cleanBloat}
+                        checked={passesOn && cleanBloat}
                         disabled={!passesOn}
                         onChange={setCleanBloat}
                     />
                     <ModeCheck
                         label="Stale"
-                        checked={cleanStale}
+                        checked={passesOn && cleanStale}
                         disabled={!passesOn}
                         onChange={setCleanStale}
                     />
                     <ModeCheck
                         label="Orphan"
-                        checked={cleanOrphan}
+                        checked={passesOn && cleanOrphan}
                         disabled={!passesOn}
                         onChange={setCleanOrphan}
                     />
                     <ModeCheck
                         label="Overlays only"
-                        checked={cleanOverlaysOnly}
+                        checked={passesOn && cleanOverlaysOnly}
                         disabled={!passesOn || !cleanBloat}
                         onChange={setCleanOverlaysOnly}
                         title="Limit the bloat pass to Kometa overlay images (EXIF-tagged), sparing user-uploaded customs"
                     />
                 </div>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
-                    {MODE_META[mode]?.scopeable && (
+                    {passesOn && (
                         <span className="text-xs text-fg-muted">
                             {selectedPaths.size > 0
                                 ? `${selectedPaths.size} selected`
                                 : 'No selection → full library'}
                         </span>
                     )}
-                    {MODE_META[mode]?.scopeable && selectedPaths.size > 0 && (
+                    {passesOn && selectedPaths.size > 0 && (
                         <Button variant="ghost" onClick={clearSelection}>
                             Clear
                         </Button>
@@ -1327,7 +1316,7 @@ const PosterCleanarrPage = () => {
                         onClick={runCleanup}
                         disabled={
                             !MODE_META[mode]?.action ||
-                            (mode !== 'report' && !hasScanned) ||
+                            (passesOn && !hasScanned) ||
                             (passesOn && !cleanBloat && !cleanStale && !cleanOrphan)
                         }
                     >

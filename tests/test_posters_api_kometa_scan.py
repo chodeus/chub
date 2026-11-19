@@ -277,21 +277,28 @@ def test_cleanup_route_reports_a_run_already_in_flight(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("mode", ["restore", "clear"])
-def test_cleanup_route_queues_the_restore_dir_modes(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize("passes", [{}, {"stale_duplicates_enabled": True}])
+def test_cleanup_route_queues_the_restore_dir_modes_alone(
+    tmp_path, monkeypatch, mode, passes
+):
     """The page's Restore and Clear reach the job, with the asset passes off."""
     cfg = ChubConfig()
+    cfg.poster_cleanarr.stale_duplicates_enabled = True
+    cfg.poster_cleanarr.orphan_assets_enabled = True
     monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
-    body = {
-        "mode": mode,
-        "stale_duplicates_enabled": False,
-        "orphan_assets_enabled": False,
-    }
+    body = {"mode": mode, **passes}
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         res = _client(db).post("/api/posters/plex-metadata/cleanup", json=body)
         jobs = db.worker.get_pending_jobs("jobs")
 
     assert res.status_code == 200
-    assert [json.loads(j["payload"])["overrides"] for j in jobs] == [body]
+    assert [json.loads(j["payload"])["overrides"] for j in jobs] == [
+        {
+            "mode": mode,
+            "stale_duplicates_enabled": False,
+            "orphan_assets_enabled": False,
+        }
+    ]
 
 
 def test_orphan_delete_route_fails_closed_without_config(tmp_path, monkeypatch):

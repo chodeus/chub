@@ -787,9 +787,34 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
             await user.click(within(confirm).getByRole('button', { name: action }));
         }
         await waitFor(() => expect(mockPostersAPI.runPlexMetadataCleanup).toHaveBeenCalled());
-        expect(mockPostersAPI.runPlexMetadataCleanup.mock.calls).toEqual([
-            [{ mode, stale_duplicates_enabled: false, orphan_assets_enabled: false }],
-        ]);
+        expect(mockPostersAPI.runPlexMetadataCleanup.mock.calls).toEqual([[{ mode }]]);
+    });
+
+    it.each([
+        ['restore', 'Restore files'],
+        ['clear', 'Clear restore dir'],
+    ])('%s shows no pass ticked and runs before any scan', async (mode, action) => {
+        const user = userEvent.setup();
+        scanPayload = null;
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, mode);
+
+        expect(PASSES.map(name => pass(name).textContent)).toEqual(PASSES);
+        expect(screen.getByRole('button', { name: action })).toBeEnabled();
+    });
+
+    it('a Restore brings back the variants a Move hid', async () => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await user.click(await screen.findByText('(unknown)'));
+        await user.click(await screen.findByRole('button', { name: 'Select variant' }));
+        await chooseMode(user, 'move');
+        await user.click(screen.getByRole('button', { name: 'Move bloat to restore' }));
+        await waitFor(() => expect(screen.queryByAltText('only_a')).not.toBeInTheDocument());
+
+        await chooseMode(user, 'restore');
+        await user.click(screen.getByRole('button', { name: 'Restore files' }));
+        expect(await screen.findByAltText('only_a')).toBeInTheDocument();
     });
 
     it.each([

@@ -91,6 +91,10 @@ def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
     if mode not in ("report", "move", "remove", "restore", "clear", "nothing"):
         raise ValueError(f"Invalid mode '{mode}'")
     overrides: dict = {"mode": mode}
+    if mode in ("restore", "clear"):
+        # The restore directory alone, whatever passes the saved config runs.
+        overrides.update(stale_duplicates_enabled=False, orphan_assets_enabled=False)
+        return overrides
 
     target_paths = body.get("target_paths")
     if isinstance(target_paths, list) and target_paths:
