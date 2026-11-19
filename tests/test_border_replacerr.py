@@ -198,6 +198,8 @@ def test_border_state_roundtrip_and_upsert(tmp_path):
                 "renamed_file": "/m/a.jpg",
                 "source_mtime": 1.5,
                 "source_size": 10,
+                "output_mtime": 3.5,
+                "output_size": 30,
                 "variant_sig": "color:8:(255, 0, 0)",
                 "updated_at": "t0",
             },
@@ -205,6 +207,8 @@ def test_border_state_roundtrip_and_upsert(tmp_path):
                 "renamed_file": "/m/b.jpg",
                 "source_mtime": 2.0,
                 "source_size": 20,
+                "output_mtime": 4.0,
+                "output_size": 40,
                 "variant_sig": "remove:8",
                 "updated_at": "t0",
             },
@@ -213,8 +217,13 @@ def test_border_state_roundtrip_and_upsert(tmp_path):
     assert n == 2
     m = bs.get_all_map()
     assert set(m) == {"/m/a.jpg", "/m/b.jpg"}
-    assert m["/m/a.jpg"]["source_size"] == 10
-    assert m["/m/a.jpg"]["variant_sig"] == "color:8:(255, 0, 0)"
+    assert m["/m/a.jpg"] == {
+        "source_mtime": 1.5,
+        "source_size": 10,
+        "output_mtime": 3.5,
+        "output_size": 30,
+        "variant_sig": "color:8:(255, 0, 0)",
+    }
 
     # PK conflict updates in place.
     bs.bulk_record(
@@ -223,14 +232,21 @@ def test_border_state_roundtrip_and_upsert(tmp_path):
                 "renamed_file": "/m/a.jpg",
                 "source_mtime": 9.0,
                 "source_size": 99,
+                "output_mtime": 8.0,
+                "output_size": 88,
                 "variant_sig": "x",
                 "updated_at": "t1",
             }
         ]
     )
     m2 = bs.get_all_map()
-    assert m2["/m/a.jpg"]["source_size"] == 99
-    assert m2["/m/a.jpg"]["variant_sig"] == "x"
+    assert m2["/m/a.jpg"] == {
+        "source_mtime": 9.0,
+        "source_size": 99,
+        "output_mtime": 8.0,
+        "output_size": 88,
+        "variant_sig": "x",
+    }
 
     bs.clear()
     assert bs.get_all_map() == {}
@@ -763,15 +779,19 @@ def test_a_bordered_poster_a_link_replaced_is_bordered_again(tmp_path, monkeypat
     assert (dest.is_symlink(), dest.read_bytes() == bordered) == (False, True)
 
 
-def test_a_link_to_the_bordered_bytes_is_replaced_by_a_file(tmp_path, monkeypatch):
+@pytest.mark.parametrize("moved", [False, True], ids=["copied", "moved"])
+def test_a_link_to_the_bordered_bytes_is_replaced_by_a_file(tmp_path, monkeypatch, moved):
     br, dest_dir, by_id = _subset_harness(tmp_path, monkeypatch)
     manifest = {"media_cache": [1], "collections_cache": []}
     br.run(manifest, process_all=False)
     dest = dest_dir / "inman.jpg"
     twin = tmp_path / "twin.jpg"
     bordered = dest.read_bytes()
-    twin.write_bytes(bordered)
-    dest.unlink()
+    if moved:
+        dest.rename(twin)
+    else:
+        twin.write_bytes(bordered)
+        dest.unlink()
     dest.symlink_to(twin)
     br.run(manifest, process_all=False)
     assert (dest.is_symlink(), dest.read_bytes(), twin.read_bytes()) == (
@@ -1123,3 +1143,99 @@ def test_dry_run_ignores_a_destination_it_cannot_write(tmp_path, monkeypatch):
         "Border replacerr completed: 1 processed, 1 replaced, 0 skipped."
         in br.logger.messages["info"]
     )
+
+
+@pytest.mark.parametrize("restage", ["copy_into_place", "link_into_place"])
+def test_a_poster_restaged_unbordered_is_bordered_again(tmp_path, monkeypatch, restage):
+    """Borders off restages the raw source over the output; back on, it is bordered again."""
+    from backend.util import file_ops
+
+    dest = tmp_path / "kometa" / "poster.jpg"
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [dest])
+    br.run(process_all=True)
+    bordered = dest.read_bytes()
+    getattr(file_ops, restage)(str(tmp_path / "src" / "0.jpg"), str(dest))
+    encodes.clear()
+    br.run(process_all=True)
+    assert (len(encodes), dest.read_bytes() == bordered) == (1, True)
+    br.run(process_all=True)
+    assert len(encodes) == 1, "the re-bordered poster was encoded again"
+
+
+def test_a_row_recorded_before_output_tracking_borders_its_poster_again(
+    tmp_path, monkeypatch
+):
+    """A border_state row from before the output columns cannot vouch for the output."""
+    import sqlite3
+
+    from backend.util.file_ops import copy_into_place
+
+    dest = tmp_path / "kometa" / "poster.jpg"
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [dest])
+    source = tmp_path / "src" / "0.jpg"
+    dest.parent.mkdir()
+    copy_into_place(str(source), str(dest))
+    st = source.stat()
+    with sqlite3.connect(tmp_path / "b.db") as conn:
+        conn.execute(
+            "CREATE TABLE border_state (renamed_file TEXT PRIMARY KEY NOT NULL, "
+            "source_mtime REAL, source_size INTEGER, variant_sig TEXT, updated_at TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO border_state VALUES (?, ?, ?, ?, ?)",
+            (str(dest), st.st_mtime, st.st_size, "color:26:(255, 0, 0)", "t0"),
+        )
+    conn.close()
+    br.run(process_all=True)
+    assert (len(encodes), dest.read_bytes() == source.read_bytes()) == (1, False)
+
+
+def _pixel(path, xy) -> tuple:
+    with Image.open(path) as im:
+        return im.convert("RGB").getpixel(xy)
+
+
+def test_a_border_colour_change_borders_the_poster_again(tmp_path, monkeypatch):
+    dest = tmp_path / "kometa" / "poster.jpg"
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [dest])
+    br.run(process_all=True)
+    br.config.border_colors = ["#00FF00"]
+    br.run(process_all=True)
+    r, g, _b = _pixel(dest, (5, 750))
+    assert (len(encodes), g > 200 and r < 60) == (2, True)
+
+
+@pytest.mark.parametrize(
+    "size, keep_mtime",
+    [((1000, 1500), False), ((900, 1350), True)],
+    ids=["same-size", "same-mtime"],
+)
+def test_a_replaced_source_is_bordered_again(tmp_path, monkeypatch, size, keep_mtime):
+    """A new source is bordered again when only its size or only its mtime differs."""
+    dest = tmp_path / "kometa" / "poster.jpg"
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [dest])
+    source = tmp_path / "src" / "0.jpg"
+    Image.new("RGB", (1000, 1500), (200, 0, 0)).save(source, "BMP")
+    br.run(process_all=True)
+    old = source.stat()
+    Image.new("RGB", size, (0, 0, 200)).save(source, "BMP")
+    mtime = old.st_mtime_ns if keep_mtime else old.st_mtime_ns + 10**10
+    os.utime(source, ns=(old.st_atime_ns, mtime))
+    assert (source.stat().st_size == old.st_size) == (not keep_mtime)
+    br.run(process_all=True)
+    r, _g, b = _pixel(dest, (500, 750))
+    assert (len(encodes), b > 150 and r < 60) == (2, True)
+
+
+@pytest.mark.parametrize("same_size", [True, False], ids=["same-size", "same-mtime"])
+def test_an_output_changed_since_is_bordered_again(tmp_path, monkeypatch, same_size):
+    """A changed output is bordered again when only its size or only its mtime differs."""
+    dest = tmp_path / "kometa" / "poster.jpg"
+    br, encodes, _ = _colour_run(tmp_path, monkeypatch, [dest])
+    br.run(process_all=True)
+    bordered, old = dest.read_bytes(), dest.stat()
+    dest.write_bytes(bordered[:-1] + b"\0" if same_size else bordered + b"\0")
+    mtime = old.st_mtime_ns + 10**10 if same_size else old.st_mtime_ns
+    os.utime(dest, ns=(old.st_atime_ns, mtime))
+    br.run(process_all=True)
+    assert (len(encodes), dest.read_bytes() == bordered) == (2, True)

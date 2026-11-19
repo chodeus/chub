@@ -551,6 +551,8 @@ class SchemaManager:
                 ),
                 ColumnDefinition("source_mtime", "REAL"),
                 ColumnDefinition("source_size", "INTEGER"),
+                ColumnDefinition("output_mtime", "REAL"),
+                ColumnDefinition("output_size", "INTEGER"),
                 ColumnDefinition("variant_sig", "TEXT"),
                 ColumnDefinition("updated_at", "TEXT"),
             ],

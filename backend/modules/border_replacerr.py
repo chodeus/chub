@@ -193,6 +193,41 @@ class BorderReplacerr(ChubModule):
             return ""
         return h.hexdigest()
 
+    def _unchanged_since(
+        self, prev: Optional[dict], sig: str, original_file: str, renamed_file: str
+    ) -> bool:
+        """True when the last pass wrote this output from this source with ``sig``, and neither changed."""
+        # A link (a symlink run's) or a file restaged over the output is bordered again.
+        if not prev or prev["variant_sig"] != sig or os.path.islink(renamed_file):
+            return False
+        src, out = self._safe_stat(original_file), self._safe_stat(renamed_file)
+        if src is None or out is None:
+            return False
+        recorded = (
+            prev["source_mtime"],
+            prev["source_size"],
+            prev["output_mtime"],
+            prev["output_size"],
+        )
+        return recorded == (src.st_mtime, src.st_size, out.st_mtime, out.st_size)
+
+    def _gate_state(
+        self, original_file: str, renamed_file: str, sig: str, now_iso: str
+    ) -> Optional[dict]:
+        """The border_state row that lets the next pass skip this poster, if both stat."""
+        src, out = self._safe_stat(original_file), self._safe_stat(renamed_file)
+        if src is None or out is None:
+            return None
+        return {
+            "renamed_file": renamed_file,
+            "source_mtime": src.st_mtime,
+            "source_size": src.st_size,
+            "output_mtime": out.st_mtime,
+            "output_size": out.st_size,
+            "variant_sig": sig,
+            "updated_at": now_iso,
+        }
+
     def _save_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
         """Write ``out_img`` to ``renamed_file`` if the bytes changed or a link is there; True if written."""
         try:
@@ -633,26 +668,16 @@ class BorderReplacerr(ChubModule):
                     variant = None
                 variant_index += 1
                 sig = _variant_sig(variant)
-                original_file = asset["original_file"]
                 renamed_file = asset["renamed_file"]
-                # Skip only a regular output whose source and settings match the last pass;
-                # a missing output or a link (a symlink run's) is bordered again.
-                if (
-                    gate_enabled
-                    and os.path.isfile(renamed_file)
-                    and not os.path.islink(renamed_file)
+                if gate_enabled and self._unchanged_since(
+                    state_map.get(renamed_file),
+                    sig,
+                    asset["original_file"],
+                    renamed_file,
                 ):
-                    prev = state_map.get(renamed_file)
-                    if prev and prev["variant_sig"] == sig:
-                        st = self._safe_stat(original_file)
-                        if (
-                            st is not None
-                            and prev["source_mtime"] == st.st_mtime
-                            and prev["source_size"] == st.st_size
-                        ):
-                            gate_skipped += 1
-                            processed += 1
-                            continue
+                    gate_skipped += 1
+                    processed += 1
+                    continue
                 work.append((asset, variant, sig))
 
             attempted = len(work)
@@ -744,8 +769,8 @@ class BorderReplacerr(ChubModule):
                 )
                 workers = max(1, min(workers, len(work) or 1))
 
-            # Refresh each processed asset's gate state (mtime/size of the SOURCE
-            # file + the signature it was made with) so the next run can skip it.
+            # Refresh each processed asset's gate state (mtime/size of the source and
+            # output files + the signature it was made with) so the next run can skip it.
             # Keyed by the output path (stable per-asset identity). Recorded for
             # written (True) and unchanged (False) results, not failures (None) —
             # failures should retry next run. Timestamp computed once.
@@ -791,17 +816,11 @@ class BorderReplacerr(ChubModule):
                         elif result is None:
                             failed += 1
                         if gate_enabled and result is not None:
-                            st = self._safe_stat(original_file)
-                            if st is not None:
-                                new_states.append(
-                                    {
-                                        "renamed_file": renamed_file,
-                                        "source_mtime": st.st_mtime,
-                                        "source_size": st.st_size,
-                                        "variant_sig": sig,
-                                        "updated_at": now_iso,
-                                    }
-                                )
+                            state = self._gate_state(
+                                original_file, renamed_file, sig, now_iso
+                            )
+                            if state:
+                                new_states.append(state)
                         processed += 1
                         done += 1
                         # Jobs-page bar; no-op without job context, and maps into
