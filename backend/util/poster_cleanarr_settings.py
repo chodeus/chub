@@ -76,20 +76,24 @@ def _validate_sub_mode(value: Any, key: str) -> Optional[str]:
     return mode
 
 
+def _parse_mode(raw_mode: Any) -> str:
+    """Lowercase the bloat mode; "report" when absent or empty, ValueError if bad."""
+    if raw_mode is None:
+        return "report"
+    if not isinstance(raw_mode, str):
+        raise ValueError(f"Invalid mode type: {type(raw_mode).__name__}")
+    mode = raw_mode.lower() or "report"
+    if mode not in ("report", "move", "remove", "restore", "clear", "nothing"):
+        raise ValueError(f"Invalid mode '{mode}'")
+    return mode
+
+
 def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
     """Assemble the poster_cleanarr job overrides from a cleanup request body.
     Raises ValueError on a malformed field type, an invalid mode, or an
     asset_dir outside the allowed roots (the route maps it to a 400). Bloat
     accepts "nothing" so the UI can run stale/orphan cleanup with bloat off."""
-    raw_mode = body.get("mode")
-    if raw_mode is None:
-        mode = "report"
-    elif isinstance(raw_mode, str):
-        mode = raw_mode.lower() or "report"
-    else:
-        raise ValueError(f"Invalid mode type: {type(raw_mode).__name__}")
-    if mode not in ("report", "move", "remove", "restore", "clear", "nothing"):
-        raise ValueError(f"Invalid mode '{mode}'")
+    mode = _parse_mode(body.get("mode"))
     overrides: dict = {"mode": mode}
     if mode in ("restore", "clear"):
         # The restore directory alone, whatever passes the saved config runs.
