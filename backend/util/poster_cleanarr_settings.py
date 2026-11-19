@@ -95,10 +95,6 @@ def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
     accepts "nothing" so the UI can run stale/orphan cleanup with bloat off."""
     mode = _parse_mode(body.get("mode"))
     overrides: dict = {"mode": mode}
-    if mode in ("restore", "clear"):
-        # The restore directory alone, whatever passes the saved config runs.
-        overrides.update(stale_duplicates_enabled=False, orphan_assets_enabled=False)
-        return overrides
 
     target_paths = body.get("target_paths")
     if isinstance(target_paths, list) and target_paths:
@@ -138,4 +134,11 @@ def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
 
     if "overlays_only" in body:
         overrides["overlays_only"] = _require_bool(body, "overlays_only")
+    if mode in ("restore", "clear"):
+        # Validated above, then dropped: these act on the restore directory alone.
+        return {
+            "mode": mode,
+            "stale_duplicates_enabled": False,
+            "orphan_assets_enabled": False,
+        }
     return overrides

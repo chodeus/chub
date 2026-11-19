@@ -621,15 +621,15 @@ const PosterCleanarrPage = () => {
     const [deletedPaths, setDeletedPaths] = useState(new Set());
 
     // Watched here, not by the log modal: hiding it stops its polling. `onSuccess`
-    // updates the bloat tiles on `success`, without a 30s+ rescan.
+    // runs on `success` only; `assetsTouched` false skips the Kometa list reload.
     const watchCleanupJob = useCallback(
-        (jobId, onSuccess) =>
+        (jobId, onSuccess, assetsTouched = true) =>
             pollJobUntilDone(jobId, pageAliveRef.current).then(status => {
                 // No end state (cancelled, or polling gave up): the run may still be going
                 if (!TERMINAL_STATUSES.includes(status)) return;
                 // Any terminal status: a run that failed part-way may still
                 // have moved or removed stale and orphaned assets.
-                loadKometaAssets(true);
+                if (assetsTouched) loadKometaAssets(true);
                 if (status === 'success') onSuccess?.();
             }),
         [loadKometaAssets]
@@ -917,7 +917,10 @@ const PosterCleanarrPage = () => {
                     return false;
                 }
                 toast.success(`${label} started (job #${jobId})`);
-                watchCleanupJob(jobId, onSuccess);
+                const assetsTouched = Boolean(
+                    body.stale_duplicates_enabled || body.orphan_assets_enabled
+                );
+                watchCleanupJob(jobId, onSuccess, assetsTouched);
                 return true;
             } catch {
                 toast.error('Failed to start cleanup');
@@ -933,9 +936,9 @@ const PosterCleanarrPage = () => {
         const meta = MODE_META[mode];
         if (!meta || !meta.action) return;
         if (!meta.passes) {
-            // A Restore brings back every variant a Move hid.
-            const unhide = mode === 'restore' ? () => setDeletedPaths(new Set()) : null;
-            await startCleanupJob({ mode }, meta.label, unhide);
+            // Only a fresh scan knows which files came back; deleted ones stay hidden.
+            const rescan = mode === 'restore' && hasScanned ? refreshScan : null;
+            await startCleanupJob({ mode }, meta.label, rescan);
             return;
         }
         const body = { mode };
@@ -966,6 +969,8 @@ const PosterCleanarrPage = () => {
         cleanOverlaysOnly,
         selectedPaths,
         startCleanupJob,
+        hasScanned,
+        refreshScan,
     ]);
 
     // The orphan pass alone, in remove mode: the job re-checks every asset

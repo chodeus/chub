@@ -795,6 +795,9 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
         }
         await waitFor(() => expect(mockPostersAPI.runPlexMetadataCleanup).toHaveBeenCalled());
         expect(mockPostersAPI.runPlexMetadataCleanup.mock.calls).toEqual([[{ mode }]]);
+        await waitFor(() => expect(mockJobsAPI.tailJobLog).toHaveBeenCalled());
+        await new Promise(r => setTimeout(r, 100));
+        expect(mockPostersAPI.enqueueKometaAssetsScan).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -810,18 +813,39 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
         expect(screen.getByRole('button', { name: action })).toBeEnabled();
     });
 
-    it('a Restore brings back the variants a Move hid', async () => {
+    it('after a Restore a fresh scan sets the tiles: a deleted variant stays gone', async () => {
         const user = userEvent.setup();
+        const gone = variant('/plex/.../ghost_a/gone_b', 'gone_b');
+        scanPayload = payload([{ ...GHOST_A, variants: [...GHOST_A.variants, gone] }]);
         render(<PosterCleanarrPage />);
         await user.click(await screen.findByText('(unknown)'));
+        await user.click(await screen.findByAltText('gone_b'));
+        await user.click(screen.getByRole('button', { name: 'Delete this variant' }));
+        await waitFor(() => expect(screen.queryByAltText('gone_b')).not.toBeInTheDocument());
         await user.click(await screen.findByRole('button', { name: 'Select variant' }));
         await chooseMode(user, 'move');
         await user.click(screen.getByRole('button', { name: 'Move bloat to restore' }));
         await waitFor(() => expect(screen.queryByAltText('only_a')).not.toBeInTheDocument());
 
+        // On disk after the Restore: the moved variant is back, the deleted one is not.
+        scanPayload = payload([GHOST_A]);
         await chooseMode(user, 'restore');
         await user.click(screen.getByRole('button', { name: 'Restore files' }));
         expect(await screen.findByAltText('only_a')).toBeInTheDocument();
+        expect(screen.queryByAltText('gone_b')).not.toBeInTheDocument();
+        expect(mockPostersAPI.enqueuePlexMetadataScan).toHaveBeenCalledTimes(1);
+    });
+
+    it('a Restore before any scan starts no scan of its own', async () => {
+        const user = userEvent.setup();
+        scanPayload = null;
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'restore');
+        await user.click(screen.getByRole('button', { name: 'Restore files' }));
+
+        await waitFor(() => expect(mockJobsAPI.tailJobLog).toHaveBeenCalled());
+        await new Promise(r => setTimeout(r, 100));
+        expect(mockPostersAPI.enqueuePlexMetadataScan).not.toHaveBeenCalled();
     });
 
     it.each([

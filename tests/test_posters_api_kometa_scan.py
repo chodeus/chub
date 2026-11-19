@@ -301,6 +301,25 @@ def test_cleanup_route_queues_the_restore_dir_modes_alone(
     ]
 
 
+@pytest.mark.parametrize("mode", ["restore", "clear"])
+@pytest.mark.parametrize(
+    "bad", [{"orphan_assets_enabled": "yes"}, {"asset_dirs": ["/etc"]}]
+)
+def test_cleanup_route_refuses_a_malformed_restore_dir_request(
+    tmp_path, monkeypatch, mode, bad
+):
+    """Restore and Clear check the body as every mode does before dropping it."""
+    monkeypatch.setattr("backend.util.config.load_config", lambda: ChubConfig())
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        res = _client(db).post(
+            "/api/posters/plex-metadata/cleanup", json={"mode": mode, **bad}
+        )
+        jobs = db.worker.get_pending_jobs("jobs")
+
+    assert res.status_code == 400
+    assert jobs == []
+
+
 def test_orphan_delete_route_fails_closed_without_config(tmp_path, monkeypatch):
     """An unreadable config is a 503 and no delete, as /gdrive/delete-local."""
     called = []

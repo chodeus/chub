@@ -233,7 +233,8 @@ async def run_plex_metadata_cleanup(
           "stale_duplicates_mode": "report"|"move"|"remove",
           "asset_dirs": [str, ...]                       # override
         }
-    Each cleaner (bloat / orphan / stale) runs independently in its own mode.
+    Each cleaner (bloat / orphan / stale) runs independently in its own mode;
+    restore and clear run alone, with orphan and stale off.
     """
     try:
         body = await read_json_object(request)
