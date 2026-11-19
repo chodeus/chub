@@ -1054,6 +1054,12 @@ class AssetRenamerr(ChubModule):
                     )
                 elif picked and placed:
                     resolved = None  # Kometa still has the pick: never re-resolve over it
+                elif moves.held(media, image_type):
+                    # Under move a placed file stands, as a staged poster does: only a
+                    # newer one placed for this media elsewhere replaces it.
+                    resolved = moves.sibling(
+                        media, image_type, placed, (locked or {}).get("source_mtime")
+                    )
                 else:
                     # No source of its own left (as after a move): the newest file
                     # placed for this media elsewhere, when newer than its own.
