@@ -1152,7 +1152,7 @@ class PosterRenamerr(ChubModule):
             if not hit:
                 rest.append((row, carry, False))
                 continue
-            # As if staged at the sibling's file; _adopted_source records it.
+            # As if staged at the sibling's file (cache write: _adopted_source).
             row["_adopted_over"] = row.get("original_file")
             row["renamed_file"], row["original_file"] = hit
             adopted.append((row, hit[0], True))
