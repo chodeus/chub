@@ -1,7 +1,7 @@
 """Under move to Kometa, where art was placed, for items whose source is gone."""
 
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from backend.util.database.media_cache import MediaCache
 
@@ -28,6 +28,7 @@ class AssetMoves:
         self._by_media: Dict[Tuple[str, str], List[Tuple[str, Optional[float]]]] = {}
         self._went: Dict[str, str] = {}
         self._placed: Dict[str, Optional[float]] = {}
+        self._picks: Set[str] = set()
 
     @classmethod
     def load(
@@ -44,9 +45,13 @@ class AssetMoves:
             for image_type in image_types:
                 row = applied_map.get((kind, int(media["id"]), image_type)) or {}
                 if row.get("applied_path"):
-                    pick = row.get("user_confirmed")
-                    mtime = None if pick else row.get("source_mtime")
-                    moves.add(media, image_type, row["applied_path"], mtime=mtime)
+                    moves.add(
+                        media,
+                        image_type,
+                        row["applied_path"],
+                        mtime=row.get("source_mtime"),
+                        pick=bool(row.get("user_confirmed")),
+                    )
         return moves
 
     def add(
@@ -56,13 +61,16 @@ class AssetMoves:
         path: str,
         source: Optional[str] = None,
         mtime: Optional[float] = None,
+        pick: bool = False,
     ) -> None:
-        """Record ``path`` placed from ``source``; ``mtime`` is None for a pick."""
+        """Record ``path`` placed from ``source``; a ``pick`` is never shared."""
         if not self.active:
             return
         placement = (path, mtime)
         self._by_media.setdefault(_media_key(media, image_type), []).append(placement)
         self._placed[path] = mtime
+        if pick:
+            self._picks.add(path)
         if source:
             self._went[source] = path
 
@@ -77,11 +85,12 @@ class AssetMoves:
         own: Optional[str],
         own_mtime: Optional[float],
     ) -> Optional[Resolved]:
-        """The newest file placed for this media, unless ``own``'s source is as new."""
+        """The newest non-pick file placed for this media, unless own's is as new."""
         placed = [
             (p, m)
             for p, m in self._by_media.get(_media_key(media, image_type), ())
-            if os.path.isfile(p)  # also drops a Plex row's library names
+            # isfile also drops a Plex row's library names.
+            if p not in self._picks and os.path.isfile(p)
         ]
         if not placed:
             return None
@@ -94,9 +103,9 @@ class AssetMoves:
         """True for a file placed for another item: copied, never moved."""
         return path != own and path in self._placed
 
-    def source_mtime(self, path: str, own: Optional[str]) -> Optional[float]:
-        """When ``path``'s source changed; a lent file's as recorded, not its copy's."""
-        if self.lent(path, own):
+    def source_mtime(self, path: str) -> Optional[float]:
+        """When ``path``'s source changed; for a placed file, as recorded."""
+        if path in self._placed:  # lent, or own carried: either may be a fresh copy
             return self._placed[path]
         try:
             return os.stat(path).st_mtime

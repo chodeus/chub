@@ -1095,9 +1095,7 @@ class AssetRenamerr(ChubModule):
                 # re-fetch every TMDB URL on every pass. Local files compare by
                 # mtime; TMDB by URL.
                 src_mtime = (
-                    moves.source_mtime(file, placed)
-                    if source == "local" and file
-                    else None
+                    moves.source_mtime(file) if source == "local" and file else None
                 )
                 prev = (
                     applied_map.get((target_kind, int(target_id), image_type))
@@ -1188,8 +1186,14 @@ class AssetRenamerr(ChubModule):
                     )
                     if applied:
                         self._drop_superseded(db, prev, detail)
-                        mtime = None if file == picked else src_mtime
-                        moves.add(media, image_type, detail, source=file, mtime=mtime)
+                        moves.add(
+                            media,
+                            image_type,
+                            detail,
+                            source=file,
+                            mtime=src_mtime,
+                            pick=file == picked,
+                        )
 
                 output[image_type].append(
                     {

@@ -2666,6 +2666,54 @@ def test_a_logo_picked_for_one_instance_is_kept_beside_the_others(
     assert files == {two: b"my pick", "Dune (2021)_logo.png": b"png"}
 
 
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_a_logo_picked_for_one_instance_does_not_reach_an_instance_with_none(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.run()
+    pick = tmp_path / "mine.png"
+    pick.write_bytes(b"my pick")
+    one_dune = db.media.get_by_instance("radarr1")[0]
+    applied, detail = m.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
+    assert applied, detail
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = order
+    m.run()
+    rows, files = _logos(db, dest)
+    assert rows == [("applied", "Dune (2021)_logo.png"), ("missing", "")]
+    assert files == {"Dune (2021)_logo.png": b"my pick"}
+
+
+@pytest.mark.parametrize("order", [["radarr1", "radarr2"], ["radarr2", "radarr1"]])
+def test_an_adopted_logo_carried_to_a_renamed_folder_does_not_beat_a_newer_one(
+    db, monkeypatch, tmp_path, order
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    _placed_files(tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    _dune_in(db, "radarr2", "Dune UHD (2021)")
+    m.config.instances = ["radarr2"]
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (1_500_000_000, 1_500_000_000))  # after the source, before the copy
+    m.config.instances = ["radarr1"]
+    m.run()
+    m.config.instances = order
+    m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune (2021)_logo.png": b"new",
+        "Dune UHD (2021)_logo.png": b"new",
+    }
+
+
 def test_a_copied_logo_whose_source_was_deleted_is_not_spread_to_another_instance(
     db, monkeypatch, tmp_path
 ):
