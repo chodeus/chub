@@ -2700,17 +2700,17 @@ def test_a_logo_picked_during_a_run_does_not_reach_another_instance(
     pick.write_bytes(b"my pick")
     one_dune = db.media.get_by_instance("radarr1")[0]
     two_dune = db.media.get_by_instance("radarr2")[0]
-    real_resolve = m._resolve_source
+    real_sibling = AssetMoves.sibling
 
-    def _resolve(media, *a, **k):
-        # The user picks radarr1's logo in the UI just before the run looks at radarr2.
+    def _sibling(moves, media, *a, **k):
+        # The user picks radarr1's logo in the UI just before radarr2 is offered one.
         if media["id"] == two_dune["id"] and pick.exists():
             picker = make_module(destination_dir=str(dest), action_type="move")
             picked = picker.apply_chosen_asset(db, "media", one_dune, "logo", str(pick))
             assert picked[0], picked[1]
-        return real_resolve(media, *a, **k)
+        return real_sibling(moves, media, *a, **k)
 
-    monkeypatch.setattr(m, "_resolve_source", _resolve)
+    monkeypatch.setattr(AssetMoves, "sibling", _sibling)
     m.config.instances = order
     m.run()
     rows, files = _logos(db, dest)
