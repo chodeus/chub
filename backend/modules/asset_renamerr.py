@@ -6,6 +6,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.util.base_module import ChubModule
+from backend.modules.asset_moves import AssetMoves
 from backend.util.connector import Connector
 from backend.util.constants import ASSET_IMAGE_EXTENSIONS, illegal_chars_regex
 from backend.util.database import ChubDB
@@ -426,6 +427,7 @@ class AssetRenamerr(ChubModule):
         is_collection: bool,
         fanart_client: Optional[FanartClient],
         conn=None,
+        moves: Optional[AssetMoves] = None,
     ) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
         """Resolve one (media, image_type) to an image, honouring the ordered
         ``sources`` preference. Returns ``(source, file, url)`` for the first
@@ -437,7 +439,9 @@ class AssetRenamerr(ChubModule):
         """
         for source in self._sources():
             if source == "local":
-                path = self._local_file(media, db, image_type, is_collection, conn)
+                path = self._local_file(
+                    media, db, image_type, is_collection, conn, moves
+                )
                 if path:
                     return ("local", path, None)
             elif source == "fanart":
@@ -455,17 +459,21 @@ class AssetRenamerr(ChubModule):
 
     @staticmethod
     def _local_file(
-        media: dict, db: ChubDB, image_type: str, is_collection: bool, conn
+        media: dict, db: ChubDB, image_type: str, is_collection: bool, conn, moves=None
     ) -> Optional[str]:
-        """The best fetched local match still on disk: a missing source root keeps its cached rows."""
+        """The best fetched local match still on disk, or where this run moved it; a missing root keeps its rows."""
         from backend.modules.poster_renamerr import PosterRenamerr
 
         found = PosterRenamerr.find_asset_candidate(
             media, db, image_type=image_type, is_collection=is_collection, conn=conn
         )
         for cand in found.get("matched_candidates") or []:
-            if cand.get("file") and os.path.isfile(cand["file"]):
-                return cand["file"]
+            file = cand.get("file")
+            if file and os.path.isfile(file):
+                return file
+            went = moves.went(file) if moves and file else None
+            if went:
+                return went
         return None
 
     # ----- apply ----------------------------------------------------------
@@ -807,6 +815,15 @@ class AssetRenamerr(ChubModule):
             return placed
         return None
 
+    @staticmethod
+    def _never_applies(media: dict, image_type: str, apply_method: str) -> bool:
+        """True for the art providers never publish (season and album logos), or Kometa never reads (season square art)."""
+        show = media.get("asset_type") == "show"
+        season = show and media.get("season_number") is not None
+        if image_type == "logo":
+            return season or media.get("asset_type") == "album"
+        return image_type == "squareart" and apply_method == "kometa" and season
+
     def _at_current_target(self, media: dict, image_type: str, placed: str) -> bool:
         """True when ``placed`` is where a Kometa apply would land now, or there is nowhere to land it."""
         target, _why = self._kometa_path(media, image_type, placed)
@@ -955,6 +972,7 @@ class AssetRenamerr(ChubModule):
         # whole loop. Read-only (query_only); closed after the loop — on an
         # exception it's reclaimed on GC, which is safe for a read connection.
         poster_conn = db.poster.open_read_connection()
+        moves = AssetMoves.load(self.config, all_media, applied_map, applicable)
         refusals: List[WriteRefused] = []
         kept_sources: List[OSError] = []
         attempted = 0
@@ -986,30 +1004,8 @@ class AssetRenamerr(ChubModule):
                 continue
 
             for image_type in applicable:
-                # Clear logos don't exist at season level — providers publish
-                # only show-level logos (fanart explicitly; TMDB likewise), so a
-                # season+logo expectation can never be auto-satisfied and would
-                # sit in Unmatched as permanently "missing". Skip seasons for
-                # logo entirely; season background/squareart remain supported.
-                if (
-                    image_type == "logo"
-                    and media.get("asset_type") == "show"
-                    and media.get("season_number") is not None
-                ):
-                    continue
-                # Albums likewise have no logos — providers publish artist-level
-                # logos only. Skip album+logo so it never sits as permanently
-                # "missing". Artist logos and album backgrounds are supported.
-                if image_type == "logo" and media.get("asset_type") == "album":
-                    continue
-                # Kometa reads square art at item level only (its
-                # find_item_assets skips Season/Episode). Plex handles it fine.
-                if (
-                    image_type == "squareart"
-                    and apply_method == "kometa"
-                    and media.get("asset_type") == "show"
-                    and media.get("season_number") is not None
-                ):
+                # Never recorded, so it cannot sit in Unmatched as permanently "missing".
+                if self._never_applies(media, image_type, apply_method):
                     continue
                 # Manual-pick lock: when the user chose a specific file in the
                 # picker, reuse it verbatim instead of re-resolving — a re-run
@@ -1045,6 +1041,7 @@ class AssetRenamerr(ChubModule):
                         is_collection,
                         fanart_client,
                         conn=poster_conn,
+                        moves=moves,
                     )
                 if not resolved and placed:
                     if self._at_current_target(media, image_type, placed) and not stale_link(
@@ -1053,6 +1050,8 @@ class AssetRenamerr(ChubModule):
                         continue
                     # No source is left (as after a move) and the destination changed or is a stale link: place from the file last placed.
                     resolved = ("local", placed, None)
+                # Nothing of its own left under move: copy what was placed for the same media in another instance.
+                resolved = resolved or moves.sibling(media, image_type)
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a
                     # "missing" row so the Unmatched view can derive coverage
@@ -1144,7 +1143,7 @@ class AssetRenamerr(ChubModule):
                 else:
                     attempted += 1
                     # A carry under move copies while another item's row records the file; _drop_superseded keeps it then.
-                    shared = (
+                    shared = moves.lent(file, placed) or (
                         carry
                         and self.config.action_type == "move"
                         and db.records_placed_path(placed, own=(target_kind, target_id, image_type))
@@ -1182,6 +1181,7 @@ class AssetRenamerr(ChubModule):
                     )
                     if applied:
                         self._drop_superseded(db, prev, detail)
+                        moves.add(media, image_type, detail, source=file)
 
                 output[image_type].append(
                     {
