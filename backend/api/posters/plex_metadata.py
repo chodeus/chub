@@ -221,7 +221,8 @@ async def run_plex_metadata_cleanup(
     """
     Enqueue a `poster_cleanarr` job. Request body (all optional):
         {
-          "mode": "report"|"move"|"remove"|"nothing",    # bloat-image mode
+          "mode": "report"|"move"|"remove"|"restore"|"clear"|"nothing",
+                                                         # bloat-image mode
                                                          # ("nothing" skips bloat
                                                          #  so stale/orphan can
                                                          #  run on their own)

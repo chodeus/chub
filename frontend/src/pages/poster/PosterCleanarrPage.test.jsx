@@ -757,3 +757,78 @@ describe('Poster Cleanarr — variant delete re-check', () => {
         expect(mockPostersAPI.enqueuePlexMetadataScan).not.toHaveBeenCalled();
     });
 });
+
+describe('Poster Cleanarr — each mode runs what it says', () => {
+    beforeEach(() => {
+        mockPostersAPI.runPlexMetadataCleanup.mockResolvedValue({ data: { job_id: 1 } });
+        scanPayload = payload([GHOST_A]);
+    });
+
+    const PASSES = ['Bloat', 'Stale', 'Orphan', 'Overlays only'];
+    // A ticked box's name starts with its icon's text, "check".
+    const pass = name => screen.getByRole('button', { name: new RegExp(`^(check)?${name}$`) });
+    const tick = (user, name) => user.click(pass(name));
+    const chooseMode = (user, mode) => user.selectOptions(screen.getByRole('combobox'), mode);
+
+    it.each([
+        ['restore', 'Restore files'],
+        ['clear', 'Clear restore dir'],
+    ])('%s acts on the restore directory alone, whatever is ticked', async (mode, action) => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'move');
+        for (const name of ['Bloat', 'Stale', 'Orphan']) await tick(user, name);
+        await chooseMode(user, mode);
+
+        expect(PASSES.map(name => pass(name).disabled)).toEqual([true, true, true, true]);
+        await user.click(screen.getByRole('button', { name: action }));
+        if (mode === 'clear') {
+            const confirm = await screen.findByRole('dialog');
+            await user.click(within(confirm).getByRole('button', { name: action }));
+        }
+        await waitFor(() => expect(mockPostersAPI.runPlexMetadataCleanup).toHaveBeenCalled());
+        expect(mockPostersAPI.runPlexMetadataCleanup.mock.calls).toEqual([
+            [{ mode, stale_duplicates_enabled: false, orphan_assets_enabled: false }],
+        ]);
+    });
+
+    it.each([
+        ['move', 'Move bloat to restore'],
+        ['remove', 'Delete bloat permanently'],
+    ])('%s cannot run with no pass ticked', async (mode, action) => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, mode);
+        await tick(user, 'Bloat');
+        const run = screen.getByRole('button', { name: action });
+        expect(run).toBeDisabled();
+        await tick(user, 'Orphan');
+        expect(run).toBeEnabled();
+    });
+
+    it.each([
+        [
+            'stale and orphan',
+            ['Bloat', 'Stale', 'Orphan'],
+            ['every stale duplicate', 'every orphaned asset'],
+        ],
+        [
+            'overlay bloat',
+            ['Overlays only'],
+            ['every bloat variant across your entire library (Kometa overlays only)'],
+        ],
+    ])('the Remove confirmation lists each pass it runs: %s', async (_, ticks, items) => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'remove');
+        for (const name of ticks) await tick(user, name);
+        await user.click(screen.getByRole('button', { name: 'Delete bloat permanently' }));
+
+        const confirm = await screen.findByRole('dialog');
+        expect(
+            within(confirm)
+                .getAllByRole('listitem')
+                .map(li => li.textContent)
+        ).toEqual(items);
+    });
+});

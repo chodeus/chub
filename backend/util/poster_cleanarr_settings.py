@@ -88,7 +88,7 @@ def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
         mode = raw_mode.lower() or "report"
     else:
         raise ValueError(f"Invalid mode type: {type(raw_mode).__name__}")
-    if mode not in ("report", "move", "remove", "nothing"):
+    if mode not in ("report", "move", "remove", "restore", "clear", "nothing"):
         raise ValueError(f"Invalid mode '{mode}'")
     overrides: dict = {"mode": mode}
 

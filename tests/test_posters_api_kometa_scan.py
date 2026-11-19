@@ -1,5 +1,8 @@
+import json
 import os
 from types import SimpleNamespace
+
+import pytest
 
 from backend.util.config import ChubConfig, InstanceDetail
 from backend.util.database import ChubDB
@@ -271,6 +274,24 @@ def test_cleanup_route_reports_a_run_already_in_flight(tmp_path, monkeypatch):
     assert second.status_code == 200
     assert second.json()["data"]["deduped"] is True
     assert second.json()["data"]["job_id"] == first.json()["data"]["job_id"]
+
+
+@pytest.mark.parametrize("mode", ["restore", "clear"])
+def test_cleanup_route_queues_the_restore_dir_modes(tmp_path, monkeypatch, mode):
+    """The page's Restore and Clear reach the job, with the asset passes off."""
+    cfg = ChubConfig()
+    monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
+    body = {
+        "mode": mode,
+        "stale_duplicates_enabled": False,
+        "orphan_assets_enabled": False,
+    }
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        res = _client(db).post("/api/posters/plex-metadata/cleanup", json=body)
+        jobs = db.worker.get_pending_jobs("jobs")
+
+    assert res.status_code == 200
+    assert [json.loads(j["payload"])["overrides"] for j in jobs] == [body]
 
 
 def test_orphan_delete_route_fails_closed_without_config(tmp_path, monkeypatch):

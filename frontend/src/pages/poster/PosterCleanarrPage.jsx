@@ -17,6 +17,7 @@ const PAGE_SIZE = 500; // master-detail needs the full bundle list client-side
 // label + colour. `confirm` means the Run button fires a confirmation modal
 // (destructive / permanent operations only). `scope` toggles which modes are
 // allowed to send `target_paths`; restore/clear/nothing ignore selection.
+// `passes`: the Bloat/Stale/Orphan ticks apply; other modes leave them out.
 const MODE_META = {
     report: {
         label: 'Report',
@@ -32,6 +33,7 @@ const MODE_META = {
         variant: 'warning',
         confirm: false,
         scopeable: true,
+        passes: true,
         description: 'Relocate bloat to <plex_path>/Poster Cleanarr Restore/ — recoverable.',
     },
     restore: {
@@ -56,6 +58,7 @@ const MODE_META = {
         variant: 'danger',
         confirm: true,
         scopeable: true,
+        passes: true,
         description: 'Delete bloat from disk directly. Cannot be undone.',
     },
     nothing: {
@@ -941,6 +944,11 @@ const PosterCleanarrPage = () => {
     const executeCleanup = useCallback(async () => {
         const meta = MODE_META[mode];
         if (!meta || !meta.action) return;
+        if (!meta.passes) {
+            const body = { mode, stale_duplicates_enabled: false, orphan_assets_enabled: false };
+            await startCleanupJob(body, meta.label, null);
+            return;
+        }
         const body = { mode };
         if (meta.scopeable && selectedPaths.size > 0) body.target_paths = Array.from(selectedPaths);
         // Bloat: when unchecked, force the harmless "nothing" mode so the
@@ -1013,6 +1021,18 @@ const PosterCleanarrPage = () => {
         const readPending = kometaLoadRef.current && !kometaLoadRef.current.settled;
         if (!answered || readPending) loadKometaAssets(true);
     };
+
+    const passesOn = Boolean(MODE_META[mode]?.passes);
+    const overlaysNote = cleanOverlaysOnly ? ' (Kometa overlays only)' : '';
+    const picked = selectedPaths.size;
+    const removeTargets = [
+        cleanBloat &&
+            (picked > 0
+                ? `${picked} selected variant${picked === 1 ? '' : 's'}${overlaysNote}`
+                : `every bloat variant across your entire library${overlaysNote}`),
+        cleanStale && 'every stale duplicate',
+        cleanOrphan && 'every orphaned asset',
+    ].filter(Boolean);
 
     const runCleanup = () => {
         // Report mode is the UI scan — populate tiles, don't enqueue a backend
@@ -1261,13 +1281,28 @@ const PosterCleanarrPage = () => {
                     {MODE_META[mode]?.description}
                 </span>
                 <div className="flex flex-wrap items-center gap-4">
-                    <ModeCheck label="Bloat" checked={cleanBloat} onChange={setCleanBloat} />
-                    <ModeCheck label="Stale" checked={cleanStale} onChange={setCleanStale} />
-                    <ModeCheck label="Orphan" checked={cleanOrphan} onChange={setCleanOrphan} />
+                    <ModeCheck
+                        label="Bloat"
+                        checked={cleanBloat}
+                        disabled={!passesOn}
+                        onChange={setCleanBloat}
+                    />
+                    <ModeCheck
+                        label="Stale"
+                        checked={cleanStale}
+                        disabled={!passesOn}
+                        onChange={setCleanStale}
+                    />
+                    <ModeCheck
+                        label="Orphan"
+                        checked={cleanOrphan}
+                        disabled={!passesOn}
+                        onChange={setCleanOrphan}
+                    />
                     <ModeCheck
                         label="Overlays only"
                         checked={cleanOverlaysOnly}
-                        disabled={!cleanBloat}
+                        disabled={!passesOn || !cleanBloat}
                         onChange={setCleanOverlaysOnly}
                         title="Limit the bloat pass to Kometa overlay images (EXIF-tagged), sparing user-uploaded customs"
                     />
@@ -1290,7 +1325,11 @@ const PosterCleanarrPage = () => {
                         loadingText={mode === 'report' ? 'Scanning…' : 'Starting…'}
                         variant={MODE_META[mode]?.variant || 'primary'}
                         onClick={runCleanup}
-                        disabled={!MODE_META[mode]?.action || (mode !== 'report' && !hasScanned)}
+                        disabled={
+                            !MODE_META[mode]?.action ||
+                            (mode !== 'report' && !hasScanned) ||
+                            (passesOn && !cleanBloat && !cleanStale && !cleanOrphan)
+                        }
                     >
                         {MODE_META[mode]?.action || 'No action'}
                     </LoadingButton>
@@ -1725,35 +1764,32 @@ const PosterCleanarrPage = () => {
             </Modal>
             <Modal isOpen={confirmRemove} onClose={() => setConfirmRemove(false)}>
                 <Modal.Header>
-                    {mode === 'clear'
-                        ? 'Clear the restore directory?'
-                        : 'Permanently delete bloat variants?'}
+                    {mode === 'clear' ? 'Clear the restore directory?' : 'Permanently delete?'}
                 </Modal.Header>
                 <Modal.Body>
-                    <p className="text-sm">
-                        {mode === 'clear' ? (
-                            <>
-                                This will permanently delete{' '}
-                                <strong>every file in the Restore directory</strong>. These were
-                                moved there by previous &apos;Move&apos; runs and can currently
-                                still be restored; clearing makes them unrecoverable.
-                            </>
-                        ) : selectedPaths.size > 0 ? (
-                            <>
-                                This will permanently delete <strong>{selectedPaths.size}</strong>{' '}
-                                selected variant
-                                {selectedPaths.size === 1 ? '' : 's'} from disk. This cannot be
-                                undone.
-                            </>
-                        ) : (
-                            <>
-                                This will permanently delete{' '}
-                                <strong>every bloat variant across your entire library</strong> from
-                                disk. This cannot be undone. Consider running <em>Move</em> instead
-                                if you&apos;d like the option to restore.
-                            </>
-                        )}
-                    </p>
+                    {mode === 'clear' ? (
+                        <p className="text-sm">
+                            This will permanently delete{' '}
+                            <strong>every file in the Restore directory</strong>. These were moved
+                            there by previous &apos;Move&apos; runs and can currently still be
+                            restored; clearing makes them unrecoverable.
+                        </p>
+                    ) : (
+                        <div className="text-sm space-y-2">
+                            <p>This will permanently delete, from disk:</p>
+                            <ul className="list-disc pl-5">
+                                {removeTargets.map(target => (
+                                    <li key={target} className="font-semibold">
+                                        {target}
+                                    </li>
+                                ))}
+                            </ul>
+                            <p>
+                                This cannot be undone. Consider running <em>Move</em> instead if
+                                you&apos;d like to keep a copy.
+                            </p>
+                        </div>
+                    )}
                 </Modal.Body>
                 <Modal.Footer align="right">
                     <Button variant="secondary" onClick={() => setConfirmRemove(false)}>
