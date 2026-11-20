@@ -1147,3 +1147,94 @@ describe('Poster Cleanarr — Kometa asset lists without Plex bundles', () => {
         await expectLists('Stale duplicates');
     });
 });
+
+describe('Poster Cleanarr — variant tiles', () => {
+    const plexVariant = (path, filename, active = false) => ({
+        ...variant(path, filename, active),
+        source: 'plex',
+    });
+    const tileOf = alt => screen.getByAltText(alt).parentElement;
+    const showTiles = async variants => {
+        const user = userEvent.setup();
+        scanPayload = payload([{ ...GHOST_A, rating_key: 4242, title: 'Real Movie', variants }]);
+        render(<PosterCleanarrPage />);
+        await user.click(await screen.findByText('Real Movie'));
+        await screen.findByAltText(variants[0].filename);
+        return user;
+    };
+
+    it('marks each tile as unused, in use, or Plex’s own, and offers only unused ones for deletion', async () => {
+        await showTiles([
+            variant('/p/unused', 'unused'),
+            variant('/p/in_use', 'in_use', true),
+            plexVariant('/p/plex_spare', 'plex_spare'),
+            plexVariant('/p/plex_in_use', 'plex_in_use', true),
+        ]);
+        const PLEX = 'Plex default — read-only, cannot be deleted';
+        const rows = [
+            [
+                'unused',
+                'Unused (bloat) — candidate for cleanup',
+                'border-error/85',
+                'bloat',
+                'text-error',
+                '0.75',
+                'none',
+                true,
+            ],
+            [
+                'in_use',
+                'Active poster in Plex',
+                'border-success',
+                'active',
+                'text-success',
+                '1',
+                'none',
+                false,
+            ],
+            [
+                'plex_spare',
+                PLEX,
+                'border-border-strong',
+                'plex',
+                'text-fg-subtle',
+                '1',
+                'grayscale(30%)',
+                false,
+            ],
+            // Plex's own poster in use: framed as Plex's, badged as in use.
+            [
+                'plex_in_use',
+                PLEX,
+                'border-border-strong',
+                'active',
+                'text-success',
+                '1',
+                'grayscale(30%)',
+                false,
+            ],
+        ];
+        for (const [alt, title, border, badge, badgeColour, opacity, filter, deletable] of rows) {
+            const tile = tileOf(alt);
+            expect(tile).toHaveAttribute('title', title);
+            expect(tile).toHaveClass(border);
+            expect(within(tile).getByText(badge)).toHaveClass(badgeColour);
+            expect(screen.getByAltText(alt)).toHaveStyle({ opacity, filter });
+            const box = within(tile).queryByRole('button', { name: 'Select variant' });
+            expect(box !== null).toBe(deletable);
+        }
+    });
+
+    it('ticking an unused tile selects it without opening its preview', async () => {
+        const user = await showTiles([variant('/p/unused', 'unused')]);
+        const tile = tileOf('unused');
+        await user.click(within(tile).getByRole('button', { name: 'Select variant' }));
+
+        const box = within(tile).getByRole('button', { name: 'Deselect variant' });
+        expect(box).toHaveTextContent('check');
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        await user.click(box);
+        expect(within(tile).getByRole('button', { name: 'Select variant' })).toHaveTextContent('');
+    });
+});

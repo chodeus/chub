@@ -213,15 +213,42 @@ const buildBundleTree = bundle => {
 // ---------------------------------------------------------------------------
 // Variant tile — green/red/grey border only, no pill badges.
 // ---------------------------------------------------------------------------
+// A Plex-owned file in use keeps the Plex frame but is badged active.
+const TILE_FRAMES = {
+    plex: { border: 'border-border-strong', title: 'Plex default — read-only, cannot be deleted' },
+    active: { border: 'border-success ring-2 ring-success/40', title: 'Active poster in Plex' },
+    bloat: { border: 'border-error/85', title: 'Unused (bloat) — candidate for cleanup' },
+};
+const BADGE_COLOURS = { active: 'text-success', plex: 'text-fg-subtle', bloat: 'text-error' };
+
+const SelectBox = ({ selected, onToggle }) => (
+    <button
+        type="button"
+        aria-label={selected ? 'Deselect variant' : 'Select variant'}
+        onClick={e => {
+            e.stopPropagation();
+            onToggle();
+        }}
+        className={`absolute top-1.5 left-1.5 flex items-center justify-center w-[18px] h-[18px] rounded-[4px] border transition-colors ${
+            selected ? 'bg-primary border-primary' : 'border-fg-subtle'
+        }`}
+        style={{ background: selected ? undefined : 'rgba(12,8,32,0.55)' }}
+    >
+        {selected && (
+            <span className="material-symbols-outlined text-on-color text-[13px] leading-none">
+                check
+            </span>
+        )}
+    </button>
+);
+
 const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
     const source = variant.cls?.source || variant.source || 'uploads';
     const isPlex = source === 'plex';
     const isActive = !!variant.active;
-    const tileBorder = isPlex
-        ? 'border-border-strong'
-        : isActive
-          ? 'border-success ring-2 ring-success/40'
-          : 'border-error/85';
+    const deletable = !isActive && !isPlex;
+    const frame = TILE_FRAMES[isPlex ? 'plex' : isActive ? 'active' : 'bloat'];
+    const badge = isActive ? 'active' : isPlex ? 'plex' : 'bloat';
     const tileStyle = {
         // Poster aspect ratio — lets the full image show without cropping the
         // top/bottom. Non-poster variants (art/banners/episode thumbs) render
@@ -236,23 +263,17 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
     };
     const imgStyle = {
         filter: isPlex ? 'grayscale(30%)' : 'none',
-        opacity: !isActive && !isPlex ? 0.75 : 1,
+        opacity: deletable ? 0.75 : 1,
         // display:block prevents the default inline-img baseline gap under
         // the image.
         display: 'block',
     };
     return (
         <div
-            className={`relative rounded-md overflow-hidden bg-surface cursor-pointer border-[3px] ${tileBorder}`}
+            className={`relative rounded-md overflow-hidden bg-surface cursor-pointer border-[3px] ${frame.border}`}
             style={tileStyle}
             onClick={() => onPreview(variant)}
-            title={
-                isPlex
-                    ? 'Plex default — read-only, cannot be deleted'
-                    : isActive
-                      ? 'Active poster in Plex'
-                      : 'Unused (bloat) — candidate for cleanup'
-            }
+            title={frame.title}
         >
             <img
                 src={postersAPI.getPlexVariantUrl(variant.path)}
@@ -264,35 +285,16 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
                     e.target.style.display = 'none';
                 }}
             />
-            {!isActive && !isPlex && (
-                <button
-                    type="button"
-                    aria-label={selected ? 'Deselect variant' : 'Select variant'}
-                    onClick={e => {
-                        e.stopPropagation();
-                        onToggleSelect(variant);
-                    }}
-                    className={`absolute top-1.5 left-1.5 flex items-center justify-center w-[18px] h-[18px] rounded-[4px] border transition-colors ${
-                        selected ? 'bg-primary border-primary' : 'border-fg-subtle'
-                    }`}
-                    style={{ background: selected ? undefined : 'rgba(12,8,32,0.55)' }}
-                >
-                    {selected && (
-                        <span className="material-symbols-outlined text-on-color text-[13px] leading-none">
-                            check
-                        </span>
-                    )}
-                </button>
+            {deletable && (
+                <SelectBox selected={selected} onToggle={() => onToggleSelect(variant)} />
             )}
             <span
-                className={`absolute bottom-0 left-0 right-0 px-1.5 py-1 font-mono text-micro font-semibold tracking-[0.3px] ${
-                    isActive ? 'text-success' : isPlex ? 'text-fg-subtle' : 'text-error'
-                }`}
+                className={`absolute bottom-0 left-0 right-0 px-1.5 py-1 font-mono text-micro font-semibold tracking-[0.3px] ${BADGE_COLOURS[badge]}`}
                 style={{
                     background: 'linear-gradient(to top, rgba(12,8,32,0.85), transparent)',
                 }}
             >
-                {isActive ? 'active' : isPlex ? 'plex' : 'bloat'}
+                {badge}
             </span>
         </div>
     );
