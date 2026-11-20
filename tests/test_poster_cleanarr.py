@@ -8,6 +8,7 @@ import sqlite3
 import sys
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -15,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from backend.modules.poster_cleanarr import (
     KOMETA_OVERLAY_EXIF_TAG,
     KOMETA_OVERLAY_EXIF_VALUE,
+    RESTORE_DIR_NAME,
     PosterCleanarr,
 )
 
@@ -165,6 +167,37 @@ def test_run_reports_no_bloat_when_the_in_use_read_fails(tmp_path, monkeypatch):
     assert executed == []
     assert [e for e in errors if "0 in-use images" in e]
     assert not [e for e in errors if "An error occurred" in e]
+
+
+@pytest.mark.parametrize("mode, restored", [("restore", b"x"), ("clear", None)])
+def test_restore_and_clear_run_without_a_plex_database_folder(
+    tmp_path, monkeypatch, mode, restored
+):
+    """Neither mode reads the Plex database, so its folder may be missing."""
+    plex = tmp_path / "plex"
+    rel = os.path.join("Movies", "a", "x.bundle", "Uploads", "posters")
+    held = plex / RESTORE_DIR_NAME / rel / "p.jpg"
+    held.parent.mkdir(parents=True)
+    held.write_bytes(b"x")
+    m = make_module()
+    m.mode = mode
+    m.plex_path = str(plex)
+    m.working_dir = str(tmp_path)
+    m.config = SimpleNamespace(
+        local_db=True,
+        use_existing_db=False,
+        ignore_running=False,
+        overlays_only=False,
+        target_paths=None,
+        excluded_libraries=[],
+    )
+    monkeypatch.setattr(m, "_run_asset_passes", lambda: ({}, {}))
+
+    m.run()
+
+    back = plex / "Metadata" / rel / "p"
+    assert (back.read_bytes() if back.exists() else None) == restored
+    assert not (plex / RESTORE_DIR_NAME).exists()
 
 
 # --- PR #90: _is_kometa_overlay + overlays_only mode in _execute_mode ---

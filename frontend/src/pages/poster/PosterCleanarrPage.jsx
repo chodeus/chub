@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router';
 import { useApiData } from '../../hooks/useApiData.js';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
@@ -504,6 +505,7 @@ const PosterCleanarrPage = () => {
     // page to the "Ready to scan" empty state rather than firing a fresh
     // walk-every-bundle on mount.
     const [hasScanned, setHasScanned] = useState(false);
+    const hasScannedRef = useLatestRef(hasScanned);
 
     // Tab + search on the left pane.
     const [tab, setTab] = useState(persisted.tab || 'all');
@@ -539,9 +541,10 @@ const PosterCleanarrPage = () => {
 
     // Locally-deleted variant paths since the last scan. Added to on successful
     // single/bulk delete so the UI prunes them immediately without a full
-    // /by-media rescan (which walks every .bundle under /plex). Cleared by
-    // refreshScan — a real scan is the source of truth.
+    // /by-media rescan (which walks every .bundle under /plex). refreshScan
+    // unhides them once its fresh scan lands — a real scan is the source of truth.
     const [deletedPaths, setDeletedPaths] = useState(() => new Set());
+    const deletedRef = useLatestRef(deletedPaths);
 
     // Watched here, not by the log modal: hiding it stops its polling. `onSuccess`
     // runs on `success` only; `assetsTouched` false skips the Kometa list reload.
@@ -711,7 +714,8 @@ const PosterCleanarrPage = () => {
 
     const refreshScan = useCallback(async () => {
         if (!hasScanned) setHasScanned(true);
-        setDeletedPaths(new Set());
+        // Kept hidden until the fresh scan lands; a delete made meanwhile stays hidden.
+        const hiddenAtStart = deletedRef.current;
         if (activeScanRef.current) activeScanRef.current.cancelled = true;
         const token = { cancelled: false };
         activeScanRef.current = token;
@@ -725,8 +729,9 @@ const PosterCleanarrPage = () => {
         } finally {
             if (!token.cancelled) setScanning(false);
         }
-        if (!token.cancelled) byMedia.refresh();
-    }, [byMedia, hasScanned]);
+        if (token.cancelled || !(await byMedia.refresh())) return;
+        setDeletedPaths(prev => new Set([...prev].filter(p => !hiddenAtStart.has(p))));
+    }, [byMedia, hasScanned, deletedRef]);
 
     // ---- Tab filtering ----
     const filteredBundles = useMemo(() => {
@@ -866,10 +871,10 @@ const PosterCleanarrPage = () => {
 
     // Restore and Clear: the restore directory alone, no passes.
     const runRestoreDir = useCallback(async () => {
-        // Only a fresh scan knows which files came back; deleted ones stay hidden.
-        const rescan = mode === 'restore' && hasScanned ? refreshScan : null;
+        // Only a fresh scan knows which files came back: rescan if the page holds one at the end.
+        const rescan = mode === 'restore' ? () => hasScannedRef.current && refreshScan() : null;
         await startCleanupJob({ mode }, MODE_META[mode].label, rescan);
-    }, [mode, hasScanned, refreshScan, startCleanupJob]);
+    }, [mode, hasScannedRef, refreshScan, startCleanupJob]);
 
     const executeCleanup = useCallback(async () => {
         const meta = MODE_META[mode];

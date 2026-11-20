@@ -433,11 +433,11 @@ class PosterCleanarr(ChubModule):
                 self.logger.error(f"Metadata directory not found: {metadata_dir}")
                 return False
 
-        if self.config.local_db:
-            db_dir = os.path.join(self.plex_path, "Plug-in Support", "Databases")
-            if not os.path.isdir(db_dir):
-                self.logger.error(f"Plex database directory not found: {db_dir}")
-                return False
+            if self.config.local_db:
+                db_dir = os.path.join(self.plex_path, "Plug-in Support", "Databases")
+                if not os.path.isdir(db_dir):
+                    self.logger.error(f"Plex database directory not found: {db_dir}")
+                    return False
 
         return True
 
