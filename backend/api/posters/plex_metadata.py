@@ -218,10 +218,13 @@ async def run_plex_metadata_cleanup(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cleanarr_logger),
 ):
-    """
-    Enqueue a `poster_cleanarr` job. Request body (all optional):
+    """Enqueue a `poster_cleanarr` job.
+
+    Parameters:
+        Request body (all optional):
         {
-          "mode": "report"|"move"|"remove"|"nothing",    # bloat-image mode
+          "mode": "report"|"move"|"remove"|"restore"|"clear"|"nothing",
+                                                         # bloat-image mode
                                                          # ("nothing" skips bloat
                                                          #  so stale/orphan can
                                                          #  run on their own)
@@ -232,7 +235,8 @@ async def run_plex_metadata_cleanup(
           "stale_duplicates_mode": "report"|"move"|"remove",
           "asset_dirs": [str, ...]                       # override
         }
-    Each cleaner (bloat / orphan / stale) runs independently in its own mode.
+    Each cleaner (bloat / orphan / stale) runs independently in its own mode;
+    restore and clear run alone, with orphan and stale off.
     """
     try:
         body = await read_json_object(request)

@@ -28,9 +28,15 @@ const toast = { success: vi.fn(), error: vi.fn(), warning: vi.fn() };
 vi.mock('../../contexts/ToastContext.jsx', () => ({ useToast: () => toast }));
 
 let scanPayload = null;
+let scanError = null;
 const refresh = vi.fn();
 vi.mock('../../hooks/useApiData.js', () => ({
-    useApiData: () => ({ data: { data: scanPayload }, isLoading: false, error: null, refresh }),
+    useApiData: () => ({
+        data: { data: scanPayload },
+        isLoading: false,
+        error: scanError,
+        refresh,
+    }),
 }));
 
 const PosterCleanarrPage = (await import('./PosterCleanarrPage.jsx')).default;
@@ -87,6 +93,7 @@ const payload = bundles => ({
 
 beforeEach(() => {
     scanPayload = null;
+    scanError = null;
     localStorage.clear();
     // Must be set here, not at the mock literal: `mockReset` wipes a
     // module-scope mockResolvedValue before every test. A bare vi.fn() returns
@@ -299,6 +306,53 @@ describe('Poster Cleanarr — persisted tree state', () => {
         } finally {
             window.matchMedia = realMatchMedia;
         }
+    });
+
+    it('climbs from an episode to its season, then its show, by the breadcrumb', async () => {
+        const user = userEvent.setup();
+        const root = '/plex/Metadata/TV Shows/s/show.bundle/Uploads';
+        const SHOW = {
+            ...GHOST_A,
+            bundle_path: '/plex/Metadata/TV Shows/s/show.bundle',
+            rating_key: 77,
+            title: 'My Show',
+            metadata_type_label: 'show',
+            variants: [
+                variant(`${root}/posters/show_p`, 'show_p'),
+                variant(`${root}/posters/seasons/1/s1_p`, 's1_p'),
+                variant(`${root}/thumbs/seasons/1/episodes/2/e2_t`, 'e2_t'),
+            ],
+        };
+        localStorage.setItem(
+            'chub_cleanarr_state_v3',
+            JSON.stringify({
+                tab: 'all',
+                selected: { kind: 'episode', bundlePath: SHOW.bundle_path, season: 1, episode: 2 },
+            })
+        );
+        scanPayload = payload([SHOW]);
+        render(<PosterCleanarrPage />);
+        const header = (await screen.findByRole('heading', { name: 'Episode 2' })).closest(
+            'header'
+        );
+        expect(screen.getByAltText('e2_t')).toBeInTheDocument();
+
+        expect(within(header).queryByRole('button', { name: 'Episode 2' })).not.toBeInTheDocument();
+        within(header).getByRole('button', { name: 'Season 1' }).focus();
+        await user.keyboard('{Enter}');
+        const seasonHeader = (await screen.findByRole('heading', { name: 'Season 1' })).closest(
+            'header'
+        );
+        expect(screen.getByAltText('s1_p')).toBeInTheDocument();
+        expect(screen.queryByAltText('e2_t')).not.toBeInTheDocument();
+
+        expect(
+            within(seasonHeader).queryByRole('button', { name: 'Season 1' })
+        ).not.toBeInTheDocument();
+        await user.click(within(seasonHeader).getByRole('button', { name: 'My Show' }));
+        expect(await screen.findByRole('heading', { name: 'My Show' })).toBeInTheDocument();
+        expect(screen.getByAltText('show_p')).toBeInTheDocument();
+        expect(screen.queryByAltText('s1_p')).not.toBeInTheDocument();
     });
 });
 
@@ -755,5 +809,432 @@ describe('Poster Cleanarr — variant delete re-check', () => {
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Deleted 0, 1 failed'));
         expect(mockPostersAPI.enqueuePlexMetadataScan).not.toHaveBeenCalled();
+    });
+});
+
+describe('Poster Cleanarr — each mode runs what it says', () => {
+    beforeEach(() => {
+        mockPostersAPI.runPlexMetadataCleanup.mockResolvedValue({ data: { job_id: 1 } });
+        scanPayload = payload([GHOST_A]);
+    });
+
+    const PASSES = ['Bloat', 'Stale', 'Orphan', 'Overlays only'];
+    const pass = name => screen.getByRole('button', { name });
+    const tick = (user, name) => user.click(pass(name));
+    const chooseMode = (user, mode) => user.selectOptions(screen.getByRole('combobox'), mode);
+
+    it.each([
+        ['restore', 'Restore files'],
+        ['clear', 'Clear restore dir'],
+    ])('%s acts on the restore directory alone, whatever is ticked', async (mode, action) => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'move');
+        for (const name of ['Bloat', 'Stale', 'Orphan']) await tick(user, name);
+        await chooseMode(user, mode);
+
+        expect(PASSES.map(name => pass(name).disabled)).toEqual([true, true, true, true]);
+        await user.click(screen.getByRole('button', { name: action }));
+        if (mode === 'clear') {
+            const confirm = await screen.findByRole('dialog');
+            await user.click(within(confirm).getByRole('button', { name: action }));
+        }
+        await waitFor(() => expect(mockPostersAPI.runPlexMetadataCleanup).toHaveBeenCalled());
+        expect(mockPostersAPI.runPlexMetadataCleanup.mock.calls).toEqual([[{ mode }]]);
+        await waitFor(() => expect(mockJobsAPI.tailJobLog).toHaveBeenCalled());
+        await new Promise(r => setTimeout(r, 100));
+        expect(mockPostersAPI.enqueueKometaAssetsScan).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['restore', 'Restore files'],
+        ['clear', 'Clear restore dir'],
+    ])('%s shows no pass ticked and runs before any scan', async (mode, action) => {
+        const user = userEvent.setup();
+        scanPayload = null;
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, mode);
+
+        expect(PASSES.map(name => pass(name).textContent)).toEqual(PASSES);
+        await user.click(screen.getByRole('button', { name: action }));
+        if (mode === 'clear') {
+            const confirm = await screen.findByRole('dialog');
+            await user.click(within(confirm).getByRole('button', { name: action }));
+        }
+        await waitFor(() =>
+            expect(mockPostersAPI.runPlexMetadataCleanup.mock.calls).toEqual([[{ mode }]])
+        );
+    });
+
+    it.each([
+        ['move', 'Move bloat to restore'],
+        ['remove', 'Delete bloat permanently'],
+    ])('%s cannot run before any Plex scan', async (mode, action) => {
+        const user = userEvent.setup();
+        scanPayload = null;
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, mode);
+
+        expect(pass('Bloat')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: action })).toBeDisabled();
+    });
+
+    it('after a Restore a fresh scan sets the tiles: a deleted variant stays gone', async () => {
+        const user = userEvent.setup();
+        const gone = variant('/plex/.../ghost_a/gone_b', 'gone_b');
+        scanPayload = payload([{ ...GHOST_A, variants: [...GHOST_A.variants, gone] }]);
+        render(<PosterCleanarrPage />);
+        await user.click(await screen.findByText('(unknown)'));
+        await user.click(await screen.findByAltText('gone_b'));
+        await user.click(screen.getByRole('button', { name: 'Delete this variant' }));
+        await waitFor(() => expect(screen.queryByAltText('gone_b')).not.toBeInTheDocument());
+        await user.click(await screen.findByRole('button', { name: 'Select variant' }));
+        await chooseMode(user, 'move');
+        await user.click(screen.getByRole('button', { name: 'Move bloat to restore' }));
+        await waitFor(() => expect(screen.queryByAltText('only_a')).not.toBeInTheDocument());
+
+        // On disk after the Restore: the moved variant is back, the deleted one is not.
+        let finishScan;
+        mockPostersAPI.enqueuePlexMetadataScan.mockReturnValue(
+            new Promise(r => (finishScan = () => r({ data: { job_id: 3 } })))
+        );
+        refresh.mockImplementation(async () => {
+            scanPayload = payload([GHOST_A]);
+            return true;
+        });
+        const readsBefore = refresh.mock.calls.length;
+        await chooseMode(user, 'restore');
+        await user.click(screen.getByRole('button', { name: 'Restore files' }));
+        await waitFor(() => expect(mockPostersAPI.enqueuePlexMetadataScan).toHaveBeenCalled());
+        expect(screen.queryByAltText('gone_b')).not.toBeInTheDocument();
+        expect(screen.queryByAltText('only_a')).not.toBeInTheDocument();
+
+        finishScan();
+        expect(await screen.findByAltText('only_a')).toBeInTheDocument();
+        expect(screen.queryByAltText('gone_b')).not.toBeInTheDocument();
+        expect(refresh.mock.calls.length - readsBefore).toBe(1);
+        expect(mockPostersAPI.enqueuePlexMetadataScan).toHaveBeenCalledTimes(1);
+    });
+
+    it('a rescan whose read fails keeps deleted variants hidden', async () => {
+        const user = userEvent.setup();
+        const gone = variant('/plex/.../ghost_a/gone_b', 'gone_b');
+        scanPayload = payload([{ ...GHOST_A, variants: [...GHOST_A.variants, gone] }]);
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        refresh.mockResolvedValue(false);
+        render(<PosterCleanarrPage />);
+        await user.click(await screen.findByText('(unknown)'));
+        await user.click(await screen.findByAltText('gone_b'));
+        await user.click(screen.getByRole('button', { name: 'Delete this variant' }));
+        await waitFor(() => expect(screen.queryByAltText('gone_b')).not.toBeInTheDocument());
+
+        const readsBefore = refresh.mock.calls.length;
+        await user.click(screen.getByRole('button', { name: 'Run scan' }));
+        await waitFor(() => expect(refresh.mock.calls.length - readsBefore).toBe(1));
+        await act(async () => {});
+        expect(screen.queryByAltText('gone_b')).not.toBeInTheDocument();
+        expect(screen.getByAltText('only_a')).toBeInTheDocument();
+    });
+
+    it('a Restore rescans when a scan lands while it runs', async () => {
+        const user = userEvent.setup();
+        scanPayload = null;
+        let finishRestore;
+        const restoring = new Promise(
+            r =>
+                (finishRestore = () =>
+                    r({ data: { status: 'success', lines: '', next_offset: 0 } }))
+        );
+        mockJobsAPI.tailJobLog.mockImplementation(id =>
+            id === 1
+                ? restoring
+                : Promise.resolve({ data: { status: 'success', lines: '', next_offset: 0 } })
+        );
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'restore');
+        await user.click(screen.getByRole('button', { name: 'Restore files' }));
+        await waitFor(() => expect(mockJobsAPI.tailJobLog).toHaveBeenCalled());
+        await chooseMode(user, 'report');
+        await user.click(screen.getByRole('button', { name: 'Run scan' }));
+        await waitFor(() =>
+            expect(mockPostersAPI.enqueuePlexMetadataScan).toHaveBeenCalledTimes(1)
+        );
+
+        finishRestore();
+        await waitFor(() =>
+            expect(mockPostersAPI.enqueuePlexMetadataScan).toHaveBeenCalledTimes(2)
+        );
+    });
+
+    it('a Restore before any scan starts no scan of its own', async () => {
+        const user = userEvent.setup();
+        scanPayload = null;
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'restore');
+        await user.click(screen.getByRole('button', { name: 'Restore files' }));
+
+        await waitFor(() => expect(mockJobsAPI.tailJobLog).toHaveBeenCalled());
+        await new Promise(r => setTimeout(r, 100));
+        expect(mockPostersAPI.enqueuePlexMetadataScan).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['move', 'Move bloat to restore'],
+        ['remove', 'Delete bloat permanently'],
+    ])('%s cannot run with no pass ticked', async (mode, action) => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, mode);
+        await tick(user, 'Bloat');
+        const run = screen.getByRole('button', { name: action });
+        expect(run).toBeDisabled();
+        await tick(user, 'Orphan');
+        expect(run).toBeEnabled();
+    });
+
+    it('Overlays only locks while Bloat is off', async () => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'move');
+        expect(pass('Overlays only')).toBeEnabled();
+        await tick(user, 'Bloat');
+        expect(pass('Overlays only')).toBeDisabled();
+    });
+
+    it('a pass announces whether it is ticked', async () => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'move');
+        expect(pass('Bloat')).toHaveAttribute('aria-pressed', 'true');
+        await tick(user, 'Bloat');
+        expect(pass('Bloat')).toHaveAttribute('aria-pressed', 'false');
+        await chooseMode(user, 'restore');
+        expect(pass('Stale')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('a pass mode names the selection it scopes, and Clear drops it', async () => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'move');
+        const bar = within(screen.getByRole('combobox').closest('section'));
+        expect(bar.getByText('No selection → full library')).toBeInTheDocument();
+        await user.click(await screen.findByText('(unknown)'));
+        await user.click(await screen.findByRole('button', { name: 'Select variant' }));
+        expect(bar.getByText('1 selected')).toBeInTheDocument();
+        await user.click(bar.getByRole('button', { name: 'Clear' }));
+        expect(bar.getByText('No selection → full library')).toBeInTheDocument();
+    });
+
+    it.each([
+        [
+            'stale and orphan',
+            ['Bloat', 'Stale', 'Orphan'],
+            ['every stale duplicate whose current copy is on disk', 'every orphaned asset'],
+        ],
+        [
+            'overlay bloat',
+            ['Overlays only'],
+            ['every bloat variant across your entire library (Kometa overlays only)'],
+        ],
+    ])('the Remove confirmation lists each pass it runs: %s', async (_, ticks, items) => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'remove');
+        for (const name of ticks) await tick(user, name);
+        await user.click(screen.getByRole('button', { name: 'Delete bloat permanently' }));
+
+        const confirm = await screen.findByRole('dialog');
+        expect(
+            within(confirm)
+                .getAllByRole('listitem')
+                .map(li => li.textContent)
+        ).toEqual(items);
+    });
+});
+
+describe('Poster Cleanarr — Kometa asset lists without Plex bundles', () => {
+    const STALE = {
+        rating_key: null,
+        plex_title: '',
+        plex_year: null,
+        name: 'Gone Movie (2019) {tmdb-1}',
+        canonical: 'Gone Movie (2019) {tmdb-2}',
+        canonical_present: true,
+        size: 10,
+        folder: '/assets/Gone Movie (2019) {tmdb-1}',
+    };
+    const ORPHAN = { path: '/assets/Lost Movie (2017)/poster.jpg', parsed: 'x', size: 10 };
+
+    // Plex can still hold the old scan beside a failed re-read (useApiData keeps its data).
+    const GONE = { ...GHOST_A, rating_key: 7, title: 'Gone Movie', year: 2019 };
+    const UNMATCHED = 'Stale duplicates without a Plex poster row';
+
+    const showLists = (data, err) => {
+        scanPayload = data;
+        scanError = err;
+        mockPostersAPI.enqueuePlexMetadataScan.mockResolvedValue({ data: { job_id: 3 } });
+        mockPostersAPI.enqueueKometaAssetsScan.mockResolvedValue({ data: { job_id: 2 } });
+        mockPostersAPI.scanKometaAssets.mockResolvedValue({
+            data: { stale: [STALE], orphans: [ORPHAN] },
+        });
+        render(<PosterCleanarrPage />);
+    };
+    const expectLists = async heading => {
+        expect(await screen.findByText(ORPHAN.path)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
+        expect(screen.getByText(`→ ${STALE.canonical}`)).toBeInTheDocument();
+        const claimed = screen.queryByText(/stale not matched to a Plex item/);
+        expect(Boolean(claimed)).toBe(heading === UNMATCHED);
+    };
+
+    it.each([
+        [
+            'has no variants',
+            payload([]),
+            null,
+            'No poster variants found. Plex metadata looks clean.',
+            UNMATCHED,
+        ],
+        [
+            'cannot be read',
+            null,
+            new Error('Plex DB locked'),
+            /Couldn.t read Plex metadata/,
+            'Stale duplicates',
+        ],
+        [
+            'cannot be re-read',
+            payload([GONE]),
+            new Error('Plex DB locked'),
+            /Couldn.t read Plex metadata/,
+            'Stale duplicates',
+        ],
+        [
+            'cannot be re-read over a scan that matched none',
+            payload([GHOST_A]),
+            new Error('Plex DB locked'),
+            /Couldn.t read Plex metadata/,
+            'Stale duplicates',
+        ],
+    ])(
+        'lists stale and orphaned assets when Plex metadata %s',
+        async (_, data, err, state, heading) => {
+            const user = userEvent.setup();
+            showLists(data, err);
+            await user.click(screen.getByRole('button', { name: 'Run scan' }));
+
+            expect(await screen.findByText(state)).toBeInTheDocument();
+            await expectLists(heading);
+        }
+    );
+
+    it('lists them before any Plex scan', async () => {
+        showLists(null, null);
+
+        expect(screen.getByText('Ready to scan')).toBeInTheDocument();
+        await expectLists('Stale duplicates');
+    });
+
+    it('keeps listing them while a Plex scan runs', async () => {
+        const user = userEvent.setup();
+        showLists(payload([]), null);
+        await expectLists('Stale duplicates');
+        mockJobsAPI.tailJobLog.mockReturnValue(new Promise(() => {}));
+        await user.click(screen.getByRole('button', { name: 'Run scan' }));
+
+        expect(await screen.findByText('Scanning Plex metadata...')).toBeInTheDocument();
+        await expectLists('Stale duplicates');
+    });
+});
+
+describe('Poster Cleanarr — variant tiles', () => {
+    const plexVariant = (path, filename, active = false) => ({
+        ...variant(path, filename, active),
+        source: 'plex',
+    });
+    const tileOf = alt => screen.getByAltText(alt).parentElement;
+    const showTiles = async variants => {
+        const user = userEvent.setup();
+        scanPayload = payload([{ ...GHOST_A, rating_key: 4242, title: 'Real Movie', variants }]);
+        render(<PosterCleanarrPage />);
+        await user.click(await screen.findByText('Real Movie'));
+        await screen.findByAltText(variants[0].filename);
+        return user;
+    };
+
+    it('marks each tile as unused, in use, or Plex’s own, and offers only unused ones for deletion', async () => {
+        await showTiles([
+            variant('/p/unused', 'unused'),
+            variant('/p/in_use', 'in_use', true),
+            plexVariant('/p/plex_spare', 'plex_spare'),
+            plexVariant('/p/plex_in_use', 'plex_in_use', true),
+        ]);
+        const PLEX = 'Plex default — read-only, cannot be deleted';
+        const rows = [
+            [
+                'unused',
+                'Unused (bloat) — candidate for cleanup',
+                'border-error/85',
+                'bloat',
+                'text-error',
+                '0.75',
+                'none',
+                true,
+            ],
+            [
+                'in_use',
+                'Active poster in Plex',
+                'border-success',
+                'active',
+                'text-success',
+                '1',
+                'none',
+                false,
+            ],
+            [
+                'plex_spare',
+                PLEX,
+                'border-border-strong',
+                'plex',
+                'text-fg-subtle',
+                '1',
+                'grayscale(0.3)',
+                false,
+            ],
+            // Plex's own poster in use: framed as Plex's, badged as in use.
+            [
+                'plex_in_use',
+                PLEX,
+                'border-border-strong',
+                'active',
+                'text-success',
+                '1',
+                'grayscale(0.3)',
+                false,
+            ],
+        ];
+        for (const [alt, title, border, badge, badgeColour, opacity, filter, deletable] of rows) {
+            const tile = tileOf(alt);
+            expect(tile).toHaveAttribute('title', title);
+            expect(tile).toHaveClass(border);
+            expect(within(tile).getByText(badge)).toHaveClass(badgeColour);
+            expect(screen.getByAltText(alt)).toHaveStyle({ opacity, filter });
+            const box = within(tile).queryByRole('button', { name: 'Select variant' });
+            expect(box !== null).toBe(deletable);
+        }
+    });
+
+    it('ticking an unused tile selects it without opening its preview', async () => {
+        const user = await showTiles([variant('/p/unused', 'unused')]);
+        const tile = tileOf('unused');
+        await user.click(within(tile).getByRole('button', { name: 'Select variant' }));
+
+        const box = within(tile).getByRole('button', { name: 'Deselect variant' });
+        expect(box).toHaveTextContent('check');
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        await user.click(box);
+        expect(within(tile).getByRole('button', { name: 'Select variant' })).toHaveTextContent('');
     });
 });

@@ -8,6 +8,7 @@ import sqlite3
 import sys
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -15,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from backend.modules.poster_cleanarr import (
     KOMETA_OVERLAY_EXIF_TAG,
     KOMETA_OVERLAY_EXIF_VALUE,
+    RESTORE_DIR_NAME,
     PosterCleanarr,
 )
 
@@ -165,6 +167,135 @@ def test_run_reports_no_bloat_when_the_in_use_read_fails(tmp_path, monkeypatch):
     assert executed == []
     assert [e for e in errors if "0 in-use images" in e]
     assert not [e for e in errors if "An error occurred" in e]
+
+
+HELD = os.path.join("Movies", "a", "x.bundle", "Uploads", "posters")
+
+
+def _run_restore_dir_mode(tmp_path, monkeypatch, mode, errors=None):
+    """Run ``mode`` on one held file, local_db on and no Plex database folder."""
+    plex = tmp_path / "plex"
+    held = plex / RESTORE_DIR_NAME / HELD / "p.jpg"
+    held.parent.mkdir(parents=True, exist_ok=True)
+    held.write_bytes(b"x")
+    m = make_module()
+    if errors is not None:
+        m.logger.error = lambda msg, *a, **k: errors.append(msg)
+    m.mode = mode
+    m.plex_path = str(plex)
+    m.working_dir = str(tmp_path)
+    m.config = SimpleNamespace(
+        local_db=True,
+        use_existing_db=False,
+        ignore_running=False,
+        overlays_only=False,
+        target_paths=None,
+        excluded_libraries=[],
+    )
+    monkeypatch.setattr(m, "_run_asset_passes", lambda: ({}, {}))
+    m.run()
+    return plex
+
+
+@pytest.mark.parametrize("mode, restored", [("restore", b"x"), ("clear", None)])
+def test_restore_and_clear_run_without_a_plex_database_folder(
+    tmp_path, monkeypatch, mode, restored
+):
+    """Neither mode reads the Plex database, so its folder may be missing."""
+    plex = _run_restore_dir_mode(tmp_path, monkeypatch, mode)
+
+    back = plex / "Metadata" / HELD / "p"
+    assert (back.read_bytes() if back.exists() else None) == restored
+    assert not (plex / RESTORE_DIR_NAME).exists()
+
+
+def test_restore_leaves_files_behind_a_linked_folder_where_they_are(
+    tmp_path, monkeypatch
+):
+    """A folder link inside the restore folder is not followed into."""
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (outside / "keep.jpg").write_bytes(b"k")
+    linked = tmp_path / "plex" / RESTORE_DIR_NAME / "Movies" / "linked"
+    linked.parent.mkdir(parents=True)
+    linked.symlink_to(outside, target_is_directory=True)
+
+    plex = _run_restore_dir_mode(tmp_path, monkeypatch, "restore")
+
+    assert (outside / "keep.jpg").read_bytes() == b"k"
+    assert not (plex / "Metadata" / "Movies" / "linked").exists()
+    assert (plex / "Metadata" / HELD / "p").read_bytes() == b"x"
+
+
+def test_restore_refuses_a_restore_folder_that_is_a_link(tmp_path, monkeypatch):
+    """A linked restore folder is left alone, and so is what it points at."""
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (tmp_path / "plex").mkdir()
+    (tmp_path / "plex" / RESTORE_DIR_NAME).symlink_to(outside, target_is_directory=True)
+    errors = []
+
+    # The held file lands in `outside`, written through the link.
+    plex = _run_restore_dir_mode(tmp_path, monkeypatch, "restore", errors)
+
+    assert (outside / HELD / "p.jpg").read_bytes() == b"x"
+    assert not (plex / "Metadata" / HELD / "p").exists()
+    assert (plex / RESTORE_DIR_NAME).is_symlink()
+    assert [e for e in errors if "is a link" in e and "nothing restored" in e]
+
+
+@pytest.mark.parametrize(
+    "stray", ["._p.jpg", os.path.join(".AppleDouble", "p.jpg"), "Thumbs.db"]
+)
+def test_restore_moves_back_only_held_files(tmp_path, monkeypatch, stray):
+    """Hidden names and non-.jpg files in the restore folder stay out of Metadata."""
+    path = tmp_path / "plex" / RESTORE_DIR_NAME / HELD / stray
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"s")
+
+    plex = _run_restore_dir_mode(tmp_path, monkeypatch, "restore")
+
+    back = plex / "Metadata" / HELD
+    assert sorted(p.name for p in back.rglob("*")) == ["p"]
+
+
+@pytest.mark.parametrize("mode", ["restore", "clear"])
+def test_restore_and_clear_leave_metadata_folders_alone(tmp_path, monkeypatch, mode):
+    """Neither mode removes from Metadata, so neither sweeps its empty folders."""
+    bundle = tmp_path / "plex" / "Metadata" / "Movies" / "b" / "y.bundle"
+    empty = bundle / "Uploads" / "art"
+    empty.mkdir(parents=True)
+
+    _run_restore_dir_mode(tmp_path, monkeypatch, mode)
+
+    assert empty.is_dir()
+
+
+@pytest.mark.parametrize("mode", ["move", "remove"])
+def test_move_and_remove_sweep_empty_metadata_folders(tmp_path, monkeypatch, mode):
+    """The modes that remove from Metadata prune its empty folders afterwards."""
+    plex = tmp_path / "plex"
+    empty = plex / "Metadata" / "Movies" / "b" / "y.bundle" / "Uploads" / "art"
+    empty.mkdir(parents=True)
+    (plex / "Plug-in Support" / "Databases").mkdir(parents=True)
+    m = make_module()
+    m.mode = mode
+    m.plex_path = str(plex)
+    m.working_dir = str(tmp_path)
+    m.config = SimpleNamespace(
+        local_db=True,
+        use_existing_db=False,
+        ignore_running=False,
+        overlays_only=False,
+        target_paths=None,
+        excluded_libraries=[],
+    )
+    monkeypatch.setattr(m, "_get_plex_database", lambda *a: None)
+    monkeypatch.setattr(m, "_run_asset_passes", lambda: ({}, {}))
+
+    m.run()
+
+    assert not empty.exists()
 
 
 # --- PR #90: _is_kometa_overlay + overlays_only mode in _execute_mode ---

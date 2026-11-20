@@ -1,5 +1,8 @@
+import json
 import os
 from types import SimpleNamespace
+
+import pytest
 
 from backend.util.config import ChubConfig, InstanceDetail
 from backend.util.database import ChubDB
@@ -271,6 +274,44 @@ def test_cleanup_route_reports_a_run_already_in_flight(tmp_path, monkeypatch):
     assert second.status_code == 200
     assert second.json()["data"]["deduped"] is True
     assert second.json()["data"]["job_id"] == first.json()["data"]["job_id"]
+
+
+@pytest.mark.parametrize("mode", ["restore", "clear"])
+@pytest.mark.parametrize("passes", [{}, {"stale_duplicates_enabled": True}])
+def test_cleanup_route_queues_the_restore_dir_modes_alone(
+    tmp_path, monkeypatch, mode, passes
+):
+    """The page's Restore and Clear reach the job with their mode alone."""
+    cfg = ChubConfig()
+    cfg.poster_cleanarr.stale_duplicates_enabled = True
+    cfg.poster_cleanarr.orphan_assets_enabled = True
+    monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
+    body = {"mode": mode, **passes}
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        res = _client(db).post("/api/posters/plex-metadata/cleanup", json=body)
+        jobs = db.worker.get_pending_jobs("jobs")
+
+    assert res.status_code == 200
+    assert [json.loads(j["payload"])["overrides"] for j in jobs] == [{"mode": mode}]
+
+
+@pytest.mark.parametrize("mode", ["restore", "clear"])
+@pytest.mark.parametrize(
+    "bad", [{"orphan_assets_enabled": "yes"}, {"asset_dirs": ["/etc"]}]
+)
+def test_cleanup_route_refuses_a_malformed_restore_dir_request(
+    tmp_path, monkeypatch, mode, bad
+):
+    """Restore and Clear check the body as every mode does before dropping it."""
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
+    with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
+        res = _client(db).post(
+            "/api/posters/plex-metadata/cleanup", json={"mode": mode, **bad}
+        )
+        jobs = db.worker.get_pending_jobs("jobs")
+
+    assert res.status_code == 400
+    assert jobs == []
 
 
 def test_orphan_delete_route_fails_closed_without_config(tmp_path, monkeypatch):

@@ -1,7 +1,6 @@
 # modules/poster_cleanarr.py
 
 import errno
-import glob
 import json
 import os
 import re
@@ -29,6 +28,7 @@ from backend.util.helper import create_table
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.normalization import normalize_titles, parse_asset_filename
+from backend.util.poster_cleanarr_settings import VALID_MODES
 from backend.util.path_safety import containing_root, resolve_confined
 from backend.util.paths import get_config_dir
 
@@ -76,6 +76,20 @@ def _normalize_lib(name: str) -> str:
     return name.strip().lower() if isinstance(name, str) else ""
 
 
+def _held_files(restore_dir: str) -> List[str]:
+    """The .jpg files glob '**' listed under ``restore_dir``, less linked subfolders."""
+    held = []
+    # os.walk, not glob: glob '**' follows a folder link out of the restore folder.
+    for root, dirs, files in os.walk(restore_dir):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        held += [
+            os.path.join(root, name)
+            for name in files
+            if name.endswith(".jpg") and not name.startswith(".")
+        ]
+    return held
+
+
 def _bundle_root(path: str) -> Optional[str]:
     """The realpath'd ``.bundle`` directory enclosing a Plex metadata file.
 
@@ -91,7 +105,6 @@ def _bundle_root(path: str) -> Optional[str]:
     return cur or None
 
 
-VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
 VALID_ORPHAN_MODES = {"report", "move", "remove"}
 VALID_STALE_MODES = {"report", "move", "remove"}
 ASSET_IMAGE_EXTS = ASSET_IMAGE_EXTENSIONS
@@ -379,7 +392,7 @@ class PosterCleanarr(ChubModule):
 
             # === Clean empty directories ===
             empty_dirs = 0
-            if self.mode not in ("report", "nothing") and metadata_dir:
+            if self.mode in ("move", "remove") and metadata_dir:
                 empty_dirs = self._clean_empty_dirs(metadata_dir)
 
             # === Report ===
@@ -433,11 +446,11 @@ class PosterCleanarr(ChubModule):
                 self.logger.error(f"Metadata directory not found: {metadata_dir}")
                 return False
 
-        if self.config.local_db:
-            db_dir = os.path.join(self.plex_path, "Plug-in Support", "Databases")
-            if not os.path.isdir(db_dir):
-                self.logger.error(f"Plex database directory not found: {db_dir}")
-                return False
+            if self.config.local_db:
+                db_dir = os.path.join(self.plex_path, "Plug-in Support", "Databases")
+                if not os.path.isdir(db_dir):
+                    self.logger.error(f"Plex database directory not found: {db_dir}")
+                    return False
 
         return True
 
@@ -804,12 +817,16 @@ class PosterCleanarr(ChubModule):
                 f"No '{RESTORE_DIR_NAME}' directory found. Nothing to restore."
             )
             return {"count": 0, "total_size": 0, "mode": "restore"}
+        if os.path.islink(restore_dir):
+            self.logger.error(
+                f"'{RESTORE_DIR_NAME}' is a link, not the folder Move makes: nothing "
+                "restored. Replace it with the real folder to restore from it."
+            )
+            return {"count": 0, "total_size": 0, "mode": "restore"}
 
         count = 0
         total_size = 0
-        restore_files = list(
-            glob.iglob(os.path.join(restore_dir, "**", "*.jpg"), recursive=True)
-        )
+        restore_files = _held_files(restore_dir)
 
         if not restore_files:
             self.logger.info("Restore directory is empty. Nothing to restore.")
@@ -908,7 +925,8 @@ class PosterCleanarr(ChubModule):
         stale_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
         orphans_on = getattr(self.config, "orphan_assets_enabled", False)
         stale_on = getattr(self.config, "stale_duplicates_enabled", False)
-        if not (orphans_on or stale_on):
+        # Restore and Clear run no orphan or stale pass, whatever is configured.
+        if self.mode in ("restore", "clear") or not (orphans_on or stale_on):
             return orphan_stats, stale_stats
         # Selection from this run's config, so per-run overrides survive
         scope = self._orphan_scope(self.config)
@@ -1664,17 +1682,13 @@ class PosterCleanarr(ChubModule):
                     if key in library_titles or folder_key in library_titles:
                         continue
 
-                    try:
-                        size = os.path.getsize(fpath)
-                    except OSError:
-                        size = 0
                     orphans.append(
                         {
                             "path": fpath,
                             "asset_dir": asset_dir,
                             "parsed": parsed,
                             "key": key,
-                            "size": size,
+                            "size": _disk_size(fpath),
                         }
                     )
 
