@@ -169,14 +169,13 @@ def test_run_reports_no_bloat_when_the_in_use_read_fails(tmp_path, monkeypatch):
     assert not [e for e in errors if "An error occurred" in e]
 
 
-@pytest.mark.parametrize("mode, restored", [("restore", b"x"), ("clear", None)])
-def test_restore_and_clear_run_without_a_plex_database_folder(
-    tmp_path, monkeypatch, mode, restored
-):
-    """Neither mode reads the Plex database, so its folder may be missing."""
+HELD = os.path.join("Movies", "a", "x.bundle", "Uploads", "posters")
+
+
+def _run_restore_dir_mode(tmp_path, monkeypatch, mode):
+    """Run ``mode`` on one held file, local_db on and no Plex database folder."""
     plex = tmp_path / "plex"
-    rel = os.path.join("Movies", "a", "x.bundle", "Uploads", "posters")
-    held = plex / RESTORE_DIR_NAME / rel / "p.jpg"
+    held = plex / RESTORE_DIR_NAME / HELD / "p.jpg"
     held.parent.mkdir(parents=True)
     held.write_bytes(b"x")
     m = make_module()
@@ -192,12 +191,59 @@ def test_restore_and_clear_run_without_a_plex_database_folder(
         excluded_libraries=[],
     )
     monkeypatch.setattr(m, "_run_asset_passes", lambda: ({}, {}))
+    m.run()
+    return plex
+
+
+@pytest.mark.parametrize("mode, restored", [("restore", b"x"), ("clear", None)])
+def test_restore_and_clear_run_without_a_plex_database_folder(
+    tmp_path, monkeypatch, mode, restored
+):
+    """Neither mode reads the Plex database, so its folder may be missing."""
+    plex = _run_restore_dir_mode(tmp_path, monkeypatch, mode)
+
+    back = plex / "Metadata" / HELD / "p"
+    assert (back.read_bytes() if back.exists() else None) == restored
+    assert not (plex / RESTORE_DIR_NAME).exists()
+
+
+@pytest.mark.parametrize("mode", ["restore", "clear"])
+def test_restore_and_clear_leave_metadata_folders_alone(tmp_path, monkeypatch, mode):
+    """Neither mode removes from Metadata, so neither sweeps its empty folders."""
+    bundle = tmp_path / "plex" / "Metadata" / "Movies" / "b" / "y.bundle"
+    empty = bundle / "Uploads" / "art"
+    empty.mkdir(parents=True)
+
+    _run_restore_dir_mode(tmp_path, monkeypatch, mode)
+
+    assert empty.is_dir()
+
+
+@pytest.mark.parametrize("mode", ["move", "remove"])
+def test_move_and_remove_sweep_empty_metadata_folders(tmp_path, monkeypatch, mode):
+    """The modes that remove from Metadata prune its empty folders afterwards."""
+    plex = tmp_path / "plex"
+    empty = plex / "Metadata" / "Movies" / "b" / "y.bundle" / "Uploads" / "art"
+    empty.mkdir(parents=True)
+    (plex / "Plug-in Support" / "Databases").mkdir(parents=True)
+    m = make_module()
+    m.mode = mode
+    m.plex_path = str(plex)
+    m.working_dir = str(tmp_path)
+    m.config = SimpleNamespace(
+        local_db=True,
+        use_existing_db=False,
+        ignore_running=False,
+        overlays_only=False,
+        target_paths=None,
+        excluded_libraries=[],
+    )
+    monkeypatch.setattr(m, "_get_plex_database", lambda *a: None)
+    monkeypatch.setattr(m, "_run_asset_passes", lambda: ({}, {}))
 
     m.run()
 
-    back = plex / "Metadata" / rel / "p"
-    assert (back.read_bytes() if back.exists() else None) == restored
-    assert not (plex / RESTORE_DIR_NAME).exists()
+    assert not empty.exists()
 
 
 # --- PR #90: _is_kometa_overlay + overlays_only mode in _execute_mode ---

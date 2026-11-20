@@ -379,7 +379,7 @@ class PosterCleanarr(ChubModule):
 
             # === Clean empty directories ===
             empty_dirs = 0
-            if self.mode not in ("report", "nothing") and metadata_dir:
+            if self.mode in ("move", "remove") and metadata_dir:
                 empty_dirs = self._clean_empty_dirs(metadata_dir)
 
             # === Report ===
