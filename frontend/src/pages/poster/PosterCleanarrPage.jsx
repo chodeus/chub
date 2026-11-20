@@ -10,60 +10,9 @@ import { Modal } from '../../components/modals/Modal';
 import { Button, IconButton, LoadingButton } from '../../components/ui/index.js';
 import { PageHeader } from '../../components/ui/PageHeader';
 import Spinner from '../../components/ui/Spinner.jsx';
+import CleanarrModeBar, { MODE_META } from './CleanarrModeBar.jsx';
 
 const PAGE_SIZE = 500; // master-detail needs the full bundle list client-side
-
-// Mode metadata — one row per cleanup mode. `action` drives the Run button's
-// label + colour. `confirm` means the Run button fires a confirmation modal
-// (destructive / permanent operations only). `passes`: the mode runs the
-// Bloat/Stale/Orphan passes, and a selection scopes its Bloat pass.
-const MODE_META = {
-    report: {
-        label: 'Report',
-        action: 'Run scan',
-        variant: 'primary',
-        confirm: false,
-        description: 'List bloat images in the UI. Nothing is deleted.',
-    },
-    move: {
-        label: 'Move',
-        action: 'Move bloat to restore',
-        variant: 'warning',
-        confirm: false,
-        passes: true,
-        description: 'Relocate bloat to <plex_path>/Poster Cleanarr Restore/ — recoverable.',
-    },
-    restore: {
-        label: 'Restore',
-        action: 'Restore files',
-        variant: 'success',
-        confirm: false,
-        description: 'Move everything in the Restore directory back to Metadata/.',
-    },
-    clear: {
-        label: 'Clear',
-        action: 'Clear restore dir',
-        variant: 'danger',
-        confirm: true,
-        description: 'Permanently delete everything in the Restore directory. Cannot be undone.',
-    },
-    remove: {
-        label: 'Remove',
-        action: 'Delete bloat permanently',
-        variant: 'danger',
-        confirm: true,
-        passes: true,
-        description: 'Delete bloat from disk directly. Cannot be undone.',
-    },
-    nothing: {
-        label: 'Nothing',
-        action: null,
-        variant: 'secondary',
-        confirm: false,
-        description:
-            'Skip image processing entirely. Useful for scheduling an orphan-cleanup-only run.',
-    },
-};
 
 // localStorage key for persisting scan/filter/tree state across navigations.
 // v3: tree identity is bundle_path now — a persisted v2 `selected` has no
@@ -348,34 +297,6 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
     );
 };
 
-// Mode-bar checkbox styled to the mock: a 17px rounded box that fills with the
-// brand colour + a check glyph when on (replaces the native browser checkbox so
-// it matches the rest of the redesign).
-const ModeCheck = ({ label, checked, disabled, onChange, title }) => (
-    <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        title={title}
-        className={`flex items-center gap-2 text-dense text-fg ${
-            disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
-        }`}
-    >
-        <span
-            className={`flex items-center justify-center w-[17px] h-[17px] rounded-[4px] border transition-colors ${
-                checked ? 'bg-primary border-primary' : 'bg-transparent border-border-strong'
-            }`}
-        >
-            {checked && (
-                <span className="material-symbols-outlined text-on-color text-[13px] leading-none">
-                    check
-                </span>
-            )}
-        </span>
-        {label}
-    </button>
-);
-
 // ---------------------------------------------------------------------------
 // Live cleanup log modal (polling)
 // ---------------------------------------------------------------------------
@@ -396,6 +317,7 @@ const LiveLogModal = ({ jobId, onClose }) => {
         if (!jobId) return undefined;
         let cancelled = false;
         let timer = null;
+        let scrollTimer = null;
         offsetRef.current = 0;
         const poll = () =>
             jobsAPI
@@ -406,7 +328,7 @@ const LiveLogModal = ({ jobId, onClose }) => {
                     if (data.lines) {
                         setText(prev => prev + data.lines);
                         offsetRef.current = data.next_offset ?? offsetRef.current;
-                        setTimeout(() => {
+                        scrollTimer = setTimeout(() => {
                             if (preRef.current)
                                 preRef.current.scrollTop = preRef.current.scrollHeight;
                         }, 0);
@@ -422,6 +344,7 @@ const LiveLogModal = ({ jobId, onClose }) => {
         return () => {
             cancelled = true;
             if (timer) clearTimeout(timer);
+            clearTimeout(scrollTimer);
         };
     }, [jobId]);
 
@@ -600,7 +523,7 @@ const PosterCleanarrPage = () => {
     const [selected, setSelected] = useState(persisted.selected || null);
 
     // Per-variant bulk selection (checkbox on bloat tiles).
-    const [selectedPaths, setSelectedPaths] = useState(new Set());
+    const [selectedPaths, setSelectedPaths] = useState(() => new Set());
 
     // Modals.
     const [previewTarget, setPreviewTarget] = useState(null);
@@ -618,7 +541,7 @@ const PosterCleanarrPage = () => {
     // single/bulk delete so the UI prunes them immediately without a full
     // /by-media rescan (which walks every .bundle under /plex). Cleared by
     // refreshScan — a real scan is the source of truth.
-    const [deletedPaths, setDeletedPaths] = useState(new Set());
+    const [deletedPaths, setDeletedPaths] = useState(() => new Set());
 
     // Watched here, not by the log modal: hiding it stops its polling. `onSuccess`
     // runs on `success` only; `assetsTouched` false skips the Kometa list reload.
@@ -822,28 +745,37 @@ const PosterCleanarrPage = () => {
         if (!bundle) return null;
         const tree = bundleTrees.get(bundle.bundle_path);
         if (!tree) return null;
+        // A crumb with a `node` selects it on click; the current level has none.
+        const showCrumb = { key: 'show', label: bundle.title };
+        const upToShow = { ...showCrumb, node: { kind: 'show', bundlePath: bundle.bundle_path } };
+        const seasonCrumb = { key: 'season', label: `Season ${selected.season}` };
         if (selected.kind === 'show') {
             const variants = tree.show;
-            return { bundle, variants, breadcrumb: [bundle.title] };
+            return { bundle, variants, breadcrumb: [showCrumb] };
         }
         if (selected.kind === 'season') {
             const season = tree.seasons.get(selected.season);
             return {
                 bundle,
                 variants: season?.posters || [],
-                breadcrumb: [bundle.title, `Season ${selected.season}`],
+                breadcrumb: [upToShow, seasonCrumb],
             };
         }
         if (selected.kind === 'episode') {
             const season = tree.seasons.get(selected.season);
             const ep = season?.episodes.get(selected.episode);
+            const node = {
+                kind: 'season',
+                bundlePath: bundle.bundle_path,
+                season: selected.season,
+            };
             return {
                 bundle,
                 variants: ep?.thumbs || [],
                 breadcrumb: [
-                    bundle.title,
-                    `Season ${selected.season}`,
-                    `Episode ${selected.episode}`,
+                    upToShow,
+                    { ...seasonCrumb, node },
+                    { key: 'episode', label: `Episode ${selected.episode}` },
                 ],
             };
         }
@@ -1017,7 +949,6 @@ const PosterCleanarrPage = () => {
         if (!answered || readPending) loadKometaAssets(true);
     };
 
-    const passesOn = Boolean(MODE_META[mode]?.passes);
     const plexBusyEmpty = (scanning || loading) && bundles.length === 0;
     // A Plex scan in hand: the stale items it matches show on their bundles instead.
     const plexShown = hasScanned && !byMedia.error && !plexBusyEmpty;
@@ -1255,85 +1186,24 @@ const PosterCleanarrPage = () => {
                 </div>
             )}
 
-            {/* Global cleanup bar — Mode dropdown (all 6 cleanup modes) + a Run
-                button whose label, colour, and confirm behaviour all track the
-                selected mode, so the destructive options are visibly distinct. */}
-            <section
-                className="rounded-xl bg-surface border border-border px-4 py-3.5 flex flex-wrap items-center gap-4"
-                style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
-            >
-                <label className="flex items-center gap-2 text-dense font-semibold text-fg-muted">
-                    Mode
-                    <select
-                        value={mode}
-                        onChange={e => setMode(e.target.value)}
-                        className="h-11 bg-surface-inset border border-border rounded-lg px-3 text-dense font-semibold text-fg outline-none focus:border-primary cursor-pointer"
-                    >
-                        {Object.entries(MODE_META).map(([k, m]) => (
-                            <option key={k} value={k}>
-                                {m.label}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <span className="text-dense text-fg-subtle" style={{ maxWidth: '420px' }}>
-                    {MODE_META[mode]?.description}
-                </span>
-                <div className="flex flex-wrap items-center gap-4">
-                    <ModeCheck
-                        label="Bloat"
-                        checked={passesOn && cleanBloat}
-                        disabled={!passesOn}
-                        onChange={setCleanBloat}
-                    />
-                    <ModeCheck
-                        label="Stale"
-                        checked={passesOn && cleanStale}
-                        disabled={!passesOn}
-                        onChange={setCleanStale}
-                    />
-                    <ModeCheck
-                        label="Orphan"
-                        checked={passesOn && cleanOrphan}
-                        disabled={!passesOn}
-                        onChange={setCleanOrphan}
-                    />
-                    <ModeCheck
-                        label="Overlays only"
-                        checked={passesOn && cleanOverlaysOnly}
-                        disabled={!passesOn || !cleanBloat}
-                        onChange={setCleanOverlaysOnly}
-                        title="Limit the bloat pass to Kometa overlay images (EXIF-tagged), sparing user-uploaded customs"
-                    />
-                </div>
-                <div className="ml-auto flex flex-wrap items-center gap-2">
-                    {passesOn && (
-                        <span className="text-xs text-fg-muted">
-                            {selectedPaths.size > 0
-                                ? `${selectedPaths.size} selected`
-                                : 'No selection → full library'}
-                        </span>
-                    )}
-                    {passesOn && selectedPaths.size > 0 && (
-                        <Button variant="ghost" onClick={clearSelection}>
-                            Clear
-                        </Button>
-                    )}
-                    <LoadingButton
-                        loading={mode === 'report' ? scanning || loading : isEnqueuing}
-                        loadingText={mode === 'report' ? 'Scanning…' : 'Starting…'}
-                        variant={MODE_META[mode]?.variant || 'primary'}
-                        onClick={runCleanup}
-                        disabled={
-                            !MODE_META[mode]?.action ||
-                            (passesOn && !hasScanned) ||
-                            (passesOn && !cleanBloat && !cleanStale && !cleanOrphan)
-                        }
-                    >
-                        {MODE_META[mode]?.action || 'No action'}
-                    </LoadingButton>
-                </div>
-            </section>
+            <CleanarrModeBar
+                mode={mode}
+                onModeChange={setMode}
+                bloat={cleanBloat}
+                onBloatChange={setCleanBloat}
+                stale={cleanStale}
+                onStaleChange={setCleanStale}
+                orphan={cleanOrphan}
+                onOrphanChange={setCleanOrphan}
+                overlaysOnly={cleanOverlaysOnly}
+                onOverlaysOnlyChange={setCleanOverlaysOnly}
+                selectedCount={selectedPaths.size}
+                onClearSelection={clearSelection}
+                scanning={scanning || loading}
+                enqueuing={isEnqueuing}
+                hasScanned={hasScanned}
+                onRun={runCleanup}
+            />
 
             {/* Scan empty / loading / loaded states */}
             {!hasScanned ? (
@@ -1476,7 +1346,7 @@ const PosterCleanarrPage = () => {
                                                 )}
                                                 <div className="text-xs text-fg-muted mb-1 flex items-center gap-2">
                                                     {detail.breadcrumb.map((crumb, i) => (
-                                                        <React.Fragment key={i}>
+                                                        <React.Fragment key={crumb.key}>
                                                             {i > 0 && (
                                                                 <span className="text-fg-subtle">
                                                                     ›
@@ -1484,34 +1354,18 @@ const PosterCleanarrPage = () => {
                                                             )}
                                                             <span
                                                                 className={
-                                                                    i < detail.breadcrumb.length - 1
+                                                                    crumb.node
                                                                         ? 'cursor-pointer hover:text-fg'
                                                                         : ''
                                                                 }
-                                                                onClick={() => {
-                                                                    if (
-                                                                        i >=
-                                                                        detail.breadcrumb.length - 1
-                                                                    )
-                                                                        return;
-                                                                    if (i === 0)
-                                                                        selectNode({
-                                                                            kind: 'show',
-                                                                            bundlePath:
-                                                                                detail.bundle
-                                                                                    .bundle_path,
-                                                                        });
-                                                                    else if (i === 1)
-                                                                        selectNode({
-                                                                            kind: 'season',
-                                                                            bundlePath:
-                                                                                detail.bundle
-                                                                                    .bundle_path,
-                                                                            season: selected.season,
-                                                                        });
-                                                                }}
+                                                                onClick={
+                                                                    crumb.node
+                                                                        ? () =>
+                                                                              selectNode(crumb.node)
+                                                                        : undefined
+                                                                }
                                                             >
-                                                                {crumb}
+                                                                {crumb.label}
                                                             </span>
                                                         </React.Fragment>
                                                     ))}
@@ -1520,7 +1374,7 @@ const PosterCleanarrPage = () => {
                                                     {
                                                         detail.breadcrumb[
                                                             detail.breadcrumb.length - 1
-                                                        ]
+                                                        ].label
                                                     }
                                                 </h3>
                                                 <div className="font-mono text-xs text-fg-muted mt-1.5">
@@ -1660,89 +1514,14 @@ const PosterCleanarrPage = () => {
             )}
 
             {/* Kometa asset lists: read apart from the Plex scan, so they show without it. */}
-            {staleListed.length > 0 && (
-                <section className="rounded-lg border border-border bg-surface mt-4 p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                        <h2 className="text-sm font-semibold text-fg">
-                            {plexShown
-                                ? 'Stale duplicates without a Plex poster row'
-                                : 'Stale duplicates'}
-                        </h2>
-                        <span style={typeBadge}>{staleListed.length}</span>
-                        <span className="text-fg-subtle text-xs">
-                            Renamed asset folders and files
-                            {plexShown ? " whose title isn't in the Plex bundle scan" : ''} — the
-                            Stale pass still moves or removes each once its current copy is in place
-                        </span>
-                    </div>
-                    <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
-                        {staleListed.map(s => (
-                            <div
-                                key={s.folder || s.name}
-                                className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
-                            >
-                                <span className="truncate text-fg-muted">
-                                    <span style={stalePill}>⧉</span> {s.name}
-                                    <span className="text-fg-subtle"> → {s.canonical}</span>
-                                </span>
-                                <span
-                                    className="text-fg-subtle text-xs whitespace-nowrap"
-                                    title="Space removing it frees"
-                                >
-                                    {formatBytes(s.size)}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-            )}
+            <StaleDuplicatesList items={staleListed} plexShown={plexShown} />
 
-            {orphans.length > 0 && (
-                <section className="rounded-lg border border-border bg-surface mt-4 p-4">
-                    <div className="flex flex-wrap items-center gap-2 mb-3">
-                        <h2 className="text-sm font-semibold text-fg">Orphaned assets</h2>
-                        <span style={typeBadge}>{orphans.length}</span>
-                        <span className="text-fg-subtle text-xs">
-                            Kometa assets with no matching media in your library
-                        </span>
-                        <LoadingButton
-                            className="ml-auto"
-                            size="small"
-                            variant="danger"
-                            loading={isEnqueuing}
-                            loadingText="Starting…"
-                            disabled={orphanDeleteBusy}
-                            onClick={() => setConfirmOrphanDelete({ all: true })}
-                        >
-                            Delete all
-                        </LoadingButton>
-                    </div>
-                    <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
-                        {orphans.map(o => (
-                            <div
-                                key={o.path}
-                                className="flex items-center gap-2 py-1.5 border-b border-border text-sm"
-                            >
-                                <span className="truncate text-fg-muted mr-auto">{o.path}</span>
-                                <span
-                                    className="text-fg-subtle text-xs whitespace-nowrap"
-                                    title="Space deleting it frees"
-                                >
-                                    {formatBytes(o.size)}
-                                </span>
-                                <IconButton
-                                    icon="delete"
-                                    size="small"
-                                    aria-label={`Delete ${o.path}`}
-                                    title="Delete this orphan"
-                                    disabled={orphanDeleteBusy}
-                                    onClick={() => setConfirmOrphanDelete({ path: o.path })}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                </section>
-            )}
+            <OrphanedAssetsList
+                orphans={orphans}
+                enqueuing={isEnqueuing}
+                busy={orphanDeleteBusy}
+                onDelete={setConfirmOrphanDelete}
+            />
 
             <VariantPreviewModal
                 target={previewTarget}
@@ -1884,8 +1663,8 @@ const PosterCleanarrPage = () => {
                 <Modal.Body>
                     <p className="text-sm">
                         The ticked variant becomes the active poster in Plex for{' '}
-                        <strong>{detail?.breadcrumb?.[detail.breadcrumb.length - 1]}</strong>, then
-                        every other non-Plex variant in this view is deleted from disk. Plex
+                        <strong>{detail?.breadcrumb?.[detail.breadcrumb.length - 1]?.label}</strong>
+                        , then every other non-Plex variant in this view is deleted from disk. Plex
                         defaults are left alone. This cannot be undone.
                     </p>
                 </Modal.Body>
@@ -2147,6 +1926,94 @@ const BundleTreeRow = ({
                 </>
             )}
         </>
+    );
+};
+
+const StaleDuplicatesList = ({ items, plexShown }) => {
+    if (items.length === 0) return null;
+    return (
+        <section className="rounded-lg border border-border bg-surface mt-4 p-4">
+            <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-sm font-semibold text-fg">
+                    {plexShown ? 'Stale duplicates without a Plex poster row' : 'Stale duplicates'}
+                </h2>
+                <span style={typeBadge}>{items.length}</span>
+                <span className="text-fg-subtle text-xs">
+                    Renamed asset folders and files
+                    {plexShown ? " whose title isn't in the Plex bundle scan" : ''} — the Stale pass
+                    still moves or removes each once its current copy is in place
+                </span>
+            </div>
+            <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                {items.map(s => (
+                    <div
+                        key={s.folder || s.name}
+                        className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
+                    >
+                        <span className="truncate text-fg-muted">
+                            <span style={stalePill}>⧉</span> {s.name}
+                            <span className="text-fg-subtle"> → {s.canonical}</span>
+                        </span>
+                        <span
+                            className="text-fg-subtle text-xs whitespace-nowrap"
+                            title="Space removing it frees"
+                        >
+                            {formatBytes(s.size)}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+};
+
+const OrphanedAssetsList = ({ orphans, enqueuing, busy, onDelete }) => {
+    if (orphans.length === 0) return null;
+    return (
+        <section className="rounded-lg border border-border bg-surface mt-4 p-4">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+                <h2 className="text-sm font-semibold text-fg">Orphaned assets</h2>
+                <span style={typeBadge}>{orphans.length}</span>
+                <span className="text-fg-subtle text-xs">
+                    Kometa assets with no matching media in your library
+                </span>
+                <LoadingButton
+                    className="ml-auto"
+                    size="small"
+                    variant="danger"
+                    loading={enqueuing}
+                    loadingText="Starting…"
+                    disabled={busy}
+                    onClick={() => onDelete({ all: true })}
+                >
+                    Delete all
+                </LoadingButton>
+            </div>
+            <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                {orphans.map(o => (
+                    <div
+                        key={o.path}
+                        className="flex items-center gap-2 py-1.5 border-b border-border text-sm"
+                    >
+                        <span className="truncate text-fg-muted mr-auto">{o.path}</span>
+                        <span
+                            className="text-fg-subtle text-xs whitespace-nowrap"
+                            title="Space deleting it frees"
+                        >
+                            {formatBytes(o.size)}
+                        </span>
+                        <IconButton
+                            icon="delete"
+                            size="small"
+                            aria-label={`Delete ${o.path}`}
+                            title="Delete this orphan"
+                            disabled={busy}
+                            onClick={() => onDelete({ path: o.path })}
+                        />
+                    </div>
+                ))}
+            </div>
+        </section>
     );
 };
 

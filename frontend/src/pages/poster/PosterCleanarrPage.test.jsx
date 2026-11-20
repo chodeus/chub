@@ -307,6 +307,48 @@ describe('Poster Cleanarr — persisted tree state', () => {
             window.matchMedia = realMatchMedia;
         }
     });
+
+    it('climbs from an episode to its season, then its show, by the breadcrumb', async () => {
+        const user = userEvent.setup();
+        const root = '/plex/Metadata/TV Shows/s/show.bundle/Uploads';
+        const SHOW = {
+            ...GHOST_A,
+            bundle_path: '/plex/Metadata/TV Shows/s/show.bundle',
+            rating_key: 77,
+            title: 'My Show',
+            metadata_type_label: 'show',
+            variants: [
+                variant(`${root}/posters/show_p`, 'show_p'),
+                variant(`${root}/posters/seasons/1/s1_p`, 's1_p'),
+                variant(`${root}/thumbs/seasons/1/episodes/2/e2_t`, 'e2_t'),
+            ],
+        };
+        localStorage.setItem(
+            'chub_cleanarr_state_v3',
+            JSON.stringify({
+                tab: 'all',
+                selected: { kind: 'episode', bundlePath: SHOW.bundle_path, season: 1, episode: 2 },
+            })
+        );
+        scanPayload = payload([SHOW]);
+        render(<PosterCleanarrPage />);
+        const header = (await screen.findByRole('heading', { name: 'Episode 2' })).closest(
+            'header'
+        );
+        expect(screen.getByAltText('e2_t')).toBeInTheDocument();
+
+        await user.click(within(header).getByText('Season 1'));
+        const seasonHeader = (await screen.findByRole('heading', { name: 'Season 1' })).closest(
+            'header'
+        );
+        expect(screen.getByAltText('s1_p')).toBeInTheDocument();
+        expect(screen.queryByAltText('e2_t')).not.toBeInTheDocument();
+
+        await user.click(within(seasonHeader).getByText('My Show'));
+        expect(await screen.findByRole('heading', { name: 'My Show' })).toBeInTheDocument();
+        expect(screen.getByAltText('show_p')).toBeInTheDocument();
+        expect(screen.queryByAltText('s1_p')).not.toBeInTheDocument();
+    });
 });
 
 describe('Poster Cleanarr — stale and orphan lists stay current', () => {
@@ -880,6 +922,28 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
         expect(run).toBeDisabled();
         await tick(user, 'Orphan');
         expect(run).toBeEnabled();
+    });
+
+    it('Overlays only locks while Bloat is off', async () => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'move');
+        expect(pass('Overlays only')).toBeEnabled();
+        await tick(user, 'Bloat');
+        expect(pass('Overlays only')).toBeDisabled();
+    });
+
+    it('a pass mode names the selection it scopes, and Clear drops it', async () => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'move');
+        const bar = within(screen.getByRole('combobox').closest('section'));
+        expect(bar.getByText('No selection → full library')).toBeInTheDocument();
+        await user.click(await screen.findByText('(unknown)'));
+        await user.click(await screen.findByRole('button', { name: 'Select variant' }));
+        expect(bar.getByText('1 selected')).toBeInTheDocument();
+        await user.click(bar.getByRole('button', { name: 'Clear' }));
+        expect(bar.getByText('No selection → full library')).toBeInTheDocument();
     });
 
     it.each([
