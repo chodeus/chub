@@ -77,7 +77,7 @@ def _normalize_lib(name: str) -> str:
 
 
 def _held_files(restore_dir: str) -> List[str]:
-    """The .jpg files glob '**' listed under ``restore_dir``, less any behind a link."""
+    """The .jpg files glob '**' listed under ``restore_dir``, less linked subfolders."""
     held = []
     # os.walk, not glob: glob '**' follows a folder link out of the restore folder.
     for root, dirs, files in os.walk(restore_dir):
@@ -815,6 +815,12 @@ class PosterCleanarr(ChubModule):
         if not os.path.isdir(restore_dir):
             self.logger.info(
                 f"No '{RESTORE_DIR_NAME}' directory found. Nothing to restore."
+            )
+            return {"count": 0, "total_size": 0, "mode": "restore"}
+        if os.path.islink(restore_dir):
+            self.logger.error(
+                f"'{RESTORE_DIR_NAME}' is a link, not the folder Move makes: nothing "
+                "restored. Replace it with the real folder to restore from it."
             )
             return {"count": 0, "total_size": 0, "mode": "restore"}
 

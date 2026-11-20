@@ -172,13 +172,15 @@ def test_run_reports_no_bloat_when_the_in_use_read_fails(tmp_path, monkeypatch):
 HELD = os.path.join("Movies", "a", "x.bundle", "Uploads", "posters")
 
 
-def _run_restore_dir_mode(tmp_path, monkeypatch, mode):
+def _run_restore_dir_mode(tmp_path, monkeypatch, mode, errors=None):
     """Run ``mode`` on one held file, local_db on and no Plex database folder."""
     plex = tmp_path / "plex"
     held = plex / RESTORE_DIR_NAME / HELD / "p.jpg"
     held.parent.mkdir(parents=True, exist_ok=True)
     held.write_bytes(b"x")
     m = make_module()
+    if errors is not None:
+        m.logger.error = lambda msg, *a, **k: errors.append(msg)
     m.mode = mode
     m.plex_path = str(plex)
     m.working_dir = str(tmp_path)
@@ -223,6 +225,23 @@ def test_restore_leaves_files_behind_a_linked_folder_where_they_are(
     assert (outside / "keep.jpg").read_bytes() == b"k"
     assert not (plex / "Metadata" / "Movies" / "linked").exists()
     assert (plex / "Metadata" / HELD / "p").read_bytes() == b"x"
+
+
+def test_restore_refuses_a_restore_folder_that_is_a_link(tmp_path, monkeypatch):
+    """A linked restore folder is left alone, and so is what it points at."""
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (tmp_path / "plex").mkdir()
+    (tmp_path / "plex" / RESTORE_DIR_NAME).symlink_to(outside, target_is_directory=True)
+    errors = []
+
+    # The held file lands in `outside`, written through the link.
+    plex = _run_restore_dir_mode(tmp_path, monkeypatch, "restore", errors)
+
+    assert (outside / HELD / "p.jpg").read_bytes() == b"x"
+    assert not (plex / "Metadata" / HELD / "p").exists()
+    assert (plex / RESTORE_DIR_NAME).is_symlink()
+    assert [e for e in errors if "is a link" in e and "nothing restored" in e]
 
 
 @pytest.mark.parametrize(
