@@ -218,8 +218,10 @@ async def run_plex_metadata_cleanup(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cleanarr_logger),
 ):
-    """
-    Enqueue a `poster_cleanarr` job. Request body (all optional):
+    """Enqueue a `poster_cleanarr` job.
+
+    Parameters:
+        Request body (all optional):
         {
           "mode": "report"|"move"|"remove"|"restore"|"clear"|"nothing",
                                                          # bloat-image mode
