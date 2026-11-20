@@ -871,7 +871,7 @@ const PosterCleanarrPage = () => {
 
     // Restore and Clear: the restore directory alone, no passes.
     const runRestoreDir = useCallback(async () => {
-        // Only a fresh scan knows which files came back: rescan if the page holds one at the end.
+        // Only a fresh scan knows what came back: on success, rescan if the page holds a scan.
         const rescan = mode === 'restore' ? () => hasScannedRef.current && refreshScan() : null;
         await startCleanupJob({ mode }, MODE_META[mode].label, rescan);
     }, [mode, hasScannedRef, refreshScan, startCleanupJob]);
