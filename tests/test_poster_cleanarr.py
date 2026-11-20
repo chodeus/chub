@@ -176,7 +176,7 @@ def _run_restore_dir_mode(tmp_path, monkeypatch, mode):
     """Run ``mode`` on one held file, local_db on and no Plex database folder."""
     plex = tmp_path / "plex"
     held = plex / RESTORE_DIR_NAME / HELD / "p.jpg"
-    held.parent.mkdir(parents=True)
+    held.parent.mkdir(parents=True, exist_ok=True)
     held.write_bytes(b"x")
     m = make_module()
     m.mode = mode
@@ -205,6 +205,39 @@ def test_restore_and_clear_run_without_a_plex_database_folder(
     back = plex / "Metadata" / HELD / "p"
     assert (back.read_bytes() if back.exists() else None) == restored
     assert not (plex / RESTORE_DIR_NAME).exists()
+
+
+def test_restore_leaves_files_behind_a_linked_folder_where_they_are(
+    tmp_path, monkeypatch
+):
+    """A folder link inside the restore folder is not followed into."""
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (outside / "keep.jpg").write_bytes(b"k")
+    linked = tmp_path / "plex" / RESTORE_DIR_NAME / "Movies" / "linked"
+    linked.parent.mkdir(parents=True)
+    linked.symlink_to(outside, target_is_directory=True)
+
+    plex = _run_restore_dir_mode(tmp_path, monkeypatch, "restore")
+
+    assert (outside / "keep.jpg").read_bytes() == b"k"
+    assert not (plex / "Metadata" / "Movies" / "linked").exists()
+    assert (plex / "Metadata" / HELD / "p").read_bytes() == b"x"
+
+
+@pytest.mark.parametrize(
+    "stray", ["._p.jpg", os.path.join(".AppleDouble", "p.jpg"), "Thumbs.db"]
+)
+def test_restore_moves_back_only_held_files(tmp_path, monkeypatch, stray):
+    """Hidden names and non-.jpg files in the restore folder stay out of Metadata."""
+    path = tmp_path / "plex" / RESTORE_DIR_NAME / HELD / stray
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"s")
+
+    plex = _run_restore_dir_mode(tmp_path, monkeypatch, "restore")
+
+    back = plex / "Metadata" / HELD
+    assert sorted(p.name for p in back.rglob("*")) == ["p"]
 
 
 @pytest.mark.parametrize("mode", ["restore", "clear"])

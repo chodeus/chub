@@ -1,7 +1,6 @@
 # modules/poster_cleanarr.py
 
 import errno
-import glob
 import json
 import os
 import re
@@ -75,6 +74,20 @@ def format_bytes(size: int) -> str:
 def _normalize_lib(name: str) -> str:
     """Case-insensitive library-name key (mirrors Connector._normalize_library_name)."""
     return name.strip().lower() if isinstance(name, str) else ""
+
+
+def _held_files(restore_dir: str) -> List[str]:
+    """The .jpg files glob '**' listed under ``restore_dir``, less any behind a link."""
+    held = []
+    # os.walk, not glob: glob '**' follows a folder link out of the restore folder.
+    for root, dirs, files in os.walk(restore_dir):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        held += [
+            os.path.join(root, name)
+            for name in files
+            if name.endswith(".jpg") and not name.startswith(".")
+        ]
+    return held
 
 
 def _bundle_root(path: str) -> Optional[str]:
@@ -807,9 +820,7 @@ class PosterCleanarr(ChubModule):
 
         count = 0
         total_size = 0
-        restore_files = list(
-            glob.iglob(os.path.join(restore_dir, "**", "*.jpg"), recursive=True)
-        )
+        restore_files = _held_files(restore_dir)
 
         if not restore_files:
             self.logger.info("Restore directory is empty. Nothing to restore.")

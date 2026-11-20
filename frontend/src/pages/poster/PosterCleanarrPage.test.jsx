@@ -1199,7 +1199,7 @@ describe('Poster Cleanarr — variant tiles', () => {
                 'plex',
                 'text-fg-subtle',
                 '1',
-                'grayscale(30%)',
+                'grayscale(0.3)',
                 false,
             ],
             // Plex's own poster in use: framed as Plex's, badged as in use.
@@ -1210,7 +1210,7 @@ describe('Poster Cleanarr — variant tiles', () => {
                 'active',
                 'text-success',
                 '1',
-                'grayscale(30%)',
+                'grayscale(0.3)',
                 false,
             ],
         ];
