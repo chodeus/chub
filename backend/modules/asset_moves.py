@@ -31,6 +31,9 @@ class AssetMoves:
         self._placed: Dict[str, Optional[float]] = {}
         self._written: Dict[str, Tuple[str, float]] = {}
         self._picks: Set[str] = set()
+        self._rows: Dict[Tuple[str, str], List[dict]] = {}
+        self._held: Dict[Tuple[str, str], bool] = {}
+        self._came_from: Dict[str, Set[str]] = {}  # any instance's row: path -> sources
 
     @classmethod
     def load(
@@ -46,6 +49,10 @@ class AssetMoves:
         moves = cls(active, picked)
         if not moves.active:
             return moves
+        for r in applied_map.values():
+            path, source = r.get("applied_path"), r.get("matched_file")
+            if path:
+                moves._came_from.setdefault(path, set()).update(filter(None, [source]))
         for media in all_media:
             if media.get("id") is None:
                 continue
@@ -66,6 +73,33 @@ class AssetMoves:
             self._written[path] = rank
         pick = bool(row.get("user_confirmed"))
         self.add(media, image_type, path, mtime=mtime, pick=pick)
+        if not pick:
+            self._rows.setdefault(_media_key(media, image_type), []).append(row)
+
+    def _on_disk(self, row: dict) -> bool:
+        """True when the row's art traces back to a source file still on disk."""
+        seen: Set[str] = set()
+        todo = [row.get("matched_file")]
+        while todo:
+            source = todo.pop()
+            if not source or source in seen:
+                continue
+            seen.add(source)
+            if source in self._came_from:  # another row's copy: follow it to its source
+                todo.extend(self._came_from[source])
+            elif source not in self._placed and os.path.isfile(source):
+                return True
+        return False
+
+    def held(self, media: dict, image_type: str) -> bool:
+        """True while auto-placed art stands and none of its recorded sources does."""
+        key = _media_key(media, image_type)
+        if key not in self._held:  # once per media per run, from the rows as loaded
+            rows = self._rows.get(key, [])
+            self._held[key] = not any(map(self._on_disk, rows)) and any(
+                os.path.isfile(r["applied_path"]) for r in rows
+            )
+        return self._held[key]
 
     def add(
         self,

@@ -2896,6 +2896,28 @@ def _dune_moves(tmp_path, recorded):
     return moves, dunes
 
 
+@pytest.mark.parametrize(
+    "source, held",
+    [(None, True), ("gone.png", True), ("back.png", False)],
+    ids=["downloaded", "moved-away", "saved-again"],
+)
+def test_a_copy_of_a_deselected_items_logo_traces_back_to_its_source(
+    tmp_path, source, held
+):
+    placed_a, placed_b = tmp_path / "a.png", tmp_path / "b.png"
+    for p in (placed_a, placed_b, tmp_path / "back.png"):
+        p.write_bytes(b"png")
+    a_from = source and str(tmp_path / source)
+    a = {"applied_path": str(placed_a), "matched_file": a_from}
+    b = {"applied_path": str(placed_b), "matched_file": str(placed_a)}
+    applied_map = {("media", 1, "logo"): a, ("media", 2, "logo"): b}
+    dune = {"id": 2, "asset_type": "movie", "tmdb_id": 438631, "title": "Dune"}
+    config = make_module(apply_method="kometa", action_type="move").config
+    moves = AssetMoves.load(config, [dune], applied_map, ["logo"], lambda _p: False)
+    got = moves.held(dune, "logo")
+    assert got is held
+
+
 def test_a_path_placed_again_with_older_art_is_not_offered_as_newer(tmp_path):
     moves, (one, two) = _dune_moves(tmp_path, [("a.png", 200), ("b.png", 150)])
     moves.add(one, "logo", str(tmp_path / "a.png"), mtime=100)
@@ -3064,3 +3086,155 @@ def test_logos_copied_then_shared_under_move_are_not_rewritten_by_later_runs(
     placed = files()
     m.run()
     assert (len(placed), files()) == (2, placed)
+
+
+def _with_runner_up(db, monkeypatch, tmp_path, dest):
+    """A move run whose src2 holds a Dune logo ranked below src's."""
+    src2 = tmp_path / "src2"
+    src2.mkdir()
+    (src2 / "Dune (2021) {tmdb-438631} - Logo.png").write_bytes(b"runner-up")
+    m = _standalone_run(db, monkeypatch, tmp_path, dest, action_type="move")
+    m.config.source_dirs.insert(0, str(src2))  # bottom-wins: src2 ranks below src
+    return m, src2
+
+
+@pytest.mark.parametrize(
+    "instances", [["radarr1"], ["radarr1", "radarr2"], ["radarr2", "radarr1"]]
+)
+def test_a_moved_first_choice_logo_is_not_replaced_by_the_runner_up_later(
+    db, monkeypatch, tmp_path, instances
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = instances
+    for _ in range(2):
+        m.run()
+    assert sorted(p.read_bytes() for p in dest.iterdir()) == [b"png"] * len(instances)
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+def test_an_instance_added_after_the_first_choice_moved_gets_it_not_the_runner_up(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    m.run()
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    for _ in range(2):
+        m.run()
+    assert sorted(p.read_bytes() for p in dest.iterdir()) == [b"png", b"png"]
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+@pytest.mark.parametrize("instances", [["radarr1"], ["radarr1", "radarr2"]])
+def test_the_runner_up_is_placed_once_every_moved_first_choice_is_deleted(
+    db, monkeypatch, tmp_path, instances
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = instances
+    m.run()
+    for p in dest.iterdir():
+        p.unlink()
+    m.run()
+    assert sorted(p.read_bytes() for p in dest.iterdir()) == [b"runner-up"] * len(
+        instances
+    )
+
+
+def test_a_moved_first_choice_deleted_for_one_instance_is_restored_from_the_other(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    (dest / "Dune (2021)_logo.png").unlink()
+    m.run()
+    assert sorted(p.read_bytes() for p in dest.iterdir()) == [b"png", b"png"]
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+@pytest.mark.parametrize("kept", ["radarr1", "radarr2"])
+def test_a_moved_first_choice_stays_when_the_other_instance_is_deselected(
+    db, monkeypatch, tmp_path, kept
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    m.config.instances = [kept]
+    for _ in range(2):
+        m.run()
+    assert sorted(p.read_bytes() for p in dest.iterdir()) == [b"png", b"png"]
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+@pytest.mark.parametrize(
+    "kept, logo",
+    [
+        ("radarr1", "Dune (2021)_logo.png"),
+        ("radarr2", "Dune (2021) {tmdb-438631}_logo.png"),
+    ],
+)
+def test_a_source_saved_again_reaches_an_instance_whose_sibling_is_deselected(
+    db, monkeypatch, tmp_path, kept, logo
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    _dune_in(db, "radarr2", "Dune (2021) {tmdb-438631}")
+    m.config.instances = ["radarr1", "radarr2"]
+    m.run()
+    m.config.instances = [kept]
+    (tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png").write_bytes(b"new")
+    for _ in range(2):
+        m.run()
+    assert (dest / logo).read_bytes() == b"new"
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+def test_a_moved_first_choice_logo_follows_a_folder_rename_over_the_runner_up(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    m.run()
+    _dune_in(db, "radarr1", "Dune HD (2021)")
+    for _ in range(2):
+        m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune HD (2021)_logo.png": b"png"
+    }
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
+
+
+def test_a_source_saved_again_replaces_a_logo_that_followed_a_folder_rename(
+    db, monkeypatch, tmp_path
+):
+    dest = tmp_path / "kometa"
+    dest.mkdir()
+    m, src2 = _with_runner_up(db, monkeypatch, tmp_path, dest)
+    m.run()
+    _dune_in(db, "radarr1", "Dune HD (2021)")
+    m.run()
+    new = tmp_path / "src" / "Dune (2021) {tmdb-438631} - Logo.png"
+    new.write_bytes(b"new")
+    os.utime(new, (2_000_000_000, 2_000_000_000))
+    for _ in range(2):
+        m.run()
+    assert {p.name: p.read_bytes() for p in dest.iterdir()} == {
+        "Dune HD (2021)_logo.png": b"new"
+    }
+    assert [p.read_bytes() for p in src2.iterdir()] == [b"runner-up"]
