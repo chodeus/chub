@@ -1357,21 +1357,19 @@ const PosterCleanarrPage = () => {
                                                                     ›
                                                                 </span>
                                                             )}
-                                                            <span
-                                                                className={
-                                                                    crumb.node
-                                                                        ? 'cursor-pointer hover:text-fg'
-                                                                        : ''
-                                                                }
-                                                                onClick={
-                                                                    crumb.node
-                                                                        ? () =>
-                                                                              selectNode(crumb.node)
-                                                                        : undefined
-                                                                }
-                                                            >
-                                                                {crumb.label}
-                                                            </span>
+                                                            {crumb.node ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        selectNode(crumb.node)
+                                                                    }
+                                                                    className="cursor-pointer hover:text-fg"
+                                                                >
+                                                                    {crumb.label}
+                                                                </button>
+                                                            ) : (
+                                                                <span>{crumb.label}</span>
+                                                            )}
                                                         </React.Fragment>
                                                     ))}
                                                 </div>

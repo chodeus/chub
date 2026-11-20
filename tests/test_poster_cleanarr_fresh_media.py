@@ -157,6 +157,7 @@ def test_scan_fails_when_the_refresh_fails(env):
 def _module(env, **flags):
     m = object.__new__(PosterCleanarr)
     m.logger = _logger()
+    m.mode = "report"
     # Snapshot from before radarr_main was configured: the run must use the live config
     m.full_config = ChubConfig()
     m.config = env.cfg.poster_cleanarr
@@ -176,6 +177,26 @@ def test_run_removes_only_true_orphans_after_the_refresh(env):
     assert orphan_stats["count"] == 1
     assert not gone.exists()
     assert new.exists()
+
+
+@pytest.mark.parametrize("mode", ["restore", "clear"])
+def test_restore_and_clear_run_no_pass_whatever_is_configured(env, mode):
+    """A schedule block that sets only the mode runs no orphan or stale pass."""
+    gone = _asset(env, "Gone Movie (2019).jpg")
+    m = _module(
+        env,
+        orphan_assets_enabled=True,
+        orphan_assets_mode="remove",
+        stale_duplicates_enabled=True,
+        stale_duplicates_mode="remove",
+    )
+    m.mode = mode
+
+    orphan_stats, stale_stats = m._run_asset_passes()
+
+    assert (orphan_stats["count"], stale_stats["count"]) == (0, 0)
+    assert gone.exists()
+    assert env.maps == []
 
 
 def test_run_skips_both_passes_when_the_refresh_fails(env):

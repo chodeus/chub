@@ -59,6 +59,7 @@ const ModeCheck = ({ label, active, checked, locked = false, onChange, title }) 
         <button
             type="button"
             disabled={disabled}
+            aria-pressed={on}
             onClick={() => onChange(!checked)}
             title={title}
             className={`flex items-center gap-2 text-dense text-fg ${
@@ -71,7 +72,10 @@ const ModeCheck = ({ label, active, checked, locked = false, onChange, title }) 
                 }`}
             >
                 {on && (
-                    <span className="material-symbols-outlined text-on-color text-[13px] leading-none">
+                    <span
+                        aria-hidden="true"
+                        className="material-symbols-outlined text-on-color text-[13px] leading-none"
+                    >
                         check
                     </span>
                 )}

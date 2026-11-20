@@ -337,14 +337,19 @@ describe('Poster Cleanarr — persisted tree state', () => {
         );
         expect(screen.getByAltText('e2_t')).toBeInTheDocument();
 
-        await user.click(within(header).getByText('Season 1'));
+        expect(within(header).queryByRole('button', { name: 'Episode 2' })).not.toBeInTheDocument();
+        within(header).getByRole('button', { name: 'Season 1' }).focus();
+        await user.keyboard('{Enter}');
         const seasonHeader = (await screen.findByRole('heading', { name: 'Season 1' })).closest(
             'header'
         );
         expect(screen.getByAltText('s1_p')).toBeInTheDocument();
         expect(screen.queryByAltText('e2_t')).not.toBeInTheDocument();
 
-        await user.click(within(seasonHeader).getByText('My Show'));
+        expect(
+            within(seasonHeader).queryByRole('button', { name: 'Season 1' })
+        ).not.toBeInTheDocument();
+        await user.click(within(seasonHeader).getByRole('button', { name: 'My Show' }));
         expect(await screen.findByRole('heading', { name: 'My Show' })).toBeInTheDocument();
         expect(screen.getByAltText('show_p')).toBeInTheDocument();
         expect(screen.queryByAltText('s1_p')).not.toBeInTheDocument();
@@ -814,8 +819,7 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
     });
 
     const PASSES = ['Bloat', 'Stale', 'Orphan', 'Overlays only'];
-    // A ticked box's name starts with its icon's text, "check".
-    const pass = name => screen.getByRole('button', { name: new RegExp(`^(check)?${name}$`) });
+    const pass = name => screen.getByRole('button', { name });
     const tick = (user, name) => user.click(pass(name));
     const chooseMode = (user, mode) => user.selectOptions(screen.getByRole('combobox'), mode);
 
@@ -871,7 +875,7 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
         render(<PosterCleanarrPage />);
         await chooseMode(user, mode);
 
-        expect(pass('Bloat').textContent).toBe('checkBloat');
+        expect(pass('Bloat')).toHaveAttribute('aria-pressed', 'true');
         expect(screen.getByRole('button', { name: action })).toBeDisabled();
     });
 
@@ -996,6 +1000,17 @@ describe('Poster Cleanarr — each mode runs what it says', () => {
         expect(pass('Overlays only')).toBeEnabled();
         await tick(user, 'Bloat');
         expect(pass('Overlays only')).toBeDisabled();
+    });
+
+    it('a pass announces whether it is ticked', async () => {
+        const user = userEvent.setup();
+        render(<PosterCleanarrPage />);
+        await chooseMode(user, 'move');
+        expect(pass('Bloat')).toHaveAttribute('aria-pressed', 'true');
+        await tick(user, 'Bloat');
+        expect(pass('Bloat')).toHaveAttribute('aria-pressed', 'false');
+        await chooseMode(user, 'restore');
+        expect(pass('Stale')).toHaveAttribute('aria-pressed', 'false');
     });
 
     it('a pass mode names the selection it scopes, and Clear drops it', async () => {

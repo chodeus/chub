@@ -281,7 +281,7 @@ def test_cleanup_route_reports_a_run_already_in_flight(tmp_path, monkeypatch):
 def test_cleanup_route_queues_the_restore_dir_modes_alone(
     tmp_path, monkeypatch, mode, passes
 ):
-    """The page's Restore and Clear reach the job, with the asset passes off."""
+    """The page's Restore and Clear reach the job with their mode alone."""
     cfg = ChubConfig()
     cfg.poster_cleanarr.stale_duplicates_enabled = True
     cfg.poster_cleanarr.orphan_assets_enabled = True
@@ -292,13 +292,7 @@ def test_cleanup_route_queues_the_restore_dir_modes_alone(
         jobs = db.worker.get_pending_jobs("jobs")
 
     assert res.status_code == 200
-    assert [json.loads(j["payload"])["overrides"] for j in jobs] == [
-        {
-            "mode": mode,
-            "stale_duplicates_enabled": False,
-            "orphan_assets_enabled": False,
-        }
-    ]
+    assert [json.loads(j["payload"])["overrides"] for j in jobs] == [{"mode": mode}]
 
 
 @pytest.mark.parametrize("mode", ["restore", "clear"])

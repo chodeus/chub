@@ -908,7 +908,8 @@ class PosterCleanarr(ChubModule):
         stale_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
         orphans_on = getattr(self.config, "orphan_assets_enabled", False)
         stale_on = getattr(self.config, "stale_duplicates_enabled", False)
-        if not (orphans_on or stale_on):
+        # Restore and Clear run no orphan or stale pass, whatever is configured.
+        if self.mode in ("restore", "clear") or not (orphans_on or stale_on):
             return orphan_stats, stale_stats
         # Selection from this run's config, so per-run overrides survive
         scope = self._orphan_scope(self.config)

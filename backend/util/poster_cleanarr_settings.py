@@ -137,10 +137,6 @@ def build_cleanup_overrides(body: dict, config: ChubConfig) -> dict:
     if "overlays_only" in body:
         overrides["overlays_only"] = _require_bool(body, "overlays_only")
     if mode in ("restore", "clear"):
-        # Validated above, then dropped: these act on the restore directory alone.
-        return {
-            "mode": mode,
-            "stale_duplicates_enabled": False,
-            "orphan_assets_enabled": False,
-        }
+        # Validated above, then dropped: PosterCleanarr runs no passes in these modes.
+        return {"mode": mode}
     return overrides
