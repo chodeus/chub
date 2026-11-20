@@ -2,6 +2,44 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.56.0](https://github.com/chodeus/chub/compare/v2.55.0...v2.56.0) (2026-11-20)
+
+
+### Features
+
+* **posters:** end the poster renamerr log with a Run Summary ([#799](https://github.com/chodeus/chub/issues/799)) ([482a86d](https://github.com/chodeus/chub/commit/482a86d0a15e3ee215e73f8dce76cc7bf2e19805))
+* **settings:** warn in the folder picker when CHUB cannot write a destination ([#793](https://github.com/chodeus/chub/issues/793)) ([dbc7756](https://github.com/chodeus/chub/commit/dbc7756eac635498d617599e7e932ee4f30bcd22))
+
+
+### Bug Fixes
+
+* **assets,posters:** replace a placed symlink instead of following it out of the destination ([#803](https://github.com/chodeus/chub/issues/803)) ([0a4c4bb](https://github.com/chodeus/chub/commit/0a4c4bb5cf8ac711a8249c16421bf8eb9ed43a16))
+* **assets:** keep an artwork pick made while an asset run is going ([#795](https://github.com/chodeus/chub/issues/795)) ([4032f77](https://github.com/chodeus/chub/commit/4032f77eea04d0d8b6af890dec37ed8228f027ae))
+* **assets:** remove the asset a new placement supersedes ([#807](https://github.com/chodeus/chub/issues/807)) ([2266e4d](https://github.com/chodeus/chub/commit/2266e4d96ac076550b21570e392ea2cda52b4b33))
+* **assets:** stop asset renamerr once when its Kometa destination cannot be written ([#791](https://github.com/chodeus/chub/issues/791)) ([064fad1](https://github.com/chodeus/chub/commit/064fad10b37c6bd5902ea35afd4fc864f5adc466))
+* **assets:** under move to Kometa, an item whose source another item moved copies it from there ([#815](https://github.com/chodeus/chub/issues/815)) ([0db7771](https://github.com/chodeus/chub/commit/0db77713628ee0ac4b163f0b70af09d9478455df))
+* **assets:** under move, placed logos stay while no source for them is on disk ([#816](https://github.com/chodeus/chub/issues/816)) ([e06617f](https://github.com/chodeus/chub/commit/e06617ffe3f45965fee9e5a7ab57df528738c4de))
+* **borders:** count a border-excluded poster its destination refuses as a failed write ([#814](https://github.com/chodeus/chub/issues/814)) ([e9a286b](https://github.com/chodeus/chub/commit/e9a286b3a4565847eff5badcf05e0588995b69fe))
+* **borders:** skip a poster only while its bordered output is still on disk ([#811](https://github.com/chodeus/chub/issues/811)) ([7013d49](https://github.com/chodeus/chub/commit/7013d495fbbb57d80ef68f6211cc34dca42f9432))
+* **cleanarr:** stale-duplicate pass also clears flat files under an old folder name ([#808](https://github.com/chodeus/chub/issues/808)) ([2487a18](https://github.com/chodeus/chub/commit/2487a18051d0d8b145da551be12fc92f5d60f7b7))
+* **deps:** update all non-major dependencies ([7e14dd3](https://github.com/chodeus/chub/commit/7e14dd33bc0c40c75b3a13a93ef71c868951131a))
+* **deps:** update all non-major dependencies (minor) ([#790](https://github.com/chodeus/chub/issues/790)) ([7e14dd3](https://github.com/chodeus/chub/commit/7e14dd33bc0c40c75b3a13a93ef71c868951131a))
+* **logs:** show the whole log file, fetching only new lines each poll ([#798](https://github.com/chodeus/chub/issues/798)) ([538bd62](https://github.com/chodeus/chub/commit/538bd626777dd3b1235a29e2ce9abc52c448fb67))
+* **media:** read-only collections list; collection API checks its fields and renames in place ([#810](https://github.com/chodeus/chub/issues/810)) ([03e8662](https://github.com/chodeus/chub/commit/03e866260c0b6d1594cb89a1336f06e3b3a185e0))
+* **poster-cleanarr:** Restore and Clear run from the page; the stale and orphan lists show without Plex variants ([#817](https://github.com/chodeus/chub/issues/817)) ([b85beca](https://github.com/chodeus/chub/commit/b85becaa5cf10a388bf8f340143478119144abdd))
+* **posters,assets:** carry a file placed with move to a new destination ([#800](https://github.com/chodeus/chub/issues/800)) ([8c7fea3](https://github.com/chodeus/chub/commit/8c7fea32d999c26e3cc086745690f8bd57bbd68e))
+* **posters,assets:** keep a superseded file another item still records ([#809](https://github.com/chodeus/chub/issues/809)) ([a744432](https://github.com/chodeus/chub/commit/a744432a31386a2715c2f5a2e858154f767f8ab6))
+* **posters,assets:** place a move from a read-only source and warn once ([#796](https://github.com/chodeus/chub/issues/796)) ([3c55f90](https://github.com/chodeus/chub/commit/3c55f90639e8a01b6b8970412cddd9f49523f5fc))
+* **posters,assets:** turn placed symlinks into files once File Action is no longer symlink ([#806](https://github.com/chodeus/chub/issues/806)) ([5764171](https://github.com/chodeus/chub/commit/57641719c81504334907658f464fd93227e58f04))
+* **posters:** a dry run never replaces a staged path that still holds a file ([#801](https://github.com/chodeus/chub/issues/801)) ([2e0de56](https://github.com/chodeus/chub/commit/2e0de561b2ff961d063b07a8292cf750103099c8))
+* **posters:** adopt a moved poster whose staged path a stale run cleared ([#804](https://github.com/chodeus/chub/issues/804)) ([b7fd12a](https://github.com/chodeus/chub/commit/b7fd12a5f50a24dd68b0e87e64c79b7be0099df5))
+* **posters:** name a folder CHUB cannot write once, and fail the run when it refuses every poster ([#789](https://github.com/chodeus/chub/issues/789)) ([ec1feeb](https://github.com/chodeus/chub/commit/ec1feebf2e019b5b14b1cc8cd9ef4f01eb23eaee))
+* **posters:** the highest-priority match wins across id and title lookups ([#805](https://github.com/chodeus/chub/issues/805)) ([b988881](https://github.com/chodeus/chub/commit/b988881ecbbd22dc73de90341819935e7f5e3f5a))
+* **posters:** under move, a poster two items share reaches each one before its source goes ([#812](https://github.com/chodeus/chub/issues/812)) ([977bfc1](https://github.com/chodeus/chub/commit/977bfc1852c6db65f8df60d43e96781c1baaf9d4))
+* **posters:** under move, an item with no poster adopts the one placed for the same media in another instance ([#813](https://github.com/chodeus/chub/issues/813)) ([c2888b4](https://github.com/chodeus/chub/commit/c2888b47412618e4e730f4b2349d7b37aff61009))
+* **renameinatorr:** let a later batch use a folder an earlier batch moved out of ([08e5c5d](https://github.com/chodeus/chub/commit/08e5c5dcdfc2ce4bd37c3c1b6a47bd6a7252d511))
+* **webhooks:** fail the job when a webhook's poster was never applied ([#792](https://github.com/chodeus/chub/issues/792)) ([5e5d9cf](https://github.com/chodeus/chub/commit/5e5d9cfac968215bf8b8da74c0ab5d0558e774b6))
+
 ## [2.55.0](https://github.com/chodeus/chub/compare/v2.54.3...v2.55.0) (2026-11-10)
 
 
