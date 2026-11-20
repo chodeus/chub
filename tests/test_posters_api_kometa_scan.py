@@ -309,7 +309,7 @@ def test_cleanup_route_refuses_a_malformed_restore_dir_request(
     tmp_path, monkeypatch, mode, bad
 ):
     """Restore and Clear check the body as every mode does before dropping it."""
-    monkeypatch.setattr("backend.util.config.load_config", lambda: ChubConfig())
+    monkeypatch.setattr("backend.util.config.load_config", ChubConfig)
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         res = _client(db).post(
             "/api/posters/plex-metadata/cleanup", json={"mode": mode, **bad}
