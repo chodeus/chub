@@ -8,7 +8,7 @@ charset-normalizer==3.5.2
 click==8.5.1
 croniter==7.0.0
 defusedxml==0.7.1
-fastapi==0.163.1
+fastapi==0.163.2
 h11==0.16.0
 idna==3.20
 pathvalidate==3.3.1
@@ -19,9 +19,9 @@ python-dateutil==4.0.0
 python-dotenv==1.2.4
 # No import anywhere: FastAPI requires it to parse the UploadFile/File routes
 # in backend/api/posters.py and backend/api/system.py, or they raise on startup.
-python-multipart==0.0.33
+python-multipart==0.0.34
 PyJWT==2.15.1
-PyYAML==6.0.3
+PyYAML==6.0.4
 requests==2.34.2
 starlette==1.10.0
 tqdm==4.70.1
