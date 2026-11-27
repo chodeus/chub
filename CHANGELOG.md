@@ -2,6 +2,22 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.57.0](https://github.com/chodeus/chub/compare/v2.56.0...v2.57.0) (2026-11-27)
+
+
+### Features
+
+* **gdrive-presets:** add Solen artwork drive ([c8e6b68](https://github.com/chodeus/chub/commit/c8e6b686e04d11c52d4792b1fce76cab80cef6e9))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([b79bdc6](https://github.com/chodeus/chub/commit/b79bdc63282da4276a0c016077ceae050a8a0cb6))
+* **deps:** update all non-major dependencies ([8f704a6](https://github.com/chodeus/chub/commit/8f704a665377cc03bec1419671b05153a0228329))
+* **deps:** update all non-major dependencies (minor) ([#822](https://github.com/chodeus/chub/issues/822)) ([b79bdc6](https://github.com/chodeus/chub/commit/b79bdc63282da4276a0c016077ceae050a8a0cb6))
+* **deps:** update all non-major dependencies (patch) ([#820](https://github.com/chodeus/chub/issues/820)) ([8f704a6](https://github.com/chodeus/chub/commit/8f704a665377cc03bec1419671b05153a0228329))
+* **deps:** update dependency @tanstack/react-virtual to ^3.14.28 ([#825](https://github.com/chodeus/chub/issues/825)) ([3b9d2ba](https://github.com/chodeus/chub/commit/3b9d2ba07eb3dc22daa4218925d2ad75a27561d4))
+
 ## [2.56.0](https://github.com/chodeus/chub/compare/v2.55.0...v2.56.0) (2026-11-20)
 
 
