@@ -2,6 +2,14 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.57.1](https://github.com/chodeus/chub/compare/v2.57.0...v2.57.1) (2026-11-28)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([962c4a7](https://github.com/chodeus/chub/commit/962c4a79c5e4eeafa50c56bf16ace1f50d5b2c21))
+* **deps:** update all non-major dependencies (patch) ([#828](https://github.com/chodeus/chub/issues/828)) ([962c4a7](https://github.com/chodeus/chub/commit/962c4a79c5e4eeafa50c56bf16ace1f50d5b2c21))
+
 ## [2.57.0](https://github.com/chodeus/chub/compare/v2.56.0...v2.57.0) (2026-11-27)
 
 
