@@ -1,9 +1,9 @@
 # Test-only dependencies — never installed into the runtime image.
 # httpx backs Starlette's TestClient; the rest are pytest and its own deps.
 # Requires Python >= 3.10 (pytest 9 / iniconfig 2); CI and Docker are on 3.14.
-httpx==0.28.1
+httpx==0.29.0
 iniconfig==2.3.1
-packaging==26.3
+packaging==26.4
 pluggy==1.7.0
 Pygments==2.21.0
 pytest==9.2.0
